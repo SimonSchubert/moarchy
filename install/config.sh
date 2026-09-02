@@ -19,6 +19,37 @@ for d in alacritty foot btop wiremix lazygit tmux imv omarchy; do
 done
 [[ -f $OMARCHY_PATH/config/starship.toml ]] && cp "$OMARCHY_PATH/config/starship.toml" ~/.config/
 
+# --- Omarchy's icon font (the bar's logo glyph, \ue900, comes from it) -------
+# 4.x moved this from config/omarchy.ttf to default/fonts/omarchy/omarchy.ttf.
+# Without it the logo renders as tofu.
+mkdir -p ~/.local/share/fonts
+if [[ -f $OMARCHY_PATH/default/fonts/omarchy/omarchy.ttf ]]; then
+  cp "$OMARCHY_PATH/default/fonts/omarchy/omarchy.ttf" ~/.local/share/fonts/
+  fc-cache -f >/dev/null 2>&1
+fi
+
+# --- Mobile tweak: bar clock -----------------------------------------------
+# The bar is centre-anchored on the clock, so its width sets where every other
+# module sits. Upstream's "dddd HH:mm" changes width with the day name
+# ("Wednesday" vs "Monday"), which visibly shifts the whole bar once a day and
+# leaves no slack on a 360px-wide screen. HH:mm is fixed width.
+# Patched in place so a user's own shell.json edits survive.
+if [[ -f ~/.config/omarchy/shell.json ]]; then
+  python3 - <<'CLOCK_EOF'
+import json, os
+p = os.path.expanduser("~/.config/omarchy/shell.json")
+try:
+    d = json.load(open(p))
+except Exception:
+    raise SystemExit(0)
+for m in d.get("bar", {}).get("layout", {}).get("center", []):
+    if m.get("id") == "omarchy.clock":
+        m["format"] = "HH:mm"
+        m["formatAlt"] = "ddd d MMM"
+json.dump(d, open(p, "w"), indent=2)
+CLOCK_EOF
+fi
+
 # --- Mobile tweak: btop -----------------------------------------------------
 # A fullscreen terminal here is 47x41 characters, and btop refuses to draw below
 # 60 columns whatever shown_boxes says. Trimming the boxes still helps in a
