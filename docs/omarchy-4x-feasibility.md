@@ -75,6 +75,43 @@ So the concrete work is:
 4. **Set `OMARCHY_PATH`** so `$OMARCHY_PATH/config/omarchy/shell.json` resolves —
    the log shows it resolving to a bare `/config/omarchy/shell.json`.
 
+## It runs: the 4.x bar renders under Sway
+
+`scripts/port-4x-shell.sh` reproduces this from a clean checkout. After the
+translation below, **Omarchy v4.0.2's bar renders on the PinePhone under Sway**,
+populated with workspaces, clock, bluetooth, wifi, volume and battery. RSS
+settles around 200-260 MB.
+
+The translation is mechanical because `Quickshell.I3` mirrors the Hyprland
+singleton for everything this shell touches:
+
+| Omarchy 4.x uses | Sway equivalent | Notes |
+| --- | --- | --- |
+| `import Quickshell.Hyprland` | `import Quickshell.I3` | 5 files |
+| `HyprlandEvent` | `I3Event` | |
+| `target: Hyprland` | `target: I3` | bare singleton, no dot — easy to miss with a naive regex |
+| `Hyprland.workspaces` / `.focusedWorkspace` / `.focusedMonitor` | same names on `I3` | |
+| `onRawEvent` | exists on `I3` | |
+| `HyprlandFocusGrab` | **no counterpart** | lives only in `Quickshell/Hyprland/_FocusGrab`; neutralised, so popups lose click-outside-to-dismiss |
+
+Two further requirements, both easy to miss:
+
+- **`SWAYSOCK` must be exported.** Without it `Quickshell.I3` logs
+  *"$SWAYSOCK and I3SOCK are unset. Cannot connect to socket"* and the bar draws
+  but never populates.
+- **A `hyprctl` shim** answering `decoration:rounding` and `general:gaps_out`.
+  The shell shells out to `hyprctl` for layout metrics; without it every call
+  logs "binary could not be found".
+
+### Known remaining defect
+
+```
+Workspaces.qml[58]: TypeError: Cannot read property 'values' of undefined
+```
+
+`I3.workspaces` has a different shape to Hyprland's. Workspaces still render, so
+this is a refinement rather than a blocker, and it is the obvious next task.
+
 ## What still cannot work
 
 Hyprland itself, for the reason in the README: the Mali-400 is GLES 2.0 and
