@@ -30,6 +30,17 @@ fi
 EOF3
 fi
 
+# lisgd synthesises swipe gestures by reading the touchscreen's evdev node
+# directly -- Sway's own bindgesture only sees libinput gesture events, which
+# come from touchpads and never from a touchscreen. Reading /dev/input/event*
+# needs the `input` group, and the group membership only takes effect on the
+# next login.
+#
+# The trade this makes: anything running as this user can then read every input
+# device, keyboard included. On a single-user phone that is the accepted cost,
+# and it is what sxmo and the other PinePhone environments do.
+sudo usermod -aG input "$USER_NAME"
+
 sudo systemctl daemon-reload
 sudo systemctl enable NetworkManager bluetooth 2>/dev/null || true
 systemctl --user enable pipewire pipewire-pulse wireplumber 2>/dev/null || true

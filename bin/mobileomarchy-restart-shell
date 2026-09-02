@@ -1,0 +1,26 @@
+#!/bin/bash
+# Start (or restart) Omarchy 4.x's quickshell shell under Sway.
+#
+# Upstream's omarchy-restart-shell reaches for HYPRLAND_INSTANCE_SIGNATURE and a
+# $XDG_RUNTIME_DIR/hypr directory, neither of which exists here.
+#
+# SWAYSOCK is the critical bit: without it Quickshell.I3 cannot connect and the
+# bar renders but never populates -- workspaces, focus and events all stay dead.
+
+: "${OMARCHY_PATH:=$HOME/.local/share/omarchy}"
+: "${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
+export OMARCHY_PATH XDG_RUNTIME_DIR
+
+[[ -f $OMARCHY_PATH/shell/shell.qml ]] || {
+  echo "No Omarchy shell at $OMARCHY_PATH/shell" >&2; exit 1; }
+
+export PATH="$HOME/.local/bin:$PATH"          # picks up the hyprctl shim
+export SWAYSOCK="${SWAYSOCK:-$(ls "$XDG_RUNTIME_DIR"/sway-ipc.* 2>/dev/null | head -1)}"
+[[ -n $SWAYSOCK ]] || echo "warning: no SWAYSOCK; the bar will not populate" >&2
+
+STATE="${XDG_STATE_HOME:-$HOME/.local/state}/mobileomarchy/shell-off"
+pkill -x quickshell 2>/dev/null
+[[ -f $STATE ]] && exit 0
+
+QS_DISABLE_FILE_WATCHER=1 QS_NO_RELOAD_POPUP=1 \
+  setsid quickshell -n -p "$OMARCHY_PATH/shell" >/dev/null 2>&1 &

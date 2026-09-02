@@ -1,0 +1,38 @@
+#!/bin/bash
+# Touchscreen gestures.
+#
+# Sway's own `bindgesture` reads libinput *gesture* events, and those are only
+# ever produced by touchpads -- a touchscreen emits raw touch events and nothing
+# else, so swipes are invisible to Sway no matter how they are bound. lisgd
+# synthesises gestures from the touch events directly, which is the standard
+# PinePhone answer to this gap.
+#
+# lisgd only reads the evdev node; it does not grab it, so Sway still receives
+# every touch. Reading it at all needs membership of the `input` group (see
+# install/session.sh).
+
+DEVICE=/dev/input/by-path/platform-1c2ac00.i2c-event
+
+if [[ ! -e $DEVICE ]]; then
+  echo "mobileomarchy-gestures: $DEVICE is missing -- is this a PinePhone?" >&2
+  exit 1
+fi
+
+if [[ ! -r $DEVICE ]]; then
+  echo "mobileomarchy-gestures: cannot read $DEVICE." >&2
+  echo "  $(id -un) is not in the 'input' group. Fix with:" >&2
+  echo "    sudo usermod -aG input $(id -un)   # then log out and back in" >&2
+  exit 1
+fi
+
+# -w/-h are the panel's *physical* resolution. lisgd scales libinput's
+# normalised coordinates by them to decide what counts as an edge; it knows
+# nothing about Sway's 360x720 logical space.
+#
+# Gesture spec is nfingers,direction,edge,distance,actmode,command -- so
+# "1,DU,B,*,R" is a one-finger swipe up, starting at the bottom edge, any
+# distance, fired on release. Commands must not contain commas.
+exec lisgd -d "$DEVICE" -w 720 -h 1440 \
+  -g "1,DU,B,*,R,mobileomarchy-toggle-keyboard" \
+  -g "1,LR,L,*,R,swaymsg workspace prev_on_output" \
+  -g "1,RL,R,*,R,swaymsg workspace next_on_output"

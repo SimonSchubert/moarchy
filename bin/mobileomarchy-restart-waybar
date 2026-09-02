@@ -1,6 +1,0 @@
-#!/bin/bash
-# Restart waybar unless it has been toggled off.
-STATE="${XDG_STATE_HOME:-$HOME/.local/state}/mobileomarchy/waybar-off"
-pkill -x waybar 2>/dev/null
-[[ -f $STATE ]] && exit 0
-setsid waybar >/dev/null 2>&1 &

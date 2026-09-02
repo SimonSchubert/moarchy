@@ -6,28 +6,23 @@
 # hardcodes it. We never run install.sh from it.
 #
 # ---------------------------------------------------------------------------
-# Why v3.8.4 and not master
+# Why v4.0.2
 # ---------------------------------------------------------------------------
-# Omarchy 4.x replaced the entire shell layer. At v4.0.0 upstream dropped
-# config/waybar, config/walker, config/elephant, config/swayosd and
-# config/fastfetch, along with the waybar.css / mako.ini / walker.css /
-# swayosd.css / hyprland.conf templates, and moved to `herdr` (a bespoke shell
-# shipped as an x86_64-only binary in pkgs.omarchy.org) plus a Lua-based
-# Hyprland config (default/themed/hyprland.lua.tpl).
+# 4.x replaced the whole shell layer: no waybar, walker, elephant, mako or
+# swayosd. The bar, launcher, notifications and OSD are all one quickshell/QML
+# shell that ships as `shell/` inside this repo, and omarchy-menu talks to it
+# via omarchy-shell.
 #
-# None of that is portable here: herdr has no aarch64 build, and the Lua config
-# is Hyprland-specific on a device that cannot run Hyprland at all.
+# That is portable here -- quickshell is packaged for aarch64 and renders on the
+# Mali-400 -- but it needs a translation pass from Quickshell.Hyprland to
+# Quickshell.I3, applied by install/port-4x.sh. See docs/omarchy-4x-feasibility.md.
 #
-# v3.8.4 is the last release built on waybar + walker + mako + swayosd -- all of
-# which either ship for aarch64 or are Go programs we can build. It also still
-# uses ~/.config/omarchy/current/theme (4.x moved this to ~/.local/state).
-#
-# Upgrading past this pin is a real porting project, not a version bump.
+# The v3.8.4 (waybar-based) port lives on the `main` branch.
 # ---------------------------------------------------------------------------
 
 echo "==> vendoring Omarchy config layer"
 
-OMARCHY_PIN="${OMARCHY_PIN:-8fcc9d6048af4cb0e3af8512c78049857a3b53dd}"   # v3.8.4
+OMARCHY_PIN="${OMARCHY_PIN:-346e69e1cec6c4e8924531874af6ba010a1bc99e}"   # v4.0.2
 
 if [[ -d $OMARCHY_PATH/.git ]]; then
   echo "    updating existing clone"
@@ -40,12 +35,12 @@ fi
 
 git -C "$OMARCHY_PATH" checkout --quiet --detach "$OMARCHY_PIN"
 
-echo "    pinned at $(git -C "$OMARCHY_PATH" rev-parse --short HEAD) (v3.8.4)"
+echo "    pinned at $(git -C "$OMARCHY_PATH" rev-parse --short HEAD) (v4.0.2)"
 echo "    themes: $(find "$OMARCHY_PATH/themes" -maxdepth 2 -name colors.toml | wc -l | tr -d ' ') with colors.toml"
 
-for required in config/waybar config/walker themes; do
+for required in shell config/omarchy themes; do
   if [[ ! -e $OMARCHY_PATH/$required ]]; then
-    echo "    !! $required missing -- is OMARCHY_PIN pointing at a 4.x commit?" >&2
+    echo "    !! $required missing -- is OMARCHY_PIN pointing at a pre-4.x commit?" >&2
     exit 1
   fi
 done

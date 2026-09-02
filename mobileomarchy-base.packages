@@ -8,10 +8,14 @@ sway
 swaybg
 swayidle
 swaylock
-swayosd
-waybar
-mako
 wl-clipboard
+
+# --- The shell -------------------------------------------------------------
+# In 4.x the bar, launcher, notifications and OSD are ONE quickshell/QML shell
+# (shipped as shell/ inside the Omarchy repo). waybar, mako, walker, elephant
+# and swayosd are all gone -- do not reintroduce them, they would fight it.
+quickshell
+inotify-tools
 xdg-desktop-portal-wlr
 xdg-desktop-portal-gtk
 polkit-gnome
@@ -35,6 +39,14 @@ wireplumber
 pamixer
 playerctl
 wiremix
+
+# --- Touch input ------------------------------------------------------------
+# Sway delivers wl_touch to clients and stops there: it has no on-screen
+# keyboard, and `bindgesture` only ever sees libinput gesture events, which
+# touchpads produce and touchscreens do not. Both packages come from the
+# DanctNIX repo that this image already has enabled.
+wvkbd
+lisgd
 
 # --- Hardware ---------------------------------------------------------------
 brightnessctl
@@ -100,6 +112,9 @@ sudo
 # tesseract / tesseract-data-eng
 #   -> Not available for aarch64. OCR capture is dropped.
 #
-# walker, elephant, yay, xdg-terminal-exec, ttf-ia-writer
+# walker, elephant
+#   -> Not used in 4.x at all; the quickshell shell replaces them.
+#
+# yay, xdg-terminal-exec, ttf-ia-writer
 #   -> Not in ALARM. Built from source; see install/build-src.sh and
 #      docker/Dockerfile.builder.

@@ -1,7 +1,7 @@
 #!/bin/bash
 # swaylock in place of hyprlock, themed from the active Omarchy theme.
-THEME="$HOME/.config/omarchy/current/theme"
-BG="$HOME/.config/omarchy/current/background"
+THEME="$HOME/.local/state/omarchy/current/theme"
+BG="$HOME/.local/state/omarchy/current/background"
 
 ACCENT=$(sed -n 's/^accent *= *"\(.*\)"/\1/p' "$THEME/colors.toml" 2>/dev/null)
 ACCENT="${ACCENT#\#}"

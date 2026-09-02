@@ -3,12 +3,15 @@
 
 echo "==> config"
 
-mkdir -p ~/.config/omarchy/{current,themed} ~/.config/sway/config.d
+# 4.x keeps the *current* theme under ~/.local/state; ~/.config/omarchy holds
+# only user-supplied overrides (themes, templates, shell.json).
+mkdir -p ~/.config/omarchy/themed ~/.local/state/omarchy/current ~/.config/sway/config.d
 
 # --- Omarchy's own app configs, used unmodified --------------------------
 # These are compositor-agnostic: they describe apps, not a window manager.
-for d in alacritty foot btop fastfetch waybar walker elephant swayosd wiremix \
-         lazygit tmux imv fontconfig; do
+# 4.x has no waybar/walker/elephant/swayosd config -- one quickshell shell
+# replaces all of them, and it lives in $OMARCHY_PATH/shell, not ~/.config.
+for d in alacritty foot btop wiremix lazygit tmux imv omarchy; do
   if [[ -d $OMARCHY_PATH/config/$d ]]; then
     rm -rf ~/".config/$d"
     cp -r "$OMARCHY_PATH/config/$d" ~/".config/$d"
@@ -16,15 +19,11 @@ for d in alacritty foot btop fastfetch waybar walker elephant swayosd wiremix \
 done
 [[ -f $OMARCHY_PATH/config/starship.toml ]] && cp "$OMARCHY_PATH/config/starship.toml" ~/.config/
 
-# --- Omarchy's icon font (waybar's custom/omarchy module renders from it) ---
-mkdir -p ~/.local/share/fonts
-cp "$OMARCHY_PATH/config/omarchy.ttf" ~/.local/share/fonts/ 2>/dev/null && fc-cache -f >/dev/null 2>&1
-
 # --- Mobile tweak: btop -----------------------------------------------------
-# A fullscreen terminal on the PinePhone is exactly 24x80 -- btop's stated
-# minimum -- so upstream's four-box layout renders only when nothing is tiled
-# beside it, and shows "Terminal size too small" the moment you split.
-# Dropping to cpu+mem makes it usable at any size this screen can produce.
+# A fullscreen terminal here is 47x41 characters, and btop refuses to draw below
+# 60 columns whatever shown_boxes says. Trimming the boxes still helps in a
+# split; mobileomarchy-launch-tui is what actually makes it fit, by dropping the
+# font size.
 if [[ -f ~/.config/btop/btop.conf ]]; then
   sed -i 's/^shown_boxes = .*/shown_boxes = "cpu mem"/' ~/.config/btop/btop.conf
 fi
@@ -38,8 +37,12 @@ cp "$MOBILEOMARCHY_PATH/config/sway/config" ~/.config/sway/config
 # theme's colors.toml without patching upstream at all.
 cp "$MOBILEOMARCHY_PATH/default/themed/sway.conf.tpl" ~/.config/omarchy/themed/
 
-# --- Waybar: our mobile module set overrides Omarchy's desktop one ----------
-cp "$MOBILEOMARCHY_PATH/config/waybar/config.jsonc" ~/.config/waybar/config.jsonc
+# --- The 4.x shell ---------------------------------------------------------
+# shell.json is the shell's config; upstream ships a default we copy verbatim so
+# the shell has something to read (it warns and degrades without one).
+mkdir -p ~/.config/omarchy
+[[ -f $OMARCHY_PATH/config/omarchy/shell.json ]] &&
+  cp -n "$OMARCHY_PATH/config/omarchy/shell.json" ~/.config/omarchy/shell.json 2>/dev/null
 
 # --- Make omarchy-* scripts work outside the installer ---------------------
 PROFILE=~/.profile
@@ -55,7 +58,21 @@ export PATH="$MOBILEOMARCHY_PATH/bin:$OMARCHY_PATH/bin:$PATH"
 PROFILE_EOF
 fi
 
-# --- Pick a starting theme (also generates ~/.config/omarchy/current/theme/sway.conf)
+# --- systemd user units ----------------------------------------------------
+# Omarchy's units are all WantedBy=graphical-session.target, and nothing here
+# activates that target: sway is started from ~/.bash_profile, not uwsm or a
+# display manager. sway-session.target is BindsTo it and is started from
+# autostart.conf, so 4.x's user units (bt-agent, omarchy-sleep-lock, ...) come
+# up at all.
+#
+# The swayosd-server unit this originally existed for is gone in 4.x -- the
+# quickshell shell owns the OSD -- but the target is still what makes every
+# other graphical-session unit start.
+mkdir -p ~/.config/systemd/user
+cp "$MOBILEOMARCHY_PATH/default/systemd/sway-session.target" ~/.config/systemd/user/
+systemctl --user daemon-reload 2>/dev/null || true
+
+# --- Pick a starting theme (also generates ~/.local/state/omarchy/current/theme/sway.conf)
 omarchy-theme-set tokyo-night || echo "    !! theme apply failed; run 'omarchy-theme-set tokyo-night' by hand" >&2
 
 echo "    config in place"

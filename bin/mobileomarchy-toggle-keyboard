@@ -1,0 +1,21 @@
+#!/bin/bash
+# Show/hide the on-screen keyboard.
+#
+# Sway has no on-screen keyboard of its own, so with no USB keyboard attached
+# there was simply no way to type -- touch reached every window fine, it just
+# had nothing to send. wvkbd is a layer-shell keyboard that types through
+# zwp_virtual_keyboard_v1, so every Wayland client sees ordinary key events.
+#
+# autostart.conf starts it with --hidden; SIGRTMIN toggles visibility.
+#
+# Caveat worth knowing: this cannot type into swaylock. Under ext-session-lock
+# the compositor shows only the locker's own surface, and a layer-shell client
+# is not drawn at all. That is why the idle chain no longer auto-locks.
+
+if pkill --signal SIGRTMIN --exact wvkbd-mobintl 2>/dev/null; then
+  exit 0
+fi
+
+# Not running (crashed, or autostart never fired). Start it visible -- the only
+# reason to reach for this is to type.
+exec wvkbd-mobintl -H 250 -L 160
