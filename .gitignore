@@ -1,6 +1,6 @@
 # Built aarch64 packages, produced by docker/Dockerfile.builder
-packages/*.pkg.tar.zst
-packages/*.pkg.tar.zst.sig
+# Arch Linux ARM's makepkg.conf does not use PKGEXT=.pkg.tar.zst -- match any
+packages/*.pkg.tar.*
 
 # Downloaded images
 *.img
