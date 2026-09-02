@@ -1,0 +1,17 @@
+#!/bin/bash
+# Launch a TUI in a fullscreen terminal sized so it actually renders.
+#
+# Measured on the PinePhone (720x1440, scale 2 -> 360x720 logical): a fullscreen
+# foot at Omarchy's font size 9 gives a 47x41 character grid. btop refuses to
+# draw below 60 columns -- and that floor is independent of shown_boxes, so
+# trimming boxes does not help. Dropping to size 7 yields ~60 columns, which is
+# still legible on a 5.95" panel.
+#
+# Override with MOBILEOMARCHY_TUI_FONT_SIZE if you want a different trade-off.
+FONT_SIZE="${MOBILEOMARCHY_TUI_FONT_SIZE:-7}"
+
+[[ $# -gt 0 ]] || { echo "usage: mobileomarchy-launch-tui <command> [args...]" >&2; exit 1; }
+
+exec foot --app-id=moa-tui \
+  --font="JetBrainsMono Nerd Font:size=$FONT_SIZE" \
+  "$@"

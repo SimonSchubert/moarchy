@@ -1,0 +1,4 @@
+#!/bin/bash
+# Shim. Upstream Omarchy calls this after a theme change to make Hyprland
+# re-read its config. Under Sway the equivalent is a reload.
+swaymsg reload >/dev/null 2>&1 || true

@@ -1,0 +1,9 @@
+#!/bin/bash
+# Upstream Omarchy opens terminals via xdg-terminal-exec, which has no aarch64
+# binary and is one of the source-built packages that may not have made it.
+# Degrade through what is actually installed rather than binding a dead key.
+for t in xdg-terminal-exec alacritty foot; do
+  if command -v "$t" >/dev/null; then exec "$t" "$@"; fi
+done
+notify-send "No terminal found" "Install alacritty or foot" 2>/dev/null
+exit 1

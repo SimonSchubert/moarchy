@@ -1,0 +1,3 @@
+#!/bin/bash
+# Shim: upstream's version is Hyprland-specific.
+exec mobileomarchy-toggle-waybar "$@"

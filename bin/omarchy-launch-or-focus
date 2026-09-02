@@ -1,0 +1,25 @@
+#!/bin/bash
+# Sway override. Upstream matches windows with `hyprctl clients -j` and focuses
+# by address; the Sway equivalent walks the tree and focuses by con_id.
+
+if (($# == 0)); then
+  echo "Usage: omarchy-launch-or-focus [window-pattern] [launch-command]"
+  exit 1
+fi
+
+WINDOW_PATTERN="$1"
+LAUNCH_COMMAND="${2:-$WINDOW_PATTERN}"
+
+CON_ID=$(swaymsg -t get_tree | jq -r --arg p "$WINDOW_PATTERN" '
+  [recurse(.nodes[]?, .floating_nodes[]?)
+   | select(.pid != null)
+   | select(((.app_id // "") | test("\\b" + $p + "\\b"; "i"))
+         or ((.window_properties.class // "") | test("\\b" + $p + "\\b"; "i"))
+         or ((.name // "") | test("\\b" + $p + "\\b"; "i")))
+   | .id] | first // empty')
+
+if [[ -n $CON_ID ]]; then
+  swaymsg "[con_id=$CON_ID] focus"
+else
+  eval exec setsid $LAUNCH_COMMAND
+fi

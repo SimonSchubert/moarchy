@@ -1,0 +1,23 @@
+#!/bin/bash
+# Shim for upstream Omarchy's uwsm-app.
+#
+# 16 of the omarchy-* scripts we vendor launch things as `uwsm-app -- <cmd>`,
+# which puts each app in its own systemd scope under a uwsm-managed session.
+# mobileomarchy starts Sway straight from the login shell (uwsm is a lot of
+# machinery for a phone), so the honest translation is "just run it".
+#
+# Without this shim, SUPER+SPACE (walker), the editor, the TUIs and background
+# switching would all silently do nothing.
+
+args=()
+seen_sep=0
+for a in "$@"; do
+  if [[ $seen_sep -eq 0 && $a == "--" ]]; then
+    seen_sep=1
+    continue
+  fi
+  args+=("$a")
+done
+
+(( ${#args[@]} )) || exit 0
+exec "${args[@]}"

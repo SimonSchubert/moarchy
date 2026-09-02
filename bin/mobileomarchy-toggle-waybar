@@ -1,0 +1,12 @@
+#!/bin/bash
+# Show/hide the top bar, remembering the choice across restarts.
+STATE="${XDG_STATE_HOME:-$HOME/.local/state}/mobileomarchy/waybar-off"
+mkdir -p "$(dirname "$STATE")"
+
+if pgrep -x waybar >/dev/null; then
+  touch "$STATE"
+  pkill -x waybar
+else
+  rm -f "$STATE"
+  setsid waybar >/dev/null 2>&1 &
+fi

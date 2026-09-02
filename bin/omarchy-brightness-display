@@ -1,0 +1,38 @@
+#!/bin/bash
+# Sway override of omarchy-brightness-display.
+#
+# Upstream reaches for `hyprctl dispatch dpms` on off/on and probes for Apple
+# displays. Here the screen is the PinePhone's own panel, so DPMS goes through
+# swaymsg and the Apple path is dropped. The non-uniform step heuristic below
+# 5% is kept verbatim -- it matters more on a phone, not less.
+
+step="${1:-+5%}"
+
+device="$(ls -1 /sys/class/backlight 2>/dev/null | head -n1)"
+[[ -n $device ]] || exit 0
+
+if [[ $step == "off" ]]; then
+  swaymsg "output * power off" >/dev/null 2>&1
+  exit 0
+elif [[ $step == "on" ]]; then
+  swaymsg "output * power on" >/dev/null 2>&1
+  exit 0
+fi
+
+current=$(brightnessctl -d "$device" -m | cut -d',' -f4 | tr -d '%')
+
+if [[ $step == "+5%" ]]; then
+  if ((current < 5)); then ((target = current + 1)); else ((target = current + 5)); fi
+  ((target > 100)) && target=100
+  step="$target%"
+elif [[ $step == "5%-" ]]; then
+  if ((current <= 5)); then ((target = current - 1)); else ((target = current - 5)); fi
+  ((target < 1)) && target=1
+  step="$target%"
+fi
+
+brightnessctl -d "$device" set "$step" >/dev/null
+
+if command -v omarchy-swayosd-brightness >/dev/null; then
+  omarchy-swayosd-brightness "$(brightnessctl -d "$device" -m | cut -d',' -f4 | tr -d '%')"
+fi

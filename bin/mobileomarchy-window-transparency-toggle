@@ -1,0 +1,14 @@
+#!/bin/bash
+# Toggle transparency on the focused window. Sway counterpart to
+# omarchy-hyprland-window-transparency-toggle. Sway has a native `opacity`
+# command, so unlike most Hyprland decoration features this one survives.
+OPACITY=$(swaymsg -t get_tree |
+  jq -r 'recurse(.nodes[]?, .floating_nodes[]?) | select(.focused == true) | .opacity // 1')
+
+# Anything at (or effectively at) full opacity gets dimmed; anything already
+# dimmed goes back to opaque.
+if awk -v o="${OPACITY:-1}" 'BEGIN { exit !(o >= 0.999) }'; then
+  swaymsg opacity 0.9
+else
+  swaymsg opacity 1
+fi

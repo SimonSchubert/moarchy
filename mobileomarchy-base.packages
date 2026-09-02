@@ -1,0 +1,105 @@
+# mobileomarchy core package list (aarch64 / Arch Linux ARM + DanctNIX)
+# Installed by install/packages.sh. Every entry here was verified to exist for
+# aarch64 on archlinuxarm.org. Packages Omarchy installs that are x86_64-only
+# are listed at the bottom of this file as comments, with the reason.
+
+# --- Compositor and session -------------------------------------------------
+sway
+swaybg
+swayidle
+swaylock
+swayosd
+waybar
+mako
+wl-clipboard
+xdg-desktop-portal-wlr
+xdg-desktop-portal-gtk
+polkit-gnome
+wlsunset
+
+# --- Terminals --------------------------------------------------------------
+# Both are themed by upstream Omarchy templates (alacritty.toml.tpl, foot.ini.tpl).
+# foot is markedly lighter on a Mali-400 / A53; alacritty keeps Omarchy fidelity.
+alacritty
+foot
+
+# --- Capture ----------------------------------------------------------------
+grim
+slurp
+satty
+
+# --- Audio ------------------------------------------------------------------
+pipewire
+pipewire-pulse
+wireplumber
+pamixer
+playerctl
+wiremix
+
+# --- Hardware ---------------------------------------------------------------
+brightnessctl
+networkmanager
+bluez
+bluez-utils
+
+# --- CLI / TUI (the Omarchy idiom, and what is actually usable on this SoC) --
+bat
+bluetui
+btop
+dust
+expac
+eza
+fastfetch
+fd
+fzf
+git
+gum
+impala
+jq
+lazygit
+less
+man-db
+neovim
+plocate
+ripgrep
+starship
+tldr
+tmux
+unzip
+zoxide
+
+# --- Fonts ------------------------------------------------------------------
+noto-fonts
+noto-fonts-emoji
+ttf-jetbrains-mono-nerd
+
+# --- Support ----------------------------------------------------------------
+gnome-keyring
+libsecret
+imagemagick
+mesa-demos
+mesa-utils
+openssh
+sudo
+
+# ============================================================================
+# Deliberately NOT installed
+# ============================================================================
+# hyprland, hyprlock, hypridle, hyprsunset, hyprpicker
+#   -> These DO build for aarch64, but Hyprland hard-requires a GLES 3.0 context
+#      (src/render/OpenGL.cpp: RASSERT on "either GLES3.2 or 3.0"). The Mali-400
+#      MP2 in the Allwinner A64 is GLES 2.0 only. Replaced by sway/swaylock/
+#      swayidle/wlsunset/grim+slurp.
+#
+# 1password-beta, 1password-cli, spotify, obsidian, typora, dotnet-runtime-9.0,
+# aether, cliamp, asdcontrol, tzupdate, ufw-docker
+#   -> x86_64-only (Omarchy's own repo has no aarch64 tree:
+#      pkgs.omarchy.org/stable/aarch64/omarchy.db returns 404), and none are
+#      sensible on a 720x1440 phone screen.
+#
+# tesseract / tesseract-data-eng
+#   -> Not available for aarch64. OCR capture is dropped.
+#
+# walker, elephant, yay, xdg-terminal-exec, ttf-ia-writer
+#   -> Not in ALARM. Built from source; see install/build-src.sh and
+#      docker/Dockerfile.builder.

@@ -1,0 +1,3 @@
+#!/bin/bash
+# Shim: upstream uses hyprshot.
+exec mobileomarchy-capture-screenshot "$@"

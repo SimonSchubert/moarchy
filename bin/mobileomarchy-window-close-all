@@ -1,0 +1,6 @@
+#!/bin/bash
+# Close every window on every workspace. Sway counterpart to
+# omarchy-hyprland-window-close-all.
+swaymsg -t get_tree |
+  jq -r '.. | objects | select(.pid? and .name?) | .id' |
+  while read -r id; do swaymsg "[con_id=$id] kill"; done

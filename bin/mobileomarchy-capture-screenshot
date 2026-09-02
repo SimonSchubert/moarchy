@@ -1,0 +1,19 @@
+#!/bin/bash
+# grim + slurp + satty, replacing Omarchy's hyprshot-based capture.
+DIR="${XDG_PICTURES_DIR:-$HOME/Pictures}/Screenshots"
+mkdir -p "$DIR"
+OUT="$DIR/screenshot-$(date +%Y%m%d-%H%M%S).png"
+
+if [[ $1 == "region" ]]; then
+  GEOM=$(slurp) || exit 1
+  grim -g "$GEOM" "$OUT" || exit 1
+else
+  grim "$OUT" || exit 1
+fi
+
+if command -v satty >/dev/null; then
+  satty --filename "$OUT" --output-filename "$OUT" --early-exit
+fi
+
+wl-copy < "$OUT"
+notify-send "Screenshot" "Saved to $OUT" 2>/dev/null

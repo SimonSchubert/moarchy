@@ -1,0 +1,14 @@
+#!/bin/bash
+# Toggle gaps on/off. Sway counterpart to omarchy-hyprland-window-gaps-toggle.
+STATE="${XDG_STATE_HOME:-$HOME/.local/state}/mobileomarchy/gaps-off"
+mkdir -p "$(dirname "$STATE")"
+
+if [[ -f $STATE ]]; then
+  rm -f "$STATE"
+  swaymsg gaps inner all set 3
+  swaymsg gaps outer all set 0
+else
+  touch "$STATE"
+  swaymsg gaps inner all set 0
+  swaymsg gaps outer all set 0
+fi

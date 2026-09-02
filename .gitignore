@@ -1,0 +1,7 @@
+# Built aarch64 packages, produced by docker/Dockerfile.builder
+packages/*.pkg.tar.zst
+packages/*.pkg.tar.zst.sig
+
+# Downloaded images
+*.img
+*.img.xz

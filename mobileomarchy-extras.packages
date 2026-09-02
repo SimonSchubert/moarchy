@@ -1,0 +1,19 @@
+# Optional extras -- NOT installed by install.sh.
+#
+# All verified available for aarch64, but each is heavy for an Allwinner A64
+# with 2-3 GB of RAM. Install what you actually want:
+#
+#   sudo pacman -S --needed $(grep -v '^#' mobileomarchy-extras.packages | grep -v '^$')
+
+chromium          # usable, but it is the heaviest thing you can run on this SoC
+nautilus          # GUI file manager; mobileomarchy-launch-files picks it up automatically
+mpv
+imv
+signal-desktop
+kdenlive
+libreoffice-fresh
+gpu-screen-recorder
+
+# On-screen keyboard. Built primarily for Phosh; under bare Sway it is the least
+# proven piece of this setup. Try it, and fall back to SSH if it misbehaves.
+squeekboard

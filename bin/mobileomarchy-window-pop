@@ -1,0 +1,4 @@
+#!/bin/bash
+# Float, centre and pin the focused window. Sway counterpart to
+# omarchy-hyprland-window-pop.
+swaymsg floating enable, resize set width 90ppt height 70ppt, move position center, sticky enable

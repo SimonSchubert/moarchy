@@ -1,0 +1,37 @@
+#!/bin/bash
+# Sway override. Upstream builds this list from `hyprctl -j binds`; Sway has no
+# equivalent introspection, so we read the binding file that is the source of
+# truth anyway, using the section comments as group headings.
+
+BINDINGS="${MOBILEOMARCHY_PATH:-$HOME/.local/share/mobileomarchy}/default/sway/bindings.conf"
+[[ -f $BINDINGS ]] || { echo "No bindings file at $BINDINGS" >&2; exit 1; }
+
+output_keybindings() {
+  local section=""
+  while IFS= read -r line; do
+    if [[ $line =~ ^#\ ([A-Z][A-Za-z].*)$ ]]; then
+      section="${BASH_REMATCH[1]}"
+    elif [[ $line =~ ^bindsym[[:space:]]+(.*)$ ]]; then
+      local rest="${BASH_REMATCH[1]}"
+      rest="${rest#--to-code }"
+      rest="${rest#--locked }"
+      rest="${rest#--whole-window }"
+      # bindings.conf pads its columns; let read collapse that run of spaces
+      local keys action
+      read -r keys action <<<"$rest"
+      keys="${keys//\$mod/Super}"
+      action="${action#exec }"
+      printf '%-28s  %-42s  %s\n' "$keys" "$action" "$section"
+    fi
+  done <"$BINDINGS"
+}
+
+if [[ $1 == "--print" || $1 == "-p" ]]; then
+  output_keybindings
+elif command -v walker >/dev/null; then
+  output_keybindings | walker --dmenu -p 'Keybindings'
+elif command -v fuzzel >/dev/null; then
+  output_keybindings | fuzzel --dmenu -p 'Keybindings> '
+else
+  output_keybindings | less
+fi

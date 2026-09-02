@@ -1,0 +1,16 @@
+#!/bin/bash
+# swaylock in place of hyprlock, themed from the active Omarchy theme.
+THEME="$HOME/.config/omarchy/current/theme"
+BG="$HOME/.config/omarchy/current/background"
+
+ACCENT=$(sed -n 's/^accent *= *"\(.*\)"/\1/p' "$THEME/colors.toml" 2>/dev/null)
+ACCENT="${ACCENT#\#}"
+: "${ACCENT:=7aa2f7}"
+
+ARGS=(--daemonize --indicator-radius 90 --indicator-thickness 8
+      --ring-color "$ACCENT" --key-hl-color ffffff --line-color 00000000
+      --inside-color 00000088 --separator-color 00000000)
+
+[[ -f $BG ]] && ARGS+=(--image "$BG" --scaling fill) || ARGS+=(--color 000000)
+
+exec swaylock "${ARGS[@]}"
