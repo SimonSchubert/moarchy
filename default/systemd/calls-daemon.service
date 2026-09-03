@@ -1,0 +1,24 @@
+# Full replacement for the packaged unit, not a drop-in.
+#
+# Upstream ships this for GNOME with Requisite=gnome-session-initialized.target,
+# a target that never exists under sway -- so the daemon would sit enabled and
+# fail instantly on every start with "Unit gnome-session-initialized.target not
+# found". A drop-in cannot fix it: systemd reads the override, but an empty
+# Requisite= does not clear the inherited list (verified on this device --
+# `systemctl show` still reported the GNOME dependency). A unit of the same name
+# in ~/.config/systemd/user does take precedence, so replace it outright.
+#
+# Without this, incoming calls never ring: nothing is listening on D-Bus.
+[Unit]
+Description=A phone dialer and call handler (daemon mode)
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+BusName=org.gnome.Calls
+ExecStart=/usr/bin/gnome-calls --gapplication-service
+Type=dbus
+Restart=on-failure
+
+[Install]
+WantedBy=sway-session.target

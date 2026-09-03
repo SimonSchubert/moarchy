@@ -97,6 +97,24 @@ tmux
 unzip
 zoxide
 
+# --- Telephony -------------------------------------------------------------
+# Calls and SMS on the Quectel EG25-G. eg25-manager (modem power/GPIO) and the
+# PinePhone ALSA UCM profile already come from the DanctNIX image; these are the
+# layer above. gnome-calls and chatty are Phosh-era GTK apps, but they are plain
+# Wayland clients and already laid out for a 360px-wide screen, which is exactly
+# what this is. Together they cost ~115 MB resident.
+#
+# See install/telephony.sh -- their systemd units need replacing, not enabling.
+#   gnome-calls  dialer and in-call UI
+#   chatty       SMS/MMS
+#   callaudiod   earpiece/speaker/headset routing during a call
+#   mmsd-tng     MMS transport, used by chatty
+modemmanager
+gnome-calls
+chatty
+callaudiod
+mmsd-tng
+
 # --- Fonts ------------------------------------------------------------------
 noto-fonts
 noto-fonts-emoji
