@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Port Omarchy 4.x's quickshell shell to run under Sway on the PinePhone.
 #
-#   PHONE=alarm@192.168.0.18 ./scripts/port-4x-shell.sh
+#   PHONE=alarm@10.15.19.82 ./scripts/port-4x-shell.sh
 #
 # Non-destructive: works on a scratch clone in ~/.cache/omarchy-4x-experiment and
 # never touches the live v3.8.4 session. Run it, look at the phone, then stop the

@@ -55,6 +55,13 @@ Better still, that template engine already processes a *user* template directory
 (`~/.config/omarchy/themed`) ahead of its own built-ins — so mobileomarchy adds
 Sway theming **without patching the vendored upstream at all**.
 
+## How this was built
+
+[`docs/build-log.md`](docs/build-log.md) is the chronological account — every
+measurement, and every dead end, including the ones that cost the most time
+(RNDIS vs macOS, a write-protected SD adapter, Docker Desktop's missing Landlock,
+and an assumption about Omarchy 4.x that turned out to be wrong twice over).
+
 ## Pinned to Omarchy v3.8.4 (deliberately)
 
 Omarchy 4.x rebuilt its whole shell layer. At v4.0.0 upstream dropped

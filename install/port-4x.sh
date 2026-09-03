@@ -135,3 +135,197 @@ echo "    Workspaces.qml: occupied guarded, focus via swaymsg, 3 persistent work
 
 remaining=$(grep -rl "import Quickshell.Hyprland" "$SHELL_DIR" --include=*.qml 2>/dev/null | wc -l | tr -d ' ')
 echo "    translated; files still importing Quickshell.Hyprland: $remaining"
+
+# --- Launcher back button --------------------------------------------------
+# The 4.x launcher retreats on Escape (clear filter / close) and on
+# Backspace-or-Left at an empty filter (up one level). Both are keyboard-only,
+# and this device has no keyboard: wvkbd can send them, but it is a layer-shell
+# panel covering the bottom half of the screen, so reaching "up one level"
+# means summoning a keyboard over the very list you are navigating.
+#
+# So give the header a back button whenever the hardware says the keys are not
+# there -- a touchscreen is present, or no real keyboard is.
+#
+# "No real keyboard" cannot come from `swaymsg -t get_inputs`: it types the
+# power button, the volume rocker, the headset jack *and* wvkbd itself as
+# "keyboard", so that check is true on every PinePhone and the button would
+# never appear. /proc/bus/input/devices carries the evdev capability bitmaps
+# instead, which say what a device can actually emit.
+python3 - "$SHELL_DIR" <<'BACKBTN_EOF'
+import pathlib, sys
+
+p = pathlib.Path(sys.argv[1]) / "plugins" / "menu" / "Menu.qml"
+if not p.exists():
+    raise SystemExit(0)
+s = p.read_text(encoding="utf-8")
+
+# --- probe -----------------------------------------------------------------
+probe = r'''  property var navStack: []
+
+  // Does this machine have the keys the launcher's navigation assumes?
+  //
+  // Defaults say "no keyboard" so the button is present on the first frame:
+  // blockLoading resolves the probe during construction, but if /proc ever
+  // fails to read, a spare back button on a desktop is the harmless way to be
+  // wrong -- a phone with no way back is not.
+  property bool hasTouchscreen: false
+  property bool hasHardwareKeyboard: false
+  readonly property bool showBackButton: root.hasTouchscreen || !root.hasHardwareKeyboard
+
+  // /proc/bus/input/devices prints capability bitmaps as space-separated hex
+  // words, most significant first, so the LAST word holds bits 0-63. Indexing
+  // by hex digit keeps this clear of JS's 32-bit bitwise operators (and of
+  // BigInt, which the QML engine does not guarantee).
+  function evdevBit(mask, bit) {
+    if (!mask) return false
+    var words = String(mask).split(/\s+/).filter(function(w) { return w.length > 0 })
+    var w = words.length - 1 - Math.floor(bit / 64)
+    if (w < 0 || w >= words.length) return false
+    var within = bit % 64
+    var digit = words[w].length - 1 - Math.floor(within / 4)   // 4 bits per hex digit
+    if (digit < 0) return false
+    var nibble = parseInt(words[w].charAt(digit), 16)
+    if (isNaN(nibble)) return false
+    return ((nibble >> (within % 4)) & 1) === 1
+  }
+
+  // Classify by capability, the way libinput itself does:
+  //
+  //   keyboard    KEY_ESC + KEY_1 + KEY_Q + KEY_SPACE. A key-emitting device
+  //               that cannot type a letter is a button, not a keyboard --
+  //               which is exactly what the PinePhone's four pseudo-keyboards
+  //               are (power, volume, wakeup, headset jack).
+  //   touchscreen BTN_TOUCH + INPUT_PROP_DIRECT. The PROP is what separates a
+  //               touchscreen from a touchpad; both report BTN_TOUCH.
+  function classifyInputDevices(text) {
+    var KEY_ESC = 1, KEY_1 = 2, KEY_Q = 16, KEY_SPACE = 57
+    var BTN_TOUCH = 0x14a, INPUT_PROP_DIRECT = 1
+    var touch = false, keyboard = false
+    var blocks = String(text || "").split(/\n\s*\n/)
+    for (var i = 0; i < blocks.length; i++) {
+      var lines = blocks[i].split("\n")
+      var name = "", key = "", prop = "", m
+      for (var j = 0; j < lines.length; j++) {
+        if ((m = lines[j].match(/^N: Name="(.*)"/))) name = m[1]
+        else if ((m = lines[j].match(/^B: KEY=(.*)$/))) key = m[1]
+        else if ((m = lines[j].match(/^B: PROP=(.*)$/))) prop = m[1]
+      }
+      if (!name) continue
+      if (root.evdevBit(key, BTN_TOUCH) && root.evdevBit(prop, INPUT_PROP_DIRECT)) touch = true
+      if (root.evdevBit(key, KEY_ESC) && root.evdevBit(key, KEY_1)
+          && root.evdevBit(key, KEY_Q) && root.evdevBit(key, KEY_SPACE)) keyboard = true
+    }
+    root.hasTouchscreen = touch
+    root.hasHardwareKeyboard = keyboard
+  }
+
+  // Read once during construction (blockLoading, so the first frame is already
+  // right), then re-read on each open -- /proc/bus/input/devices delivers no
+  // inotify events, and an open is the only moment the answer is needed. It is
+  // 1.5 KB.
+  FileView {
+    id: inputDevicesFile
+    path: "/proc/bus/input/devices"
+    blockLoading: true
+    onLoaded: root.classifyInputDevices(inputDevicesFile.text())
+    onLoadFailed: { root.hasTouchscreen = false; root.hasHardwareKeyboard = false }
+  }
+
+  // One affordance for all three retreats, so the button never dead-ends:
+  // narrow the search, then climb the menu, then close. Same order as Escape
+  // and Backspace, so touch and keyboard stay in step.
+  function goBackOrClose() {
+    if (root.filterText) root.setFilter("")
+    else if (!root.goBack()) root.cancel()
+  }
+'''
+
+anchor = "  property var navStack: []\n"
+if anchor not in s:
+    print("    !! navStack anchor not found -- back button probe not inserted", file=sys.stderr)
+    raise SystemExit(0)
+s = s.replace(anchor, probe, 1)
+
+# --- refresh the probe as the launcher opens -------------------------------
+# Deferred, and that is load-bearing. open() runs inside the IPC handler for
+# `omarchy-shell shell summon`, and a blockLoading FileView reload spins a
+# nested event loop; doing that here leaves the rest of open() unfinished, so
+# the launcher never becomes visible -- silently, with nothing in the log.
+# Qt.callLater puts the read after the open has returned.
+old_open = """  function open(payloadJson) {
+    var payload = ({})"""
+new_open = """  function open(payloadJson) {
+    Qt.callLater(function() { inputDevicesFile.reload() })
+    var payload = ({})"""
+if old_open in s:
+    s = s.replace(old_open, new_open, 1)
+else:
+    print("    !! open() anchor not found -- probe will not refresh per open", file=sys.stderr)
+
+# --- header: back button, then the filter/prompt text ----------------------
+# Matched down to the Text's anchors only, so the prompt's own bindings (which
+# contain non-ASCII ellipses) stay untouched.
+old_header = """        Rectangle {
+          width: parent.width
+          height: root.headerHeight
+          radius: root.cornerRadius
+          color: "transparent"
+
+          Text {
+            textFormat: Text.PlainText
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+"""
+
+new_header = """        Rectangle {
+          width: parent.width
+          height: root.headerHeight
+          radius: root.cornerRadius
+          color: "transparent"
+
+          // Square on the header's own height, so the tap target is as tall as
+          // the row it sits in rather than as tall as the glyph.
+          Rectangle {
+            id: backButton
+            visible: root.showBackButton
+            width: visible ? root.headerHeight : 0
+            height: root.headerHeight
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+            radius: root.cornerRadius
+            color: backTap.pressed ? root.selectedBackground : "transparent"
+
+            Text {
+              anchors.centerIn: parent
+              textFormat: Text.PlainText
+              text: "\\uf053"                       // nf-fa-chevron_left
+              color: backTap.pressed ? root.selectedText : root.foreground
+              opacity: backTap.pressed ? 1 : 0.58   // matches the idle prompt
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.iconLarge
+            }
+
+            MouseArea {
+              id: backTap
+              anchors.fill: parent
+              onClicked: root.goBackOrClose()
+            }
+          }
+
+          Text {
+            textFormat: Text.PlainText
+            anchors.left: backButton.visible ? backButton.right : parent.left
+            anchors.leftMargin: backButton.visible ? Style.space(4) : 0
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+"""
+
+if old_header in s:
+    s = s.replace(old_header, new_header, 1)
+else:
+    print("    !! menu header anchor not found -- back button not rendered", file=sys.stderr)
+
+p.write_text(s, encoding="utf-8")
+BACKBTN_EOF
+echo "    Menu.qml: back button when a touchscreen is present or no real keyboard is"
