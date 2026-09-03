@@ -1,0 +1,64 @@
+#!/bin/bash
+# mobileomarchy-screen -- what the power button does on the phone.
+#
+# "Lock" here means: blank the panel and stop the touchscreen from producing
+# events. It deliberately does NOT start a password locker.
+#
+# swaylock and Omarchy 4.x's quickshell lock plugin are both ext-session-lock
+# clients, and under that protocol the compositor draws the locker's surface and
+# nothing else -- every layer-shell client is hidden, the on-screen keyboard
+# included. So a password lock on a device with no keyboard can only be cleared
+# over ssh, and wiring one to the power button would strand the phone on every
+# stray press.
+#
+# A dead touchscreen behind a dark panel gives the thing you actually want from
+# a pocket -- nothing sees the screen, nothing reacts to it -- and the hardware
+# power button is outside that state, so it can always undo it. A real password
+# lock stays deliberate, on Super+Ctrl+L.
+#
+# The lock state lives in a flag file rather than being read back from the
+# output's power flag, because swayidle blanks the same output on its own idle
+# timeout. Keying off the panel would make the button's meaning depend on
+# whether the idle timer had fired.
+
+set -uo pipefail
+
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/mobileomarchy"
+FLAG="$STATE_DIR/screen-locked"
+
+# The Goodix panel shows up twice in get_inputs, as a touch device and as a
+# keyboard; both share one identifier, and `input <id> events` covers both.
+touch_devices() {
+  swaymsg -r -t get_inputs | jq -r '.[] | select(.type == "touch") | .identifier' | sort -u
+}
+
+set_touch() {
+  local id
+  while read -r id; do
+    [[ -n $id ]] && swaymsg "input \"$id\" events $1" >/dev/null
+  done < <(touch_devices)
+}
+
+lock() {
+  mkdir -p "$STATE_DIR"
+  : >"$FLAG"
+  set_touch disabled            # before the blank, so the dark panel is already deaf
+  swaymsg 'output * power off' >/dev/null
+}
+
+unlock() {
+  rm -f "$FLAG"
+  swaymsg 'output * power on' >/dev/null
+  set_touch enabled             # after the panel is back, so the first tap is seen
+}
+
+case "${1:-toggle}" in
+  lock)   lock ;;
+  unlock) unlock ;;
+  toggle) if [[ -e $FLAG ]]; then unlock; else lock; fi ;;
+  # swayidle's resume hook. Any input wakes the panel, but while we are locked
+  # the only input that should is the power button, which unlocks in its own
+  # right -- so resume must not light the screen behind our back.
+  wake)   [[ -e $FLAG ]] || swaymsg 'output * power on' >/dev/null ;;
+  *)      echo "usage: ${0##*/} [lock|unlock|toggle|wake]" >&2; exit 1 ;;
+esac

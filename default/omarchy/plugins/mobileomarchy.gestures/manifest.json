@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "mobileomarchy.gestures",
+  "name": "Touch gestures",
+  "version": "1.0.0",
+  "author": "mobileomarchy",
+  "description": "Bottom-edge touchscreen gestures: swipe sideways to change workspace, swipe up for the Omarchy menu.",
+  "kinds": [
+    "panel"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "panel": "Service.qml"
+  }
+}

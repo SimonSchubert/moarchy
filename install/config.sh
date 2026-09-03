@@ -3,12 +3,15 @@
 
 echo "==> config"
 
-mkdir -p ~/.config/omarchy/{current,themed} ~/.config/sway/config.d
+# 4.x keeps the *current* theme under ~/.local/state; ~/.config/omarchy holds
+# only user-supplied overrides (themes, templates, shell.json).
+mkdir -p ~/.config/omarchy/themed ~/.local/state/omarchy/current ~/.config/sway/config.d
 
 # --- Omarchy's own app configs, used unmodified --------------------------
 # These are compositor-agnostic: they describe apps, not a window manager.
-for d in alacritty foot btop fastfetch waybar walker elephant swayosd wiremix \
-         lazygit tmux imv fontconfig; do
+# 4.x has no waybar/walker/elephant/swayosd config -- one quickshell shell
+# replaces all of them, and it lives in $OMARCHY_PATH/shell, not ~/.config.
+for d in alacritty foot btop wiremix lazygit tmux imv omarchy; do
   if [[ -d $OMARCHY_PATH/config/$d ]]; then
     rm -rf ~/".config/$d"
     cp -r "$OMARCHY_PATH/config/$d" ~/".config/$d"
@@ -16,15 +19,42 @@ for d in alacritty foot btop fastfetch waybar walker elephant swayosd wiremix \
 done
 [[ -f $OMARCHY_PATH/config/starship.toml ]] && cp "$OMARCHY_PATH/config/starship.toml" ~/.config/
 
-# --- Omarchy's icon font (waybar's custom/omarchy module renders from it) ---
+# --- Omarchy's icon font (the bar's logo glyph, \ue900, comes from it) -------
+# 4.x moved this from config/omarchy.ttf to default/fonts/omarchy/omarchy.ttf.
+# Without it the logo renders as tofu.
 mkdir -p ~/.local/share/fonts
-cp "$OMARCHY_PATH/config/omarchy.ttf" ~/.local/share/fonts/ 2>/dev/null && fc-cache -f >/dev/null 2>&1
+if [[ -f $OMARCHY_PATH/default/fonts/omarchy/omarchy.ttf ]]; then
+  cp "$OMARCHY_PATH/default/fonts/omarchy/omarchy.ttf" ~/.local/share/fonts/
+  fc-cache -f >/dev/null 2>&1
+fi
+
+# --- Mobile tweak: bar clock -----------------------------------------------
+# The bar is centre-anchored on the clock, so its width sets where every other
+# module sits. Upstream's "dddd HH:mm" changes width with the day name
+# ("Wednesday" vs "Monday"), which visibly shifts the whole bar once a day and
+# leaves no slack on a 360px-wide screen. HH:mm is fixed width.
+# Patched in place so a user's own shell.json edits survive.
+if [[ -f ~/.config/omarchy/shell.json ]]; then
+  python3 - <<'CLOCK_EOF'
+import json, os
+p = os.path.expanduser("~/.config/omarchy/shell.json")
+try:
+    d = json.load(open(p))
+except Exception:
+    raise SystemExit(0)
+for m in d.get("bar", {}).get("layout", {}).get("center", []):
+    if m.get("id") == "omarchy.clock":
+        m["format"] = "HH:mm"
+        m["formatAlt"] = "ddd d MMM"
+json.dump(d, open(p, "w"), indent=2)
+CLOCK_EOF
+fi
 
 # --- Mobile tweak: btop -----------------------------------------------------
-# A fullscreen terminal on the PinePhone is exactly 24x80 -- btop's stated
-# minimum -- so upstream's four-box layout renders only when nothing is tiled
-# beside it, and shows "Terminal size too small" the moment you split.
-# Dropping to cpu+mem makes it usable at any size this screen can produce.
+# A fullscreen terminal here is 47x41 characters, and btop refuses to draw below
+# 60 columns whatever shown_boxes says. Trimming the boxes still helps in a
+# split; mobileomarchy-launch-tui is what actually makes it fit, by dropping the
+# font size.
 if [[ -f ~/.config/btop/btop.conf ]]; then
   sed -i 's/^shown_boxes = .*/shown_boxes = "cpu mem"/' ~/.config/btop/btop.conf
 fi
@@ -38,8 +68,53 @@ cp "$MOBILEOMARCHY_PATH/config/sway/config" ~/.config/sway/config
 # theme's colors.toml without patching upstream at all.
 cp "$MOBILEOMARCHY_PATH/default/themed/sway.conf.tpl" ~/.config/omarchy/themed/
 
-# --- Waybar: our mobile module set overrides Omarchy's desktop one ----------
-cp "$MOBILEOMARCHY_PATH/config/waybar/config.jsonc" ~/.config/waybar/config.jsonc
+# --- The 4.x shell ---------------------------------------------------------
+# shell.json is the shell's config; upstream ships a default we copy verbatim so
+# the shell has something to read (it warns and degrades without one).
+mkdir -p ~/.config/omarchy
+[[ -f $OMARCHY_PATH/config/omarchy/shell.json ]] &&
+  cp -n "$OMARCHY_PATH/config/omarchy/shell.json" ~/.config/omarchy/shell.json 2>/dev/null
+
+# --- On-screen keyboard gating ---------------------------------------------
+# squeekboard reads both of these through GSettings and refuses to do anything
+# useful without them. They are normally set by GNOME/Phosh, which nothing here
+# runs, so a bare Sway session leaves them at their defaults and the keyboard
+# silently never appears:
+#
+#   screen-keyboard-enabled  false by default -> squeekboard binds the input
+#                            method but never shows a surface
+#   input-sources            empty by default -> "No system layout present",
+#                            so it has no layout to draw
+gsettings set org.gnome.desktop.a11y.applications screen-keyboard-enabled true 2>/dev/null || true
+if [[ $(gsettings get org.gnome.desktop.input-sources sources 2>/dev/null) == "@a(ss) []" ]]; then
+  gsettings set org.gnome.desktop.input-sources sources "[('xkb','us')]" 2>/dev/null || true
+fi
+
+# --- Touch gestures, as a shell plugin -------------------------------------
+# 4.x's shell discovers third-party plugins in ~/.config/omarchy/plugins/<id>/
+# from their manifest.json, so the gesture layer needs no patching of the
+# vendored shell -- the same trick sway.conf.tpl uses for theming.
+#
+# Unlike first-party plugins, third-party ones are opt-in: PluginRegistry's
+# isEnabled() falls through to findEntryLocation(), which only looks for
+# `{"id": ...}` objects in shell.json's plugins[]. Without the entry the plugin
+# loads nothing and says nothing, so register it here.
+mkdir -p ~/.config/omarchy/plugins
+rm -rf ~/.config/omarchy/plugins/mobileomarchy.gestures
+cp -r "$MOBILEOMARCHY_PATH/default/omarchy/plugins/mobileomarchy.gestures" ~/.config/omarchy/plugins/
+
+python3 - <<'PLUGIN_EOF'
+import json, os
+p = os.path.expanduser("~/.config/omarchy/shell.json")
+try:
+    d = json.load(open(p))
+except Exception:
+    raise SystemExit(0)
+plugins = d.setdefault("plugins", [])
+if not any(isinstance(e, dict) and e.get("id") == "mobileomarchy.gestures" for e in plugins):
+    plugins.append({"id": "mobileomarchy.gestures"})
+    json.dump(d, open(p, "w"), indent=2)
+PLUGIN_EOF
 
 # --- Make omarchy-* scripts work outside the installer ---------------------
 PROFILE=~/.profile
@@ -55,7 +130,21 @@ export PATH="$MOBILEOMARCHY_PATH/bin:$OMARCHY_PATH/bin:$PATH"
 PROFILE_EOF
 fi
 
-# --- Pick a starting theme (also generates ~/.config/omarchy/current/theme/sway.conf)
+# --- systemd user units ----------------------------------------------------
+# Omarchy's units are all WantedBy=graphical-session.target, and nothing here
+# activates that target: sway is started from ~/.bash_profile, not uwsm or a
+# display manager. sway-session.target is BindsTo it and is started from
+# autostart.conf, so 4.x's user units (bt-agent, omarchy-sleep-lock, ...) come
+# up at all.
+#
+# The swayosd-server unit this originally existed for is gone in 4.x -- the
+# quickshell shell owns the OSD -- but the target is still what makes every
+# other graphical-session unit start.
+mkdir -p ~/.config/systemd/user
+cp "$MOBILEOMARCHY_PATH/default/systemd/sway-session.target" ~/.config/systemd/user/
+systemctl --user daemon-reload 2>/dev/null || true
+
+# --- Pick a starting theme (also generates ~/.local/state/omarchy/current/theme/sway.conf)
 omarchy-theme-set tokyo-night || echo "    !! theme apply failed; run 'omarchy-theme-set tokyo-night' by hand" >&2
 
 echo "    config in place"

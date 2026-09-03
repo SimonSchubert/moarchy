@@ -23,8 +23,10 @@ source "$MOBILEOMARCHY_INSTALL/preflight.sh"
 source "$MOBILEOMARCHY_INSTALL/packages.sh"
 source "$MOBILEOMARCHY_INSTALL/build-src.sh"
 source "$MOBILEOMARCHY_INSTALL/vendor-omarchy.sh"
+source "$MOBILEOMARCHY_INSTALL/port-4x.sh"
 source "$MOBILEOMARCHY_INSTALL/config.sh"
 source "$MOBILEOMARCHY_INSTALL/session.sh"
+source "$MOBILEOMARCHY_INSTALL/telephony.sh"
 
 echo
 echo "==> Done. Reboot, or start the session now with:  exec sway"

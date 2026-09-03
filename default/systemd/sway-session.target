@@ -1,0 +1,13 @@
+# Sway is started from ~/.bash_profile, not uwsm or a display manager, so
+# nothing ever activates graphical-session.target -- and every unit Omarchy
+# ships is WantedBy=graphical-session.target. That is why swayosd-server was
+# installed but never running, and why the volume keys had no server to talk to.
+#
+# Starting this target from autostart.conf pulls graphical-session.target up
+# with it (BindsTo), and stopping it tears the whole session's units down again.
+[Unit]
+Description=sway session
+Documentation=man:systemd.special(7)
+BindsTo=graphical-session.target
+Wants=graphical-session-pre.target
+After=graphical-session-pre.target

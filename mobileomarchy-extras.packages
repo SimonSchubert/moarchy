@@ -14,6 +14,5 @@ kdenlive
 libreoffice-fresh
 gpu-screen-recorder
 
-# On-screen keyboard. Built primarily for Phosh; under bare Sway it is the least
-# proven piece of this setup. Try it, and fall back to SSH if it misbehaves.
-squeekboard
+# (squeekboard moved to the base set -- it is the on-screen keyboard now, and
+# measured to raise and retract correctly under Sway.)

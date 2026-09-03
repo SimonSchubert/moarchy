@@ -1,3 +1,0 @@
-#!/bin/bash
-# Shim: upstream's version talks to Hyprland to find the bar.
-exec mobileomarchy-restart-waybar "$@"

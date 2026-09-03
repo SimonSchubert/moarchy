@@ -1,7 +1,38 @@
 #!/bin/bash
 # swaylock in place of hyprlock, themed from the active Omarchy theme.
-THEME="$HOME/.config/omarchy/current/theme"
-BG="$HOME/.config/omarchy/current/background"
+#
+# ---------------------------------------------------------------------------
+# A password lock needs something to type the password on
+# ---------------------------------------------------------------------------
+# swaylock is an ext-session-lock client, and under that protocol the compositor
+# draws the locker's surface and nothing else -- every layer-shell client is
+# hidden, the on-screen keyboard included. On a device with no hardware keyboard
+# that is a trap: the password prompt is up, the on-screen keyboard it needs is
+# hidden by the very lock asking for it, and the session can only be cleared
+# over ssh or by rebooting.
+#
+# That is not hypothetical. Omarchy 4.x's shell runs its own idle service, which
+# calls this script through omarchy-system-lock after `idle.lock` seconds (300
+# by default, inherited from upstream's desktop config). So the phone locked
+# itself out roughly five minutes after being left alone.
+#
+# So: only take a real lock when a real keyboard is present. Without one, fall
+# back to what the power button does -- blank the panel and stop the touchscreen
+# producing events. That gives the thing you actually want from a pocket, and
+# the hardware power button is outside that state, so it can always undo it.
+#
+# MOBILEOMARCHY_FORCE_LOCK=1 overrides, for anyone who means it and has ssh.
+# ---------------------------------------------------------------------------
+
+BIN="$(dirname "$(readlink -f "$0")")"
+
+if [[ ${MOBILEOMARCHY_FORCE_LOCK:-0} != 1 ]] && ! "$BIN/mobileomarchy-has-keyboard"; then
+  echo "${0##*/}: no hardware keyboard -- blanking instead of locking" >&2
+  exec "$BIN/mobileomarchy-screen" lock
+fi
+
+THEME="$HOME/.local/state/omarchy/current/theme"
+BG="$HOME/.local/state/omarchy/current/background"
 
 ACCENT=$(sed -n 's/^accent *= *"\(.*\)"/\1/p' "$THEME/colors.toml" 2>/dev/null)
 ACCENT="${ACCENT#\#}"

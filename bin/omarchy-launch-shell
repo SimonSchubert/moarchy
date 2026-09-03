@@ -1,0 +1,3 @@
+#!/bin/bash
+# Shim: upstream expects Hyprland.
+exec mobileomarchy-restart-shell "$@"

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Experiment: can Omarchy 4.x's quickshell-based shell run on the PinePhone?
 #
-#   PHONE=alarm@192.168.0.18 ./scripts/experiment-4x.sh
+#   PHONE=alarm@10.15.19.82 ./scripts/experiment-4x.sh
 #
 # Runs ON the phone via SSH. Non-destructive: it clones 4.x to a scratch
 # directory and never touches the working v3.8.4 setup, the running session, or

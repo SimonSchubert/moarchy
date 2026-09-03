@@ -1,0 +1,53 @@
+#!/bin/bash
+# Exit 0 if a real, typeable keyboard is attached; 1 otherwise.
+#
+# `swaymsg -t get_inputs` cannot answer this. It reports type "keyboard" for the
+# power button (axp20x-pek), the volume rocker (1c21800.lradc), the wakeup GPIO
+# (gpio-keys), the headset jack and wvkbd's own virtual keyboard -- so on this
+# phone it is always true and the answer is worthless.
+#
+# /proc/bus/input/devices carries the evdev capability bitmaps, which say what a
+# device can actually emit. libinput's own test is the one used here: a keyboard
+# advertises KEY_ESC(1), KEY_1(2), KEY_Q(16) and KEY_SPACE(57). A device that
+# emits keys but cannot type a letter is a button, not a keyboard.
+#
+# The on-screen keyboard does not appear in /proc at all -- squeekboard is a
+# Wayland virtual-keyboard client, not an evdev device -- which is exactly the
+# answer we want: it cannot be used to escape an ext-session-lock, because the
+# locker hides it.
+
+exec python3 - <<'EOF'
+import sys
+
+# Bitmaps print as space-separated hex words, most significant first, so the
+# LAST word holds bits 0-63.
+def bit(mask, n):
+    words = mask.split()
+    w = len(words) - 1 - n // 64
+    if w < 0 or w >= len(words):
+        return False
+    within = n % 64
+    digit = len(words[w]) - 1 - within // 4      # 4 bits per hex digit
+    if digit < 0:
+        return False
+    try:
+        return (int(words[w][digit], 16) >> (within % 4)) & 1 == 1
+    except ValueError:
+        return False
+
+KEY_ESC, KEY_1, KEY_Q, KEY_SPACE = 1, 2, 16, 57
+
+try:
+    blocks = open("/proc/bus/input/devices").read().split("\n\n")
+except OSError:
+    sys.exit(1)                                  # cannot tell -> assume none
+
+for block in blocks:
+    key = ""
+    for line in block.splitlines():
+        if line.startswith("B: KEY="):
+            key = line[7:]
+    if key and all(bit(key, c) for c in (KEY_ESC, KEY_1, KEY_Q, KEY_SPACE)):
+        sys.exit(0)
+sys.exit(1)
+EOF

@@ -1,0 +1,12 @@
+#!/bin/bash
+# Show/hide the 4.x shell, remembering the choice. Replaces the waybar toggle.
+STATE="${XDG_STATE_HOME:-$HOME/.local/state}/mobileomarchy/shell-off"
+mkdir -p "$(dirname "$STATE")"
+
+if pgrep -x quickshell >/dev/null; then
+  touch "$STATE"
+  pkill -x quickshell
+else
+  rm -f "$STATE"
+  mobileomarchy-restart-shell
+fi
