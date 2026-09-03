@@ -55,6 +55,14 @@ Better still, that template engine already processes a *user* template directory
 (`~/.config/omarchy/themed`) ahead of its own built-ins — so mobileomarchy adds
 Sway theming **without patching the vendored upstream at all**.
 
+## What runs on it
+
+[`docs/apps.md`](docs/apps.md) — the apps actually installed and launched on the
+device, with screenshots straight off the phone. Short version: GNOME's
+libadwaita apps and KDE's Kirigami/Plasma Mobile apps both reflow to a 360px
+screen and are the comfortable fit; availability is not the constraint, screen
+width and 2 GB of RAM are.
+
 ## How this was built
 
 [`docs/build-log.md`](docs/build-log.md) is the chronological account — every
