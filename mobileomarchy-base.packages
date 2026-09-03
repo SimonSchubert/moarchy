@@ -43,9 +43,26 @@ wiremix
 # --- Touch input ------------------------------------------------------------
 # Sway delivers wl_touch to clients and stops there: it has no on-screen
 # keyboard, and `bindgesture` only ever sees libinput gesture events, which
-# touchpads produce and touchscreens do not. Both packages come from the
-# DanctNIX repo that this image already has enabled.
-wvkbd
+# touchpads produce and touchscreens do not.
+#
+# squeekboard is the keyboard because it raises and retracts itself correctly.
+# Sway advertises zwp_input_method_manager_v2 and zwp_text_input_manager_v3, so
+# any OSK binding them is told when a text field takes focus -- and squeekboard
+# keeps one layer surface for the life of the process.
+#
+# wvkbd was here first and does auto-raise (`--auto`), but it creates a fresh
+# layer surface per activation and destroys only the newest on deactivate: 12
+# created against 11 destroyed in one session, and the leaked one stays mapped,
+# so the keyboard never goes away. squeekboard also ships a terminal layout with
+# Tab/Ctrl/Alt/arrows, which wvkbd's generic layout lacks.
+#
+# Two gsettings gate it, both applied by install/config.sh: without them it
+# starts, binds nothing and logs only "No system layout present".
+squeekboard
+
+# lisgd is no longer started (default/omarchy/plugins/mobileomarchy.gestures
+# replaced it) but bin/mobileomarchy-gestures still needs it for anyone who
+# wants the old edge-swipe bindings back.
 lisgd
 
 # --- Hardware ---------------------------------------------------------------

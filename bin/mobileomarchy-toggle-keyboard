@@ -1,21 +1,40 @@
 #!/bin/bash
-# Show/hide the on-screen keyboard.
+# Force the on-screen keyboard up or down.
 #
-# Sway has no on-screen keyboard of its own, so with no USB keyboard attached
-# there was simply no way to type -- touch reached every window fine, it just
-# had nothing to send. wvkbd is a layer-shell keyboard that types through
-# zwp_virtual_keyboard_v1, so every Wayland client sees ordinary key events.
+# Mostly unnecessary now: squeekboard raises itself whenever a text field takes
+# focus and retracts when focus moves to something without one. What is left for
+# this script is the awkward cases -- an app that never advertises a text field,
+# or pushing the keyboard out of the way without moving focus.
 #
-# autostart.conf starts it with --hidden; SIGRTMIN toggles visibility.
+# Driven over DBus, not by signal. squeekboard owns `sm.puri.OSK0` (the same
+# interface Phosh drives) and exposes a readable `Visible` property, so the
+# toggle can ask before it acts instead of guessing.
 #
-# Caveat worth knowing: this cannot type into swaylock. Under ext-session-lock
-# the compositor shows only the locker's own surface, and a layer-shell client
-# is not drawn at all. That is why the idle chain no longer auto-locks.
+# This used to send SIGRTMIN to wvkbd, which was the keyboard until squeekboard
+# replaced it -- see the note in mobileomarchy-base.packages for why. Left as it
+# was, it would have started a second, competing keyboard.
+#
+# Caveat unchanged: this cannot type into swaylock. Under ext-session-lock the
+# compositor draws only the locker's own surface and every layer-shell client is
+# hidden, the keyboard included. That is why bin/mobileomarchy-system-lock
+# blanks instead of locking when no hardware keyboard is attached.
 
-if pkill --signal SIGRTMIN --exact wvkbd-mobintl 2>/dev/null; then
-  exit 0
+set -euo pipefail
+
+osk() {
+  local verb=$1
+  shift
+  busctl --user "$verb" sm.puri.OSK0 /sm/puri/OSK0 sm.puri.OSK0 "$@"
+}
+
+if ! visible=$(osk get-property Visible 2>/dev/null); then
+  echo "${0##*/}: no on-screen keyboard on the bus (is squeekboard running?)" >&2
+  exit 1
 fi
 
-# Not running (crashed, or autostart never fired). Start it visible -- the only
-# reason to reach for this is to type.
-exec wvkbd-mobintl -H 250 -L 160
+# `busctl get-property` prints the variant as e.g. `b true`.
+if [[ $visible == *true* ]]; then
+  osk call SetVisible b false
+else
+  osk call SetVisible b true
+fi

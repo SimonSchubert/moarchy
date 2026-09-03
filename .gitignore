@@ -5,3 +5,6 @@ packages/*.pkg.tar.*
 # Downloaded images
 *.img
 *.img.xz
+
+# Python bytecode cache (bin/mobileomarchy-one-app-per-workspace)
+__pycache__/

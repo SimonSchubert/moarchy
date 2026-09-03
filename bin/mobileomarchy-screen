@@ -6,9 +6,10 @@
 #
 # swaylock and Omarchy 4.x's quickshell lock plugin are both ext-session-lock
 # clients, and under that protocol the compositor draws the locker's surface and
-# nothing else -- every layer-shell client is hidden, wvkbd included. So a
-# password lock on a device with no keyboard can only be cleared over ssh, and
-# wiring one to the power button would strand the phone on every stray press.
+# nothing else -- every layer-shell client is hidden, the on-screen keyboard
+# included. So a password lock on a device with no keyboard can only be cleared
+# over ssh, and wiring one to the power button would strand the phone on every
+# stray press.
 #
 # A dead touchscreen behind a dark panel gives the thing you actually want from
 # a pocket -- nothing sees the screen, nothing reacts to it -- and the hardware

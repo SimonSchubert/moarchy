@@ -75,6 +75,47 @@ mkdir -p ~/.config/omarchy
 [[ -f $OMARCHY_PATH/config/omarchy/shell.json ]] &&
   cp -n "$OMARCHY_PATH/config/omarchy/shell.json" ~/.config/omarchy/shell.json 2>/dev/null
 
+# --- On-screen keyboard gating ---------------------------------------------
+# squeekboard reads both of these through GSettings and refuses to do anything
+# useful without them. They are normally set by GNOME/Phosh, which nothing here
+# runs, so a bare Sway session leaves them at their defaults and the keyboard
+# silently never appears:
+#
+#   screen-keyboard-enabled  false by default -> squeekboard binds the input
+#                            method but never shows a surface
+#   input-sources            empty by default -> "No system layout present",
+#                            so it has no layout to draw
+gsettings set org.gnome.desktop.a11y.applications screen-keyboard-enabled true 2>/dev/null || true
+if [[ $(gsettings get org.gnome.desktop.input-sources sources 2>/dev/null) == "@a(ss) []" ]]; then
+  gsettings set org.gnome.desktop.input-sources sources "[('xkb','us')]" 2>/dev/null || true
+fi
+
+# --- Touch gestures, as a shell plugin -------------------------------------
+# 4.x's shell discovers third-party plugins in ~/.config/omarchy/plugins/<id>/
+# from their manifest.json, so the gesture layer needs no patching of the
+# vendored shell -- the same trick sway.conf.tpl uses for theming.
+#
+# Unlike first-party plugins, third-party ones are opt-in: PluginRegistry's
+# isEnabled() falls through to findEntryLocation(), which only looks for
+# `{"id": ...}` objects in shell.json's plugins[]. Without the entry the plugin
+# loads nothing and says nothing, so register it here.
+mkdir -p ~/.config/omarchy/plugins
+rm -rf ~/.config/omarchy/plugins/mobileomarchy.gestures
+cp -r "$MOBILEOMARCHY_PATH/default/omarchy/plugins/mobileomarchy.gestures" ~/.config/omarchy/plugins/
+
+python3 - <<'PLUGIN_EOF'
+import json, os
+p = os.path.expanduser("~/.config/omarchy/shell.json")
+try:
+    d = json.load(open(p))
+except Exception:
+    raise SystemExit(0)
+plugins = d.setdefault("plugins", [])
+if not any(isinstance(e, dict) and e.get("id") == "mobileomarchy.gestures" for e in plugins):
+    plugins.append({"id": "mobileomarchy.gestures"})
+    json.dump(d, open(p, "w"), indent=2)
+PLUGIN_EOF
+
 # --- Make omarchy-* scripts work outside the installer ---------------------
 PROFILE=~/.profile
 touch "$PROFILE"

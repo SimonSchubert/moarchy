@@ -1,0 +1,153 @@
+#!/usr/bin/env python3
+"""One app per workspace, which is what makes the swipe gestures mean anything.
+
+Sway tiles by default: open a second window and both get half the screen. Half
+of 360 logical pixels is 180, which no app on this phone can use. So every new
+window that would have to share a workspace is moved to a free one instead, and
+focus follows it -- tap an app in the launcher and you land *in* it, full width.
+
+The workspace then becomes the unit a swipe moves through
+(default/omarchy/plugins/mobileomarchy.gestures), so "next workspace" reads as
+"next app".
+
+Deliberately NOT handled, because both should stay with their parent:
+
+  floating windows   Sway floats xdg toplevels that declare a parent, which is
+                     how GTK and Qt ship modal dialogs -- a "Save changes?"
+                     sheet must not fly off to its own workspace, leaving the
+                     document behind.
+  the first window   A window that lands on an empty workspace is already
+                     alone. Moving it would strand an empty workspace behind it
+                     and renumber everything for no gain.
+
+Run it from Sway's autostart. It is a plain event loop over sway's IPC; killing
+it restores stock tiling immediately, with no state to unwind.
+"""
+
+import json
+import subprocess
+import sys
+
+
+def swaymsg(*args):
+    """Run swaymsg and return parsed JSON, or None if sway is not answering."""
+    try:
+        out = subprocess.run(
+            ["swaymsg", "-t", *args], capture_output=True, text=True, timeout=5
+        ).stdout
+        return json.loads(out)
+    except (subprocess.SubprocessError, json.JSONDecodeError):
+        return None
+
+
+def command(cmd):
+    subprocess.run(["swaymsg", cmd], capture_output=True, timeout=5)
+
+
+def locate(node, con_id, workspace=None, floating=False):
+    """(workspace node, is_floating) for con_id, or None if it is not in the tree.
+
+    Floating-ness is taken from *where the container sits in the tree*, not from
+    the `window::new` event. The event is serialised before Sway has applied
+    for_window criteria, so a window that is about to be floated still reports
+    `"type": "con"` there -- which silently sent dialogs off to their own
+    workspace. Anything reached through a `floating_nodes` list is floating, and
+    that is true by the time we re-read the tree.
+    """
+    if node.get("type") == "workspace":
+        workspace = node
+    if node.get("id") == con_id:
+        return workspace, floating
+    for child in node.get("nodes", []):
+        found = locate(child, con_id, workspace, floating)
+        if found:
+            return found
+    for child in node.get("floating_nodes", []):
+        found = locate(child, con_id, workspace, True)
+        if found:
+            return found
+    return None
+
+
+def tiled_window_ids(workspace):
+    """Ids of the tiled windows on a workspace. Floating ones are not counted:
+    a dialog open over an app does not make the workspace crowded."""
+    found = []
+
+    def walk(node):
+        # A window is a node carrying an app_id (Wayland) or window_properties
+        # (XWayland); containers that only split have neither.
+        if node.get("app_id") or node.get("window_properties"):
+            found.append(node["id"])
+        for child in node.get("nodes", []):
+            walk(child)
+
+    for child in workspace.get("nodes", []):
+        walk(child)
+    return found
+
+
+def first_free_workspace():
+    """Lowest unused positive number, so closing an app reopens its slot and the
+    swipe order stays contiguous rather than climbing forever."""
+    used = set()
+    for workspace in swaymsg("get_workspaces") or []:
+        try:
+            used.add(int(workspace["name"]))
+        except (ValueError, KeyError):
+            pass  # named workspaces do not take part in the numbering
+    number = 1
+    while number in used:
+        number += 1
+    return number
+
+
+def on_new_window(container):
+    con_id = container.get("id")
+    if con_id is None:
+        return
+
+    tree = swaymsg("get_tree")
+    if tree is None:
+        return
+    found = locate(tree, con_id)
+    if found is None:
+        return  # already gone, or in the scratchpad
+    workspace, floating = found
+    if workspace is None or floating:
+        return
+
+    others = [i for i in tiled_window_ids(workspace) if i != con_id]
+    if not others:
+        return  # it has the workspace to itself already
+
+    target = first_free_workspace()
+    command(f"[con_id={con_id}] move container to workspace number {target}")
+    # Moving does not carry focus with it, and landing in the app is the whole
+    # point of launching one.
+    command(f"workspace number {target}")
+
+
+def main():
+    proc = subprocess.Popen(
+        ["swaymsg", "-t", "subscribe", "-m", '["window"]'],
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    if proc.stdout is None:
+        return 1
+    for line in proc.stdout:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if event.get("change") == "new":
+            on_new_window(event.get("container") or {})
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
