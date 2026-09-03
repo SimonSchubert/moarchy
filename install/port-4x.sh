@@ -172,6 +172,12 @@ probe = r'''  property var navStack: []
   property bool hasHardwareKeyboard: false
   readonly property bool showBackButton: root.hasTouchscreen || !root.hasHardwareKeyboard
 
+  // The icon has to predict what the button will do. goBackOrClose() retreats
+  // through filter -> menu -> close, so the only state that actually closes is
+  // the root menu with an empty filter -- and that is the one that shows an x.
+  // (dmenu prompts sit at "root" too, where closing is also the right answer.)
+  readonly property bool backClosesMenu: root.activeMenu === "root" && !root.filterText
+
   // /proc/bus/input/devices prints capability bitmaps as space-separated hex
   // words, most significant first, so the LAST word holds bits 0-63. Indexing
   // by hex digit keeps this clear of JS's 32-bit bitwise operators (and of
@@ -299,7 +305,7 @@ new_header = """        Rectangle {
             Text {
               anchors.centerIn: parent
               textFormat: Text.PlainText
-              text: "\\uf053"                       // nf-fa-chevron_left
+              text: root.backClosesMenu ? "\\uf00d" : "\\uf053"   // nf-fa-times / nf-fa-chevron_left
               color: backTap.pressed ? root.selectedText : root.foreground
               opacity: backTap.pressed ? 1 : 0.58   // matches the idle prompt
               font.family: root.fontFamily
