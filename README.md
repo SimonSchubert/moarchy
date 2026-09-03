@@ -1,5 +1,10 @@
 # mobileomarchy
 
+<p align="center">
+  <img src="docs/screenshots/home.png" width="45%" alt="The home screen: Omarchy's bar on top, the gesture drawer's home pill on the bottom edge">
+  <img src="docs/screenshots/papers.png" width="45%" alt="Papers showing a PDF, with the drawer reserving the bottom edge">
+</p>
+
 Omarchy's look, keybindings and theming on an original **PinePhone**, running on
 Arch Linux ARM (DanctNIX) with **Sway** in Hyprland's place.
 
