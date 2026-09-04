@@ -85,9 +85,34 @@ mkdir -p ~/.config/omarchy
 #                            method but never shows a surface
 #   input-sources            empty by default -> "No system layout present",
 #                            so it has no layout to draw
-gsettings set org.gnome.desktop.a11y.applications screen-keyboard-enabled true 2>/dev/null || true
-if [[ $(gsettings get org.gnome.desktop.input-sources sources 2>/dev/null) == "@a(ss) []" ]]; then
-  gsettings set org.gnome.desktop.input-sources sources "[('xkb','us')]" 2>/dev/null || true
+# These MUST go through a D-Bus session bus. gsettings' dconf backend writes by
+# calling the dconf service on the session bus, so with no bus the write fails
+# -- and the old `2>/dev/null || true` swallowed that, reporting success while
+# storing nothing. The installer runs as a detached systemd unit with no bus, so
+# that is the normal case, not the edge case, and the result was a keyboard that
+# never appeared on a freshly installed phone.
+#
+# dbus-run-session spins up a throwaway bus just long enough for dconf to write.
+# The write itself lands in ~/.config/dconf/user, so it persists after the bus
+# goes away -- verified by reading the value back on a *different* bus below.
+gset() {
+  if [[ -n ${DBUS_SESSION_BUS_ADDRESS:-} ]]; then gsettings "$@"
+  else dbus-run-session -- gsettings "$@" 2>/dev/null
+  fi
+}
+
+gset set org.gnome.desktop.a11y.applications screen-keyboard-enabled true
+if [[ $(gset get org.gnome.desktop.input-sources sources) == "@a(ss) []" ]]; then
+  gset set org.gnome.desktop.input-sources sources "[('xkb','us')]"
+fi
+
+# Read back rather than trust the exit status: a silent no-op here costs a
+# keyboard, and the symptom (squeekboard runs, logs nothing useful, draws
+# nothing) is a long way from the cause.
+if [[ $(gset get org.gnome.desktop.a11y.applications screen-keyboard-enabled) != "true" ]]; then
+  echo "    !! screen-keyboard-enabled did not stick -- squeekboard will not show" >&2
+else
+  echo "    on-screen keyboard gated on"
 fi
 
 # --- Touch gestures, as a shell plugin -------------------------------------

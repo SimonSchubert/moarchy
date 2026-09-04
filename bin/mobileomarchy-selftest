@@ -1,0 +1,175 @@
+#!/bin/bash
+# Assert the phone UI is actually wired up, on the running session.
+#
+# Every regression this stack has hit was silent: the swipe still answered "ok"
+# while nothing happened, the keyboard still drew while refusing to retract, the
+# launcher still reported success with its binary missing from PATH. None of
+# them showed up as an error anywhere, and all of them were found by hand.
+#
+# So each check here is one of those failures, turned into a question with a
+# yes/no answer. Run it after touching autostart.conf, the plugin, or the shell.
+#
+# Read-only apart from hiding the on-screen keyboard, which the checks need in a
+# known state and which the next text field will undo.
+
+set -uo pipefail
+
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-1}"
+export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}"
+[[ -n ${SWAYSOCK:-} ]] || SWAYSOCK=$(ls "$XDG_RUNTIME_DIR"/sway-ipc.* 2>/dev/null | head -1)
+export SWAYSOCK
+
+# Exported, not just set: omarchy-shell reads OMARCHY_PATH to find the running
+# shell, and without it in the environment every IPC check below reports the
+# plugin missing when it is loaded and fine.
+export OMARCHY_PATH="${OMARCHY_PATH:-$HOME/.local/share/omarchy}"
+export PATH="$HOME/.local/bin:$HOME/.local/share/mobileomarchy/bin:$OMARCHY_PATH/bin:$PATH"
+
+pass=0
+fail=0
+
+ok()   { printf '  \033[32mPASS\033[0m  %s\n' "$1"; pass=$((pass + 1)); }
+no()   { printf '  \033[31mFAIL\033[0m  %s\n' "$1"; [[ -n ${2:-} ]] && printf '        %s\n' "$2"; fail=$((fail + 1)); }
+head_() { printf '\n%s\n' "$1"; }
+
+# --- the session is there at all -------------------------------------------
+head_ "session"
+
+for p in sway squeekboard; do
+  if pgrep -x "$p" >/dev/null; then ok "$p is running"; else no "$p is not running"; fi
+done
+if pgrep -f 'quickshell' >/dev/null; then ok "the shell is running"; else no "the shell is not running"; fi
+if pgrep -f one-app-per-workspace >/dev/null; then
+  ok "one-app-per-workspace is running"
+else
+  no "one-app-per-workspace is not running" "new windows will tile at ~180px instead of taking a workspace"
+fi
+
+# lisgd bound the same bottom edge as the gesture plugin, so both fired on one
+# swipe: the menu opened and the keyboard toggled at the same time.
+if pgrep -x lisgd >/dev/null; then
+  no "lisgd is running" "it double-binds the bottom edge against the gesture plugin; kill it"
+else
+  ok "lisgd is not running (no double-bound edge)"
+fi
+
+# --- the shell can reach the things it shells out to ------------------------
+head_ "shell environment"
+
+# A shell restarted without the session environment gets
+# /usr/local/sbin:/usr/local/bin:/usr/bin, and then every omarchy-* call it
+# makes fails with 127 while the gesture still answers "ok".
+shell_pid=$(pgrep -f 'quickshell' | head -1)
+if [[ -n $shell_pid ]] && shell_path=$(tr '\0' '\n' <"/proc/$shell_pid/environ" 2>/dev/null | sed -n 's/^PATH=//p'); then
+  if [[ $shell_path == *"$OMARCHY_PATH/bin"* ]]; then
+    ok "the shell's PATH carries the omarchy bins"
+  else
+    no "the shell's PATH is missing $OMARCHY_PATH/bin" \
+       "restart it with: swaymsg exec mobileomarchy-restart-shell"
+  fi
+else
+  no "cannot read the shell's environment"
+fi
+
+if [[ -x $OMARCHY_PATH/bin/omarchy-menu ]]; then
+  ok "omarchy-menu exists where the plugin calls it"
+else
+  no "omarchy-menu is missing from $OMARCHY_PATH/bin"
+fi
+
+# --- the gesture plugin -----------------------------------------------------
+head_ "gesture plugin"
+
+if status=$(timeout 5 omarchy-shell gestures status 2>/dev/null) && [[ -n $status ]]; then
+  ok "gestures IPC answers ($status)"
+else
+  no "gestures IPC does not answer" "the plugin is not loaded; check shell.json plugins[]"
+fi
+
+# Declared as a service the plugin was mounted twice and drew two stacked pills.
+kinds=$(python3 - <<'PY' 2>/dev/null
+import json, os
+p = os.path.expanduser("~/.config/omarchy/plugins/mobileomarchy.gestures/manifest.json")
+try:
+    print(",".join(json.load(open(p)).get("kinds", [])))
+except Exception:
+    pass
+PY
+)
+if [[ $kinds == "panel" ]]; then
+  ok "the plugin is declared as a panel (mounted once)"
+else
+  no "the plugin declares kinds=[${kinds:-?}]" "a service-kind plugin is mounted twice and draws two pills"
+fi
+
+# --- the drawer actually reserves its strip ---------------------------------
+head_ "drawer geometry"
+
+# The exclusive zone is the whole point: it is what keeps the drawer out from
+# under the on-screen keyboard. Sway hands the rest to the workspace, so the
+# space below the workspace is what the drawer reserved -- its ~20px zone plus
+# the config's gap. Mounted twice, that figure doubles, which is what two
+# stacked pills looked like from the outside.
+#
+# Hide the keyboard first: while it is up it reserves the bottom too, and the
+# number means nothing.
+busctl --user call sm.puri.OSK0 /sm/puri/OSK0 sm.puri.OSK0 SetVisible b false >/dev/null 2>&1
+sleep 1
+
+read -r out_h top bottom < <(python3 - <<'PY' 2>/dev/null
+import json, subprocess
+def sway(kind):
+    return json.loads(subprocess.run(["swaymsg", "-t", kind], capture_output=True, text=True).stdout)
+out = next((o for o in sway("get_outputs") if o.get("active")), None)
+ws = next((w for w in sway("get_workspaces") if w.get("focused")), None)
+if out and ws:
+    h, r = out["rect"]["height"], ws["rect"]
+    print(h, r["y"], h - (r["y"] + r["height"]))
+else:
+    print(0, 0, 0)
+PY
+)
+if (( ${out_h:-0} == 0 )); then
+  no "cannot read output geometry"
+else
+  if (( top >= 20 && top <= 40 )); then
+    ok "the bar reserves ${top}px at the top"
+  else
+    no "the bar reserves ${top}px at the top" "expected roughly 29"
+  fi
+  if (( bottom >= 15 && bottom <= 32 )); then
+    ok "the drawer reserves ${bottom}px at the bottom"
+  elif (( bottom > 32 )); then
+    no "the drawer reserves ${bottom}px -- about double" \
+       "the plugin is mounted more than once, or the keyboard did not retract"
+  else
+    no "the drawer reserves only ${bottom}px" \
+       "the exclusive zone is missing; the keyboard will bury the drawer"
+  fi
+fi
+
+# --- the on-screen keyboard -------------------------------------------------
+head_ "on-screen keyboard"
+
+if busctl --user get-property sm.puri.OSK0 /sm/puri/OSK0 sm.puri.OSK0 Visible >/dev/null 2>&1; then
+  ok "the keyboard owns sm.puri.OSK0"
+else
+  no "sm.puri.OSK0 is not on the bus" "squeekboard is not running, so \$mod+i does nothing"
+fi
+
+# Both gate squeekboard, both default off outside GNOME/Phosh, and without them
+# it starts, binds the input method, and silently never draws.
+if [[ $(gsettings get org.gnome.desktop.a11y.applications screen-keyboard-enabled 2>/dev/null) == "true" ]]; then
+  ok "screen-keyboard-enabled is true"
+else
+  no "screen-keyboard-enabled is false" "gsettings set org.gnome.desktop.a11y.applications screen-keyboard-enabled true"
+fi
+if [[ $(gsettings get org.gnome.desktop.input-sources sources 2>/dev/null) == "@a(ss) []" ]]; then
+  no "no input source is configured" "squeekboard logs 'No system layout present' and draws nothing"
+else
+  ok "an input source is configured"
+fi
+
+printf '\n%d passed, %d failed\n' "$pass" "$fail"
+(( fail == 0 ))

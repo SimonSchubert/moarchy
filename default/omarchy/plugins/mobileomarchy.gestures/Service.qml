@@ -100,8 +100,15 @@ Item {
   // started without the session environment gets only
   // /usr/local/sbin:/usr/local/bin:/usr/bin, and then the swipe reports success
   // while nothing happens. swaymsg is left on PATH because it lives in /usr/bin.
-  readonly property string omarchyPath: Quickshell.env("OMARCHY_PATH")
-                                        || (Quickshell.env("HOME") + "/.local/share/omarchy")
+  //
+  // NOT `readonly`, and that matters. The shell hands plugins their own path --
+  // `if ("omarchyPath" in item) item.omarchyPath = shell.omarchyPath` -- so a
+  // read-only declaration makes that assignment throw and the whole plugin
+  // fails to load, silently, on the next reload. Every first-party plugin
+  // declares it exactly like this: writable, with the env var as the fallback
+  // for when the shell has not got round to assigning it yet.
+  property string omarchyPath: Quickshell.env("OMARCHY_PATH")
+                               || (Quickshell.env("HOME") + "/.local/share/omarchy")
 
   // Swipe up opens the menu already inside Apps rather than at the root. On a
   // phone the menu is the app launcher first and a command palette second, and

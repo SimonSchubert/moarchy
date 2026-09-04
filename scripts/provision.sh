@@ -113,11 +113,43 @@ step_deploy() {
 
 step_install() {
   say "run installer on the phone (long -- runs as a detached systemd unit)"
-  phone 'sudo systemd-run --unit=moa-install --collect --no-block --service-type=oneshot \
+
+  # Clear the log first, and as root. A previous run -- or an older
+  # provision.sh that ran this unit as root -- leaves /tmp/moa-install.log
+  # owned by root:root, and the redirect below then fails for the
+  # unprivileged user before bash executes a single line. That looks exactly
+  # like the installer erroring instantly on its own first source.
+  phone 'sudo rm -f /tmp/moa-install.log; sudo systemctl reset-failed moa-install 2>/dev/null; true'
+
+  # Detached, so a `pacman -Syu` that restarts sshd cannot kill the install
+  # halfway. Three details, each of which cost a full run to find:
+  #
+  #   --uid/--gid  install.sh writes user config to ~/.config and ~/.local and
+  #                calls sudo itself for the system parts. Run the unit bare as
+  #                root and every one of those lands in /root instead.
+  #   --setenv     systemd sets no HOME for a system unit, so install.sh's
+  #                `${MOBILEOMARCHY_PATH:-$HOME/.local/share/...}` expanded to
+  #                `/.local/share/...` and it died on the first source.
+  #   XDG_...    `systemctl --user enable` needs XDG_RUNTIME_DIR to find the
+  #                user manager. Without it install/telephony.sh silently fails
+  #                to enable the call and SMS daemons -- and its own comment
+  #                names that failure mode: the phone never rings and incoming
+  #                SMS is dropped, while outgoing still works.
+  #   no --collect a collected unit is unloaded the moment it finishes, and
+  #                `systemctl show` then answers from defaults -- reporting
+  #                Result=success for a run that exited 1. Without it the failed
+  #                unit stays inspectable; the reset-failed above covers re-runs.
+  #
+  # $HOME, $(id -u) and $(id -g) expand on the phone, in the login shell, which
+  # is the one place they are reliably correct.
+  phone 'sudo systemd-run --unit=moa-install --no-block --service-type=oneshot \
            --property=TimeoutStartSec=10800 \
+           --uid=$(id -u) --gid=$(id -g) \
+           --setenv=HOME=$HOME --setenv=XDG_RUNTIME_DIR=/run/user/$(id -u) \
            bash -c "cd $HOME/.local/share/mobileomarchy && ./install.sh > /tmp/moa-install.log 2>&1"' >/dev/null
   info "started. follow with:  ./scripts/provision.sh watch"
 }
+
 
 step_watch() {
   say "watching installer"

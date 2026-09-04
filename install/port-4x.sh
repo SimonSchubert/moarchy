@@ -133,7 +133,12 @@ p.write_text(s)
 PY_EOF
 echo "    Workspaces.qml: occupied guarded, focus via swaymsg, 3 persistent workspaces"
 
-remaining=$(grep -rl "import Quickshell.Hyprland" "$SHELL_DIR" --include=*.qml 2>/dev/null | wc -l | tr -d ' ')
+# `|| true` is load-bearing. grep exits 1 when it matches nothing, install.sh
+# runs under `set -eo pipefail`, and pipefail propagates that 1 out of the
+# whole pipeline -- so the assignment fails and the installer aborts here
+# *precisely when the translation above worked perfectly*. It cost a full
+# 21-minute install run to find, because the abort looks like a clean stop.
+remaining=$( { grep -rl "import Quickshell.Hyprland" "$SHELL_DIR" --include=*.qml 2>/dev/null || true; } | wc -l | tr -d ' ')
 echo "    translated; files still importing Quickshell.Hyprland: $remaining"
 
 # --- Launcher back button --------------------------------------------------

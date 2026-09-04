@@ -59,6 +59,12 @@ wiremix
 # Two gsettings gate it, both applied by install/config.sh: without them it
 # starts, binds nothing and logs only "No system layout present".
 squeekboard
+# squeekboard's binary links libbsd.so.0, but the Arch Linux ARM package does
+# not declare it (Depends On: cairo dconf feedbackd gdk-pixbuf2 glib2 glibc
+# gnome-desktop gtk3 libgcc libxkbcommon pango wayland). So pacman never pulls
+# it in and squeekboard dies at exec with "error while loading shared
+# libraries". Listing it here is the fix until upstream corrects the package.
+libbsd
 
 # lisgd is no longer started (default/omarchy/plugins/mobileomarchy.gestures
 # replaced it) but bin/mobileomarchy-gestures still needs it for anyone who
