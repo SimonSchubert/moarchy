@@ -277,8 +277,8 @@ names the surface outside this stack that satisfies it.
 `docs/menu-coverage.md` is empty
 
 **G7** The class totals are the ones committed to.
-→ `settings coverage | cut -f2 | sort | uniq -c` == 75 Bridged, 66 Native,
-1 Shade, 178 Unsupported
+→ `settings coverage | cut -f2 | sort | uniq -c` == 74 Bridged, 66 Native,
+1 Shade, 179 Unsupported
 
 ## H. Not repeating the shade
 

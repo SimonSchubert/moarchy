@@ -565,9 +565,6 @@ var PAGES = {
   { id: "lock", type: "action", glyph: "", label: "Lock",
     run: "mobileomarchy-system-lock", launch: "none",
     covers: { "system.lock": "N" } },
-  { id: "suspend", type: "action", glyph: "󰒲", label: "Suspend",
-    when: "! omarchy-toggle-enabled suspend-off",
-    run: "systemctl suspend", launch: "none", covers: { "system.suspend": "B" } },
   { id: "logout", type: "action", glyph: "󰍃", label: "Log out",
     confirm: "Log out of the session?",
     run: "mobileomarchy-system-logout", launch: "none",
@@ -577,13 +574,7 @@ var PAGES = {
     run: "omarchy-system-reboot", launch: "none", covers: { "system.reboot": "B" } },
   { id: "shutdown", type: "action", glyph: "󰐥", label: "Power off",
     confirm: "Power off the phone?",
-    run: "omarchy-system-shutdown", launch: "none", covers: { "system.shutdown": "B" } },
-  // No upstream id: the suspend-off flag exists and system.suspend is guarded
-  // on it, but nothing in upstream's menu ever writes it.
-  { id: "offer-suspend", type: "switch", glyph: "󰒲", label: "Offer suspend",
-    detail: "Show Suspend on this screen",
-    read: "omarchy-toggle-enabled suspend-off && echo true || echo false", invert: true,
-    on: "omarchy-toggle suspend-off off", off: "omarchy-toggle suspend-off on" }
+    run: "omarchy-system-shutdown", launch: "none", covers: { "system.shutdown": "B" } }
 ]},
 
 // -------------------------------------------------------------------- about

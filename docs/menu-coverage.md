@@ -41,9 +41,9 @@ replaced by the fullscreen terminal, which is the entire point of bridging.
 | Class | Entries |
 | --- | ---: |
 | Native | 66 |
-| Bridged | 75 |
+| Bridged | 74 |
 | Shade | 1 |
-| Unsupported | 178 |
+| Unsupported | 179 |
 | **Total** | **320** |
 
 Roughly a third of the menu survives. That is not a gap to be closed: the
@@ -70,14 +70,14 @@ The two root entries that are not the head of a route of their own.
 
 ## System (8)
 
-Native 3 · Bridged 4 · Unsupported 1
+Native 3 · Bridged 3 · Unsupported 2
 
 | id | label | class | lands at | note |
 | --- | --- | --- | --- | --- |
 | `system` | System | Native | System > Power | also the shade's power glyph target |
 | `system.screensaver` | Screensaver | Bridged | Tools > Screensaver | cbonsai is prebuilt in `packages/` |
 | `system.lock` | Lock | Native | System > Power > Lock | `mobileomarchy-system-lock`; blanks unless a hardware keyboard is present |
-| `system.suspend` | Suspend | Bridged | System > Power > Suspend | upstream `when` on `suspend-off` kept |
+| `system.suspend` | Suspend | Unsupported | -- | suspending locks the session: install/config.sh starts sway-session.target, which brings up 4.x's omarchy-sleep-lock unit, and the lock it raises is an ext-session-lock surface -- so the on-screen keyboard is hidden by the very prompt asking for a password. Same trap idle-lock was disabled for. Locked a phone out on 2026-09-05 |
 | `system.hibernate` | Hibernate | Unsupported | -- | `omarchy-hibernation-available` tests for swap; the SD root has no resume device or RAM-sized swap |
 | `system.logout` | Logout | Native | System > Power > Log out | needs a new `mobileomarchy-system-logout` (`swaymsg exit`); upstream's exits Hyprland |
 | `system.reboot` | Reboot | Bridged | System > Power > Restart |  |

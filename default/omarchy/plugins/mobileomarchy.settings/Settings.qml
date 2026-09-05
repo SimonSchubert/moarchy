@@ -449,9 +449,14 @@ Item {
     onExited: Qt.callLater(root.refresh)
   }
 
-  function activate(row) {
+  // `confirmed` is a parameter, not a reading of confirmText. It used to arm the
+  // sheet whenever `row.confirm` was set and confirmText happened to be empty --
+  // and Continue clears confirmText before calling this, so every Continue tap
+  // re-armed the very sheet it was dismissing. The button looked dead: the
+  // dialog never closed and the action never ran.
+  function activate(row, confirmed) {
     if (!row) return
-    if (row.confirm && root.confirmText === "") {
+    if (row.confirm && !confirmed) {
       root.confirmText = String(row.confirm)
       root.confirmRow = row
       return
@@ -778,7 +783,7 @@ Item {
                     var row = root.confirmRow
                     root.confirmText = ""
                     root.confirmRow = null
-                    if (row) root.activate(row)
+                    if (row) root.activate(row, true)
                   }
                 }
               }

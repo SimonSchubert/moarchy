@@ -944,10 +944,10 @@ DOCTBL
   # own -- rows move -- but it should be a deliberate edit to the doc, not a
   # surprise.
   totals=$(cut -f2 <<<"$cov" | sort | uniq -c | awk '{printf "%s=%s ", $2, $1}')
-  [[ $totals == "Bridged=75 Native=66 Shade=1 " ]] \
+  [[ $totals == "Bridged=74 Native=66 Shade=1 " ]] \
     && ok "G7 the class totals are the ones committed to ($totals)" \
     || no "G7 the class totals moved: $totals" \
-          "expected Bridged=75 Native=66 Shade=1; update docs/settings.md if deliberate"
+          "expected Bridged=74 Native=66 Shade=1; update docs/settings.md if deliberate"
 
   grep -q '^trigger.toggle.notifications	Shade' <<<"$cov" \
     && ok "H2 the shade-owned toggle is recorded, not rendered" \

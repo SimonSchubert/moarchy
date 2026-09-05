@@ -882,6 +882,30 @@ the same 3.14:1 from independent implementations once its checker grew a
 `mix(base;over;alpha)` form, which is better evidence than either of us checking
 our own arithmetic.
 
+### Two the Settings screens shipped, found by using them
+
+**Confirm did nothing.** The Continue button cleared `confirmText` and then called
+`activate(row)` -- and `activate` armed the sheet whenever `row.confirm` was set
+and `confirmText` was empty, which it now was. So every tap re-armed the dialog
+it was dismissing: the sheet stayed up, the action never ran, and the button read
+as dead rather than as looping. Confirmation is a parameter now, not a reading of
+the state the caller has just cleared.
+
+**Suspend locked a phone out.** `install/config.sh` starts `sway-session.target`
+so that 4.x's user units come up at all, and one of those is
+`omarchy-sleep-lock`. Suspending therefore locks the session, and the lock is an
+ext-session-lock surface -- under that protocol the compositor draws the locker
+and nothing else, so the on-screen keyboard is hidden by the very prompt asking
+for a password. Touch-only, that is unrecoverable without ssh.
+
+This is the trap `autostart.conf` and `mobileomarchy-system-lock` already
+document and defend against, and the defence did not reach here: our shim guards
+`omarchy-system-lock`, the *script*, while the sleep unit and the shell's own
+`omarchy.lock` service raise their locker directly. Guarding a script does not
+guard the capability. `system.suspend` is Unsupported until the sleep unit is
+masked and that is verified on the device -- and it is worth doing, because
+suspend on a phone is worth having.
+
 ## 6i. Three fixes that came from other people's measurements
 
 **A single alpha cannot make secondary text readable.** `subdued` was
