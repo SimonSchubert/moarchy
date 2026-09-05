@@ -43,9 +43,23 @@ head_() { printf '\n%s\n' "$1"; }
 # --- the session is there at all -------------------------------------------
 head_ "session"
 
-for p in sway squeekboard; do
-  if pgrep -x "$p" >/dev/null; then ok "$p is running"; else no "$p is not running"; fi
-done
+if pgrep -x sway >/dev/null; then ok "sway is running"; else no "sway is not running"; fi
+
+# An on-screen keyboard, not a *named* one. This asserted `squeekboard` by
+# process name and went red the moment the keyboard was replaced -- reporting a
+# working phone as broken, and naming the wrong thing as the cause. The
+# invariant is the contract: something owns sm.puri.OSK0 and answers on it,
+# which is what mobileomarchy-toggle-keyboard and the back gesture both drive.
+#
+# The same mistake in the other direction cost a peer session an afternoon: its
+# suite confidently reported on squeekboard while a different implementation
+# owned the name. Assert the interface, not the implementation.
+if osk_owner=$(busctl --user get-property sm.puri.OSK0 /sm/puri/OSK0 \
+                 sm.puri.OSK0 Visible 2>/dev/null) && [[ -n $osk_owner ]]; then
+  ok "an on-screen keyboard owns sm.puri.OSK0 ($(pgrep -a -x 'squeekboard|moarchy-keyboar' 2>/dev/null | head -1 | cut -d" " -f2- || echo present))"
+else
+  no "nothing owns sm.puri.OSK0" "no on-screen keyboard is running, so typing is impossible"
+fi
 if pgrep -f 'quickshell' >/dev/null; then ok "the shell is running"; else no "the shell is not running"; fi
 if pgrep -f one-app-per-workspace >/dev/null; then
   ok "one-app-per-workspace is running"
@@ -288,8 +302,10 @@ else
   no "sm.puri.OSK0 is not on the bus" "squeekboard is not running, so \$mod+i does nothing"
 fi
 
-# Both gate squeekboard, both default off outside GNOME/Phosh, and without them
-# it starts, binds the input method, and silently never draws.
+# Both gated squeekboard, which defaulted off outside GNOME/Phosh and would
+# otherwise start, bind the input method, and silently never draw. Kept because
+# they are cheap and a keyboard that needs them is still supported; a keyboard
+# that does not need them is unaffected by their being set.
 if [[ $(gsettings get org.gnome.desktop.a11y.applications screen-keyboard-enabled 2>/dev/null) == "true" ]]; then
   ok "screen-keyboard-enabled is true"
 else

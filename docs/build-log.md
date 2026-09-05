@@ -1000,6 +1000,49 @@ silent. `mobileomarchy.device` spent a day in exactly that state -- scp'd,
 uncommitted, live -- and the next provision would have removed it. Commit a
 plugin before you rely on it surviving.
 
+## 6i. Two surfaces, one edge
+
+The on-screen keyboard was replaced, and the new one landed on the **Overlay**
+layer -- the same layer as the gesture strip. Both reserve space, and the total
+was right: 23 for the strip plus 200 for the keyboard, 223 reserved, nothing
+lost. What a correct total does not say is *which surface gets the edge*, and
+the keyboard was getting it: keys ran to y=720 and the home pill was displaced
+to 497..520, stranded between the app and the keys.
+
+**Exclusive zones resolve layer by layer, Overlay downward.** That is why the
+strip beat squeekboard without anyone having to think about it -- squeekboard
+was on Top, so the strip's zone was always resolved first and the edge was free.
+Putting a second surface on Overlay replaced that guarantee with intra-layer
+map order, which is a race. The fix was for the keyboard to go back to Top,
+where the ordering is decided by the layer rather than by who happened to map
+first.
+
+**Six failures, identical across three runs, and none of them were the
+gestures.** B1, A1/A3, A4 and D1 all swipe at y=710 logical, which used to be
+the strip and had become the middle of the keyboard; E3 cascaded from A1/A3.
+The gestures were behaving correctly the whole time and the tests were aiming
+at where the strip used to be. Worth separating from the day's other failures:
+those were contention and leftover state, this one was reproducible, and the
+difference between "fails three times identically" and "fails one run in three"
+is the difference between a regression and an environment.
+
+**A correct total is not evidence of a correct arrangement**, and that mistake
+was mine twice over. I warned that sharing a layer turns the exclusion into a
+race, was shown a measurement proving both surfaces reserved the right amount,
+and retracted -- when the measurement was compatible with either order and
+never addressed the question. The screenshot is what settled it, because a
+screenshot cannot be compatible with both.
+
+**Assert the interface, not the implementation.** The session check asserted
+`squeekboard` by process name and went red the moment the keyboard changed,
+reporting a working phone as broken and naming the wrong cause. It asks whether
+*something* owns `sm.puri.OSK0` now -- which is the actual contract, the one
+`mobileomarchy-toggle-keyboard` and the back gesture both drive. The same error
+in the other direction cost a peer session an afternoon: its suite reported
+confidently on squeekboard while a different implementation owned the name.
+
+46/0, three consecutive runs, against the replacement keyboard.
+
 ## 7. Hardware status
 
 | | |
