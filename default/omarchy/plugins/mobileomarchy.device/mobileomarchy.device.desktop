@@ -11,3 +11,7 @@ Icon=computer-symbolic
 Terminal=false
 Categories=System;Monitor;
 Keywords=battery;temperature;cpu;memory;hardware;
+# Ownership marker. install/config.sh sweeps entries whose named plugin is no
+# longer in the repo; without it a deleted plugin leaves a drawer icon that
+# launches nothing.
+X-MobileOmarchy-Plugin=mobileomarchy.device

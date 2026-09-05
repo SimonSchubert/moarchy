@@ -123,6 +123,41 @@ fi
 # Everything the phone UI adds to the desktop shell lives here: the bottom-edge
 # gestures, the status bar sized for 360px, the app drawer and the shade.
 mkdir -p ~/.config/omarchy/plugins
+
+# Remove plugins we used to ship and no longer do. The copy loop below only
+# touches plugins that still exist in the repo, so without this a deleted one
+# keeps its installed directory, stays in shell.json, and keeps its drawer icon
+# -- an app that launches nothing, which is not the sort of thing anyone
+# reports as a bug.
+#
+# Scoped to the mobileomarchy.* namespace on purpose: plugins installed from
+# elsewhere are the user's, and a sweep that removed those would be a far worse
+# bug than the one it fixes.
+repo_plugins=""
+for plugin_dir in "$MOBILEOMARCHY_PATH"/default/omarchy/plugins/*/; do
+  [[ -d $plugin_dir ]] || continue
+  repo_plugins="$repo_plugins $(basename "$plugin_dir")"
+done
+
+for installed in ~/.config/omarchy/plugins/mobileomarchy.*/; do
+  [[ -d $installed ]] || continue
+  installed_id=$(basename "$installed")
+  [[ " $repo_plugins " == *" $installed_id "* ]] && continue
+  rm -rf "$installed"
+  echo "    removed stale plugin $installed_id"
+done
+
+# Desktop entries are matched by their ownership marker rather than by filename,
+# so an entry named after something else still gets cleaned up.
+for entry in ~/.local/share/applications/*.desktop; do
+  [[ -e $entry ]] || continue
+  owner=$(sed -n 's/^X-MobileOmarchy-Plugin=//p' "$entry" | head -1)
+  [[ -n $owner ]] || continue
+  [[ " $repo_plugins " == *" $owner "* ]] && continue
+  rm -f "$entry"
+  echo "    removed stale desktop entry $(basename "$entry")"
+done
+
 for plugin_dir in "$MOBILEOMARCHY_PATH"/default/omarchy/plugins/*/; do
   plugin_id=$(basename "$plugin_dir")
   rm -rf ~/.config/omarchy/plugins/"$plugin_id"
@@ -180,6 +215,18 @@ for pid in ("mobileomarchy.gestures", "mobileomarchy.drawer", "mobileomarchy.rec
     if not any(isinstance(e, dict) and e.get("id") == pid for e in plugins):
         plugins.append({"id": pid})
         dirty = True
+
+# And drop ids whose plugin is gone. The loop above only ever appends, so a
+# plugin removed from the repo stayed listed here and the shell went on trying
+# to load a directory that the sweep had already deleted. Scoped to our own
+# namespace for the same reason the sweep is.
+keep = [e for e in plugins
+        if not (isinstance(e, dict)
+                and str(e.get("id", "")).startswith("mobileomarchy.")
+                and not os.path.isdir(os.path.expanduser("~/.config/omarchy/plugins/" + e["id"])))]
+if len(keep) != len(plugins):
+    plugins[:] = keep
+    dirty = True
 
 if dirty:
     json.dump(d, open(p, "w"), indent=2)
