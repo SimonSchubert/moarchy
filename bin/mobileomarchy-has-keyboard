@@ -11,8 +11,8 @@
 # advertises KEY_ESC(1), KEY_1(2), KEY_Q(16) and KEY_SPACE(57). A device that
 # emits keys but cannot type a letter is a button, not a keyboard.
 #
-# The on-screen keyboard does not appear in /proc at all -- squeekboard is a
-# Wayland virtual-keyboard client, not an evdev device -- which is exactly the
+# The on-screen keyboard does not appear in /proc at all -- moarchy-keyboard is
+# a Wayland virtual-keyboard client, not an evdev device -- which is exactly the
 # answer we want: it cannot be used to escape an ext-session-lock, because the
 # locker hides it.
 

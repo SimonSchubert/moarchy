@@ -1,12 +1,12 @@
 #!/bin/bash
-# walker, elephant, yay, xdg-terminal-exec and ttf-ia-writer have no aarch64
+# moarchy-keyboard, yay, xdg-terminal-exec and ttf-ia-writer have no aarch64
 # builds in Arch Linux ARM and no aarch64 tree in Omarchy's own repo
 # (pkgs.omarchy.org/stable/aarch64/omarchy.db -> 404).
 #
 # Preferred path: packages/ already holds *.pkg.tar.zst built on the Mac by
 # docker/Dockerfile.builder (an aarch64 container, which runs natively on Apple
-# Silicon). Fallback: build here on the phone -- slow, but these are small Go
-# programs.
+# Silicon). Fallback: build here on the phone -- slow, and moarchy-keyboard is
+# a Qt6 C++ build, so this is measured in tens of minutes on an A53.
 
 echo "==> source-built packages"
 
@@ -37,4 +37,6 @@ else
   rm -rf "$MOBILEOMARCHY_BUILD_DIR"
 fi
 
-# 4.x has no separate launcher: SUPER+SPACE goes through the quickshell shell.
+# 4.x has no separate launcher: SUPER+SPACE goes through the quickshell shell,
+# so walker and elephant are neither built nor installed. See the tail of
+# mobileomarchy-base.packages.

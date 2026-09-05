@@ -23,7 +23,7 @@
 // The three surfaces, and why each sits on the layer it does
 // ---------------------------------------------------------------------------
 //   strip     Overlay, bottom, 20px, exclusive.  Recents and home (A, B).
-//             Overlay because squeekboard is on Top with an exclusive zone, so
+//             Overlay because moarchy-keyboard is on Top with an exclusive zone, so
 //             anything lower loses the bottom edge to the keyboard.
 //   home      Bottom, full screen, no exclusion.  The drawer (D).
 //             *Below* every window, so on a blank workspace it receives the
@@ -386,7 +386,7 @@ Item {
   // G1. One gesture that undoes the topmost thing: keyboard, then any open
   // overlay, then the focused app, then nothing.
   //
-  // Whether the keyboard is up cannot be answered synchronously -- squeekboard
+  // Whether the keyboard is up cannot be answered synchronously -- the keyboard
   // owns it over DBus and there is no Wayland signal for it -- so the probe is
   // started on press and read on release. A deliberate swipe has to travel
   // backCommit, which takes longer than busctl does; if it somehow has not

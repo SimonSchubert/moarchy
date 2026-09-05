@@ -14,9 +14,6 @@ kdenlive
 libreoffice-fresh
 gpu-screen-recorder
 
-# (squeekboard moved to the base set -- it is the on-screen keyboard now, and
-# measured to raise and retract correctly under Sway.)
-
 # Needed only by bin/mobileomarchy-touch, which synthesises touchscreen input
 # through /dev/uinput so bin/mobileomarchy-selftest --gestures can drive the
 # gesture drawer without a finger. Not needed to run the phone, only to test it.

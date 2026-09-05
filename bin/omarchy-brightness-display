@@ -33,6 +33,7 @@ fi
 
 brightnessctl -d "$device" set "$step" >/dev/null
 
-if command -v omarchy-swayosd-brightness >/dev/null; then
-  omarchy-swayosd-brightness "$(brightnessctl -d "$device" -m | cut -d',' -f4 | tr -d '%')"
-fi
+# 4.x has no swayosd: the quickshell shell draws the OSD, and upstream feeds it
+# through omarchy-osd. Best-effort -- a shell that is not up is not an error.
+omarchy-osd -i brightness -p "$(brightnessctl -d "$device" -m | cut -d',' -f4 | tr -d '%')" \
+  >/dev/null 2>&1 || true

@@ -10,7 +10,7 @@ mkdir -p "$OUT"
 # never glob for a specific extension -- have makepkg write to $OUT directly.
 export PKGDEST="$OUT"
 
-PACKAGES=(yay elephant walker xdg-terminal-exec ttf-ia-writer)
+PACKAGES=(yay xdg-terminal-exec ttf-ia-writer)
 failed=()
 
 # moarchy-keyboard is not an AUR package -- it is its own repo with a PKGBUILD
@@ -55,7 +55,6 @@ ls -1 "$OUT" || true
 if (( ${#failed[@]} )); then
   echo
   echo "==> FAILED: ${failed[*]}" >&2
-  echo "    install/build-src.sh falls back to fuzzel if walker is missing." >&2
   echo "    There is no fallback for moarchy-keyboard: without it the phone" >&2
   echo "    has no on-screen keyboard and no hardware one either." >&2
   exit 1

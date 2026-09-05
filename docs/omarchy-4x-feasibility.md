@@ -37,7 +37,9 @@ The remaining 90 QML files import only compositor-agnostic modules:
 ## First run: it already loads
 
 `scripts/experiment-4x.sh` ran Omarchy **v4.0.2's actual `shell/shell.qml`**
-under quickshell on the phone, on 2026-09-02. It reached
+under quickshell on the phone, on 2026-09-02. (That script and
+`scripts/port-4x-shell.sh` below were probes against a live v3.8.4 session and
+were deleted once the port shipped; both are in git history.) It reached
 `INFO: Configuration Loaded` and **stayed running**:
 
 ```
@@ -77,8 +79,9 @@ So the concrete work is:
 
 ## It runs: the 4.x bar renders under Sway
 
-`scripts/port-4x-shell.sh` reproduces this from a clean checkout. After the
-translation below, **Omarchy v4.0.2's bar renders on the PinePhone under Sway**,
+`scripts/port-4x-shell.sh` first reproduced this from a clean checkout; the
+translation it prototyped is now `install/port-4x.sh`, applied by every install.
+After the translation below, **Omarchy v4.0.2's bar renders on the PinePhone under Sway**,
 populated with workspaces, clock, bluetooth, wifi, volume and battery. RSS
 settles around 200-260 MB.
 

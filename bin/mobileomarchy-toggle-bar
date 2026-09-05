@@ -1,6 +1,6 @@
 #!/bin/bash
-# Show or hide the status bar. Shadows upstream's omarchy-toggle-bar, which
-# toggles waybar.
+# Show or hide the status bar. Shadows upstream's omarchy-toggle-bar, which does
+# the same two steps for the quickshell bar.
 #
 # ---------------------------------------------------------------------------
 # Why this no longer kills the shell

@@ -53,7 +53,7 @@ wiremix
 #
 # Not in any repo: built from https://github.com/SimonSchubert/moarchy-keyboard
 # into packages/ by docker/build-packages.sh, and installed from there by
-# install/build-src.sh -- the same path walker and elephant take. It is
+# install/build-src.sh -- the same path yay and xdg-terminal-exec take. It is
 # deliberately NOT listed here, because listing it would make pacman look for it
 # in a repo that does not have it.
 #

@@ -1,5 +1,5 @@
 # Build the handful of packages that have no aarch64 binaries anywhere:
-# walker, elephant, yay, xdg-terminal-exec, ttf-ia-writer.
+# moarchy-keyboard, yay, xdg-terminal-exec, ttf-ia-writer.
 #
 # On Apple Silicon this container runs NATIVELY (linux/arm64), so these build at
 # full speed rather than at PinePhone speed (4x Cortex-A53 @ 1.15GHz, 2-3 GB).

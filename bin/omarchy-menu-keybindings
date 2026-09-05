@@ -28,10 +28,8 @@ output_keybindings() {
 
 if [[ $1 == "--print" || $1 == "-p" ]]; then
   output_keybindings
-elif command -v walker >/dev/null; then
-  output_keybindings | walker --dmenu -p 'Keybindings'
-elif command -v fuzzel >/dev/null; then
-  output_keybindings | fuzzel --dmenu -p 'Keybindings> '
+elif command -v omarchy-menu-select >/dev/null; then
+  output_keybindings | omarchy-menu-select 'Keybindings'
 else
   output_keybindings | less
 fi

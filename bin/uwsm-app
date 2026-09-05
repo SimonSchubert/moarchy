@@ -6,7 +6,7 @@
 # mobileomarchy starts Sway straight from the login shell (uwsm is a lot of
 # machinery for a phone), so the honest translation is "just run it".
 #
-# Without this shim, SUPER+SPACE (walker), the editor, the TUIs and background
+# Without this shim, SUPER+SPACE (the Omarchy menu), the editor, the TUIs and background
 # switching would all silently do nothing.
 
 args=()

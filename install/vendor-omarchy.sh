@@ -17,7 +17,8 @@
 # Mali-400 -- but it needs a translation pass from Quickshell.Hyprland to
 # Quickshell.I3, applied by install/port-4x.sh. See docs/omarchy-4x-feasibility.md.
 #
-# The v3.8.4 (waybar-based) port lives on the `main` branch.
+# The v3.8.4 (waybar-based) port was replaced, not kept on a branch; it exists
+# only in git history.
 # ---------------------------------------------------------------------------
 
 echo "==> vendoring Omarchy config layer"

@@ -435,7 +435,7 @@ Item {
     //
     // A zero-zone surface is *arranged into* whatever the exclusive surfaces
     // left, which is exactly right for the drawer: its search field needs
-    // squeekboard, so the grid reflowing above the keyboard is the feature.
+    // the keyboard, so the grid reflowing above it is the feature.
     // A switcher has no text field and gets no benefit -- what it got instead
     // was the carousel squashed into the top two thirds of the screen
     // whenever the app behind it happened to have a text field focused.
