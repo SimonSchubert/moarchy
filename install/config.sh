@@ -128,6 +128,19 @@ for plugin_dir in "$MOBILEOMARCHY_PATH"/default/omarchy/plugins/*/; do
   rm -rf ~/.config/omarchy/plugins/"$plugin_id"
   cp -r "$plugin_dir" ~/.config/omarchy/plugins/
   echo "    plugin $plugin_id"
+
+  # A plugin that ships a .desktop wants to be launchable like an app: the
+  # drawer lists desktop entries, not plugins, and the entry's Exec asks the
+  # shell to summon the overlay. It lives in the plugin directory so a plugin
+  # stays one self-contained thing, but it has to be moved into applications/
+  # to be found -- and moved rather than copied, so the shell does not also
+  # scan it inside plugins/.
+  for entry in ~/.config/omarchy/plugins/"$plugin_id"/*.desktop; do
+    [[ -e $entry ]] || continue
+    mkdir -p ~/.local/share/applications
+    mv "$entry" ~/.local/share/applications/
+    echo "      desktop entry $(basename "$entry")"
+  done
 done
 
 # The two kinds are enabled by different keys, and crossing them is a silent
@@ -160,7 +173,8 @@ if bar.get("id") != "mobileomarchy.bar":
 
 plugins = d.setdefault("plugins", [])
 for pid in ("mobileomarchy.gestures", "mobileomarchy.drawer", "mobileomarchy.recents",
-            "mobileomarchy.shade", "mobileomarchy.themes", "mobileomarchy.settings"):
+            "mobileomarchy.shade", "mobileomarchy.themes", "mobileomarchy.settings",
+            "mobileomarchy.device"):
     if not os.path.isdir(os.path.expanduser("~/.config/omarchy/plugins/" + pid)):
         continue
     if not any(isinstance(e, dict) and e.get("id") == pid for e in plugins):

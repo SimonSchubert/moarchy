@@ -157,7 +157,7 @@ fi
 # declared as a service gets two surfaces, and for the shade that means two
 # grab strips fighting over the top edge.
 for plugin in mobileomarchy.drawer mobileomarchy.recents mobileomarchy.shade \
-              mobileomarchy.themes mobileomarchy.settings; do
+              mobileomarchy.themes mobileomarchy.settings mobileomarchy.device; do
   k=$(python3 -c '
 import json, os, sys
 p = os.path.expanduser("~/.config/omarchy/plugins/%s/manifest.json" % sys.argv[1])
@@ -173,7 +173,7 @@ except Exception:
   fi
 done
 
-for target in drawer recents shade themes settings; do
+for target in drawer recents shade themes settings device; do
   if st=$(timeout 5 omarchy-shell "$target" state 2>/dev/null) && [[ -n $st ]]; then
     ok "$target IPC answers ($st)"
   else

@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Device
+GenericName=Hardware Monitor
+Comment=Battery, thermals, CPU, memory and storage at a glance
+# A shell plugin is not a process you launch, it is a screen the shell already
+# holds. Asking the shell to summon it is what makes a plugin appear in the
+# drawer and behave like any other app.
+Exec=omarchy-shell shell toggle mobileomarchy.device
+Icon=computer-symbolic
+Terminal=false
+Categories=System;Monitor;
+Keywords=battery;temperature;cpu;memory;hardware;
