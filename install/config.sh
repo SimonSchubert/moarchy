@@ -75,45 +75,18 @@ mkdir -p ~/.config/omarchy
 [[ -f $OMARCHY_PATH/config/omarchy/shell.json ]] &&
   cp -n "$OMARCHY_PATH/config/omarchy/shell.json" ~/.config/omarchy/shell.json 2>/dev/null
 
-# --- On-screen keyboard gating ---------------------------------------------
-# squeekboard reads both of these through GSettings and refuses to do anything
-# useful without them. They are normally set by GNOME/Phosh, which nothing here
-# runs, so a bare Sway session leaves them at their defaults and the keyboard
-# silently never appears:
+# --- On-screen keyboard ------------------------------------------------------
+# Nothing to do. squeekboard needed two GSettings keys
+# (org.gnome.desktop.a11y.applications screen-keyboard-enabled and
+# org.gnome.desktop.input-sources sources) and silently did nothing without
+# them, which cost a keyboard on a freshly installed phone and a long hunt --
+# the block that wrote them, through dbus-run-session because the installer has
+# no session bus, and then read them back rather than trusting the exit status,
+# lived here.
 #
-#   screen-keyboard-enabled  false by default -> squeekboard binds the input
-#                            method but never shows a surface
-#   input-sources            empty by default -> "No system layout present",
-#                            so it has no layout to draw
-# These MUST go through a D-Bus session bus. gsettings' dconf backend writes by
-# calling the dconf service on the session bus, so with no bus the write fails
-# -- and the old `2>/dev/null || true` swallowed that, reporting success while
-# storing nothing. The installer runs as a detached systemd unit with no bus, so
-# that is the normal case, not the edge case, and the result was a keyboard that
-# never appeared on a freshly installed phone.
-#
-# dbus-run-session spins up a throwaway bus just long enough for dconf to write.
-# The write itself lands in ~/.config/dconf/user, so it persists after the bus
-# goes away -- verified by reading the value back on a *different* bus below.
-gset() {
-  if [[ -n ${DBUS_SESSION_BUS_ADDRESS:-} ]]; then gsettings "$@"
-  else dbus-run-session -- gsettings "$@" 2>/dev/null
-  fi
-}
-
-gset set org.gnome.desktop.a11y.applications screen-keyboard-enabled true
-if [[ $(gset get org.gnome.desktop.input-sources sources) == "@a(ss) []" ]]; then
-  gset set org.gnome.desktop.input-sources sources "[('xkb','us')]"
-fi
-
-# Read back rather than trust the exit status: a silent no-op here costs a
-# keyboard, and the symptom (squeekboard runs, logs nothing useful, draws
-# nothing) is a long way from the cause.
-if [[ $(gset get org.gnome.desktop.a11y.applications screen-keyboard-enabled) != "true" ]]; then
-  echo "    !! screen-keyboard-enabled did not stick -- squeekboard will not show" >&2
-else
-  echo "    on-screen keyboard gated on"
-fi
+# moarchy-keyboard reads neither. It takes its palette from colors.toml and its
+# layouts from its own package, so there is no gate to open and nothing here to
+# fail silently.
 
 # --- The phone shell, as plugins -------------------------------------------
 # 4.x's shell discovers third-party plugins in ~/.config/omarchy/plugins/<id>/

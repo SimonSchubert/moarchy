@@ -45,26 +45,27 @@ wiremix
 # keyboard, and `bindgesture` only ever sees libinput gesture events, which
 # touchpads produce and touchscreens do not.
 #
-# squeekboard is the keyboard because it raises and retracts itself correctly.
-# Sway advertises zwp_input_method_manager_v2 and zwp_text_input_manager_v3, so
-# any OSK binding them is told when a text field takes focus -- and squeekboard
-# keeps one layer surface for the life of the process.
+# moarchy-keyboard is the keyboard. It binds zwp_input_method_v2 for apps that
+# speak text-input-v3 and zwp_virtual_keyboard_v1 for everything that does not,
+# keeps ONE layer surface for the life of the process, and reads the Omarchy
+# palette straight out of ~/.local/state/omarchy/current/theme/colors.toml, so
+# it recolours live on omarchy-theme-set like the bar and the drawer.
 #
-# wvkbd was here first and does auto-raise (`--auto`), but it creates a fresh
-# layer surface per activation and destroys only the newest on deactivate: 12
-# created against 11 destroyed in one session, and the leaked one stays mapped,
-# so the keyboard never goes away. squeekboard also ships a terminal layout with
-# Tab/Ctrl/Alt/arrows, which wvkbd's generic layout lacks.
+# Not in any repo: built from https://github.com/SimonSchubert/moarchy-keyboard
+# into packages/ by docker/build-packages.sh, and installed from there by
+# install/build-src.sh -- the same path walker and elephant take. It is
+# deliberately NOT listed here, because listing it would make pacman look for it
+# in a repo that does not have it.
 #
-# Two gsettings gate it, both applied by install/config.sh: without them it
-# starts, binds nothing and logs only "No system layout present".
-squeekboard
-# squeekboard's binary links libbsd.so.0, but the Arch Linux ARM package does
-# not declare it (Depends On: cairo dconf feedbackd gdk-pixbuf2 glib2 glibc
-# gnome-desktop gtk3 libgcc libxkbcommon pango wayland). So pacman never pulls
-# it in and squeekboard dies at exec with "error while loading shared
-# libraries". Listing it here is the fix until upstream corrects the package.
-libbsd
+# squeekboard was here and behaved correctly -- self-raising, one surface, a
+# terminal layout -- but its styling is GTK CSS baked into its gresource, so the
+# largest thing on screen while typing stayed Adwaita grey through every theme
+# change, and GTK3 draws through cairo, which on this GPU means the CPU. wvkbd
+# was here before that and leaked a layer surface per activation.
+#
+# libbsd went with squeekboard: it was only ever here because squeekboard's Arch
+# Linux ARM package fails to declare it and dies at exec without it.
+layer-shell-qt
 
 # lisgd is no longer started (default/omarchy/plugins/mobileomarchy.gestures
 # replaced it) but bin/mobileomarchy-gestures still needs it for anyone who
