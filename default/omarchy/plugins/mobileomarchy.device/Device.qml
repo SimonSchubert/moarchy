@@ -90,10 +90,29 @@ Item {
       root.shell.summon(back, "{}")
   }
 
+  // Short target, matching every other plugin here -- the selftest and
+  // mobileomarchy-* scripts address these as `omarchy-shell device state`, not
+  // by plugin id.
+  //
+  // open() goes through the shell rather than calling root.open() directly.
+  // root.open() is the host's summon hook, the mirror of close(): calling it
+  // ourselves sets local state without the shell ever learning the plugin is
+  // up, so the surface does not take focus and toggle() disagrees with what is
+  // on screen. Same host-versus-self distinction that made close() recurse,
+  // pointing the other way.
   IpcHandler {
-    target: "mobileomarchy.device"
-    function open(): string { root.open("{}"); return "ok" }
+    target: "device"
+
+    function state(): string { return root.opened ? "open" : "closed" }
+    function open(): string {
+      if (root.shell) root.shell.summon(root.pluginId, "{}")
+      return "ok"
+    }
     function close(): string { root.dismiss(); return "ok" }
+    function toggle(): string {
+      if (root.shell) root.shell.toggle(root.pluginId, "{}")
+      return root.opened ? "open" : "closed"
+    }
   }
 
   Timer {
