@@ -409,7 +409,37 @@ Item {
     Quickshell.execDetached(["rfkill", on ? "block" : "unblock", "all"])
     airplaneRecheck.restart()
   }
-  Timer { id: airplaneRecheck; interval: 700; onTriggered: airplaneProbe.running = true }
+  // S9. Turning a radio on from inside airplane mode clears airplane mode,
+  // rather than leaving the tile lit and the radio dark contradicting each
+  // other on screen.
+  //
+  // Unblocking just that one radio is enough, and is better than `unblock
+  // all`: airplaneProbe calls it airplane mode only when *every* rfkill switch
+  // reads blocked, so freeing one clears the state on the next read -- without
+  // switching the other radios back on behind the user, which is not what
+  // tapping Wi-Fi asked for.
+  property string pendingRadio: ""
+
+  function enableRadio(kind) {
+    Quickshell.execDetached(["rfkill", "unblock", kind])
+    root.pendingRadio = kind
+    airplaneRecheck.restart()
+  }
+
+  // The radio is switched on after the unblock has landed, not alongside it:
+  // NetworkManager will refuse to enable an interface that rfkill still has
+  // blocked, and the write would be silently dropped.
+  Timer {
+    id: airplaneRecheck
+    interval: 700
+    onTriggered: {
+      airplaneProbe.running = true
+      if (root.pendingRadio === "wifi") Networking.wifiEnabled = true
+      else if (root.pendingRadio === "bluetooth" && root.btAdapter)
+        root.btAdapter.enabled = true
+      root.pendingRadio = ""
+    }
+  }
   Timer { id: historyRefresh; interval: 250; onTriggered: historyRead.running = true }
 
   function setBrightness(percent) {
@@ -426,12 +456,17 @@ Item {
   }
 
   function rotate() {
+    // S11. Portrait and one landscape, toggled -- not a cycle through all four
+    // transforms. This is a portrait phone: 180 is upside-down and 270 is the
+    // other landscape, so cycling made the landscape you wanted three taps
+    // away and put upside-down on the route there.
+    //
     // Sway has no "rotate by 90" verb, so read the current transform and pick
-    // the next one. Detached and fire-and-forget: the output reconfigure is
+    // the other one. Detached and fire-and-forget: the output reconfigure is
     // what tells us it worked, and there is nothing useful to do if it did not.
     Quickshell.execDetached(["bash", "-c",
       "t=$(swaymsg -t get_outputs | python3 -c 'import json,sys;print(json.load(sys.stdin)[0].get(\"transform\",\"normal\"))'); " +
-      "case $t in normal) n=90;; 90) n=180;; 180) n=270;; *) n=normal;; esac; " +
+      "case $t in normal) n=90;; *) n=normal;; esac; " +
       "swaymsg output DSI-1 transform $n"])
   }
 
@@ -901,7 +936,10 @@ Item {
             label: "Wi-Fi"
             detail: root.wifiLabel
             on: Networking.wifiEnabled
-            onActivated: Networking.wifiEnabled = !Networking.wifiEnabled
+            onActivated: {
+              if (root.airplane) root.enableRadio("wifi")
+              else Networking.wifiEnabled = !Networking.wifiEnabled
+            }
           }
 
           WideTile {
@@ -910,7 +948,10 @@ Item {
             label: "Bluetooth"
             detail: root.btLabel
             on: root.btAdapter ? root.btAdapter.enabled : false
-            onActivated: if (root.btAdapter) root.btAdapter.enabled = !root.btAdapter.enabled
+            onActivated: {
+              if (root.airplane) root.enableRadio("bluetooth")
+              else if (root.btAdapter) root.btAdapter.enabled = !root.btAdapter.enabled
+            }
           }
         }
 

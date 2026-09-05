@@ -394,7 +394,8 @@ Item {
   // closes an app the user only meant to un-cover.
   property bool keyboardUp: false
   property bool keyboardKnown: false
-  property bool backRetried: false
+  property int backRetries: 0
+  readonly property int backRetryLimit: 6
 
   Process {
     id: keyboardProbe
@@ -415,6 +416,16 @@ Item {
     onTriggered: root.performBack()
   }
 
+  function startKeyboardProbe(): void {
+    root.keyboardKnown = false
+    root.backRetries = 0
+    // Toggled off first. Setting `running` true on a Process that is already
+    // running is a no-op, so a probe still in flight from the previous gesture
+    // left keyboardKnown false and the answer stale.
+    keyboardProbe.running = false
+    keyboardProbe.running = true
+  }
+
   function hideKeyboard(): void {
     Quickshell.execDetached(["busctl", "--user", "call", "sm.puri.OSK0",
                              "/sm/puri/OSK0", "sm.puri.OSK0", "SetVisible",
@@ -422,14 +433,17 @@ Item {
   }
 
   function performBack(): void {
-    if (!root.keyboardKnown && !root.backRetried) {
-      root.backRetried = true
+    if (!root.keyboardKnown && root.backRetries < root.backRetryLimit) {
+      root.backRetries++
       backRetry.restart()
       return
     }
 
-    // G2
-    if (root.keyboardUp) { root.hideKeyboard(); return }
+    // G2. If the probe still has not answered, take the keyboard branch
+    // anyway: it is the reversible one. Acting on a stale `keyboardUp` closed
+    // an app while the keyboard was plainly up, which is the one outcome this
+    // gesture must never produce by accident.
+    if (root.keyboardUp || !root.keyboardKnown) { root.hideKeyboard(); return }
 
     // G3
     if (root.backTopmostOverlay()) return
@@ -440,7 +454,17 @@ Item {
     var tl = root.focusedToplevel()
     if (tl) { tl.close(); return }
 
-    // G5: a bare home screen. Nothing to undo.
+    // G4 again, for when the foreign-toplevel state says nothing is activated
+    // and a window is plainly there. Sway can end up with a workspace focused
+    // and no window inside it focused -- `[app_id=...] focus` then reports
+    // success and changes nothing -- and in that state this gesture silently
+    // did nothing at all.
+    //
+    // `kill` is the same close *request*, addressed to whatever Sway considers
+    // focused. It closes the window in that state and is a no-op on a genuinely
+    // empty workspace, which keeps G5 true: on a bare home screen there is
+    // nothing focused for it to reach.
+    root.dispatch("kill")
   }
 
   // Back to rest. Every path out of a gesture goes through this.
@@ -497,9 +521,7 @@ Item {
     // G. Reachable without a finger, and the only way to test the priority
     // order without a keyboard on screen.
     function back(): string {
-      root.keyboardKnown = false
-      root.backRetried = false
-      keyboardProbe.running = true
+      root.startKeyboardProbe()
       root.performBack()
       return "ok: back"
     }
@@ -797,9 +819,7 @@ Item {
         edgeStartY = pts[0].sceneY
         // Started now so it has answered by the time the swipe has travelled
         // far enough to commit.
-        root.keyboardKnown = false
-        root.backRetried = false
-        keyboardProbe.running = true
+        root.startKeyboardProbe()
       }
 
       onReleased: pts => {

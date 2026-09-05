@@ -324,6 +324,17 @@ if [[ ${1:-} == "--gestures" ]]; then
   # shell, so the check is independent of the thing under test.
   ws_rep() { swaymsg -t get_workspaces | python3 -c 'import json,sys; print(([w.get("representation") or "" for w in json.load(sys.stdin) if w["focused"]] or [""])[0])'; }
   scratch() { pgrep -fc "foot --app-id=moa-selftest" || true; }
+  # The app Sway currently has focused, or empty. Read from the tree rather
+  # than from the shell, so a check never confirms itself.
+  focused_app() { swaymsg -t get_tree | python3 -c '
+import json,sys
+found = []
+def walk(n):
+    if n.get("focused") and n.get("app_id"): found.append(n["app_id"])
+    for k in ("nodes", "floating_nodes"):
+        for c in n.get(k, []): walk(c)
+walk(json.load(sys.stdin))
+print(found[0] if found else "")'; }
   cards() { timeout 8 omarchy-shell recents list 2>/dev/null | grep -c . || true; }
 
   # Right after a full-screen surface maps on this GPU the shell can be busy
@@ -458,10 +469,15 @@ if [[ ${1:-} == "--gestures" ]]; then
     else
       noac A4 "the home drag left workspace $(ws) holding '$(ws_rep)'"
     fi
-    if (( $(cards) == before )); then
+    # F2 says going home never *closes* anything, so that is what is asserted.
+    # Requiring the count to be unchanged also fails when something unrelated
+    # launches mid-run -- a leftover app finishing its start-up was enough --
+    # and that is not what this criterion is about.
+    after=$(cards)
+    if (( after >= before )); then
       okac F2 "going home closed nothing ($before apps still open)"
     else
-      noac F2 "the app count changed going home: $before -> $(cards)"
+      noac F2 "the app count dropped going home: $before -> $after"
     fi
 
     # --- D. the home screen ------------------------------------------------
@@ -527,17 +543,34 @@ if [[ ${1:-} == "--gestures" ]]; then
     fi
 
     # And with nothing above it, back asks the app to close.
-    osk false; sleep 2
+    #
+    # Focus first, keyboard down second, and that order matters: focusing a
+    # terminal makes it advertise a text field and squeekboard comes straight
+    # back up. Dismissing the keyboard before focusing left it up again by the
+    # time the swipe landed, so back correctly took the G2 branch and this
+    # check failed on behaviour that was right.
     swaymsg '[app_id=moa-selftest] focus' >/dev/null 2>&1
     sleep 2
+    osk false; sleep 2
     before=$(cards)
-    sudo -n "$touch_bin" swipe 4 700 200 700 300 >/dev/null 2>&1
-    sleep 3
-    if (( $(cards) == before - 1 )); then
-      okac G4 "back closes the focused app ($before -> $(cards))"
+    # G4 needs a focused window, and that precondition can fail on its own.
+    # Sway can end up with the workspace focused and no window inside it
+    # focused -- `[app_id=...] focus` then reports success and changes
+    # nothing. Back is right to do nothing there (G5: no app, nothing to
+    # close), so without this the check blames the gesture for a seat state it
+    # did not cause.
+    if [[ -z $(focused_app) ]]; then
+      no "no window is focused, so G4 cannot be tested" \
+         "Sway reports the workspace focused but no window in it; see build-log 6g"
     else
-      noac G4 "the app count went $before -> $(cards)" \
-              "a left-edge swipe on an app has to close it"
+      sudo -n "$touch_bin" swipe 4 700 200 700 300 >/dev/null 2>&1
+      sleep 3
+      if (( $(cards) == before - 1 )); then
+        okac G4 "back closes the focused app ($before -> $(cards))"
+      else
+        noac G4 "the app count went $before -> $(cards)" \
+                "a left-edge swipe on an app has to close it"
+      fi
     fi
 
     # A short drag from the edge must not.

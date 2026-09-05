@@ -729,6 +729,61 @@ the font's bearings. Measured after: the gear moved from -1.5 to +0.5 device
 pixels, the power glyph stayed at -1.5 because its ink genuinely overhangs its
 cell to the left, and at that size both read as centred.
 
+## 6g. One phone, three sessions
+
+Most of an afternoon's "flaky gesture tests" were not flaky and were not
+gestures. Two other Claude sessions were driving the same PinePhone: one
+scp'ing plugins and restarting the shell every few minutes, one running
+input-method lifetime tests that deliberately parked focus on an empty
+workspace. The tells were all there and I read every one of them as my own
+bug first: windows nobody in this session had spawned (`moa-kbdtest`, a KDE
+Calculator), workspace numbering at **19**, and a seat where the workspace was
+focused and no window inside it was -- after which `swaymsg '[app_id=...]
+focus'` returns success and changes nothing.
+
+The most expensive one: **squeekboard had been killed and replaced**, with
+another implementation owning `sm.puri.OSK0`. The G2 check -- "a back swipe
+dismisses the keyboard and leaves the app open" -- was therefore testing
+somebody else's keyboard, and I had already started rewriting the probe to
+chase what I took to be my own defect. Asking cost one message and would have
+cost nothing an hour earlier.
+
+**What that says about the suite**, beyond "coordinate": a check that fails
+because of the environment must say so. Three now do.
+
+- G4 asserts its precondition. If Sway has no focused window, it reports *that*
+  rather than blaming the back gesture -- which is right to do nothing there,
+  because "no toplevel activated" is also how a home screen looks (G5).
+- F2 asserts what its criterion actually says. "Going home never closes
+  anything" is `after >= before`, not `after == before`; the stricter version
+  failed when an unrelated app finished starting mid-run.
+- G2 forces the keyboard up rather than hoping. An unforced run of that check
+  is what made G4 look broken while it was correctly obeying G2's priority.
+
+**Two real defects came out of the noise**, both of which would have bitten a
+real user:
+
+- The keyboard probe could act on a stale answer. `Process.running = true` on
+  a process that is already running is a no-op, so a probe still in flight
+  from the previous gesture left `keyboardKnown` false and `keyboardUp`
+  whatever it was last time -- and back closed an app while the keyboard was
+  plainly up. It toggles `running` off first now, retries a bounded six times,
+  and if it still has no answer it takes the *keyboard* branch, because
+  dismissing a keyboard is reversible and closing an app is not.
+- Back did nothing at all in the stranded-focus state. `focusedToplevel()`
+  returns null there while a window is plainly on screen, so the gesture fell
+  through to G5's "nothing to undo". It falls back to `kill` now -- the same
+  close request, addressed to whatever Sway considers focused, which reaches
+  the window in that state and is a no-op on a genuinely empty workspace, so
+  G5 still holds.
+
+**And one fix that was a workaround.** The suite had grown a discarded warm-up
+gesture because the first real gesture of a run was sometimes swallowed. The
+cause is that a fresh uinput device needs longer than `mobileomarchy-touch`
+waited for Sway to map it to an output. Every caller pays that wait anyway, so
+it is 2s now and the warm-up is gone. A warm-up that exists to survive a
+too-short sleep is the sleep being wrong.
+
 ## 7. Hardware status
 
 | | |

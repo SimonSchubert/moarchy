@@ -51,7 +51,7 @@ CAPABILITIES = {
 class Touch:
     """One finger on a virtual panel."""
 
-    def __init__(self, settle=1.0):
+    def __init__(self, settle=2.0):
         self.ui = UInput(
             CAPABILITIES,
             name="mobileomarchy-virtual-touch",
@@ -60,6 +60,12 @@ class Touch:
         # libinput has to notice the hotplug and Sway has to map it to an output
         # before anything sent here lands anywhere. Without this pause the first
         # gesture of a run is silently dropped.
+        #
+        # 2s, not 1s. One second is enough on an idle phone and is not enough
+        # on a loaded one, and the failure is invisible: the gesture simply
+        # does not happen. It was being worked around with a discarded warm-up
+        # gesture in the selftest, which is treating the symptom -- every
+        # caller pays the wait anyway, so it may as well be long enough.
         time.sleep(settle)
 
     def _point(self, x, y):
