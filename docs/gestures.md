@@ -210,6 +210,30 @@ are scrolling must never close the sheet out from under you.
 **H6** The existing 26px handle bands keep working. They are the affordance
 that says the sheet is draggable at all.
 
+**H7** Swiping a notification card sideways dismisses that notification. It is
+the **only** way to dismiss one — there is no close button on the card.
+→ the card leaves the list, and the notification is still absent after the
+shade is closed and reopened
+
+**H7a** A short swipe dismisses nothing and springs back. Measured: 100px of
+travel leaves the notification in place, 340px removes it. Without this,
+"swiping dismisses" is satisfied by a card that fires on any horizontal
+movement at all, which would make scrolling a minefield.
+
+**H7b** Neither a swipe nor a vertical drag over the list closes the shade.
+Measured: seven notifications, a vertical drag across them, nothing dismissed
+and the sheet still open.
+
+Sideways, not vertical, and that is the whole reason a swipe is allowed here at
+all: the list scrolls vertically and keeps vertical drags (H5), so claiming one
+axis rather than the gesture is what stops a scroll that wanders sideways from
+throwing away something you were reading.
+
+**H8** Clear-all remains reachable by tap. A swipe is invisible where a glyph
+is self-evident, so removing the close button makes per-card dismissal
+something you have to know about; the bulk control is what keeps emptying the
+shade from depending on a gesture nobody told you about.
+
 ---
 
 ## Constraints

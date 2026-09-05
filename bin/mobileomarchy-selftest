@@ -526,6 +526,39 @@ print(found[0] if found else "")'; }
     sudo -n "$touch_bin" swipe 360 700 360 200 2000 >/dev/null 2>&1
     sleep 3
 
+    # --- H7. swipe a notification away ------------------------------------
+    # The only per-card dismissal there is, now that the close button is gone,
+    # so a swipe that does not land means a notification that cannot be
+    # dismissed at all. Posted rather than waited for: a suite that needs a
+    # real notification to arrive on its own tests nothing most of the time.
+    notify-send "moa-selftest" "swipe me away" >/dev/null 2>&1
+    sleep 3
+    timeout 8 omarchy-shell shade open >/dev/null 2>&1
+    sleep 3
+    before_n=$(timeout 8 omarchy-shell shade notifications 2>/dev/null | grep -c . || true)
+    if (( before_n == 0 )); then
+      no "no notification to swipe, so H7 cannot be tested" \
+         "notify-send produced nothing the shade could see"
+    else
+      # Sideways across a card. The list is at the top, so the first card sits
+      # just under the header.
+      # y=770 is the first card's middle with one notification posted. Below
+      # the last card the sheet ends and the scrim begins, and a swipe there
+      # reads as a tap on the scrim and closes the shade -- which looks like
+      # the swipe having some wild side effect rather than having missed.
+      sudo -n "$touch_bin" swipe 200 770 660 770 400 >/dev/null 2>&1
+      sleep 3
+      after_n=$(timeout 8 omarchy-shell shade notifications 2>/dev/null | grep -c . || true)
+      if (( after_n == before_n - 1 )); then
+        okac H7 "swiping a notification card dismisses it ($before_n -> $after_n)"
+      else
+        noac H7 "the notification count went $before_n -> $after_n" \
+                "with no close button, a swipe that does not land leaves it undismissable"
+      fi
+    fi
+    timeout 8 omarchy-shell shade close >/dev/null 2>&1
+    sleep 2
+
     # --- G. back -----------------------------------------------------------
     # With the drawer up, back closes the overlay and leaves the apps alone.
     before=$(cards)

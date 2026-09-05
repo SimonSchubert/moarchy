@@ -356,6 +356,20 @@ Item {
       return "ok"
     }
     function close(): string { root.dismiss(); return "ok" }
+
+    // One line per notification in the history, so a dismissal is assertable
+    // by counting -- the same reason the carousel exposes list(). Needed
+    // because the swipe (H7) is now the only per-card dismissal there is: with
+    // no close button to fall back on, "it renders correctly" stops being
+    // evidence that a notification can be got rid of at all.
+    function notifications(): string {
+      var out = []
+      for (var i = 0; i < root.historyRows.length; i++) {
+        var r = root.historyRows[i]
+        if (r) out.push(root.rowStem(r) + " " + (r.app || "?"))
+      }
+      return out.join("\n")
+    }
     function toggle(): string {
       if (root.shell) root.shell.toggle(root.pluginId, "{}")
       return root.opened ? "open" : "closed"

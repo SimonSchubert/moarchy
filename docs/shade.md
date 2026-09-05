@@ -112,11 +112,14 @@ the cost that ruled out theme previews.
 
 ## S18–S20. Notifications
 
-**S18** History is newest first, one card per notification, each dismissable on
-its own.
+**S18** History is newest first, one card per notification. A single
+notification is dismissed by **swiping its card sideways** — there is no close
+button on the card, and the swipe is the only per-card path. See
+`gestures.md` H7 for the gesture and why it claims one axis.
 
 **S19** A clear-all removes every notification, both the live popups and the
-history.
+history. It is the only dismissal reachable by tap, which is what keeps
+emptying the shade from depending on knowing about H7's swipe.
 
 **S20** The list is the only scrolling region on the sheet, and while it can
 scroll it keeps vertical drags — the shade must never close out from under
