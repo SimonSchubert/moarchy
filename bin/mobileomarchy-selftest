@@ -1128,8 +1128,14 @@ print("armed=%d mid=%d lag=%d stop=%d landed_ok=%s landed=%s"
     timeout 8 omarchy-shell recents close >/dev/null 2>&1; sleep 1
     fi
   fi
-  # Not `pkill -f`: the pattern matches its own command line when this runs over
-  # ssh, and the suite kills the session it is reporting to.
+  # Closed through the compositor rather than by `pkill -f`. The pkill was not
+  # self-matching here -- this script's own command line does not contain the
+  # pattern, so it reached only the windows it meant to, and runs over ssh
+  # printed their full summary. What `-f` does carry is a hazard one keystroke
+  # away: type the same pattern into an ssh command and *that* argv does contain
+  # it, the match includes the shell running it, and the session dies mid-run.
+  # Asking a window to close by app_id cannot reach anything but a window, and
+  # it is what the rest of this file does to windows anyway.
   swaymsg '[app_id=moa-selftest] kill' >/dev/null 2>&1
 
   # An AC with no check here is a gap, and a gap nobody can see is the same as
