@@ -997,5 +997,13 @@ plugin before you rely on it surviving.
   `openPanelIds` for `omarchy.` surfaces after its own, so a vendored popup can
   at least be dismissed. Tapping outside one still does nothing.
 - `I3.workspaces` shape differs from Hyprland's in ways not fully explored.
+- **Browser-policy theming fails on every `omarchy-theme-set`.** Upstream's
+  `omarchy-theme-set-browser-policy` runs its privileged half from
+  `/usr/bin/...` because that is the path `/etc/sudoers.d/omarchy-theme-browser`
+  names, and we vendor a checkout rather than installing the package, so nothing
+  is there: `Error accessing /usr/bin/omarchy-theme-set-browser-policy`. The
+  caller sets `failed=1` and carries on, so only Chromium's managed-policy
+  colour is lost. Harmless, but it prints on every theme change and looks like a
+  real failure.
 
 The v3.8.4 (waybar-based) port on `main` ran stably for hours and is the fallback.
