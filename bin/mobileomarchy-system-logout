@@ -1,0 +1,10 @@
+#!/bin/bash
+# End the session. Upstream's omarchy-system-logout dispatches `hyprctl dispatch
+# exit`; the Sway equivalent is `swaymsg exit`.
+#
+# Sway is started from ~/.bash_profile rather than a display manager, so exiting
+# drops to the login shell and autologin re-execs it -- which makes this the
+# supported way back from a wedged compositor, and the reason it is worth having
+# on the Power screen rather than only Restart and Power off.
+set -euo pipefail
+exec swaymsg exit

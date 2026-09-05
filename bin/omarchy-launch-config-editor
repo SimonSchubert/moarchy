@@ -1,0 +1,15 @@
+#!/bin/bash
+# Sway/phone override. Upstream hands off to omarchy-launch-editor, which opens
+# $EDITOR through uwsm in whatever terminal xdg-terminal-exec picks -- at desktop
+# font size, which on this panel is a 47-column window.
+#
+# Same editor, fullscreen and legible. Everything routed here is a config file,
+# so this is nvim in a foot sized for the screen.
+path="${1-}"
+[[ -n $path ]] || { echo "usage: omarchy-launch-config-editor <path>" >&2; exit 1; }
+
+# Upstream's toast, kept: the file being edited is the only clue which row you
+# tapped once the editor is fullscreen and the menu is gone.
+omarchy-notification-send -u low "Editing config file" "$path" 2>/dev/null || true
+
+exec setsid mobileomarchy-launch-tui "${EDITOR:-nvim}" "$path"

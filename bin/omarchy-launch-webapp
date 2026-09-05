@@ -1,0 +1,10 @@
+#!/bin/bash
+# Sway/phone override. Upstream resolves the default browser, insists on a
+# Chromium-family one, and launches `--app=<url>` for a chromeless window.
+#
+# None of the Chromium-family browsers has an aarch64 build in the repos this
+# phone uses; the browser here is epiphany (WebKit), which has no --app= mode.
+# A web app and a tab are the same thing on a phone anyway -- the window is
+# fullscreen either way and there is no taskbar to tell them apart.
+[[ $# -gt 0 ]] || { echo "usage: omarchy-launch-webapp <url> [args...]" >&2; exit 1; }
+exec setsid mobileomarchy-launch-browser "$@"

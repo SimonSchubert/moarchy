@@ -1,0 +1,59 @@
+#!/bin/bash
+# Nightlight on wlsunset. Upstream drives hyprsunset over `hyprctl hyprsunset
+# temperature`, which needs Hyprland; wlsunset is the wlroots equivalent and is
+# in the base package set.
+#
+# The interface is upstream's on purpose -- `--status` answers the same
+# {"enabled":bool,"temperature":int|null} shape -- so anything reading it (the
+# shell's nightlight indicator, the Settings switch) needs no special case.
+#
+# Two differences worth knowing:
+#
+#   State is "is wlsunset running", not a queried temperature. wlsunset has no
+#   query interface at all, so there is nothing to ask; the process either has
+#   the gamma ramp or it does not.
+#
+#   Held constant rather than following the sun. wlsunset interpolates between a
+#   day and a night temperature across sunrise and sunset, but this is a manual
+#   toggle: asked for nightlight at noon it must give nightlight. -T one degree
+#   above -t is the idiom for that -- wlsunset wants high > low, so they cannot
+#   simply be equal.
+set -euo pipefail
+
+ON_TEMP=4000
+OFF_TEMP=6500
+
+running() { pgrep -x wlsunset >/dev/null; }
+
+status_json() {
+  if running; then
+    printf '{"enabled":true,"temperature":%d}\n' "$ON_TEMP"
+  else
+    printf '{"enabled":false,"temperature":%d}\n' "$OFF_TEMP"
+  fi
+}
+
+nightlight_on() {
+  running && return 0
+  setsid wlsunset -T $((ON_TEMP + 1)) -t "$ON_TEMP" >/dev/null 2>&1 &
+  # Gamma is applied on the first frame after it connects; without this a caller
+  # that reads back immediately sees the old state and reports the write failed.
+  sleep 0.3
+}
+
+# The compositor restores the default ramp when the client disconnects, so there
+# is nothing to reset by hand.
+nightlight_off() { pkill -x wlsunset 2>/dev/null || true; }
+
+case "${1:-toggle}" in
+  --status|status) status_json; exit 0 ;;
+  on|enable)   nightlight_on ;;
+  off|disable) nightlight_off ;;
+  toggle)      if running; then nightlight_off; else nightlight_on; fi ;;
+  *) echo "usage: mobileomarchy-toggle-nightlight [toggle|on|off|--status]" >&2; exit 1 ;;
+esac
+
+# Upstream's indicator refresh. -q and guarded: a shell that is not up is not an
+# error, and the nightlight indicator is absent on some bar layouts.
+omarchy-shell -q nightlight refresh >/dev/null 2>&1 || true
+status_json

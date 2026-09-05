@@ -1,0 +1,15 @@
+#!/bin/bash
+# What swayidle's timeout runs. Blanks the panel unless Stay Awake is set.
+#
+# swayidle has no way to skip a timeout conditionally -- the command it runs is
+# fixed at start -- so the condition has to live in the command. Without this the
+# Stay Awake row in Settings (and upstream's `omarchy-toggle-idle`) would read
+# and write its flag correctly while the screen went dark anyway at ten minutes:
+# a switch that is right about everything except the thing it controls.
+#
+# The flag is upstream's, at the path omarchy-toggle-idle writes, so the two
+# agree without either knowing about the other.
+STATE_FILE="$HOME/.local/state/omarchy/indicators/stay-awake"
+[[ -f $STATE_FILE ]] && exit 0
+
+exec swaymsg "output * power off"

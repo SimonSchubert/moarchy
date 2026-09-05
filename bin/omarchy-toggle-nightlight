@@ -1,0 +1,3 @@
+#!/bin/bash
+# Sway override: upstream drives hyprsunset through hyprctl, which needs Hyprland.
+exec mobileomarchy-toggle-nightlight "$@"

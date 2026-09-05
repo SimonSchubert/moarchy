@@ -167,6 +167,77 @@ Item {
            && root.shell.isPluginOpen(id)
   }
 
+  // Every full-screen overlay this shell can put over an app, in dismissal
+  // order rather than z-order.
+  //
+  // This used to be three ids written out at each of the two call sites, and
+  // Settings and Themes were in neither. A back swipe over Settings therefore
+  // fell straight through to closing the *app behind it* -- with the sheet
+  // still on screen, so nothing looked wrong until you dismissed it and found
+  // the app gone. Adding a screen must not mean remembering two lists.
+  readonly property var overlayIds: [
+    "mobileomarchy.shade",
+    "mobileomarchy.drawer",
+    "mobileomarchy.recents",
+    "mobileomarchy.themes",
+    "mobileomarchy.settings"
+  ]
+
+  function panelItem(id: string): var {
+    if (!root.shell || !root.shell.panelLoaders) return null
+    var loader = root.shell.panelLoaders[id]
+    return loader && loader.item ? loader.item : null
+  }
+
+  function topmostOverlay(): string {
+    for (var i = 0; i < root.overlayIds.length; i++)
+      if (root.isOpen(root.overlayIds[i])) return root.overlayIds[i]
+
+    // Vendored popups: omarchy.menu, omarchy.emojis, the speed tests, the image
+    // selector. install/port-4x.sh stubs out HyprlandFocusGrab -- it has no
+    // Quickshell.I3 counterpart -- so none of them dismiss on tap-outside and a
+    // gesture is the only way out. openPanelIds is the host's own record of
+    // what summon() put up; guarded, because a shell without it has to fall
+    // through to closing the app rather than throwing here.
+    //
+    // `omarchy.` only, and never the bar. That list carries everything mounted,
+    // including surfaces that are always up: hiding mobileomarchy.gestures
+    // would take away the strip the gesture arrived on, with no way back. The
+    // prefix test excludes our own ids for free -- "mobileomarchy." does not
+    // start with "omarchy.".
+    var open = root.shell ? root.shell.openPanelIds : null
+    if (open && open.length) {
+      for (var j = open.length - 1; j >= 0; j--) {
+        var candidate = String(open[j] || "")
+        if (candidate.indexOf("omarchy.") === 0 && candidate !== "omarchy.bar")
+          return candidate
+      }
+    }
+    return ""
+  }
+
+  // A7, A8. Put the topmost surface away outright. Never walks a screen's own
+  // page stack: an up-flick means "get me out of here", not "up one level".
+  function hideTopmostOverlay(): bool {
+    var id = root.topmostOverlay()
+    if (!id || !root.shell) return false
+    root.shell.hide(id)
+    return true
+  }
+
+  // G3. Same order, but an overlay that owns a page stack gets first refusal --
+  // Settings is a stack, and back walks up it before leaving the surface.
+  // goBack() answers true when it consumed the gesture; false means "nothing
+  // left, close me".
+  function backTopmostOverlay(): bool {
+    var id = root.topmostOverlay()
+    if (!id || !root.shell) return false
+    var item = root.panelItem(id)
+    if (item && typeof item.goBack === "function" && item.goBack() === true) return true
+    root.shell.hide(id)
+    return true
+  }
+
   // A9. Nothing open anywhere means the strip's up-swipe has nothing to show.
   function hasApps(): bool {
     var list = ToplevelManager.toplevels ? ToplevelManager.toplevels.values : []
@@ -307,12 +378,7 @@ Item {
       if (root.focusedToplevel())
         root.dispatch("workspace number " + root.firstFreeWorkspace())
     }
-    else if (action === "clear") {
-      if (!root.shell) return
-      if (root.isOpen("mobileomarchy.shade")) root.shell.hide("mobileomarchy.shade")
-      else if (root.isOpen("mobileomarchy.drawer")) root.shell.hide("mobileomarchy.drawer")
-      else if (root.isOpen("mobileomarchy.recents")) root.shell.hide("mobileomarchy.recents")
-    }
+    else if (action === "clear") root.hideTopmostOverlay()
   }
 
   // ------------------------------------------------------------------- back
@@ -366,11 +432,7 @@ Item {
     if (root.keyboardUp) { root.hideKeyboard(); return }
 
     // G3
-    if (root.shell) {
-      if (root.isOpen("mobileomarchy.shade")) { root.shell.hide("mobileomarchy.shade"); return }
-      if (root.isOpen("mobileomarchy.drawer")) { root.shell.hide("mobileomarchy.drawer"); return }
-      if (root.isOpen("mobileomarchy.recents")) { root.shell.hide("mobileomarchy.recents"); return }
-    }
+    if (root.backTopmostOverlay()) return
 
     // G4, G7. close() is xdg_toplevel.close -- a close *request*, so an editor
     // with unsaved work prompts rather than dies. That is what makes firing it

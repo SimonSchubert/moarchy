@@ -69,11 +69,18 @@ Item {
   //   toggleTransparency                                  omarchy-shell IPC
   //   panelWidgetIdAt                                     togglePanelAt IPC
   //   debugBarGeometry                                    debug IPC
+  // Ours, not upstream's, called by bin/mobileomarchy-toggle-bar:
+  //   syncHidden                                          re-read the bar-off flag
   readonly property int barSize: Style.bar.sizeHorizontal
   property bool barHidden: false
   readonly property string position: "top"
   readonly property string fontFamily: Style.font.family
-  property bool transparent: false
+  // Bound, not assigned. `omarchy-bar transparent` commits to shell.json and the
+  // host re-assigns barConfig, so the config is the single source of truth.
+  // This was a plain `property bool transparent: false`, which meant the write
+  // landed in the file and the bar never changed -- and a settings switch
+  // reading the file then disagreed with one reading the bar.
+  property bool transparent: root.barConfig && root.barConfig.transparent === true
 
   // This bar hosts no widgets at all, so every widget-routing call has exactly
   // one honest answer. Returning false (rather than omitting the function) is
@@ -83,7 +90,36 @@ Item {
   function isBarWidgetOpen(id: string): bool { return false }
   function panelWidgetIdAt(section: string, index: string): string { return "" }
   function debugBarGeometry(): var { return [] }
-  function toggleTransparency(): void { root.transparent = !root.transparent }
+  // Writes through to the config instead of assigning `transparent`, which would
+  // break the binding above and strand the bar on whatever it happened to be.
+  // omarchy-bar only mutates shell.json -- it never calls back into the shell --
+  // so there is no loop here.
+  function toggleTransparency(): void {
+    Quickshell.execDetached(["omarchy-bar", "transparent", "toggle"])
+  }
+
+  // barHidden is what the shell.bar contract exposes and what the exclusive zone
+  // and top margin read, and until now nothing ever set it. `omarchy-toggle
+  // bar-off` flips a flag file; this is how the bar learns the flag moved.
+  //
+  // Read as a file test rather than through omarchy-toggle-enabled so a shell
+  // started with a short PATH answers "shown" from an actual test rather than
+  // from a 127 that looks the same.
+  function syncHidden(): string {
+    hiddenProbe.running = true
+    return "ok"
+  }
+
+  Process {
+    id: hiddenProbe
+    running: true
+    command: ["bash", "-c",
+      "[[ -f \"${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/toggles/bar-off\" ]] " +
+      "&& echo hidden || echo shown"]
+    stdout: StdioCollector {
+      onStreamFinished: root.barHidden = String(text || "").trim() === "hidden"
+    }
+  }
 
   // ------------------------------------------------------------- appearance
   readonly property color background: Color.bar.background

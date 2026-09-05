@@ -37,6 +37,9 @@ export SWAYSOCK="${SWAYSOCK:-$(ls "$XDG_RUNTIME_DIR"/sway-ipc.* 2>/dev/null | he
 export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-$(basename "$(ls "$XDG_RUNTIME_DIR"/wayland-[0-9] 2>/dev/null | head -1)" 2>/dev/null)}"
 [[ -n $WAYLAND_DISPLAY ]] || echo "warning: no WAYLAND_DISPLAY; the shell will not start" >&2
 
+# Set by hand only, since mobileomarchy-toggle-bar stopped killing the shell to
+# hide the bar. Kept as the escape hatch for debugging: touch it and the shell
+# stays down across restarts.
 STATE="${XDG_STATE_HOME:-$HOME/.local/state}/mobileomarchy/shell-off"
 pkill -x quickshell 2>/dev/null
 [[ -f $STATE ]] && exit 0

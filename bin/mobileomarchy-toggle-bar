@@ -1,12 +1,32 @@
 #!/bin/bash
-# Show/hide the 4.x shell, remembering the choice. Replaces the waybar toggle.
-STATE="${XDG_STATE_HOME:-$HOME/.local/state}/mobileomarchy/shell-off"
-mkdir -p "$(dirname "$STATE")"
+# Show or hide the status bar. Shadows upstream's omarchy-toggle-bar, which
+# toggles waybar.
+#
+# ---------------------------------------------------------------------------
+# Why this no longer kills the shell
+# ---------------------------------------------------------------------------
+# It used to `pkill -x quickshell` and remember the choice in a `shell-off`
+# flag, which made sense when the bar *was* the only thing the shell drew. It is
+# not any more: the same process draws the bar, the app drawer, the shade, the
+# recents carousel and the bottom-edge gesture strip. Hiding the bar by killing
+# it took all five away and left a bare Sway with no way back except a hardware
+# keyboard or ssh -- from a row labelled "Menu Bar".
+#
+# So this flips the same `bar-off` flag upstream uses and asks the bar to re-read
+# it. mobileomarchy.bar's syncHidden() moves its exclusive zone and slides it off
+# the top edge; everything else the shell draws stays up.
+#
+# `on`/`off` set an absolute state so a settings switch can write what it means
+# rather than blind-toggling; bare `toggle` keeps the keybinding's old behaviour.
+set -euo pipefail
 
-if pgrep -x quickshell >/dev/null; then
-  touch "$STATE"
-  pkill -x quickshell
-else
-  rm -f "$STATE"
-  mobileomarchy-restart-shell
-fi
+case "${1:-toggle}" in
+  on)     omarchy-toggle bar-off off ;;   # bar on  == flag off
+  off)    omarchy-toggle bar-off on  ;;
+  toggle) omarchy-toggle bar-off toggle ;;
+  *) echo "usage: mobileomarchy-toggle-bar [toggle|on|off]" >&2; exit 1 ;;
+esac
+
+# The bar watches nothing, so tell it. -q because a shell that is not up yet is
+# not an error: it reads the flag itself when it starts.
+omarchy-shell -q omarchy.bar syncHidden >/dev/null 2>&1 || true

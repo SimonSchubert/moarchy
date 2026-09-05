@@ -1,0 +1,27 @@
+#!/bin/bash
+# Sway/phone override. Upstream opens a *floating* terminal through
+# xdg-terminal-exec and uwsm, sized by a Hyprland window rule. There are no
+# floating windows worth having on a 360px screen, and the rule is Hyprland's.
+#
+# This is the single highest-leverage shim in the repo: 128 of the 320 rows in
+# omarchy-menu.jsonc are `omarchy-launch-floating-terminal-with-presentation
+# <script>`, and every script they name exists upstream. Because bin/ here comes
+# before $OMARCHY_PATH/bin on PATH, replacing this one wrapper makes all of them
+# run without reimplementing any.
+#
+# The presentation wrapper is upstream's, kept verbatim -- logo, then the
+# command, then the done prompt unless the user interrupted it (130). Only the
+# terminal changes: mobileomarchy-launch-tui is a fullscreen foot at font size 7,
+# which is the ~60 columns btop and friends need.
+
+# Theme the gum widgets to the current theme. Absent on a partial install, and a
+# missing prompt style is not worth refusing to run the command over.
+source omarchy-restart-gum 2>/dev/null || true
+
+cmd="$*"
+[[ -n $cmd ]] || { echo "usage: omarchy-launch-floating-terminal-with-presentation <command>" >&2; exit 1; }
+
+# `$?` is escaped so it is evaluated inside the spawned bash, not here.
+presentation="omarchy-show-logo; $cmd; if (( \$? != 130 )); then omarchy-show-done; fi"
+
+exec setsid mobileomarchy-launch-tui bash -lc "$presentation"
