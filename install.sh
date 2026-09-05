@@ -1,7 +1,7 @@
 #!/bin/bash
 # mobileomarchy installer -- run ON the phone, over SSH.
 #
-#   ssh alarm@10.15.19.82
+#   ssh alarm@<the phone's wifi address>
 #   git clone https://github.com/<you>/mobileomarchy ~/.local/share/mobileomarchy
 #   ~/.local/share/mobileomarchy/install.sh
 #

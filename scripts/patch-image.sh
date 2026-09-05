@@ -1,23 +1,29 @@
 #!/usr/bin/env bash
-# Patch a DanctNIX PinePhone image so a Mac can actually reach it, before flashing.
+# Preseed a wifi connection into a PinePhone image before flashing, so the phone
+# joins the network on first boot and is reachable over SSH without a keyboard.
 #
-#   ./scripts/patch-image.sh ~/Downloads/mobileomarchy/archlinux-pinephone-barebone-20251224.img.xz
+#   WIFI_SSID='MyNetwork' WIFI_PSK='secret' ./scripts/patch-image.sh <image.img|.img.xz>
 #
-# Why this exists
-# ---------------
-# DanctNIX's usb-tethering gadget presents RNDIS (USB interface class 02/02/ff).
-# macOS ships no RNDIS driver, so the phone enumerates as "Arch Linux Mobile"
-# but no network interface ever appears and `ssh alarm@10.15.19.82` cannot work.
-# CDC-ECM (02/06/00) is supported natively by macOS, and usb_f_ecm is built into
-# the DanctNIX kernel (verified against modules.builtin), so switching costs
-# nothing on Linux hosts.
-#
-# Optionally also preseeds a wifi connection, giving a second, independent way in:
-#
-#   WIFI_SSID='MyNetwork' WIFI_PSK='secret' ./scripts/patch-image.sh <image>
+# Optional. It exists to save a round trip on a debug build -- flash, boot, and
+# the phone is already on the network. Without it you need a USB keyboard (or a
+# serial console) to run `nmtui` once.
 #
 # Pass the PSK via the environment, not a flag, so it stays out of shell history
 # and process listings.
+#
+# ---------------------------------------------------------------------------
+# What this used to do, and why it does not any more
+# ---------------------------------------------------------------------------
+# This script's original job was switching DanctNIX's USB gadget from RNDIS to
+# CDC-ECM, because macOS has no RNDIS driver. That worked at the file level --
+# the gadget script really was patched, and usb_f_ecm really is built into the
+# kernel -- but the link never came up in practice: macOS binds the interface
+# and the gadget side never gains carrier. Wifi is the only way in that has been
+# made to work from this host, so the USB path is gone rather than left in as a
+# route that reads like it should work.
+#
+# Once the image builder in image/ exists, this goes too: preseeding is a build
+# input there, not surgery on someone else's ext4. See docs/structure.md I6.
 #
 # Needs e2fsprogs (`brew install e2fsprogs`) -- debugfs edits ext4 directly, so
 # no VM, no root, no loop mounts.
@@ -25,7 +31,13 @@
 set -euo pipefail
 
 SRC="${1:-}"
-[[ -n $SRC && -f $SRC ]] || { echo "usage: $0 <image.img|image.img.xz>" >&2; exit 1; }
+[[ -n $SRC && -f $SRC ]] || { echo "usage: WIFI_SSID=... WIFI_PSK=... $0 <image.img|image.img.xz>" >&2; exit 1; }
+
+if [[ -z ${WIFI_SSID:-} || -z ${WIFI_PSK:-} ]]; then
+  echo "!! WIFI_SSID and WIFI_PSK are both required -- preseeding wifi is all this does." >&2
+  echo "   Skip this step entirely if you plan to run nmtui on the phone instead." >&2
+  exit 1
+fi
 
 E2FS_PREFIX="${E2FS_PREFIX:-/opt/homebrew/opt/e2fsprogs}"
 DEBUGFS="$E2FS_PREFIX/sbin/debugfs"
@@ -78,50 +90,9 @@ FS="$IMG?offset=$OFFSET"
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
-# --- Sanity: is ECM actually available in this kernel? ----------------------
-KVER=$("$DEBUGFS" -R "ls /usr/lib/modules" "$FS" 2>/dev/null | tr ' ' '\n' | grep -E '^[0-9]+\.' | head -1)
-if ! "$DEBUGFS" -R "cat /usr/lib/modules/$KVER/modules.builtin" "$FS" 2>/dev/null | grep -q usb_f_ecm; then
-  echo "!! usb_f_ecm is not built into kernel $KVER -- refusing to switch to ECM." >&2
-  exit 1
-fi
-echo "    kernel $KVER has usb_f_ecm built in"
-
-# --- Patch the gadget script ------------------------------------------------
-echo "==> switching USB gadget rndis -> ecm"
-"$DEBUGFS" -R "cat /usr/lib/danctnix/usb-tethering" "$FS" 2>/dev/null >"$WORK/orig"
-grep -q 'rndis.usb0' "$WORK/orig" || { echo "    already patched, or unexpected script layout"; }
-
-sed -e 's|:-rndis\.usb0}"|:-ecm.usb0}"|' \
-    -e 's|echo "rndis" > \$CONFIGFS|echo "ecm" > $CONFIGFS|' \
-    "$WORK/orig" >"$WORK/new"
-
-python3 - "$WORK/new" <<'PY'
-import sys
-p = sys.argv[1]
-s = open(p).read()
-if 'PATCHED BY mobileomarchy' not in s:
-    s = s.replace("#!/bin/sh\n", """#!/bin/sh
-
-# PATCHED BY mobileomarchy: rndis.usb0 -> ecm.usb0
-# macOS has no RNDIS driver; CDC-ECM is supported natively.
-# Reinstalling danctnix-usb-tethering reverts this.
-""", 1)
-    open(p, 'w').write(s)
-PY
-
-{
-  echo "cd /usr/lib/danctnix"
-  echo "rm usb-tethering"
-  echo "write $WORK/new usb-tethering"
-  echo "sif usb-tethering mode 0100755"
-  echo "sif usb-tethering uid 0"
-  echo "sif usb-tethering gid 0"
-} >"$WORK/cmds"
-
-# --- Optional wifi preseed --------------------------------------------------
-if [[ -n ${WIFI_SSID:-} && -n ${WIFI_PSK:-} ]]; then
-  echo "==> preseeding wifi for SSID '$WIFI_SSID'"
-  cat >"$WORK/wifi.nmconnection" <<EOF
+# --- Write the NetworkManager keyfile --------------------------------------
+echo "==> preseeding wifi for SSID '$WIFI_SSID'"
+cat >"$WORK/wifi.nmconnection" <<EOF
 [connection]
 id=$WIFI_SSID
 uuid=$(uuidgen | tr 'A-Z' 'a-z')
@@ -144,17 +115,16 @@ method=auto
 addr-gen-mode=stable-privacy
 method=auto
 EOF
-  {
-    echo "cd /etc/NetworkManager/system-connections"
-    echo "write $WORK/wifi.nmconnection $WIFI_SSID.nmconnection"
-    # NetworkManager refuses to load a keyfile that is not 0600 root:root.
-    echo "sif $WIFI_SSID.nmconnection mode 0100600"
-    echo "sif $WIFI_SSID.nmconnection uid 0"
-    echo "sif $WIFI_SSID.nmconnection gid 0"
-  } >>"$WORK/cmds"
-else
-  echo "==> no WIFI_SSID/WIFI_PSK set, skipping wifi preseed"
-fi
+
+{
+  echo "cd /etc/NetworkManager/system-connections"
+  echo "rm $WIFI_SSID.nmconnection"
+  echo "write $WORK/wifi.nmconnection $WIFI_SSID.nmconnection"
+  # NetworkManager refuses to load a keyfile that is not 0600 root:root.
+  echo "sif $WIFI_SSID.nmconnection mode 0100600"
+  echo "sif $WIFI_SSID.nmconnection uid 0"
+  echo "sif $WIFI_SSID.nmconnection gid 0"
+} >"$WORK/cmds"
 
 "$DEBUGFS" -w -f "$WORK/cmds" "$FS" >"$WORK/log" 2>&1 || { cat "$WORK/log" >&2; exit 1; }
 
@@ -164,8 +134,15 @@ tail -2 "$WORK/fsck" | sed 's/^/    /'
 
 echo
 echo "==> verifying"
-"$DEBUGFS" -R "cat /usr/lib/danctnix/usb-tethering" "$FS" 2>/dev/null |
-  grep -q 'ecm.usb0' && echo "    gadget: ecm.usb0 OK" || { echo "    !! patch did not take" >&2; exit 1; }
+# Read it back rather than trusting debugfs's exit status: it reports success
+# for a write into a directory that does not exist.
+if "$DEBUGFS" -R "cat /etc/NetworkManager/system-connections/$WIFI_SSID.nmconnection" \
+     "$FS" 2>/dev/null | grep -q "ssid=$WIFI_SSID"; then
+  echo "    wifi keyfile: $WIFI_SSID OK"
+else
+  echo "    !! the keyfile did not take" >&2
+  exit 1
+fi
 
 cat <<NEXT
 
@@ -175,6 +152,7 @@ Patched image ready:
 Flash it with:
   IMAGE_FILE="$IMG" ./scripts/flash-sd.sh /dev/diskN
 
-After boot, the phone should appear on macOS as a network interface, reachable at:
-  ssh alarm@10.15.19.82        (password: 123456)
+After boot the phone joins '$WIFI_SSID'. Find it with \`arp -a\` or your router,
+then:
+  ssh alarm@<its address>        (password: 123456)
 NEXT

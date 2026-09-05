@@ -10,21 +10,22 @@
 # requires a real terminal. Everything after `flash` talks to the phone over SSH.
 #
 # Configuration (environment):
-#   PHONE       ssh target                (default alarm@10.15.19.82, USB/ECM)
+#   PHONE       ssh target                (default alarm@192.168.0.18, over wifi)
 #   DISK        SD card device            (e.g. /dev/disk28) -- required for `flash`
-#   WIFI_SSID   preseed this wifi network into the image (optional but recommended)
+#   WIFI_SSID   preseed this wifi network into the image (optional)
 #   WIFI_PSK    its password (pass via env, never as an argument)
 #
-# Why wifi matters: USB networking to a Mac is unreliable even after the image is
-# patched from RNDIS to CDC-ECM -- macOS binds the interface but the gadget side
-# never gains carrier. Preseeding wifi gives a second, working way in.
+# Wifi is the only way in. USB networking to a Mac does not work: DanctNIX's
+# gadget presents RNDIS, which macOS cannot drive, and switching it to CDC-ECM
+# gets the interface bound but never carrying. Preseeding saves one round trip
+# with a USB keyboard and `nmtui`; it is not otherwise required.
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-PHONE="${PHONE:-alarm@10.15.19.82}"
+PHONE="${PHONE:-alarm@192.168.0.18}"
 RELEASE="${RELEASE:-20251224}"
 CACHE="${CACHE:-$HOME/Downloads/mobileomarchy}"
 IMG="$CACHE/archlinux-pinephone-barebone-${RELEASE}.img"
@@ -48,15 +49,20 @@ step_prereqs() {
     info "docker running ($(docker info --format '{{.Architecture}}')) -- packages will build natively"
   else
     info "docker NOT running -- start Docker Desktop, or the phone will build"
-    info "  walker/elephant itself (slow on a 1.15GHz A53)"
+    info "  moarchy-keyboard itself (slow on a 1.15GHz A53)"
   fi
 }
 
 step_image() {
-  say "fetch + patch image"
-  local args=()
-  [[ -n ${WIFI_SSID:-} ]] && info "wifi preseed: $WIFI_SSID"
-  ./scripts/patch-image.sh "$CACHE/archlinux-pinephone-barebone-${RELEASE}.img.xz" "${args[@]}"
+  say "preseed wifi into the image"
+  if [[ -z ${WIFI_SSID:-} || -z ${WIFI_PSK:-} ]]; then
+    info "WIFI_SSID/WIFI_PSK not set -- skipping."
+    info "  The image is flashed as downloaded; join the network with nmtui on"
+    info "  the phone, which needs a USB keyboard once."
+    return 0
+  fi
+  info "wifi preseed: $WIFI_SSID"
+  ./scripts/patch-image.sh "$CACHE/archlinux-pinephone-barebone-${RELEASE}.img.xz"
 }
 
 step_flash() {
@@ -78,7 +84,7 @@ EOS
 }
 
 step_build() {
-  say "build aarch64 packages (walker, elephant, yay, xdg-terminal-exec, ttf-ia-writer)"
+  say "build aarch64 packages (moarchy-keyboard, yay, xdg-terminal-exec, ttf-ia-writer)"
   docker info >/dev/null 2>&1 || die "Docker is not running"
   docker build --platform linux/arm64 -f docker/Dockerfile.builder -t mobileomarchy-builder . >/dev/null
   mkdir -p packages
@@ -88,7 +94,7 @@ step_build() {
 
 step_deploy() {
   say "deploy repo + packages to $PHONE"
-  phone true 2>/dev/null || die "cannot reach $PHONE (set PHONE=alarm@<ip>; key auth via ssh-copy-id)"
+  phone true 2>/dev/null || die "cannot reach $PHONE -- set PHONE=alarm@<ip> (the phone's wifi address; key auth via ssh-copy-id)"
 
   # Passwordless sudo, so the long install steps do not stall on a prompt.
   if ! phone 'sudo -n true' 2>/dev/null; then
@@ -172,7 +178,7 @@ step_verify() {
     echo "  sway -C:    $(WLR_BACKENDS=headless sway -C -c ~/.config/sway/config >/dev/null 2>&1 && echo PASS || echo FAIL)"
     echo "  themes:     $(ls $OMARCHY_PATH/themes 2>/dev/null | wc -l | tr -d " ") vendored"
     echo "  omarchy at: $(git -C $OMARCHY_PATH describe --tags 2>/dev/null)"
-    for p in sway waybar mako swaybg swayidle; do
+    for p in sway quickshell moarchy-keyboard swaybg swayidle; do
       printf "  %-10s %s\n" "$p" "$(pgrep -x $p >/dev/null && echo running || echo -)"
     done'
 }

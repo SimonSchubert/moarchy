@@ -48,9 +48,10 @@ fi
 mkdir -p "$CACHE"
 cd "$CACHE"
 
-# IMAGE_FILE lets you flash a locally modified image (e.g. one patched from
-# rndis to CDC-ECM so macOS can see the USB network gadget). Checksum
-# verification is skipped for it by definition -- it no longer matches upstream.
+# IMAGE_FILE lets you flash a locally modified image -- one with wifi preseeded
+# by scripts/patch-image.sh, or eventually one this project builds itself.
+# Checksum verification is skipped for it by definition: it no longer matches
+# upstream.
 if [[ -n ${IMAGE_FILE:-} ]]; then
   [[ -f $IMAGE_FILE ]] || { echo "No such image: $IMAGE_FILE" >&2; exit 1; }
   IMAGE="$IMAGE_FILE"
@@ -131,9 +132,11 @@ cat <<'NEXT'
 
 Done. Next:
   1. Put the card in the PinePhone and power it on.
-  2. Connect it to this Mac by USB; a CDC-ECM interface appears.
-  3. ssh alarm@10.15.19.82        (password: 123456; root password: root)
-  4. Change both passwords, join wifi with `sudo nmtui`, then:
+  2. Get it on wifi. If the image was preseeded by scripts/patch-image.sh it is
+     already there; otherwise attach a USB keyboard once and run `sudo nmtui`.
+  3. ssh alarm@<its address>      (password: 123456; root password: root)
+     Find the address from your router, or with `arp -a`.
+  4. Change both passwords, then:
 
        sudo pacman-key --init && sudo pacman-key --populate archlinuxarm
        sudo pacman -Syu
