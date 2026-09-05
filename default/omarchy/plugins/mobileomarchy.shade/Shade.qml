@@ -210,6 +210,9 @@ Item {
   // goes up past the slop drags the sheet.
   readonly property int dragSlop: Style.space(10)
 
+  // Android's long-press interval. Milliseconds, not pixels -- not a Style.space.
+  readonly property int holdInterval: 500
+
   // Scene coordinates, because every one of those MouseAreas is a child of the
   // sheet and the sheet is what moves. A delta measured in a frame that moves
   // with the thing it is driving feeds back into itself.
@@ -374,6 +377,32 @@ Item {
       if (root.shell) root.shell.toggle(root.pluginId, "{}")
       return root.opened ? "open" : "closed"
     }
+
+    // S4, S6a. What the Wi-Fi tile is reading, so a check can tell which branch
+    // a tap is about to take without inferring it from the phone's own network
+    // -- and can say so when the answer is the surprising one.
+    function wifi(): string {
+      var device = root.wifiDevice
+      return [Networking.wifiEnabled ? "on" : "off",
+              device && device.connected ? "connected" : "disconnected",
+              root.wifiKnownInRange ? "known-in-range" : "none-known",
+              root.wifiStranded ? "stranded" : "ok"].join(" ")
+    }
+
+    // The tile's own decision, reached through the tile's own code. Under
+    // `dryRun 1` it records and does not act, so S6a is assertable on a phone
+    // that is reached over the radio it would otherwise switch off.
+    function wifiTap(): string { root.wifiTap(); return root.lastAction }
+    function wifiHold(): string { root.wifiHold(); return root.lastAction }
+    function btTap(): string { root.btTap(); return root.lastAction }
+    function btHold(): string { root.btHold(); return root.lastAction }
+
+    function dryRun(on: string): string {
+      root.dryRun = (on === "1" || on === "true" || on === "on")
+      return root.dryRun ? "on" : "off"
+    }
+    function lastLaunch(): string { return root.lastLaunch }
+    function lastAction(): string { return root.lastAction }
   }
 
   // ------------------------------------------------------------- sources
@@ -405,6 +434,24 @@ Item {
       if (networks[i] && networks[i].connected) return String(networks[i].name || "Connected")
     return "Connected"
   }
+
+  // S6a. "Nothing a tap could usefully do." Known means NetworkManager holds a
+  // saved connection for it, so a known network in range is one the phone is
+  // about to join by itself -- and toggling the radio off mid-reconnect is the
+  // last thing the tap should mean. With none in range there is nothing to
+  // wait for, and the picker is the only way out.
+  readonly property bool wifiKnownInRange: {
+    var device = root.wifiDevice
+    var networks = device && device.networks ? device.networks.values : []
+    for (var i = 0; i < networks.length; i++)
+      if (networks[i] && networks[i].known) return true
+    return false
+  }
+
+  readonly property bool wifiStranded:
+    Networking.wifiEnabled && !root.airplane
+    && !(root.wifiDevice && root.wifiDevice.connected)
+    && !root.wifiKnownInRange
 
   readonly property string btLabel: {
     if (!root.btAdapter) return "No adapter"
@@ -499,6 +546,71 @@ Item {
     }
   }
   Timer { id: historyRefresh; interval: 250; onTriggered: historyRead.running = true }
+
+  // S6, S6a, S6b, S6c. Each wide tile toggles a radio and holds to open the
+  // thing that radio is for. Both are the commands the matching Settings rows
+  // run (`net.wifi`, `net.bluetooth`), so there is one picker behind two
+  // entry points rather than two that drift.
+  //
+  // nmtui-connect rather than impala: impala is an iwd client, this phone runs
+  // NetworkManager, and iwd.service is disabled -- but it is D-Bus activatable,
+  // so launching impala would start iwd to fight NetworkManager for wlan0
+  // rather than fail cleanly. nmtui-connect is NetworkManager's own list, and
+  // it fits: measured at the 60x41 grid mobileomarchy-launch-tui gives, the
+  // network list and its buttons are all on screen.
+  readonly property string wifiPicker:
+    "omarchy-launch-floating-terminal-with-presentation nmtui-connect"
+  readonly property string btPicker:
+    "omarchy-launch-floating-terminal-with-presentation bluetui"
+
+  // Set by `shade dryRun 1`, the way Settings does it. What the tile decided is
+  // recorded either way; only the two effects that cannot be taken back -- the
+  // radio write and the launch -- are held back. Without this a check of S6a
+  // would have to switch the radio off on a phone reached over that radio.
+  property bool dryRun: false
+  property string lastLaunch: ""
+  property string lastAction: ""
+
+  function openPicker(cmd) {
+    // The terminal comes up over the shade, so the shade goes away first --
+    // the same order the gear uses (S2).
+    root.dismiss()
+    root.lastAction = "picker"
+    root.lastLaunch = cmd
+    if (root.dryRun) return
+    Quickshell.execDetached(["bash", "-lc", cmd])
+  }
+
+  function wifiTap() {
+    if (root.airplane) {
+      root.lastAction = "unblock"
+      if (!root.dryRun) root.enableRadio("wifi")
+      return
+    }
+    if (root.wifiStranded) {
+      root.openPicker(root.wifiPicker)
+      return
+    }
+    root.lastAction = "toggle"
+    if (!root.dryRun) Networking.wifiEnabled = !Networking.wifiEnabled
+  }
+
+  function wifiHold() { root.openPicker(root.wifiPicker) }
+
+  // S6c. The pair behaves the same way. No stranded case here: a Bluetooth
+  // adapter with nothing paired in range is the normal resting state of one,
+  // not a dead end worth re-routing the tap for.
+  function btTap() {
+    if (root.airplane) {
+      root.lastAction = "unblock"
+      if (!root.dryRun) root.enableRadio("bluetooth")
+      return
+    }
+    root.lastAction = "toggle"
+    if (!root.dryRun && root.btAdapter) root.btAdapter.enabled = !root.btAdapter.enabled
+  }
+
+  function btHold() { root.openPicker(root.btPicker) }
 
   function setBrightness(percent) {
     var v = Math.max(1, Math.min(100, Math.round(percent)))
@@ -600,6 +712,20 @@ Item {
     property bool on: false
     signal activated()
 
+    // S6. Opt-in, and off by default: a tile with no long press must keep the
+    // tap it always had. Were the hold armed everywhere, holding the Bluetooth
+    // tile would swallow its own click and the tile would do nothing at all --
+    // which is worse than not having the gesture.
+    property bool holdable: false
+    signal held()
+
+    // Fired while the finger is still down, as Android does, so the surface
+    // answers the gesture rather than the lift. Cleared on the next press
+    // rather than on release, for the reason sheetWasDrag is (Qt delivers
+    // released before clicked, so a flag cleared on release is already false
+    // when the click lands and the tile fires both actions).
+    property bool heldFired: false
+
     height: Style.space(62)
     radius: root.radiusTile
     color: tile.on ? root.accent : root.container
@@ -644,13 +770,29 @@ Item {
       }
     }
 
+    Timer {
+      id: hold
+      interval: root.holdInterval
+      onTriggered: { tile.heldFired = true; tile.held() }
+    }
+
     MouseArea {
       anchors.fill: parent
-      onPressed: mouse => root.sheetPress(this, mouse)
-      onPositionChanged: mouse => root.sheetMove(this, mouse)
-      onReleased: root.sheetRelease()
-      onCanceled: root.sheetCancel()
-      onClicked: if (!root.sheetWasDrag) tile.activated()
+      onPressed: mouse => {
+        root.sheetPress(this, mouse)
+        tile.heldFired = false
+        if (tile.holdable) hold.restart()
+      }
+      onPositionChanged: mouse => {
+        root.sheetMove(this, mouse)
+        // Cancelled by the sheet drag latching, not by any movement at all: a
+        // thumb held still for half a second still travels a few pixels, and a
+        // hold that a steady hand cannot complete is not a gesture.
+        if (root.sheetDragging) hold.stop()
+      }
+      onReleased: { hold.stop(); root.sheetRelease() }
+      onCanceled: { hold.stop(); root.sheetCancel() }
+      onClicked: if (!root.sheetWasDrag && !tile.heldFired) tile.activated()
     }
   }
 
@@ -1006,10 +1148,9 @@ Item {
             label: "Wi-Fi"
             detail: root.wifiLabel
             on: Networking.wifiEnabled
-            onActivated: {
-              if (root.airplane) root.enableRadio("wifi")
-              else Networking.wifiEnabled = !Networking.wifiEnabled
-            }
+            holdable: true
+            onActivated: root.wifiTap()
+            onHeld: root.wifiHold()
           }
 
           WideTile {
@@ -1018,10 +1159,9 @@ Item {
             label: "Bluetooth"
             detail: root.btLabel
             on: root.btAdapter ? root.btAdapter.enabled : false
-            onActivated: {
-              if (root.airplane) root.enableRadio("bluetooth")
-              else if (root.btAdapter) root.btAdapter.enabled = !root.btAdapter.enabled
-            }
+            holdable: true
+            onActivated: root.btTap()
+            onHeld: root.btHold()
           }
         }
 

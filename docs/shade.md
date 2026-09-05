@@ -41,7 +41,7 @@ a popup with no tap-outside dismiss in this port, since `install/port-4x.sh`
 stubs out `HyprlandFocusGrab`, so it was a trapdoor. Lock, Suspend, Log out,
 Restart and Power off are native rows now — see `docs/settings.md`.
 
-## S4–S5. Wi-Fi and Bluetooth
+## S4–S6. Wi-Fi and Bluetooth
 
 **S4** The Wi-Fi tile is lit when Wi-Fi is enabled and a tap toggles it. Its
 second line reads, in order of preference: `Off`, the connected network's name,
@@ -51,10 +51,39 @@ second line reads, in order of preference: `Off`, the connected network's name,
 it. Its second line reads `No adapter`, `Off`, the connected device's name, or
 `On`.
 
-**? S6** Neither tile does anything but toggle. A long press does not open the
-network or device picker.
-— confirm: the picker is reachable from the gear, so this may be deliberate.
-Android puts it on a long press.
+**S6** A **long press** on the Wi-Fi tile opens the network picker: the shade
+closes and `nmtui-connect` runs in the fullscreen TUI terminal. The tap it
+interrupts does not also fire, so the radio is left as it was. 500ms, Android's
+interval; a press that turns into a drag of the sheet cancels it.
+
+Joining a network is the one thing the tile could not do, and a radio switch
+that cannot get you online is half a control. Android puts the picker on
+exactly this gesture.
+
+**S6a** A **tap** does the same thing — opens the picker rather than toggling
+— when Wi-Fi is on, nothing is connected, and no network in range is one
+NetworkManager has a saved connection for. In that state the toggle is a dead
+end: there is nothing to reconnect to, so the only thing a tap could otherwise
+do is switch the radio off, which is the opposite of what somebody tapping a
+disconnected Wi-Fi tile wants.
+
+The cost is that Wi-Fi cannot be switched **off** from this tile while it is
+stranded. Airplane (S8) and Settings still do it, and an idle radio with
+nothing saved in range is the case where turning it off matters least.
+
+**S6b** The picker is `nmtui-connect`, not `impala`. `impala` is an iwd client
+and this phone runs NetworkManager with `iwd.service` disabled — running it
+would D-Bus-activate iwd to fight NetworkManager for `wlan0`. The Settings row
+that named `impala` (`docs/settings.md`, `net.wifi`) is corrected to match, so
+both entry points run one picker.
+
+**S6c** A long press on the **Bluetooth** tile does the same for pairing: the
+shade closes and `bluetui` runs. The two wide tiles behave alike — hold for the
+thing the radio is for.
+
+There is no stranded tap here to match S6a. An adapter that is on with nothing
+connected is the normal resting state of Bluetooth, not a dead end, so its tap
+stays a plain toggle.
 
 ## S7–S10. Small tiles
 

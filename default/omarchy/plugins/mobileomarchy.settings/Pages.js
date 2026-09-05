@@ -96,8 +96,12 @@ var PAGES = {
     detailCmd: "omarchy-dns", covers: { "setup.network.dns": "N" } },
   // The shade toggles the radios. Neither of these has an upstream id because
   // upstream has no equivalent: a desktop joins a network from a bar applet.
+  // nmtui-connect, not impala: impala is an iwd client and this phone runs
+  // NetworkManager with iwd.service disabled -- and iwd is D-Bus activatable,
+  // so impala would start it to fight NetworkManager for wlan0. Same picker the
+  // shade's Wi-Fi tile opens on a long press (docs/shade.md S6b).
   { id: "wifi", type: "action", glyph: "󱚾", label: "Wi-Fi networks",
-    detailCmd: "omarchy-network-status", run: "impala", launch: "tui" },
+    detailCmd: "omarchy-network-status", run: "nmtui-connect", launch: "tui" },
   { id: "bluetooth", type: "action", glyph: "󰂯", label: "Bluetooth devices",
     run: "bluetui", launch: "tui" },
   { id: "qr", type: "action", glyph: "󰐲", label: "Wi-Fi QR code",

@@ -95,8 +95,14 @@ So `mobileomarchy-launch-tui` opens TUIs fullscreen at font size 7. For somethin
 that fits a *tiled* terminal with the bar still visible, use **`btm`** (bottom) —
 it adapts, and shows CPU, memory, all three thermal zones, disks and network.
 
-Also installed and worth knowing: `htop`, `lazygit`, `impala` (wifi), `bluetui`,
-`wiremix` (audio), `s-tui` (CPU frequency/temperature graphs).
+Also installed and worth knowing: `htop`, `lazygit`, `nmtui-connect` (wifi),
+`bluetui`, `wiremix` (audio), `s-tui` (CPU frequency/temperature graphs).
+
+`impala` is installed too and looks like the wifi TUI to reach for, but it is an
+**iwd** client and this phone runs NetworkManager with `iwd.service` disabled —
+iwd is D-Bus activatable, so impala starts it to fight NetworkManager for
+`wlan0` rather than failing cleanly. `nmtui-connect` is the one both the shade
+and Settings open.
 
 ## Browsers
 

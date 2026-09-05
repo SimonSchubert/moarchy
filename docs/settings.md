@@ -59,9 +59,10 @@ implementation behind two entry points.
 **`apps` leaves Settings entirely.** It is the app drawer, which already *is*
 upstream's `apps` provider. A launcher inside Settings would repeat it.
 
-Two rows exist that upstream has no id for: **Wi-Fi networks** (`impala`) and
-**Bluetooth devices** (`bluetui`). The shade toggles both radios but can neither
-join a network nor pair a device.
+Two rows exist that upstream has no id for: **Wi-Fi networks**
+(`nmtui-connect`) and **Bluetooth devices** (`bluetui`). The shade toggles both
+radios; it can now join a network too — the Wi-Fi row and the shade's long
+press open one picker (`docs/shade.md` S6) — but it still cannot pair a device.
 
 ---
 
@@ -287,8 +288,9 @@ airplane mode, brightness, volume, silent, torch, rotate, media transport.
 → no row on any page has a `switch` whose label matches
 `^(wi-?fi|bluetooth|airplane|brightness|volume|silent|torch|rotate)`
 
-The two rows that open `impala` and `bluetui` are network *configuration*, not
-radio toggles, and are named "Wi-Fi networks" and "Bluetooth devices".
+The two rows that open `nmtui-connect` and `bluetui` are network
+*configuration*, not radio toggles, and are named "Wi-Fi networks" and
+"Bluetooth devices".
 
 **H2** The single Shade-class id is recorded and not rendered.
 → `settings coverage` shows `trigger.toggle.notifications` as `Shade` with an
