@@ -68,7 +68,11 @@ Item {
   property string pageValue: ""
 
   // Rows a provider or text page built for itself. Empty for ordinary pages.
+  // `dynamicLoaded` is separate from `dynamicRows.length` because a provider is
+  // allowed to return nothing -- a phone with no extra wallpapers -- and
+  // keying off the length alone re-ran it forever.
   property var dynamicRows: []
+  property bool dynamicLoaded: false
 
   // Set by `settings dryRun 1`. Records what would have run instead of running
   // it, which is what lets the selftest exercise every bridged row on a phone
@@ -114,6 +118,30 @@ Item {
     return out.join("\n")
   }
 
+  // A deep link arrives as one page id, but back has to walk up from it. Page
+  // ids are dotted the way upstream's menu ids are, so the ancestors are the
+  // prefixes: system.power -> root, system, system.power. Without this, back
+  // from the shade's power glyph would close Settings rather than go up a level.
+  function stackFor(pageId) {
+    if (pageId === "root") return ["root"]
+    var parts = String(pageId).split(".")
+    var out = ["root"]
+    var acc = ""
+    for (var i = 0; i < parts.length; i++) {
+      acc = acc ? acc + "." + parts[i] : parts[i]
+      if (Pages.exists(acc)) out.push(acc)
+    }
+    return out
+  }
+
+  function rowByValue(value) {
+    var rows = root.currentRows
+    for (var i = 0; i < rows.length; i++)
+      if (rows[i].type === "choice" && String(rows[i].value) === String(value))
+        return rows[i]
+    return null
+  }
+
   function rowById(id) {
     var rows = root.currentRows
     for (var i = 0; i < rows.length; i++) if (rows[i].id === id) return rows[i]
@@ -132,7 +160,11 @@ Item {
   function rowChecked(row) {
     if (!row) return false
     if (row.type === "switch") {
-      var v = String(root.valueMap[row.id] || "").toLowerCase()
+      // Unknown is not "off inverted". Before the first read there is no answer,
+      // and an inverted switch would otherwise paint ON for a frame and then
+      // flip -- which reads as the tap having done something.
+      if (root.valueMap[row.id] === undefined) return false
+      var v = String(root.valueMap[row.id]).toLowerCase()
       var on = (v === "true" || v === "1" || v === "on" || v === "enabled")
       return row.invert ? !on : on
     }
@@ -173,7 +205,7 @@ Item {
       // A malformed payload is not worth refusing to open over.
     }
 
-    root.stack = [start]
+    root.stack = root.stackFor(start)
     root.confirmText = ""
     root.opened = true
     // Deferred, always. See note 1 in the header.
@@ -182,11 +214,19 @@ Item {
 
   function close() { root.opened = false }
 
+  // Put the surface away without going anywhere. Handing off to another plugin
+  // and launching a command both need this: dismiss() would additionally summon
+  // whatever opened us, so tapping Screenshot from the shade's gear would take a
+  // screenshot of the shade coming back.
+  function hideOnly() {
+    if (root.shell && typeof root.shell.hide === "function") root.shell.hide(root.pluginId)
+    else root.close()
+  }
+
   function dismiss() {
     var back = root.returnTo
     root.returnTo = ""
-    if (root.shell && typeof root.shell.hide === "function") root.shell.hide(root.pluginId)
-    else root.close()
+    root.hideOnly()
     if (back && root.shell && typeof root.shell.summon === "function")
       root.shell.summon(back, "{}")
   }
@@ -223,6 +263,7 @@ Item {
     root.valueMap = ({})
     root.pageValue = ""
     root.dynamicRows = []
+    root.dynamicLoaded = false
     root.refresh()
   }
 
@@ -233,7 +274,7 @@ Item {
   function refresh() {
     var p = root.pageDef
     if (!p) return
-    if ((p.provider || p.text) && root.dynamicRows.length === 0) {
+    if ((p.provider || p.text) && !root.dynamicLoaded) {
       dynamicProc.command = ["bash", "-lc", p.provider ? p.provider.list : p.text]
       dynamicProc.running = true
       return
@@ -267,10 +308,11 @@ Item {
             var label = p.provider.label === "basename"
                         ? value.replace(/^.*\//, "") : value
             built.push({ id: "p" + i, type: "choice", label: label, value: value,
-                         write: p.write + " " + JSON.stringify(value) })
+                         write: p.write + " " + root.shellQuote(value) })
           }
         }
         root.dynamicRows = built
+        root.dynamicLoaded = true
         Qt.callLater(root.refresh)
       }
     }
@@ -290,10 +332,16 @@ Item {
   }
 
   // ------------------------------------------------------------ activating
+  // Single quotes, not JSON. A double-quoted argument still expands $ and `,
+  // and a wallpaper path or a font family is user data.
+  function shellQuote(value) {
+    return "'" + String(value).split("'").join("'\\''") + "'"
+  }
+
   function commandFor(row) {
     if (!row) return ""
     if (row.type === "link")
-      return "omarchy-launch-webapp " + JSON.stringify(String(row.url))
+      return "omarchy-launch-webapp " + root.shellQuote(String(row.url))
     if (row.type === "choice") return String(row.write || "")
     if (row.launch === "tui")
       return "omarchy-launch-floating-terminal-with-presentation " + String(row.run)
@@ -339,7 +387,7 @@ Item {
     if (row.type === "plugin") {
       var target = String(row.plugin)
       var here = root.currentPage
-      root.dismiss()
+      root.hideOnly()
       if (root.shell && typeof root.shell.summon === "function")
         root.shell.summon(target, JSON.stringify({ returnTo: root.pluginId,
                                                    page: here }))
@@ -362,7 +410,7 @@ Item {
     // picker is not underneath a layer surface -- and so a screenshot is not
     // a screenshot of this screen.
     var cmd = root.commandFor(row)
-    if (!root.dryRun) root.dismiss()
+    if (!root.dryRun) root.hideOnly()
     root.runCommand(cmd)
   }
 
@@ -418,7 +466,11 @@ Item {
 
     function rowsOn(page: string): string { return root.rowsTsv(page) }
 
+    // Accepts a row id, or the id of the open choice page -- "what is the DNS
+    // set to" is a question about the page, not about one of its four rows.
     function value(rowId: string): string {
+      if (rowId === root.currentPage && root.pageDef && root.pageDef.reader)
+        return root.pageValue
       var row = root.rowById(rowId)
       if (!row) return "unknown row"
       if (row.type === "switch") return root.rowChecked(row) ? "on" : "off"
@@ -428,6 +480,9 @@ Item {
 
     function set(rowId: string, value: string): string {
       var row = root.rowById(rowId)
+      // Setting the page sets whichever of its rows carries that value.
+      if (!row && rowId === root.currentPage && root.pageDef && root.pageDef.reader)
+        row = root.rowByValue(value)
       if (!row) return "unknown row"
       if (!root.rowVisible(row)) return "hidden"
       if (row.type === "switch") {

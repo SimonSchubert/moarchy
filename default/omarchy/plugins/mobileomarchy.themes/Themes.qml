@@ -58,6 +58,11 @@ Item {
   // when closing outright is the right thing.
   property string returnTo: ""
 
+  // And where in it. Settings is a stack of pages now, so returning to the
+  // plugin is not enough -- without this the chevron lands on the Settings root
+  // rather than on Appearance, one level below where you actually were.
+  property string returnPage: ""
+
   readonly property int gestureStrip: Style.space(20)
   readonly property int radiusCard: Style.space(20)
 
@@ -79,9 +84,11 @@ Item {
     }
     root.opened = true
     root.returnTo = ""
+    root.returnPage = ""
     try {
       var payload = JSON.parse(String(payloadJson || "{}"))
       if (payload && payload.returnTo) root.returnTo = String(payload.returnTo)
+      if (payload && payload.page) root.returnPage = String(payload.page)
     } catch (e) {
       // A malformed payload is not worth refusing to open over.
     }
@@ -94,10 +101,11 @@ Item {
 
   function dismiss() {
     var back = root.returnTo
+    var page = root.returnPage
     if (root.shell && typeof root.shell.hide === "function") root.shell.hide(root.pluginId)
     else root.close()
     if (back && root.shell && typeof root.shell.summon === "function")
-      root.shell.summon(back, "{}")
+      root.shell.summon(back, page ? JSON.stringify({ page: page }) : "{}")
   }
 
   function scan(): void {

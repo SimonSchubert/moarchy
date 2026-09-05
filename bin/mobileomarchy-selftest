@@ -11,6 +11,13 @@
 #
 # Read-only apart from hiding the on-screen keyboard, which the checks need in a
 # known state and which the next text field will undo.
+#
+# Two opt-in suites take a flag, because each needs more than a read:
+#
+#   --gestures   drives real touch through /dev/uinput. Needs root and
+#                python-evdev, and closes a window at the end.
+#   --settings   walks the Settings stack over IPC, against docs/settings.md.
+#                Flips three switches and restores them; launches nothing.
 
 set -uo pipefail
 
@@ -604,6 +611,242 @@ print(found[0] if found else "")'; }
   #   F1      home picks the lowest free workspace
   #   G7/G8/G9 constants, not behaviour
   printf '  \033[90m%-4s\033[0m   \033[90mnot covered: A6 A8 A9 B2 D2 D3 D4 E1 E4 E5 E6 E7 F1 G5 G7 G8 G9\033[0m\n' ""
+fi
+
+# ---------------------------------------------------------------------------
+# --settings: the Settings stack, against docs/settings.md
+# ---------------------------------------------------------------------------
+# Every check cites an AC id, so an AC with no check is visible at the end.
+# Read-only except for three switch flips, each restored; nothing here reboots,
+# logs out or installs -- the rows that would are exercised through dryRun,
+# which records the command line instead of running it.
+if [[ ${1:-} == "--settings" ]]; then
+  head_ "settings"
+
+  s() { timeout 5 omarchy-shell settings "$@" 2>/dev/null; }
+
+  if ! st=$(s state) || [[ -z $st ]]; then
+    no "settings IPC does not answer" \
+       "the plugin is missing from shell.json plugins[], or it failed to load"
+    printf '\n%d passed, %d failed\n' "$pass" "$fail"
+    exit 1
+  fi
+  ok "settings IPC answers ($st)"                                    # I1
+
+  # --- A. getting in and out ------------------------------------------------
+  s close >/dev/null; sleep 1
+  s open  >/dev/null; sleep 2
+  [[ $(s state) == open && $(s page) == root ]] \
+    && ok "A1 the gear opens Settings at the root" \
+    || no "A1 open did not land on root" "page=$(s page) state=$(s state)"
+
+  others=""
+  for p in shade drawer recents themes; do
+    [[ $(timeout 5 omarchy-shell "$p" state 2>/dev/null) == open ]] && others="$others $p"
+  done
+  [[ -z $others ]] && ok "A2 no other full-screen surface is up" \
+                   || no "A2 still open:$others" "open() must hide the others"
+
+  [[ $(s openAt nope) == "unknown page: nope" ]] \
+    && ok "A4 an unknown page id is refused" \
+    || no "A4 an unknown page id was not refused" "it silently landed somewhere"
+
+  s openAt appearance.bar >/dev/null; sleep 2
+  [[ $(s page) == appearance.bar ]] \
+    && ok "A4 Settings opens directly at a page" \
+    || no "A4 openAt did not land" "page=$(s page)"
+
+  s close >/dev/null; sleep 1; s open >/dev/null; sleep 2
+  [[ $(s page) == root ]] \
+    && ok "A6 reopening lands on the root, not where it was left" \
+    || no "A6 reopened at $(s page)" "the stack must reset on open"
+
+  # --- B. the stack and back ------------------------------------------------
+  before=$(s stack | wc -l)
+  s goto appearance >/dev/null; sleep 1
+  after=$(s stack | wc -l)
+  [[ $(s page) == appearance && $after -eq $((before + 1)) ]] \
+    && ok "B1 a nav row pushes exactly one page" \
+    || no "B1 stack went $before -> $after" "page=$(s page)"
+
+  s goto appearance >/dev/null; sleep 1
+  [[ $(s stack | wc -l) -eq $after ]] \
+    && ok "B5 pushing the page already on top is a no-op" \
+    || no "B5 the stack grew on a repeat push" "it can grow without bound"
+
+  s goto appearance.bar >/dev/null; sleep 1
+  [[ $(s back) == appearance ]] && [[ $(s back) == root ]] \
+    && ok "B2 back pops one page at a time" \
+    || no "B2 back did not walk the stack" "landed on $(s page)"
+
+  [[ $(s back) == closed ]] \
+    && ok "B2 back at the root closes Settings" \
+    || no "B2 back at the root did not close" "state=$(s state)"
+
+  # The gesture layer must not close the app underneath. It asks the overlay
+  # first, and only closes the surface when the overlay says it is done.
+  wins() { swaymsg -t get_tree 2>/dev/null | jq '[recurse(.nodes[]?,.floating_nodes[]?)|select(.app_id)]|length'; }
+  s open >/dev/null; sleep 2; s goto appearance >/dev/null; sleep 1
+  w0=$(wins)
+  timeout 5 omarchy-shell gestures back >/dev/null 2>&1; sleep 2
+  w1=$(wins)
+  if [[ $(s page) == root && $w0 == "$w1" ]]; then
+    ok "B3 the back gesture pops a page and closes no app"
+  else
+    no "B3 back over Settings closed something" "page=$(s page) windows $w0 -> $w1"
+  fi
+
+  # --- B7 / F2. a page whose rows are all hidden is unreachable -------------
+  s openAt apps.default >/dev/null; sleep 2
+  vis=$(s rows | awk -F'\t' '$4=="1"' | wc -l)
+  (( vis > 0 )) \
+    && ok "B7 Default apps has $vis visible row(s)" \
+    || no "B7 every row on apps.default is hidden" "its parent row should hide too"
+
+  # --- C. switches ----------------------------------------------------------
+  s openAt appearance.bar >/dev/null; sleep 2
+  live=$(s value show)
+  flag_now() { omarchy-toggle-enabled bar-off && echo off || echo on; }
+  [[ $live == "$(flag_now)" ]] \
+    && ok "C1/C2 the bar switch reads the flag, inverted correctly" \
+    || no "C1/C2 switch says '$live', flag says '$(flag_now)'" \
+          "bar-off is negative polarity: the file existing means the bar is OFF"
+
+  # C4 is the one that used to take the whole shell down.
+  pid_before=$(pgrep -x quickshell | head -1)
+  s set show off >/dev/null; sleep 3
+  pid_after=$(pgrep -x quickshell | head -1)
+  if [[ -n $pid_after && $pid_before == "$pid_after" ]]; then
+    ok "C4 hiding the status bar does not restart the shell"
+  else
+    no "C4 the shell restarted or died on a bar toggle" \
+       "quickshell $pid_before -> ${pid_after:-gone}; toggle-bar must not pkill it"
+  fi
+  [[ $(s value show) == off ]] \
+    && ok "C3 the switch re-reads itself after a write" \
+    || no "C3 the switch did not follow its own write" "value=$(s value show)"
+  s set show on >/dev/null; sleep 3          # restore
+  [[ $(s value show) == on ]] && ok "C3 the bar came back" \
+                             || no "C3 the bar did not come back" "value=$(s value show)"
+
+  # --- D. choices -----------------------------------------------------------
+  s openAt net.dns >/dev/null; sleep 2
+  ticked=$(s rows | awk -F'\t' '$5=="1"' | wc -l)
+  current=$(omarchy-dns 2>/dev/null)
+  if (( ticked == 1 )); then
+    ok "D1 exactly one DNS row is ticked ($current)"
+  elif (( ticked == 0 )) && ! printf 'DHCP\nCloudflare\nGoogle\nCustom\n' | grep -qx "$current"; then
+    ok "D2 the reader says '$current', which no row declares, so nothing is ticked"
+  else
+    no "D1/D2 $ticked rows ticked, omarchy-dns says '$current'" \
+       "one row must tick, or none when the reader names something unlisted"
+  fi
+
+  s openAt net >/dev/null; sleep 2
+  [[ $(s rows | awk -F'\t' '$1=="dns"{print $6}') == "$current" ]] \
+    && ok "D5 the parent row shows the current value" \
+    || no "D5 the DNS row's detail is not the current value" "expected $current"
+
+  # --- E. bridged launches --------------------------------------------------
+  s dryRun 1 >/dev/null
+  s openAt tools >/dev/null; sleep 2
+  s activate screensaver >/dev/null; sleep 1
+  [[ $(s lastLaunch) == "omarchy-launch-screensaver force" ]] \
+    && ok "E1 a bridged row records its command and runs nothing" \
+    || no "E1 lastLaunch was '$(s lastLaunch)'" "expected: omarchy-launch-screensaver force"
+  s dryRun 0 >/dev/null
+
+  missing=""
+  for shim in omarchy-launch-floating-terminal-with-presentation \
+              omarchy-launch-config-editor omarchy-launch-webapp; do
+    p=$(command -v "$shim" 2>/dev/null)
+    [[ $p == "$HOME/.local/share/mobileomarchy/bin/"* ]] || missing="$missing $shim"
+  done
+  [[ -z $missing ]] \
+    && ok "E4 the bridge shims shadow upstream" \
+    || no "E4 upstream wins for:$missing" "our bin/ must come first on PATH"
+
+  # E3/I5. A shell whose PATH lost our bin runs every row's command as 127,
+  # and every switch then reads "off" from an error rather than from a state.
+  shell_pid=$(pgrep -x quickshell | head -1)
+  shell_path=$(tr '\0' '\n' < "/proc/$shell_pid/environ" 2>/dev/null | sed -n 's/^PATH=//p')
+  case ":$shell_path:" in
+    *":$HOME/.local/share/mobileomarchy/bin:"*) ok "I5 the shell's PATH carries our bin" ;;
+    *) no "I5 the shell's PATH is missing $HOME/.local/share/mobileomarchy/bin" \
+          "every bridged row would open nothing" ;;
+  esac
+
+  # --- G. coverage parity ---------------------------------------------------
+  cov=$(s coverage)
+  menu="$OMARCHY_PATH/default/omarchy/omarchy-menu.jsonc"
+  upstream=$(sed -E 's#^[[:space:]]*//.*##' "$menu" | sed -E 's/,([[:space:]]*[}\]])/\1/' \
+             | jq -r 'keys[]' 2>/dev/null | sort)
+  covered=$(cut -f1 <<<"$cov" | sort)
+
+  n_dup=$(cut -f1 <<<"$cov" | sort | uniq -d | wc -l)
+  (( n_dup == 0 )) \
+    && ok "G2 no upstream id is claimed twice" \
+    || no "G2 $n_dup id(s) claimed by more than one row" "$(cut -f1 <<<"$cov" | sort | uniq -d | tr '\n' ' ')"
+
+  stray=$(comm -23 <(echo "$covered") <(echo "$upstream"))
+  [[ -z $stray ]] \
+    && ok "G1 every id claimed exists upstream" \
+    || no "G1 claimed but not in omarchy-menu.jsonc" "$(tr '\n' ' ' <<<"$stray")"
+
+  classes=$(cut -f2 <<<"$cov" | sort -u | tr '\n' ' ')
+  [[ $classes == "Bridged Native Shade " ]] \
+    && ok "G3 every class is one of the three renderable words" \
+    || no "G3 classes are: $classes" "Unsupported must never reach a row"
+
+  # G6. The doc is the record; the code is the truth. They must agree.
+  # Defaulted, not assumed: this script runs under `set -u`, so a bare
+  # $MOBILEOMARCHY_PATH would abort the whole suite rather than fail one check,
+  # and it is not exported by the session -- only PATH carries it.
+  doc="${MOBILEOMARCHY_PATH:-$HOME/.local/share/mobileomarchy}/docs/menu-coverage.md"
+  if [[ -f $doc ]]; then
+    doc_nb=$(sed -n 's/^| `\([a-z0-9.\-]*\)` | [^|]* | \(Native\|Bridged\|Shade\) |.*/\1\t\2/p' "$doc" | sort)
+    code_nb=$(cut -f1,2 <<<"$cov" | sort)
+    if diff -q <(echo "$doc_nb") <(echo "$code_nb") >/dev/null; then
+      ok "G6 docs/menu-coverage.md and Pages.js agree ($(wc -l <<<"$code_nb") ids)"
+    else
+      no "G6 the doc and the code disagree" \
+         "$(diff <(echo "$doc_nb") <(echo "$code_nb") | head -4 | tr '\n' ' ')"
+    fi
+  else
+    no "G6 docs/menu-coverage.md not found" "expected at $doc"
+  fi
+
+  # G5/H2. Everything upstream ships is accounted for: rendered, or recorded as
+  # a shade control, or classified Unsupported in the doc and therefore absent.
+  n_up=$(wc -l <<<"$upstream")
+  n_cov=$(wc -l <<<"$covered")
+  n_unsup=$(grep -c '| Unsupported |' "$doc" 2>/dev/null || echo 0)
+  (( n_cov + n_unsup == n_up )) \
+    && ok "G5 all $n_up upstream entries are accounted for ($n_cov live, $n_unsup dropped)" \
+    || no "G5 $n_cov live + $n_unsup dropped != $n_up upstream" "something is unclassified"
+
+  grep -q '^trigger.toggle.notifications	Shade' <<<"$cov" \
+    && ok "H2 the shade-owned toggle is recorded, not rendered" \
+    || no "H2 trigger.toggle.notifications is not recorded as Shade" ""
+
+  # --- I. robustness --------------------------------------------------------
+  plug="$HOME/.config/omarchy/plugins/mobileomarchy.settings"
+  bad=$(grep -nE '(readonly +)?property[^:]*\bon[A-Z]' "$plug"/*.qml "$plug"/*.js 2>/dev/null)
+  [[ -z $bad ]] \
+    && ok "I3 no property is named on<Uppercase>" \
+    || no "I3 a property uses the reserved on<Uppercase> prefix" \
+          "it reads back undefined, and undefined as a color is black: $bad"
+
+  s close >/dev/null
+
+  printf '  \033[90m%-4s\033[0m   \033[90mnot covered: A3 A5 B4 B6 C5 C6 C7 C8 D3 D4 D6 E2 E5 E6 E7 E8 F1 F3 F4 F5 F6 F7 G4 G7 H1 I2 I4\033[0m\n' ""
+  # A3/B4  need a real finger or the touch injector
+  # A5     needs every reader stubbed slow
+  # C5-C8  need a blank, a bar repaint, a systemd unit and an sshd flip
+  # D3/D6  Zed and the font provider are absent on a base install
+  # E2     static: Pages.js against omarchy-menu.jsonc, not a runtime question
+  # F3-F7  need PATH stubs that count forks
+  # I2/I4  static greps, run at build time
 fi
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"

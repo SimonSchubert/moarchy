@@ -35,8 +35,11 @@ losing it is the one thing a phone user would notice immediately.
 **S2** The gear opens the settings list and closes the shade on the way.
 Everything the Omarchy menu reaches that is not an app lives there.
 
-**S3** The power button opens the Omarchy menu at its `system` route and closes
-the shade on the way.
+**S3** The power button opens Settings at its Power page and closes the shade on
+the way. It used to summon the Omarchy menu at its `system` route; that menu is
+a popup with no tap-outside dismiss in this port, since `install/port-4x.sh`
+stubs out `HyprlandFocusGrab`, so it was a trapdoor. Lock, Suspend, Log out,
+Restart and Power off are native rows now — see `docs/settings.md`.
 
 ## S4–S5. Wi-Fi and Bluetooth
 

@@ -69,8 +69,9 @@ Item {
   //   toggleTransparency                                  omarchy-shell IPC
   //   panelWidgetIdAt                                     togglePanelAt IPC
   //   debugBarGeometry                                    debug IPC
-  // Ours, not upstream's, called by bin/mobileomarchy-toggle-bar:
-  //   syncHidden                                          re-read the bar-off flag
+  // Ours, not upstream's, called by bin/mobileomarchy-toggle-bar and by the
+  // Settings battery-percentage switch:
+  //   syncHidden                                          re-read the toggle flags
   readonly property int barSize: Style.bar.sizeHorizontal
   property bool barHidden: false
   readonly property string position: "top"
@@ -100,24 +101,34 @@ Item {
 
   // barHidden is what the shell.bar contract exposes and what the exclusive zone
   // and top margin read, and until now nothing ever set it. `omarchy-toggle
-  // bar-off` flips a flag file; this is how the bar learns the flag moved.
+  // bar-off` flips a flag file; this is how the bar learns a flag moved.
   //
-  // Read as a file test rather than through omarchy-toggle-enabled so a shell
-  // started with a short PATH answers "shown" from an actual test rather than
-  // from a 127 that looks the same.
+  // Both flags come back from one bash rather than two, because a fork on this
+  // SoC costs more than either test.
+  //
+  // Read as file tests rather than through omarchy-toggle-enabled so a shell
+  // started with a short PATH answers from an actual test rather than from a
+  // 127 that looks exactly the same.
+  property bool batteryPercentShown: true
+
   function syncHidden(): string {
-    hiddenProbe.running = true
+    flagProbe.running = true
     return "ok"
   }
 
   Process {
-    id: hiddenProbe
+    id: flagProbe
     running: true
     command: ["bash", "-c",
-      "[[ -f \"${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/toggles/bar-off\" ]] " +
-      "&& echo hidden || echo shown"]
+      "d=\"${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/toggles\"; " +
+      "[[ -f \"$d/bar-off\" ]] && echo bar=hidden || echo bar=shown; " +
+      "[[ -f \"$d/battery-percentage-off\" ]] && echo pct=off || echo pct=on"]
     stdout: StdioCollector {
-      onStreamFinished: root.barHidden = String(text || "").trim() === "hidden"
+      onStreamFinished: {
+        var out = String(text || "")
+        root.barHidden = out.indexOf("bar=hidden") >= 0
+        root.batteryPercentShown = out.indexOf("pct=on") >= 0
+      }
     }
   }
 
@@ -393,8 +404,15 @@ Item {
               color: root.batteryLow ? Color.bar.active : root.foreground
             }
 
+            // Shown unless turned off, so this changes nothing until asked.
+            // The flag is `battery-percentage-off` rather than
+            // `battery-percentage` for that reason -- same negative polarity as
+            // bar-off, screensaver-off and suspend-off, where the file existing
+            // means the feature is off. Upstream's own row for this drives a
+            // desktop-bar widget we never instantiate.
             Text {
               anchors.verticalCenter: parent.verticalCenter
+              visible: root.batteryPercentShown
               text: root.batteryPercent + "%"
               font.family: Style.font.family
               font.pixelSize: Style.font.caption

@@ -919,7 +919,7 @@ Item {
             }
             RoundButton {
               glyph: ""
-              onActivated: root.openMenu("system")
+              onActivated: root.openSettings("system.power")
             }
           }
         }
@@ -1280,20 +1280,22 @@ Item {
     }
   }
 
-  function openMenu(route) {
-    root.dismiss()
-    if (root.shell && typeof root.shell.summon === "function")
-      root.shell.summon("omarchy.menu", JSON.stringify({ menu: route }))
-  }
-
   // The gear is the way in to everything the app drawer used to carry across
   // its top row. Android puts Settings behind the gear in the pull-down for the
   // same reason: this is already the surface you open when you want to change
   // something.
-  function openSettings() {
+  //
+  // The power glyph beside it opens the same screen at its Power page rather
+  // than summoning omarchy.menu at `system`, which is what it used to do. That
+  // menu is a popup with no tap-outside dismiss in this port -- port-4x.sh
+  // stubs out HyprlandFocusGrab, which has no Quickshell.I3 counterpart -- so
+  // it was the one remaining way to get stuck behind a surface. One
+  // implementation, two entry points.
+  function openSettings(page) {
     root.dismiss()
     if (root.shell && typeof root.shell.summon === "function")
-      root.shell.summon("mobileomarchy.settings", "{}")
+      root.shell.summon("mobileomarchy.settings",
+                        page ? JSON.stringify({ page: page }) : "{}")
   }
 
   SystemClock {
