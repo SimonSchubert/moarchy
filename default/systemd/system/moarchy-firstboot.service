@@ -1,0 +1,15 @@
+[Unit]
+Description=moarchy first-boot setup (groups, autologin)
+# Nothing here is useful before the system has a user database and a filesystem.
+After=systemd-user-sessions.service
+# The stamp is what makes this run once. The unit disables itself as well, but
+# a ConditionPathExists is what survives someone re-enabling it by hand.
+ConditionPathExists=!/var/lib/moarchy/firstboot-done
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/moarchy/bin/moarchy-firstboot
+
+[Install]
+WantedBy=multi-user.target

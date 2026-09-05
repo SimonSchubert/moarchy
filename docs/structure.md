@@ -4,7 +4,7 @@ How the three repos, the packages, the package repository and the image builder
 fit together, and what has to be true before a PinePhone image can be built at
 all.
 
-Status: **M1 done (2026-09-06); M2 in progress; M3–M4 proposed, not agreed.** The
+Status: **M1 and M2 done (2026-09-06); M3–M4 proposed, not agreed.** The
 acceptance criteria are the contract to argue with before any of them is; where
 one is my reading rather than your decision it is marked **?**. Each AC below
 carries its state, and §11 has the per-milestone summary.
@@ -394,12 +394,50 @@ same manifest now agree.
 > argument arriving three milestones early because the cost of not doing it was
 > already visible.
 
-**M2 — One transaction. In progress.** P1–P10. Done so far: **P1–P5, P7, P10**
-— `pkgbuilds/` builds `omarchy-config`, `moarchy` and `moarchy-meta`, all three
-verified in the aarch64 container. Outstanding: **P6** (delete the two
-`.packages` files), **P8** (the per-user setup) and **P9** (delete the
-installer), which are one piece of work and are sequenced last so the current
-installer keeps working until its replacement does.
+**M2 — One transaction. Done 2026-09-06.** P1–P10. `pkgbuilds/` builds
+`omarchy-config`, `moarchy` and `moarchy-meta`; `install.sh`, `install/`, both
+`.packages` files and `scripts/test-plugin-sweep.sh` are deleted.
+
+> **Almost nothing is copied into $HOME, which was not the plan.** P8 offered
+> two mechanisms — a file under `/etc` or `/usr/share/factory`, or a first-boot
+> unit. Reading upstream showed most of the copying was unnecessary: sway takes
+> `-c`, `omarchy-theme-set-templates` already globs `$OMARCHY_PATH/default/themed`
+> after the user's, and `shell.qml:30` already reads
+> `$OMARCHY_PATH/config/omarchy/shell.json` as defaults with the user's file
+> overriding. So the bar id, the plugin list and the Sway theme template are
+> packaged files, not per-user copies, and an upgrade takes effect because the
+> files the shell reads *are* the package's files.
+>
+> Plugins needed the one addition: `PluginRegistry.pluginsDir` was a single
+> hardcoded path, so the patch adds `/usr/share/moarchy/plugins`, scanned
+> *before* the user directory so a user copy of the same id still wins. Twelve
+> lines. The stale-plugin sweep in `install/config.sh` — and
+> `scripts/test-plugin-sweep.sh` with it — is gone: pacman owns the files now,
+> so a plugin removed from the repo is removed from the phone by the upgrade.
+>
+> What genuinely needed a first-boot unit is small: group membership (`input`,
+> `feedbackd`), tty1 autologin, and the three app configs — alacritty, foot,
+> btop — that only ever read `~/.config`.
+>
+> **`/etc/sway/config` is owned by the `sway` package**, so moarchy cannot ship
+> one. `/etc/profile.d/zz-moarchy-session.sh` names ours with `sway -c` instead.
+> Found by pacman refusing the transaction, which is the point of packaging.
+>
+> **Three packages are not from Arch Linux ARM.** `lisgd`, `mmsd-tng` and
+> `portfolio-file-manager` come from `[danctnix]`
+> (`archmobile.mirror.danctnix.org`), not `archlinuxarm.org` as
+> `moarchy-base.packages` claimed at the top of the file for every entry. Found
+> by `pacman -U --print` failing to resolve in a bare ALARM container, and
+> settled by reading `/etc/pacman.conf` out of the shipped image rather than
+> guessing repo URLs.
+>
+> Verified in the container: the whole set resolves as **one transaction of 564
+> packages**; `omarchy-config` and `moarchy` install together with no file
+> conflict; `pacman -Ql` shows no path under `/home` for either; nine plugin
+> directories land in `/usr/share/moarchy/plugins` and the patched registry
+> scans it; the packaged `shell.json` carries `bar.id = moarchy.bar`, eight
+> plugins and the `HH:mm` clock; and every absolute `include` in the sway config
+> points at a file that exists.
 
 > **The collision the old installer hid.** `moarchy` ships 19 scripts whose
 > names upstream Omarchy also uses — `omarchy-toggle-bar`, `omarchy-system-lock`,
@@ -450,7 +488,15 @@ Marked **?** above, collected here:
 2. **Where `moarchy.db` is hosted.** GitHub Pages off this repo is the cheap
    answer and needs no domain. A `pkgs.moarchy.org` mirrors what upstream
    Omarchy does and survives moving off GitHub. Not decided.
-3. **How to pin the build environment, given that ALARM has no archive.**
+3. **`moarchy-store` cannot be pinned from this side.** Its PKGBUILD builds
+   `moarchy-store-git` from `source=("...::git+$url.git")` — a VCS package, so
+   makepkg fetches at HEAD however the repo is cloned. `[moarchy-store]` in
+   `manifest.toml` therefore pins what we review, not what gets built. The fix
+   is `#commit=` in that PKGBUILD's source array, and B2 says the component repo
+   owns how it is built — so it belongs there, not in a local edit to someone
+   else's recipe. This is the one entry in the package set V2 does not cover.
+
+4. **How to pin the build environment, given that ALARM has no archive.**
    `Dockerfile.builder` pins the base image by digest and then runs
    `pacman -Syu`, which floats. The two builds of `moarchy-keyboard` on
    2026-09-05 measure the cost: same pinned source, same `0.1.0-1`, identical
@@ -462,10 +508,14 @@ Marked **?** above, collected here:
    that the environment floats and saying so on every image. Not decided, and
    it belongs to M3 rather than M1 — the package repo is what would host a
    snapshot.
-4. **Whether `omarchy-config` should be a package at all**, versus vendoring the
+5. **Whether `omarchy-config` should be a package at all**, versus vendoring the
    ~95 QML files of upstream's shell directly into this repo with the port
    already applied. The package keeps the upstream diff visible and the update
    path mechanical; vendoring is simpler and admits that a Sway port of a
    Hyprland shell is a fork whether or not we call it one. The patch in P4 is
    the thing that decides this — if it grows past a few hundred lines, it is a
    fork, and pretending otherwise costs more than it saves.
+
+   **Measured 2026-09-06: 9 files, 224 insertions, 30 deletions.** So the
+   package stays, on the test this question set itself. Worth re-measuring on
+   every upstream bump; the number to watch is this one.

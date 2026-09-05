@@ -1,0 +1,14 @@
+[Unit]
+Description=moarchy per-user setup (app configs, initial theme)
+# Everything else moarchy ships is read from a system path. What is left is the
+# handful of app configs -- alacritty, foot, btop -- that only ever read
+# ~/.config, and the initial theme, which writes user state by design.
+ConditionPathExists=!%h/.local/state/moarchy/user-setup-done
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/moarchy/bin/moarchy-user-setup
+
+[Install]
+WantedBy=default.target

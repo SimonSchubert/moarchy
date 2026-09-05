@@ -1,0 +1,73 @@
+#!/bin/bash
+# What is left after everything that can live in a system path does
+# (docs/structure.md P8). Runs once per user, from a systemd user unit.
+#
+# The list is short on purpose. sway reads /etc/sway/config, the shell reads its
+# defaults from /usr/share/omarchy/config/omarchy/shell.json and its plugins
+# from /usr/share/moarchy/plugins, the Sway theme template ships into
+# /usr/share/omarchy/default/themed, fontconfig reads /etc/fonts/conf.d. None of
+# that is copied anywhere, which is why upgrading the package upgrades the
+# phone.
+#
+# These are the exceptions: three app configs that only ever read ~/.config, and
+# the initial theme, which writes user state by design.
+set -uo pipefail
+
+STAMP="$HOME/.local/state/moarchy/user-setup-done"
+OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"
+say() { printf '==> %s\n' "$*"; }
+
+# omarchy-theme-set-templates globs "$HOME/.config/omarchy/themed"/*.tpl ahead
+# of the system directory. Create it empty so that glob has a directory to fail
+# to match in rather than a missing path.
+mkdir -p "$HOME/.config/omarchy/themed" \
+         "$HOME/.local/state/omarchy/current" \
+         "$HOME/.config/sway/config.d" \
+         "$HOME/.local/state/moarchy"
+
+# Upstream's app configs. Copied only when absent -- this runs once, and a user
+# who has edited their foot config should not lose it to a reinstall.
+#
+# `omarchy` is deliberately NOT in this list. ~/.config/omarchy/shell.json
+# OVERRIDES the packaged defaults, so copying upstream's there would mask the
+# bar id and plugin list that moarchy sets system-side, and the phone would come
+# up with the desktop bar and no phone UI.
+for d in alacritty foot btop wiremix lazygit tmux imv; do
+  src="$OMARCHY_PATH/config/$d"
+  [[ -d $src ]] || continue
+  [[ -e $HOME/.config/$d ]] && continue
+  cp -r "$src" "$HOME/.config/$d"
+  say "config $d"
+done
+[[ -f $OMARCHY_PATH/config/starship.toml && ! -e $HOME/.config/starship.toml ]] &&
+  cp "$OMARCHY_PATH/config/starship.toml" "$HOME/.config/starship.toml"
+
+# The terminal keeps Regular while the rest of the UI is lifted to SemiBold by
+# /etc/fonts/conf.d/50-moarchy-weight.conf -- pages of semibold `ls` output are
+# not an improvement.
+#
+# `style=Regular` rather than `weight=regular`, and the difference matters: the
+# fontconfig rule tests `weight eq regular`, so asking for weight=regular is
+# asking to be rewritten, while style=Regular sidesteps it.
+if [[ -f $HOME/.config/foot/foot.ini ]] && ! grep -q "style=Regular" "$HOME/.config/foot/foot.ini"; then
+  sed -i "s/^font=JetBrainsMono Nerd Font:/font=JetBrainsMono Nerd Font:style=Regular:/" \
+    "$HOME/.config/foot/foot.ini"
+fi
+
+# A fullscreen terminal here is 47x41 characters, and btop refuses to draw below
+# 60 columns whatever shown_boxes says. Trimming the boxes still helps in a
+# split; moarchy-launch-tui is what actually makes it fit, by dropping the font
+# size.
+if [[ -f $HOME/.config/btop/btop.conf ]]; then
+  sed -i 's/^shown_boxes = .*/shown_boxes = "cpu mem"/' "$HOME/.config/btop/btop.conf"
+fi
+
+# The starting theme, which also generates
+# ~/.local/state/omarchy/current/theme/sway.conf -- the file /etc/sway/config
+# includes. Without it sway starts with no theme colours at all.
+if ! omarchy-theme-set tokyo-night 2>/dev/null; then
+  echo "!! theme apply failed; run 'omarchy-theme-set tokyo-night' by hand" >&2
+fi
+
+date -Iseconds >"$STAMP"
+say "done"

@@ -34,7 +34,7 @@ depends=('quickshell' 'bash')
 source=("omarchy-$_ref.tar.gz::$_url/archive/$_ref.tar.gz"
         'port-4x.patch')
 sha256sums=('f8fe9d0ca01226112a144d1961831ce3f27fddfa66e0f9f44b67c375a372b9f1'
-            'e16f9d464e54a97b6563cbcee63c0f1df78eafe1e78713417cdded5165f938a8')
+            '985b0132a992609831050ffcc86fb1ffa35ea9df899b4a9707019c146569ec73')
 
 prepare() {
   cd "omarchy-$_ref"
@@ -83,4 +83,12 @@ package() {
   # fixes it; it is listed there as harmless-but-noisy.
   install -Dm440 etc/sudoers.d/omarchy-theme-browser \
     "$pkgdir/etc/sudoers.d/omarchy-theme-browser"
+
+  # Omarchy's icon font. The bar's logo glyph (\ue900) comes from it, and
+  # without it that glyph renders as tofu. /usr/share/fonts is where fontconfig
+  # already looks, so nothing has to copy it into ~/.local/share/fonts.
+  if [ -f default/fonts/omarchy/omarchy.ttf ]; then
+    install -Dm644 default/fonts/omarchy/omarchy.ttf \
+      "$pkgdir/usr/share/fonts/omarchy/omarchy.ttf"
+  fi
 }

@@ -1,0 +1,66 @@
+#!/bin/bash
+# The three things a package genuinely cannot do, run once on first boot
+# (docs/structure.md P8).
+#
+# Everything else moarchy ships is read from a system path -- /etc/sway/config,
+# /usr/share/moarchy/plugins, /usr/share/omarchy/config/omarchy/shell.json --
+# so this is deliberately short. If it grows, the thing being added probably
+# has a system path too and should use it.
+set -uo pipefail
+
+STAMP=/var/lib/moarchy/firstboot-done
+say() { printf '==> %s\n' "$*"; }
+
+# The phone's user. uid 1000 is the one DanctNIX creates and the one autologin
+# has to name; picking "the first non-system account" rather than hardcoding
+# `alarm` means this still works once first boot creates the user itself (I8).
+USER_NAME=$(getent passwd 1000 | cut -d: -f1)
+if [[ -z $USER_NAME ]]; then
+  echo "!! no uid 1000 -- cannot set up autologin or group membership" >&2
+  echo "   re-run after creating the user: systemctl start moarchy-firstboot" >&2
+  exit 1
+fi
+say "setting up for $USER_NAME"
+
+# lisgd and bin/moarchy-touch read /dev/input/event* directly, which needs the
+# `input` group. Sway's own bindgesture only sees libinput gesture events, which
+# come from touchpads and never from a touchscreen.
+#
+# The trade: anything running as this user can then read every input device,
+# keyboard included. On a single-user phone that is the accepted cost, and it is
+# what sxmo and the other PinePhone environments do.
+usermod -aG input "$USER_NAME" || echo "!! could not add $USER_NAME to input" >&2
+
+# The camera flash LED, which is also the torch. The shade has a tile for it,
+# but /sys/class/leds/white:flash/brightness is root:feedbackd 0664 (set by
+# 72-feedbackd.rules) and on a bare install the feedbackd group has no members
+# at all -- so without this the tile is a control that lights nothing.
+usermod -aG feedbackd "$USER_NAME" || echo "!! could not add $USER_NAME to feedbackd" >&2
+
+# Autologin on tty1. /etc/profile.d/zz-moarchy-session.sh execs sway from the
+# login shell, which is the same shape DanctNIX's own images use and far lighter
+# than a display manager on 2-3 GB of RAM.
+install -d /etc/systemd/system/getty@tty1.service.d
+cat >/etc/systemd/system/getty@tty1.service.d/autologin.conf <<EOF
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty -o '-p -f -- \\u' --noclear --autologin $USER_NAME %I \$TERM
+EOF
+
+systemctl daemon-reload
+systemctl enable NetworkManager bluetooth 2>/dev/null ||
+  echo "!! could not enable NetworkManager/bluetooth" >&2
+
+# Telephony. eg25-manager owns modem power and the GPIO dance; DanctNIX enables
+# it already, but nothing else brings the modem up so make sure.
+systemctl enable ModemManager.service 2>/dev/null ||
+  echo "!! could not enable ModemManager" >&2
+systemctl enable eg25-manager.service 2>/dev/null || true
+
+install -d "$(dirname "$STAMP")"
+date -Iseconds >"$STAMP"
+
+# Belt and braces with the unit's ConditionPathExists: the stamp is what stops
+# this running again, and disabling makes that visible in `systemctl status`.
+systemctl disable moarchy-firstboot.service 2>/dev/null || true
+say "done"

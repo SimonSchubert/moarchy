@@ -25,10 +25,15 @@ url='https://github.com/SimonSchubert/moarchy'
 license=('MIT')
 
 depends=(
-  # The aarch64 package set (Arch Linux ARM + DanctNIX). Every entry was
-  # verified to exist for aarch64 on archlinuxarm.org. Packages Omarchy
-  # installs that are x86_64-only are listed at the bottom as comments, with
-  # the reason.
+  # The aarch64 package set. Most of it is Arch Linux ARM; lisgd, mmsd-tng and
+  # portfolio-file-manager come from [danctnix]
+  # (archmobile.mirror.danctnix.org), which the DanctNIX image's pacman.conf
+  # carries and a bare ALARM install does not. The list this replaced claimed
+  # at the top that every entry was on archlinuxarm.org, which was not true of
+  # those three -- `pacman -U --print` in a bare container is what found it.
+  #
+  # Packages Omarchy installs that are x86_64-only are listed at the bottom as
+  # comments, with the reason.
 
   # --- Compositor and session -------------------------------------------------
   'sway'
@@ -245,7 +250,10 @@ depends=(
   # The phone layer itself, and the store. moarchy pulls omarchy-config in
   # turn, so this one name brings the whole environment.
   'moarchy'
-  'moarchy-store'
+  # Named -git because that is what its PKGBUILD builds. It is the one entry
+  # here that manifest.toml cannot fully pin: a VCS package fetches at HEAD
+  # when makepkg runs. See [moarchy-store] there.
+  'moarchy-store-git'
 )
 
 optdepends=(

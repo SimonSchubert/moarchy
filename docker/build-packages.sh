@@ -1,7 +1,9 @@
 #!/bin/bash
-# Build each package that has no aarch64 binary anywhere and drop the resulting
-# *.pkg.tar.zst into /out, which install/build-src.sh then installs with
-# `pacman -U`.
+# Build every package this project ships and drop the results into /out.
+#
+# Three kinds: the two components with their own repos (keyboard, store), the
+# AUR packages with no aarch64 binary anywhere, and the packages defined in
+# this repo under pkgbuilds/. `pacman -U /out/*` then installs the phone.
 #
 # Every source is fetched at the exact commit named in manifest.toml, never at
 # HEAD. Before the pins this cloned everything with `--depth 1` and no ref, so
@@ -36,27 +38,29 @@ clone_pinned() {   # clone_pinned <url> <dir> <ref> [extra git-clone args...]
   fi
 }
 
-# moarchy-keyboard is not an AUR package -- it is its own repo with a PKGBUILD
-# in packaging/ -- so it needs its own clause rather than a name in the list
-# below. Built first, because it is the one whose absence leaves the phone with
-# no way to type at all.
-kbd_url=$(manifest_get moarchy-keyboard url) || exit 1
-kbd_ref=$(manifest_get moarchy-keyboard ref) || exit 1
-kbd_dir=$(manifest_get moarchy-keyboard pkgbuilddir) || exit 1
+# The two components with their own repos. Not AUR packages, so they are not
+# in the list below; each names its own PKGBUILD directory in the manifest.
+# The keyboard is built first, because it is the one whose absence leaves the
+# phone with no way to type at all.
+for component in moarchy-keyboard moarchy-store; do
+  c_url=$(manifest_get "$component" url) || { failed+=("$component"); continue; }
+  c_ref=$(manifest_get "$component" ref) || { failed+=("$component"); continue; }
+  c_dir=$(manifest_get "$component" pkgbuilddir) || { failed+=("$component"); continue; }
 
-echo "==> moarchy-keyboard @ ${kbd_ref:0:7}"
-if clone_pinned "$kbd_url" /home/builder/moarchy-keyboard "$kbd_ref" \
-     --filter=blob:none --no-checkout; then
-  if ( cd "/home/builder/moarchy-keyboard/$kbd_dir" && makepkg -s --noconfirm --needed ); then
-    cp "/home/builder/moarchy-keyboard/$kbd_dir"/*.pkg.tar.* "$OUT/" 2>/dev/null || true
+  echo "==> $component @ ${c_ref:0:7}"
+  if clone_pinned "$c_url" "/home/builder/$component" "$c_ref" \
+       --filter=blob:none --no-checkout; then
+    if ( cd "/home/builder/$component/$c_dir" && makepkg -s --noconfirm --needed ); then
+      cp "/home/builder/$component/$c_dir"/*.pkg.tar.* "$OUT/" 2>/dev/null || true
+    else
+      echo "!! build failed: $component" >&2
+      failed+=("$component")
+    fi
   else
-    echo "!! build failed: moarchy-keyboard -- the phone will have no keyboard" >&2
-    failed+=(moarchy-keyboard)
+    echo "!! clone failed: $component" >&2
+    failed+=("$component")
   fi
-else
-  echo "!! clone failed: moarchy-keyboard" >&2
-  failed+=(moarchy-keyboard)
-fi
+done
 
 # The package list comes from the manifest's [aur.*] sections, so this script
 # has no list of its own to drift out of step with install/build-src.sh.
@@ -79,6 +83,27 @@ for pkg in $packages; do
     failed+=("$pkg")
   fi
 done
+
+# The packages this repo defines. Built last: moarchy-meta depends on every
+# name above, and makepkg checks depends even though it does not install them.
+if [ -d /repo/pkgbuilds ]; then
+  # The whole repo, not just pkgbuilds/: each PKGBUILD reads its pins through
+  # $startdir/../../scripts/manifest.sh, and moarchy's package() copies bin/,
+  # default/ and config/ out of the tree. Copied rather than built in place
+  # because /repo is mounted read-only and makepkg writes src/ and pkg/.
+  rm -rf /home/builder/repo
+  cp -a /repo /home/builder/repo
+  chown -R builder /home/builder/repo
+
+  for d in /home/builder/repo/pkgbuilds/*/; do
+    p=$(basename "$d")
+    echo "==> $p (in-repo)"
+    if ! ( cd "$d" && makepkg --nodeps --noconfirm --nocheck ); then
+      echo "!! build failed: $p" >&2
+      failed+=("$p")
+    fi
+  done
+fi
 
 echo
 echo "==> built into $OUT:"

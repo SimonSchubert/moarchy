@@ -78,10 +78,9 @@ manifest_get() {
 
 # manifest_aur_packages -- the names under [aur.*], one per line, in file order.
 #
-# This is the package list. docker/build-packages.sh and install/build-src.sh
-# both read it rather than each carrying their own copy: three lists with two
-# of them right is a failure this project has already paid for once (see
-# docs/structure.md P5).
+# The AUR half of the package list. docker/build-packages.sh reads it here and
+# pkgbuilds/moarchy-meta names the same packages in depends, so pacman resolves
+# what used to be resolved by three lists with two of them right (P5).
 manifest_aur_packages() {
   if [ ! -f "$MANIFEST_FILE" ]; then
     echo "manifest: no such file: $MANIFEST_FILE" >&2

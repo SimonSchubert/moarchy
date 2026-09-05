@@ -1,3 +1,54 @@
+diff --git a/config/omarchy/shell.json b/config/omarchy/shell.json
+index e6202da8..81b25411 100644
+--- a/config/omarchy/shell.json
++++ b/config/omarchy/shell.json
+@@ -23,8 +23,8 @@
+         },
+         {
+           "id": "omarchy.clock",
+-          "format": "dddd HH:mm",
+-          "formatAlt": "d MMMM 'W'ww yyyy",
++          "format": "HH:mm",
++          "formatAlt": "ddd d MMM",
+           "verticalFormat": "HH\n\u2014\nmm"
+         },
+         {
+@@ -60,7 +60,33 @@
+           "id": "omarchy.power"
+         }
+       ]
+-    }
++    },
++    "id": "moarchy.bar"
+   },
+-  "plugins": []
++  "plugins": [
++    {
++      "id": "moarchy.gestures"
++    },
++    {
++      "id": "moarchy.drawer"
++    },
++    {
++      "id": "moarchy.recents"
++    },
++    {
++      "id": "moarchy.shade"
++    },
++    {
++      "id": "moarchy.themes"
++    },
++    {
++      "id": "moarchy.settings"
++    },
++    {
++      "id": "moarchy.device"
++    },
++    {
++      "id": "moarchy.splash"
++    }
++  ]
+ }
 diff --git a/shell/Ui/PopupCard.qml b/shell/Ui/PopupCard.qml
 index 058b068f..262570b5 100644
 --- a/shell/Ui/PopupCard.qml
@@ -374,5 +425,36 @@ index 738529de..9c447191 100644
        root.launchOsdOpen = true
 -      Quickshell.execDetached(["omarchy-shell", "osd", "show", JSON.stringify({ icon: "󱓞", message: root.launchOsdMessage, duration: 0 })])
      }
+   }
+ 
+diff --git a/shell/services/PluginRegistry.qml b/shell/services/PluginRegistry.qml
+index f08bf765..abf65b8d 100644
+--- a/shell/services/PluginRegistry.qml
++++ b/shell/services/PluginRegistry.qml
+@@ -10,6 +10,15 @@ QtObject {
+   property string home: Quickshell.env("HOME")
+   property string pluginsDir: home + "/.config/omarchy/plugins"
+ 
++  // Packaged third-party plugins. moarchy ships its phone UI here rather than
++  // copying nine directories into every user's ~/.config, so that upgrading
++  // the package upgrades the shell -- which is the whole point of shipping it
++  // as a package.
++  //
++  // Scanned BEFORE pluginsDir, which is what makes a user copy of the same id
++  // win: parseScanOutput keys thirdParty by id and the last write survives.
++  property string systemPluginsDir: "/usr/share/moarchy/plugins"
++
+   // Set by shell.qml at startup so we can also scan bundled first-party plugins.
+   property string firstPartyDir: ""
+ 
+@@ -688,8 +697,9 @@ QtObject {
+       + "  done; "
+       + "}; "
+       + "scan_firstparty \"$0\"; "
++      + "scan_thirdparty \"$2\"; "
+       + "scan_thirdparty \"$1\""
+-    scanProcess.command = ["bash", "-c", script, registry.firstPartyDir, registry.pluginsDir]
++    scanProcess.command = ["bash", "-c", script, registry.firstPartyDir, registry.pluginsDir, registry.systemPluginsDir]
+     scanProcess.running = true
    }
  

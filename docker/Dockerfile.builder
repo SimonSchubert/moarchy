@@ -35,4 +35,11 @@ USER builder
 WORKDIR /home/builder
 
 COPY docker/build-packages.sh /usr/local/bin/build-packages
+
+# The repo itself, so the in-repo pkgbuilds/ can be built without a bind mount.
+# Last, because it changes on every commit and everything above it does not.
+USER root
+COPY . /repo
+USER builder
+
 ENTRYPOINT ["/usr/local/bin/build-packages"]

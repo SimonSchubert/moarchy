@@ -138,14 +138,14 @@ moarchy-selftest --gestures   # drives real synthetic touch via /dev/uinput
 | Path | What it is |
 | --- | --- |
 | `manifest.toml` | The version pins. The only file that says what version of anything is built |
-| `install.sh`, `install/` | On-device installer. Never invokes upstream's. |
-| `moarchy-base.packages` | aarch64 package set, with every omission explained |
+| `pkgbuilds/` | `moarchy`, `omarchy-config` (upstream + the Sway port as a patch), `moarchy-meta` |
+| `pkgbuilds/moarchy-meta/PKGBUILD` | The aarch64 package set, as `depends`, with every omission explained |
 | `default/sway/bindings.conf` | Omarchy's bindings, translated to Sway, key-for-key |
 | `default/sway/pinephone.conf` | 720×1440 @ scale 2, touch, tightened gaps |
 | `default/themed/sway.conf.tpl` | The one file that themes Sway from any Omarchy theme |
 | `bin/moarchy-*` | Sway counterparts to Omarchy's Hyprland helpers |
 | `bin/omarchy-*` | Shims with upstream's names, so `omarchy-menu` keeps working |
-| `docker/` | aarch64 container that builds moarchy-keyboard/yay natively on Apple Silicon |
+| `docker/` | aarch64 container that builds every package natively on Apple Silicon |
 | `scripts/flash-sd.sh` | Guarded SD-card flasher for macOS |
 
 ## Install
@@ -174,26 +174,30 @@ Change both passwords.
 > which macOS cannot drive, and switching it to CDC-ECM gets the interface bound
 > but never carrying. That path was tried and removed.
 
-**3. Build the missing packages** (optional but recommended — on the Mac, where
-an aarch64 container runs natively). Everything it builds comes from the commit
-named in `manifest.toml`, so two runs a month apart produce the same packages:
+**3. Build the packages** (on the Mac, where an aarch64 container runs
+natively). Everything comes from the commits named in `manifest.toml`, so two
+runs a month apart produce the same packages:
 
 ```bash
-docker build --platform linux/arm64 -f docker/Dockerfile.builder -t moarchy-builder .
-docker run --rm -v "$PWD/packages:/out" moarchy-builder
-scp packages/*.pkg.tar.zst alarm@<its address>:~/
+./scripts/provision.sh build
 ```
 
-Skip this and `install/build-src.sh` builds on the phone instead — slow, and
-`moarchy-keyboard` is a Qt6 C++ build, so budget tens of minutes on an A53.
-There is no fallback for it: without the keyboard the phone cannot type at all.
+That builds nine: `moarchy-keyboard` and `moarchy-store-git` from their own
+repos, `yay`, `xdg-terminal-exec`, `ttf-ia-writer` and `cbonsai` from the AUR,
+and `moarchy`, `omarchy-config` and `moarchy-meta` from `pkgbuilds/`.
 
 **4. Install:**
 
 ```bash
-git clone <this repo> ~/.local/share/moarchy
-~/.local/share/moarchy/install.sh
+./scripts/provision.sh deploy     # scp the packages over
+./scripts/provision.sh install    # one pacman transaction
 ```
+
+There is no installer to run on the phone any more. `pacman` places every file,
+and two systemd units do the rest: `moarchy-firstboot` (group membership and
+tty1 autologin) and `moarchy-user-setup` (the three app configs that only ever
+read `~/.config`, and the initial theme). Everything else is read from a system
+path, which is what makes upgrading the package upgrade the phone.
 
 ## What you get, and what you don't
 
@@ -208,8 +212,8 @@ never have driven: blur, shadows, rounded corners, animations, gradient borders,
 Also dropped: universal copy/paste (Hyprland `sendshortcut` has no Sway
 equivalent), OCR capture (`tesseract` has no aarch64 build), dictation
 (`voxtype` is x86-only), and every x86-only proprietary app — 1Password, Spotify,
-Obsidian, Typora. See the bottom of `moarchy-base.packages` for the full
-list with reasons.
+Obsidian, Typora. See the bottom of `pkgbuilds/moarchy-meta/PKGBUILD` for the
+full list with reasons.
 
 ## Measured on the device
 

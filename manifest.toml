@@ -53,6 +53,23 @@ version    = "0.1.0"
 # The PKGBUILD lives in packaging/, not at the repo root.
 pkgbuilddir = "packaging"
 
+# moarchy-store's PKGBUILD builds the package `moarchy-store-git` from
+# `source=("...::git+$url.git")` -- a VCS package, which fetches at HEAD when
+# makepkg runs. Cloning this repo at the ref below therefore pins what we
+# review, but NOT what gets built: makepkg re-clones inside src/.
+#
+# Pinning it properly means `#commit=` in that PKGBUILD's source array, and
+# docs/structure.md B2 says the component repo owns how it is built -- so the
+# fix belongs there, not here. Recorded as an open question rather than worked
+# around by editing someone else's PKGBUILD from this side.
+[moarchy-store]
+url     = "https://github.com/SimonSchubert/moarchy-store"
+ref     = "63e3793efdfdfc6b7d6e42657dca1866a138fa0b"
+pkgname = "moarchy-store-git"
+version = "0.1.0"
+# Its PKGBUILD is at the repo root, unlike the keyboard's.
+pkgbuilddir = "."
+
 # ---------------------------------------------------------------------------
 # AUR packages with no aarch64 binary anywhere -- neither in Arch Linux ARM nor
 # in Omarchy's own repo, which has no aarch64 tree at all

@@ -98,20 +98,22 @@ step_build() {
   mkdir -p packages
   docker run --rm --platform linux/arm64 -v "$PWD/packages:/out" moarchy-builder
   info "built: $(ls -1 packages/*.pkg.tar.* 2>/dev/null | wc -l | tr -d ' ') packages"
+  info "  (the components, the AUR rebuilds, and pkgbuilds/: moarchy,"
+  info "   omarchy-config and moarchy-meta)"
 }
 
 step_deploy() {
-  say "deploy repo + packages to $PHONE"
+  say "ship the built packages to $PHONE"
   phone true 2>/dev/null || die "cannot reach $PHONE -- set PHONE=alarm@<ip> (the phone's wifi address; key auth via ssh-copy-id)"
 
-  # Passwordless sudo, so the long install steps do not stall on a prompt.
+  # Passwordless sudo, so the install does not stall on a prompt.
   if ! phone 'sudo -n true' 2>/dev/null; then
     info "installing sudoers drop-in (remove later with: sudo rm /etc/sudoers.d/10-moarchy)"
     phone 'echo 123456 | sudo -S -k sh -c "echo \"$(id -un) ALL=(ALL) NOPASSWD: ALL\" > /etc/sudoers.d/10-moarchy && chmod 440 /etc/sudoers.d/10-moarchy && visudo -c -q"' 2>/dev/null ||
       die "could not enable passwordless sudo (is the password still the default?)"
   fi
 
-  # Rename migration, one release only (see install/config.sh). A phone
+  # Rename migration, one release only. A phone
   # provisioned before 2026-09-05 has 10-mobileomarchy, and the guard above
   # skips right past it -- `sudo -n true` succeeds precisely *because* that
   # file is there. Write the new drop-in and prove it parses before removing
@@ -123,70 +125,45 @@ step_deploy() {
       info "!! could not rename the sudoers drop-in; 10-mobileomarchy is still in place and still works"
   fi
 
-  local tarball; tarball=$(mktemp -t moa).tar.gz
-  tar --exclude='.git' --exclude='packages' -czf "$tarball" .
-  scp "${SSH_OPTS[@]}" -q "$tarball" "$PHONE:/tmp/moa.tar.gz"
-  rm -f "$tarball"
-  phone 'mkdir -p ~/.local/share/moarchy && tar xzf /tmp/moa.tar.gz -C ~/.local/share/moarchy && rm /tmp/moa.tar.gz'
+  # The working tree used to be tarred up and unpacked into
+  # ~/.local/share/moarchy, which put files on the phone that no package owned
+  # -- exactly what docs/structure.md D2 rules out. Only built packages cross
+  # now, and pacman owns every file they place.
+  compgen -G "packages/*.pkg.tar.*" >/dev/null ||
+    die "no packages built -- run './scripts/provision.sh build' first"
 
-  if compgen -G "packages/*.pkg.tar.*" >/dev/null; then
-    phone 'mkdir -p ~/.local/share/moarchy/packages'
-    scp "${SSH_OPTS[@]}" -q packages/*.pkg.tar.* "$PHONE:/home/$(phone 'id -un')/.local/share/moarchy/packages/"
-    info "shipped prebuilt packages"
-  fi
+  phone 'rm -rf ~/pkgs && mkdir -p ~/pkgs'
+  scp "${SSH_OPTS[@]}" -q packages/*.pkg.tar.* "$PHONE:pkgs/"
+  info "shipped $(ls -1 packages/*.pkg.tar.* | wc -l | tr -d ' ') packages"
   info "deployed"
 }
 
 step_install() {
-  say "run installer on the phone (long -- runs as a detached systemd unit)"
+  say "install the packages on the phone"
 
-  # Clear the log first, and as root. A previous run -- or an older
-  # provision.sh that ran this unit as root -- leaves /tmp/moa-install.log
-  # owned by root:root, and the redirect below then fails for the
-  # unprivileged user before bash executes a single line. That looks exactly
-  # like the installer erroring instantly on its own first source.
-  phone 'sudo rm -f /tmp/moa-install.log; sudo systemctl reset-failed moa-install 2>/dev/null; true'
+  # This used to run install.sh on the phone as a detached systemd unit, with
+  # three environment details that each cost a full run to find -- HOME, the
+  # uid/gid to write user config as, and XDG_RUNTIME_DIR for `systemctl --user`.
+  # None of them exist any more. The packages own the files, systemd owns the
+  # per-user step, and this is one pacman transaction (docs/structure.md M2).
+  #
+  # -U rather than -S because there is no published repo yet; M3 is what turns
+  # this into `pacman -S moarchy-meta`.
+  phone 'sudo pacman -U --needed --noconfirm ~/pkgs/*.pkg.tar.*' ||
+    die "pacman failed -- run './scripts/provision.sh watch' or check the output above"
 
-  # Detached, so a `pacman -Syu` that restarts sshd cannot kill the install
-  # halfway. Three details, each of which cost a full run to find:
-  #
-  #   --uid/--gid  install.sh writes user config to ~/.config and ~/.local and
-  #                calls sudo itself for the system parts. Run the unit bare as
-  #                root and every one of those lands in /root instead.
-  #   --setenv     systemd sets no HOME for a system unit, so install.sh's
-  #                `${MOARCHY_PATH:-$HOME/.local/share/...}` expanded to
-  #                `/.local/share/...` and it died on the first source.
-  #   XDG_...    `systemctl --user enable` needs XDG_RUNTIME_DIR to find the
-  #                user manager. Without it install/telephony.sh silently fails
-  #                to enable the call and SMS daemons -- and its own comment
-  #                names that failure mode: the phone never rings and incoming
-  #                SMS is dropped, while outgoing still works.
-  #   no --collect a collected unit is unloaded the moment it finishes, and
-  #                `systemctl show` then answers from defaults -- reporting
-  #                Result=success for a run that exited 1. Without it the failed
-  #                unit stays inspectable; the reset-failed above covers re-runs.
-  #
-  # $HOME, $(id -u) and $(id -g) expand on the phone, in the login shell, which
-  # is the one place they are reliably correct.
-  phone 'sudo systemd-run --unit=moa-install --no-block --service-type=oneshot \
-           --property=TimeoutStartSec=10800 \
-           --uid=$(id -u) --gid=$(id -g) \
-           --setenv=HOME=$HOME --setenv=XDG_RUNTIME_DIR=/run/user/$(id -u) \
-           bash -c "cd $HOME/.local/share/moarchy && ./install.sh > /tmp/moa-install.log 2>&1"' >/dev/null
-  info "started. follow with:  ./scripts/provision.sh watch"
+  info "installed. reboot the phone, or start the session with: exec sway"
+  info "first boot runs moarchy-firstboot (groups, autologin) and"
+  info "moarchy-user-setup (app configs, initial theme) automatically"
 }
 
 
 step_watch() {
-  say "watching installer"
-  while true; do
-    local state; state=$(phone 'systemctl is-active moa-install 2>/dev/null' || echo unknown)
-    printf '\r    state=%-12s %s' "$state" "$(phone 'sudo tail -1 /tmp/moa-install.log 2>/dev/null' | cut -c1-60)"
-    [[ $state == activating || $state == active ]] || break
-    sleep 15
-  done
-  echo
-  phone 'sudo tail -20 /tmp/moa-install.log 2>/dev/null'
+  # There is nothing to watch any more. The install was a 21-minute detached
+  # unit compiling Go and Qt6 on an A53; it is a pacman transaction now, and
+  # `install` reports its own result.
+  say "nothing to watch -- 'install' is a single pacman transaction and is synchronous"
+  phone 'systemctl --no-pager --failed 2>/dev/null; echo; systemctl --user --no-pager --failed 2>/dev/null' || true
 }
 
 step_verify() {

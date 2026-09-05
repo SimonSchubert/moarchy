@@ -1,14 +1,20 @@
 # The phone layer itself: bin/, default/ and config/, and nothing else
 # (docs/structure.md P1).
 #
-# `pacman -Ql moarchy` lists no path under /home. Everything the old installer
-# wrote into $HOME is either a file under /etc here, or is populated per user
-# by moarchy-firstboot from what this package ships under /usr/share.
+# `pacman -Ql moarchy` lists no path under /home. Almost nothing is copied into
+# $HOME at all -- each thing the old installer wrote there has a system path
+# that the reader already checks:
 #
-# Built from the working tree rather than from a tarball: this is the
-# integration repo's own content, so there is no upstream to fetch and no
-# checksum to verify. P10 is about not cloning someone else's source in
-# build(); it does not apply to the repo the PKGBUILD lives in.
+#   ~/.config/sway/config            -> sway -c /usr/share/moarchy/config/sway/config
+#   ~/.config/omarchy/plugins/       -> /usr/share/moarchy/plugins  (PluginRegistry, patched)
+#   ~/.config/omarchy/themed/*.tpl   -> /usr/share/omarchy/default/themed
+#   ~/.config/omarchy/shell.json     -> omarchy-config's defaults, patched
+#   ~/.config/fontconfig/conf.d/     -> /etc/fonts/conf.d
+#   ~/.config/systemd/user/          -> /usr/lib/systemd/user, /etc/systemd/user
+#   ~/.bash_profile exec sway        -> /etc/profile.d
+#
+# What is left needs a running user or a live system, and runs once from
+# moarchy-firstboot.service and moarchy-user-setup.service (P8).
 
 . "$startdir/../../scripts/manifest.sh"
 _ver=$(manifest_get moarchy version) || return 1
@@ -25,28 +31,94 @@ depends=('bash' 'sway' 'omarchy-config')
 source=()
 
 package() {
-  # bin/ -- NOT /usr/bin. 19 of these names are also upstream Omarchy's, and
-  # two packages cannot own the same path. /etc/profile.d/zz-moarchy.sh puts
-  # this directory ahead of /usr/bin, which is the same shadowing the old
-  # installer arranged in ~/.profile.
+  # --- bin/ -- NOT /usr/bin ------------------------------------------------
+  # 19 of these names are also upstream Omarchy's, and two packages cannot own
+  # the same path. /etc/profile.d/zz-moarchy.sh puts this directory ahead of
+  # /usr/bin, which is the same shadowing the old installer arranged in
+  # ~/.profile with MOARCHY_PATH/bin before OMARCHY_PATH/bin.
   install -d "$pkgdir/usr/lib/moarchy/bin"
   for f in "$_repo"/bin/*; do
     [ -f "$f" ] && install -Dm755 "$f" "$pkgdir/usr/lib/moarchy/bin/$(basename "$f")"
   done
 
-  # default/ and config/, minus default/etc, which is installed to /etc below
-  # rather than shipped twice.
+  # --- default/ and config/ ------------------------------------------------
+  # The sway .conf fragments are included by absolute path from
+  # /etc/sway/config, so they have to be here rather than in $HOME.
   install -d "$pkgdir/usr/share/moarchy"
   cp -a "$_repo/default" "$pkgdir/usr/share/moarchy/default"
-  rm -rf "$pkgdir/usr/share/moarchy/default/etc"
-  cp -a "$_repo/config" "$pkgdir/usr/share/moarchy/config"
+  cp -a "$_repo/config"  "$pkgdir/usr/share/moarchy/config"
+  # Subdirectories of default/ that are installed to their real homes below
+  # rather than shipped twice.
+  rm -rf "$pkgdir/usr/share/moarchy/default/etc" \
+         "$pkgdir/usr/share/moarchy/default/systemd" \
+         "$pkgdir/usr/share/moarchy/default/fontconfig" \
+         "$pkgdir/usr/share/moarchy/default/omarchy" \
+         "$pkgdir/usr/share/moarchy/default/themed"
 
-  # The two things a package can do that the installer had to do by hand.
-  # They live under default/etc in the repo so that this package still ships
-  # bin/, default/ and config/ and nothing else -- the source of truth stays
-  # somewhere you can read it.
+  # --- the shell plugins ---------------------------------------------------
+  # PluginRegistry scans this directory before ~/.config/omarchy/plugins, so a
+  # user copy of the same id still wins. Nine directories that used to be
+  # copied into every home, upgraded now by upgrading the package.
+  install -d "$pkgdir/usr/share/moarchy/plugins"
+  cp -a "$_repo"/default/omarchy/plugins/. "$pkgdir/usr/share/moarchy/plugins/"
+
+  # A plugin that ships a .desktop wants to be launchable like an app: the
+  # drawer lists desktop entries, not plugins. Moved out of the plugin
+  # directory rather than copied, so the shell does not also scan it there.
+  install -d "$pkgdir/usr/share/applications"
+  find "$pkgdir/usr/share/moarchy/plugins" -name '*.desktop' -type f |
+    while read -r entry; do
+      install -Dm644 "$entry" "$pkgdir/usr/share/applications/$(basename "$entry")"
+      rm -f "$entry"
+    done
+
+  # --- the one theme template ----------------------------------------------
+  # omarchy-theme-set-templates globs the user directory and then
+  # $OMARCHY_PATH/default/themed, so dropping it there themes Sway from every
+  # theme's colors.toml with nothing copied and nothing patched.
+  install -Dm644 "$_repo/default/themed/sway.conf.tpl" \
+    "$pkgdir/usr/share/omarchy/default/themed/sway.conf.tpl"
+
+  # --- /etc ----------------------------------------------------------------
   install -Dm644 "$_repo/default/etc/profile.d/zz-moarchy.sh" \
     "$pkgdir/etc/profile.d/zz-moarchy.sh"
+  install -Dm644 "$_repo/default/etc/profile.d/zz-moarchy-session.sh" \
+    "$pkgdir/etc/profile.d/zz-moarchy-session.sh"
   install -Dm644 "$_repo/default/etc/systemd/logind.conf.d/10-power-key.conf" \
     "$pkgdir/etc/systemd/logind.conf.d/10-power-key.conf"
+
+  # Lift Regular to SemiBold for the UI font, system-wide. The shell has 336
+  # Text sites across upstream and our plugins, none of which inherit a weight,
+  # so there is no one place in QML to set this -- and doing it in fontconfig
+  # brings every GTK and Qt app along, which is the point.
+  install -Dm644 "$_repo/default/fontconfig/50-moarchy-weight.conf" \
+    "$pkgdir/etc/fonts/conf.d/50-moarchy-weight.conf"
+
+  # --- systemd -------------------------------------------------------------
+  install -Dm644 "$_repo/default/systemd/system/moarchy-firstboot.service" \
+    "$pkgdir/usr/lib/systemd/system/moarchy-firstboot.service"
+  install -d "$pkgdir/usr/lib/systemd/system/multi-user.target.wants"
+  ln -s ../moarchy-firstboot.service \
+    "$pkgdir/usr/lib/systemd/system/multi-user.target.wants/moarchy-firstboot.service"
+
+  install -Dm644 "$_repo/default/systemd/user/moarchy-user-setup.service" \
+    "$pkgdir/usr/lib/systemd/user/moarchy-user-setup.service"
+  install -Dm644 "$_repo/default/systemd/sway-session.target" \
+    "$pkgdir/usr/lib/systemd/user/sway-session.target"
+
+  # gnome-calls and chatty ship user units with
+  # `Requisite=gnome-session-initialized.target`, which fails immediately unless
+  # that target is already active -- and under sway it never exists. A drop-in
+  # does not fix it: an empty Requisite= does not clear the inherited list
+  # (verified on-device). A unit of the same name wins, and /etc/systemd/user
+  # takes precedence over the /usr/lib copies their packages install, so these
+  # replacements need no per-user copying either.
+  for unit in calls-daemon.service sm.puri.Chatty-daemon.service; do
+    install -Dm644 "$_repo/default/systemd/$unit" "$pkgdir/etc/systemd/user/$unit"
+  done
+
+  install -d "$pkgdir/usr/lib/systemd/user/default.target.wants"
+  for unit in moarchy-user-setup.service calls-daemon.service sm.puri.Chatty-daemon.service; do
+    ln -s "../$unit" "$pkgdir/usr/lib/systemd/user/default.target.wants/$unit"
+  done
 }

@@ -148,6 +148,10 @@ Done. Next:
 
        sudo pacman-key --init && sudo pacman-key --populate archlinuxarm
        sudo pacman -Syu
-       git clone <this repo> ~/.local/share/moarchy
-       ~/.local/share/moarchy/install.sh
+
+  5. From the Mac, build the packages and install them:
+
+       ./scripts/provision.sh build
+       ./scripts/provision.sh deploy
+       ./scripts/provision.sh install
 NEXT
