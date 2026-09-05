@@ -75,7 +75,39 @@ Item {
   // on a dark tile while the properties either side of them are fine.
   readonly property color textOnSurface: Color.menu.text
   readonly property color container: Util.alpha(Color.menu.text, 0.08)
-  readonly property color subdued: Util.alpha(Color.menu.text, 0.6)
+  // Computed per theme, not fixed. A flat 0.6 reaches 2.72:1 on rose-pine --
+  // measured across all 22 colors.toml files -- and no single alpha clears AA
+  // everywhere without being loud enough to stop reading as secondary. Walk
+  // from quiet toward the foreground and stop the moment it is legible. Same
+  // arithmetic as mobileomarchy.settings/Settings.qml; four small pure
+  // functions rather than an import, because plugins are separate directories
+  // and a relative path across them is the kind of thing that breaks silently.
+  readonly property color subdued: root.readableOn(root.surface, Color.menu.text,
+                                                   0.55, 4.5)
+
+  function luminance(c) {
+    function chan(v) { return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4) }
+    return 0.2126 * chan(c.r) + 0.7152 * chan(c.g) + 0.0722 * chan(c.b)
+  }
+
+  function contrastRatio(a, b) {
+    var la = root.luminance(a), lb = root.luminance(b)
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
+  }
+
+  function mix(bg, fg, a) {
+    return Qt.rgba(bg.r + a * (fg.r - bg.r),
+                   bg.g + a * (fg.g - bg.g),
+                   bg.b + a * (fg.b - bg.b), 1)
+  }
+
+  function readableOn(bg, fg, from, minRatio) {
+    for (var a = from; a < 1.0; a += 0.01) {
+      var c = root.mix(bg, fg, a)
+      if (root.contrastRatio(c, bg) >= minRatio) return c
+    }
+    return fg
+  }
 
   function open(payloadJson) {
     if (root.shell && typeof root.shell.isPluginOpen === "function") {

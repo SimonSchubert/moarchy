@@ -99,13 +99,25 @@ Item {
   readonly property color textOnSurface: Color.menu.text
   readonly property color container: Util.alpha(Color.menu.text, 0.08)
 
-  // 0.7, not the 0.6 the other surfaces use. Detail lines sit on `container`
-  // rather than on the background, and that 8% lift costs contrast: measured
-  // off the device on Catppuccin, 0.6 lands at exactly 4.50:1 -- AA to two
-  // decimal places, with the antialiased edges of the glyphs below it. 0.7
-  // gives 5.47:1 on the card and stays well short of the label's 9.5:1, so the
-  // hierarchy survives.
-  readonly property color subdued: Util.alpha(Color.menu.text, 0.7)
+  // The detail line is computed per theme rather than fixed, because no single
+  // alpha is right for all 22.
+  //
+  // Measured across every theme's colors.toml, foreground at 0.7 over this card
+  // falls below AA in six of them and reaches 3.14:1 on rose-pine. Calibrating
+  // on Catppuccin -- which passes at 5.44 -- is what hides that; it is one of
+  // the more forgiving themes for this pair. A constant has to be tuned for the
+  // worst theme, which then makes it wrong for the other 21: the alpha that
+  // clears AA everywhere is 0.9, and at 0.9 a subtitle is within ten percent of
+  // its label and the hierarchy the alpha existed to create is gone.
+  //
+  // So: start quiet and walk toward the foreground only until it clears 4.5:1.
+  // Every theme ends up as quiet as it can afford -- 0.55 on vantablack, 0.88
+  // on rose-pine, and sixteen of the twenty-two below 0.70.
+  //
+  // Evaluated once per theme change, not per row.
+  readonly property color cardOpaque: root.mix(root.surface, Color.menu.text, 0.08)
+  readonly property color subdued: root.readableOn(root.cardOpaque, Color.menu.text,
+                                                   0.55, 4.5)
   readonly property color accent: Color.accent
 
   readonly property var pageDef: Pages.page(root.currentPage)
@@ -117,6 +129,34 @@ Item {
     var p = root.pageDef
     if (!p) return []
     return (p.provider || p.text) ? root.dynamicRows : p.rows
+  }
+
+  // WCAG 2.1 relative luminance and contrast, and a linear composite. `container`
+  // is painted with alpha over `surface`, so the background the text actually
+  // lands on is the blend of the two -- measuring against `surface` alone
+  // overstates the contrast by the width of that lift.
+  function luminance(c) {
+    function chan(v) { return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4) }
+    return 0.2126 * chan(c.r) + 0.7152 * chan(c.g) + 0.0722 * chan(c.b)
+  }
+
+  function contrastRatio(a, b) {
+    var la = root.luminance(a), lb = root.luminance(b)
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
+  }
+
+  function mix(bg, fg, a) {
+    return Qt.rgba(bg.r + a * (fg.r - bg.r),
+                   bg.g + a * (fg.g - bg.g),
+                   bg.b + a * (fg.b - bg.b), 1)
+  }
+
+  function readableOn(bg, fg, from, minRatio) {
+    for (var a = from; a < 1.0; a += 0.01) {
+      var c = root.mix(bg, fg, a)
+      if (root.contrastRatio(c, bg) >= minRatio) return c
+    }
+    return fg
   }
 
   function rowsTsv(pageId) {
