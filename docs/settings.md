@@ -346,12 +346,18 @@ omarchy-shell settings refresh              -> ok
 omarchy-shell settings dryRun <0|1>         -> ok
 omarchy-shell settings lastLaunch           -> the command line of the last launch
 omarchy-shell settings coverage             -> TSV upstreamId class pageId rowId
+omarchy-shell settings geometry             -> w= h= margin= strip= gap= screen=
 ```
 
 The `rows` TSV is `rowId, type, label, visible, checked, detail`. Visibility and
 state are only real for the page that is open; `rowsOn` answers `?` for another
 page's, because its guards have not been run and `0` would read as "hidden"
 rather than "not asked".
+
+`geometry` reports what the compositor granted this surface, and exists because
+nothing else can: sway's IPC does not list layer surfaces. `h` is the configure
+the window received; `margin` is only our own property read back. It answers
+`docs/gestures.md` I2 and I4, not anything in this file.
 
 `coverage` is emitted from `Pages.js`, not from this doc. That is what makes
 parity a bash assertion rather than a promise.

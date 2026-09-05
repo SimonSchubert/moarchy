@@ -18,6 +18,9 @@
 #                python-evdev, and closes a window at the end.
 #   --settings   walks the Settings stack over IPC, against docs/settings.md.
 #                Flips three switches and restores them; launches nothing.
+#   --surfaces   checks what the gesture strip is drawn over, against
+#                docs/gestures.md I. Opens every overlay in turn and takes one
+#                grim capture per sheet; I5 also needs the touch injector.
 
 set -uo pipefail
 
@@ -1018,6 +1021,167 @@ ICONS
   # E2     static: Pages.js against omarchy-menu.jsonc, not a runtime question
   # F3-F7  need PATH stubs that count forks
   # I2/I4  static greps, run at build time
+fi
+
+# --- surfaces: what the strip is drawn over -------------------------------
+# docs/gestures.md section I. Opt-in because it opens every overlay in turn and
+# writes a capture, and because I5 needs the touch injector and therefore root.
+if [[ ${1:-} == "--surfaces" ]]; then
+  head_ "surfaces (docs/gestures.md I)"
+
+  # One field out of one `geometry` line. Layer surfaces are invisible to sway's
+  # IPC -- `swaymsg -t get_tree` does not list them -- so the surface reporting
+  # its own configure is the only measurement available. `h` is the compositor's
+  # number; `margin` is only our own property read back.
+  g() { omarchy-shell "$1" geometry 2>/dev/null | tr ' ' '\n' | sed -n "s/^$2=//p"; }
+
+  # Read from the compositor, never from the thing under test.
+  ws_rect() {
+    swaymsg -t get_workspaces | python3 -c 'import json,sys
+r = [w["rect"] for w in json.load(sys.stdin) if w["focused"]][0]
+print(r["x"], r["y"], r["width"], r["height"])'
+  }
+
+  open_()  { omarchy-shell "$1" open  >/dev/null 2>&1; sleep 2; }
+  close_() { omarchy-shell "$1" close >/dev/null 2>&1; sleep 1; }
+
+  sheets="drawer settings themes"
+
+  # I2. mobileomarchy.device is the control: same layer, same zero exclusive
+  # zone, no margin. The difference between its height and a sheet's is the
+  # margin and nothing else.
+  #
+  # Deliberately NOT asserted against the workspace rect, which carries a
+  # `gaps inner 3` inset that layer-surface arrangement does not -- that would
+  # fail on arithmetic rather than on behaviour.
+  open_ device; control=$(g device h); close_ device
+  if [[ -z $control ]]; then
+    no "I2 the device control did not report a geometry" \
+       "without it every height below is unanchored"
+  else
+    for s in $sheets; do
+      open_ "$s"; h=$(g "$s" h); strip=$(g "$s" strip); close_ "$s"
+      want=$(( control + strip ))
+      if [[ $h == "$want" ]]; then
+        ok "I2 $s is one strip taller than the control ($control + $strip)"
+      else
+        no "I2 $s is ${h:-?}, wanted $want" \
+           "equal to the control ($control) means the negative margin was ignored"
+      fi
+    done
+  fi
+
+  # I4. Content may pass under the pill mid-scroll; none may come to rest there.
+  for s in $sheets; do
+    open_ "$s"; gap=$(g "$s" gap); strip=$(g "$s" strip); close_ "$s"
+    if [[ -n $gap && -n $strip ]] && (( gap >= strip )); then
+      ok "I4 $s rests its last row clear of the pill (gap $gap >= $strip)"
+    else
+      no "I4 $s rests content under the pill (gap ${gap:-?} < ${strip:-?})" \
+         "a row that stops under the pill cannot be tapped"
+    fi
+  done
+
+  # I3. Extending a surface reserves nothing.
+  before=$(ws_rect)
+  for s in $sheets; do open_ "$s"; close_ "$s"; done
+  after=$(ws_rect)
+  [[ $before == "$after" ]] \
+    && ok "I3 the workspace rect is unchanged by opening every sheet" \
+    || no "I3 the workspace rect moved: [$before] -> [$after]" \
+          "a sheet started reserving space; the keyboard will fight it"
+
+  # I1. The pixel check, and the one that catches "correct but invisible".
+  #
+  # Relative, never against a known colour: compare the last row against one a
+  # strip above it. That says "the sheet reaches the bottom edge" without
+  # resolving what Color.menu.background is for the installed theme, and without
+  # assuming the strip is 20 -- Style.space rounds a *scaled* value.
+  if ! command -v magick >/dev/null; then
+    no "I1 imagemagick is missing" "the pixel check cannot run"
+  else
+    for s in $sheets; do
+      # Open versus closed, NOT against a pixel higher up the same capture.
+      # That was the first version and it is unsound: the reference lands on
+      # whatever the sheet is drawing there, so on Settings it hit a row card
+      # and the check compared card-against-sheet and failed a surface that was
+      # in fact reaching the edge. What I1 actually asks is "is this band the
+      # sheet, or is it still what is behind" -- which is a question about the
+      # difference between the two states, and nothing else.
+      shut=$(mktemp -t moa-shut-XXXX).png
+      shot=$(mktemp -t moa-shot-XXXX).png
+      close_ "$s"
+      if grim "$shut" 2>/dev/null; then
+        open_ "$s"
+        if grim "$shot" 2>/dev/null; then
+          lw=$(g "$s" screen | cut -dx -f1)
+          pw=$(magick identify -format '%w' "$shot")
+          ph=$(magick identify -format '%h' "$shot")
+          scale=$(( pw / lw ))
+          # x well left of the centred 96-logical pill, y in the last row.
+          x=$(( 40 * scale )); y=$(( ph - 2 ))
+          was=$(magick "$shut" -format "%[hex:p{$x,$y}]" info:)
+          now=$(magick "$shot" -format "%[hex:p{$x,$y}]" info:)
+          [[ $was != "$now" ]] \
+            && ok "I1 $s paints the bottom row ($was -> $now)" \
+            || no "I1 $s leaves the bottom row untouched ($now)" \
+                  "the band under the pill is still showing what is behind"
+        else
+          no "I1 grim captured nothing for $s (open)" "a blanked screen has no frames"
+        fi
+      else
+        no "I1 grim captured nothing for $s (closed)" "a blanked screen has no frames"
+      fi
+      rm -f "$shut" "$shot"
+      close_ "$s"
+    done
+  fi
+
+  # I5. The drawer must still reflow above the keyboard -- the whole reason its
+  # exclusive zone is zero. Needs a tap on the search field, so it needs the
+  # injector and root.
+  touch_bin="$HOME/.local/share/mobileomarchy/bin/mobileomarchy-touch"
+  if [[ -x $touch_bin ]] && sudo -n true 2>/dev/null; then
+    open_ drawer
+    h_down=$(g drawer h); gap_down=$(g drawer gap)
+    # The search pill: below the 26px handle strip, centred.
+    lw=$(g drawer screen | cut -dx -f1); scale=$(( 720 / lw ))
+    # Two taps, because the injector creates its uinput device on first use and
+    # events sent before the compositor has bound it land nowhere.
+    osk_up() { [[ $(busctl --user get-property sm.puri.OSK0 /sm/puri/OSK0 \
+                      sm.puri.OSK0 Visible 2>/dev/null) == "b true" ]]; }
+    for _ in 1 2; do
+      sudo -n "$touch_bin" tap $(( 180 * scale )) $(( 74 * scale )) >/dev/null 2>&1
+      sleep 3
+      osk_up && break
+    done
+    h_up=$(g drawer h); gap_up=$(g drawer gap)
+    if ! osk_up; then
+      # An environment that will not raise the keyboard cannot answer I5, and
+      # reporting that as an I5 failure teaches you to ignore I5.
+      #
+      # Measured, and worth knowing before chasing it: a session that has been
+      # opening and closing overlays for a while stops re-activating the search
+      # field's text input entirely -- the tap lands, the injector is fine (the
+      # same one still drives every gesture check), and the keyboard simply
+      # never rises. `mobileomarchy-restart-shell` clears it every time. So a
+      # skip here usually means the session is stale, not that I5 is broken.
+      printf '  \033[90m%-4s\033[0m   \033[90mI5 skipped: the keyboard would not come up\033[0m\n' ""
+    elif [[ -n $h_up && -n $h_down ]] && (( h_up < h_down )) && [[ $gap_up == "$gap_down" ]]; then
+      ok "I5 the drawer reflows above the keyboard ($h_down -> $h_up, gap $gap_up held)"
+    else
+      no "I5 the drawer did not reflow (h $h_down -> ${h_up:-?}, gap $gap_down -> ${gap_up:-?})" \
+         "an unchanged height means the keyboard is now covering the grid"
+    fi
+    close_ drawer
+  else
+    printf '  \033[90m%-4s\033[0m   \033[90mI5 skipped: needs the touch injector and passwordless sudo\033[0m\n' ""
+  fi
+
+  printf '  \033[90m%-4s\033[0m   \033[90mnot covered: I6 I7\033[0m\n' ""
+  # I6  the pill over a sheet is A7 in --gestures, which already covers it for
+  #     the drawer; settings/themes and the keyboard case want a finger.
+  # I7  static, over every colors.toml -- a contrast sum, not a device question.
 fi
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"

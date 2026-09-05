@@ -31,7 +31,7 @@
 // ---------------------------------------------------------------------------
 // Why Top + a zero exclusive zone rather than Overlay
 // ---------------------------------------------------------------------------
-// The search field needs the on-screen keyboard, and squeekboard sits on Top
+// The search field needs the on-screen keyboard, and moarchy-keyboard sits on Top
 // with an exclusive zone. A surface that reserves nothing is arranged into
 // whatever area is left after the exclusive ones are placed -- so on Top with
 // zone 0 the drawer is laid out below the bar, above the home pill, and above
@@ -188,6 +188,17 @@ Item {
   readonly property int columns: 4
   readonly property int iconSize: Style.space(42)
 
+  // Must match mobileomarchy.gestures' own stripHeight. Duplicated rather than
+  // read across plugins for the same reason the shade duplicates it: this
+  // surface has to know the number even when the gestures plugin failed to
+  // load, and a sheet that ran off the bottom of the screen in that case would
+  // be worse than one that leaves the band unused.
+  //
+  // Not 20 pixels. Style.space rounds a *scaled* value and the scale comes from
+  // the theme's shell.toml, so this is nearer 23 at the default ~1.15 -- which
+  // is why nothing here or in the selftest writes the number down.
+  readonly property int gestureStrip: Style.space(20)
+
   // Radii are written out rather than taken from Style.cornerRadius, which
   // mirrors Hyprland's `decoration:rounding` and is pinned to 0 here by the
   // hyprctl shim -- right for tiled windows under Sway, wrong for a phone.
@@ -284,7 +295,7 @@ Item {
   }
 
   function close() {
-    // Move focus off the search field BEFORE the surface goes away. squeekboard
+    // Move focus off the search field BEFORE the surface goes away. The keyboard
     // is driven by zwp_text_input_v3 and an unmap is not a deactivate: close the
     // drawer straight from the search field and the keyboard is left standing
     // over whatever is underneath, with nothing focused that could dismiss it.
@@ -328,6 +339,33 @@ Item {
     // process spawn on an A53, so the sampling is slower than the thing being
     // sampled. Recording in-process and reading the trace afterwards can.
     function dragTrace(): string { return root.dragTrace.join(" ") }
+
+    // What the compositor actually granted this surface. Nothing else can
+    // answer it: sway's IPC does not list layer surfaces, so `swaymsg -t
+    // get_tree` is silent about every one of them.
+    //
+    // `h` is the configure this window received, so it is the compositor's
+    // number rather than ours -- which is what makes it evidence. `margin` is
+    // only our own property read back: it proves the assignment was accepted,
+    // never that it was honoured. When the two disagree, `h` is the one that
+    // is telling the truth (docs/gestures.md I2).
+    //
+    // `gap` is how far the last content pixel comes to rest above the bottom of
+    // the surface. It must never fall below `strip`, or a row settles under the
+    // home pill where it cannot be tapped (I4, I5).
+    //
+    // Meaningless while the surface is closed or mid-slide: open it first.
+    function geometry(): string {
+      var gap = Math.round(drawerWindow.height - grid.mapToItem(null, 0, grid.height).y + grid.bottomMargin)
+      return "w=" + drawerWindow.width
+           + " h=" + drawerWindow.height
+           + " margin=" + drawerWindow.margins.bottom
+           + " strip=" + root.gestureStrip
+           + " gap=" + gap
+           + " screen=" + (drawerWindow.screen
+               ? drawerWindow.screen.width + "x" + drawerWindow.screen.height : "?")
+    }
+
     function open(): string {
       if (root.shell) root.shell.summon(root.pluginId, "{}")
       return "ok"
@@ -353,6 +391,48 @@ Item {
     // This is the whole reason the keyboard can coexist with the search field.
     exclusionMode: ExclusionMode.Normal
     exclusiveZone: 0
+
+    // Extend past the bottom of the usable area, under the gesture strip. A
+    // zero exclusive zone means sway arranges this *into* what the exclusive
+    // surfaces left, so without this the sheet stops at the top of the strip
+    // and a band of wallpaper -- or of the app behind -- shows under it with
+    // the pill drawn on it (docs/gestures.md I1).
+    //
+    // The exclusion mode is deliberately untouched. The strip still reserves
+    // its band off every window and this surface is still arranged around the
+    // on-screen keyboard, because a margin moves only this surface's own bottom
+    // edge. Reserving and drawing-under are separate questions.
+    //
+    // Negative is legal, not a trick: wlroots stores layer-shell margins as
+    // int32_t and computes `box.height = bounds.height - (margin.top +
+    // margin.bottom)` with no clamping, and sway delegates to it and adds no
+    // validation of its own.
+    //
+    // Gated on the search field, and this is the whole subtlety. A margin does
+    // not extend the surface "under the strip" -- it extends it past the bottom
+    // of the *usable area*, and what sits there depends on what else is
+    // reserving. With the keyboard down that is the strip, which is on Overlay
+    // and draws over us: exactly what is wanted. With the keyboard up it is the
+    // keyboard, which is on Top like this surface and mapped earlier, so the
+    // drawer wins the overlap and paints over it.
+    //
+    // Measured, not reasoned about: unconditional, with the keyboard up, the
+    // drawer's last 20px covered the whole top key row -- `qwertyuiop` reduced
+    // to a sliver under the app labels. Content compensation does not help,
+    // because the grid's bottomMargin moves the last *row* and not the surface.
+    //
+    // activeFocus rather than the keyboard's actual visibility: the real signal
+    // lives on sm.puri.OSK0 over DBus and cannot be read synchronously (the
+    // back gesture probes it asynchronously for the same reason). The field
+    // holding focus is what causes the keyboard to be up, so it leads the state
+    // it stands in for rather than lagging it.
+    //
+    // Safe against the drag, which was the reason to want it constant. The flip
+    // is driven by focus, and focus does not change mid-drag: a close moves it
+    // to focusSink only once the sheet is already on its way out, and while
+    // typing the height is constant for the whole gesture. closeTravel and the
+    // sheet's `y` both read drawerWindow.height and neither sees it move.
+    margins.bottom: searchField.activeFocus ? 0 : -root.gestureStrip
 
     // Plain Exclusive rather than the prime-then-OnDemand dance in
     // Ui/KeyboardPanel.qml: that exists so clicks can still reach the bar
@@ -555,7 +635,15 @@ Item {
           // to show at that point. Capped, the sheet's own drag area (H1) gets
           // those touches, and when there are more apps than fit this is the
           // full height again and it scrolls exactly as before.
-          height: Math.min(parent.height - y, contentHeight)
+          // + bottomMargin, or the cap defeats it: with the margin
+          // outside the cap a grid whose apps fit becomes scrollable by exactly
+          // the margin, which makes it interactive where it was not and lets it
+          // swallow the close-drag (H1) the cap exists to protect.
+          height: Math.min(parent.height - y, contentHeight + bottomMargin)
+          // Scroll padding, so the last row comes to rest a strip clear of the
+          // home pill now that the sheet runs under it (I4). Rows may pass
+          // beneath the pill mid-scroll; none may stop there.
+          bottomMargin: root.gestureStrip
           clip: true
           cellWidth: Math.floor(width / root.columns)
           cellHeight: Style.space(86)

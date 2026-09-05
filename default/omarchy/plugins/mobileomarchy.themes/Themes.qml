@@ -63,6 +63,15 @@ Item {
   // rather than on Appearance, one level below where you actually were.
   property string returnPage: ""
 
+  // Must match mobileomarchy.gestures' own stripHeight. Duplicated rather than
+  // read across plugins for the same reason the shade duplicates it: this
+  // surface has to know the number even when the gestures plugin failed to
+  // load, and a sheet that ran off the bottom of the screen in that case would
+  // be worse than one that leaves the band unused.
+  //
+  // Not 20 pixels. Style.space rounds a *scaled* value and the scale comes from
+  // the theme's shell.toml, so this is nearer 23 at the default ~1.15 -- which
+  // is why nothing here or in the selftest writes the number down.
   readonly property int gestureStrip: Style.space(20)
   readonly property int radiusCard: Style.space(20)
 
@@ -237,6 +246,33 @@ Item {
       return "ok"
     }
     function close(): string { root.dismiss(); return "ok" }
+
+    // What the compositor actually granted this surface. Nothing else can
+    // answer it: sway's IPC does not list layer surfaces, so `swaymsg -t
+    // get_tree` is silent about every one of them.
+    //
+    // `h` is the configure this window received, so it is the compositor's
+    // number rather than ours -- which is what makes it evidence. `margin` is
+    // only our own property read back: it proves the assignment was accepted,
+    // never that it was honoured. When the two disagree, `h` is the one that
+    // is telling the truth (docs/gestures.md I2).
+    //
+    // `gap` is how far the last content pixel comes to rest above the bottom of
+    // the surface. It must never fall below `strip`, or a row settles under the
+    // home pill where it cannot be tapped (I4, I5).
+    //
+    // Meaningless while the surface is closed or mid-slide: open it first.
+    function geometry(): string {
+      var gap = Math.round(themeWindow.height - grid.mapToItem(null, 0, grid.height).y + grid.bottomMargin)
+      return "w=" + themeWindow.width
+           + " h=" + themeWindow.height
+           + " margin=" + themeWindow.margins.bottom
+           + " strip=" + root.gestureStrip
+           + " gap=" + gap
+           + " screen=" + (themeWindow.screen
+               ? themeWindow.screen.width + "x" + themeWindow.screen.height : "?")
+    }
+
     function toggle(): string {
       if (root.shell) root.shell.toggle(root.pluginId, "{}")
       return root.opened ? "open" : "closed"
@@ -267,6 +303,22 @@ Item {
     // arrangement as the drawer, and for the same reason.
     exclusionMode: ExclusionMode.Normal
     exclusiveZone: 0
+
+    // Extend past the bottom of the usable area, under the gesture strip. A
+    // zero exclusive zone means sway arranges this *into* what the exclusive
+    // surfaces left, so without this the sheet stops at the top of the strip
+    // and a band of wallpaper -- or of the app behind -- shows under it with
+    // the pill drawn on it (docs/gestures.md I1).
+    //
+    // The exclusion mode is deliberately untouched: the strip still reserves
+    // its band off every window, because a margin moves only this surface's own
+    // bottom edge. Reserving and drawing-under are separate questions.
+    //
+    // Negative is legal, not a trick: wlroots stores layer-shell margins as
+    // int32_t and computes `box.height = bounds.height - (margin.top +
+    // margin.bottom)` with no clamping, and sway delegates to it and adds no
+    // validation of its own.
+    margins.bottom: -root.gestureStrip
     WlrLayershell.keyboardFocus: root.opened ? WlrKeyboardFocus.Exclusive
                                              : WlrKeyboardFocus.None
 
@@ -338,6 +390,9 @@ Item {
           clip: true
           cellWidth: Math.floor(width / 2)
           cellHeight: Style.space(96)
+          // Scroll padding, so the last card rests a strip clear of the home
+          // pill now that the sheet runs under it (docs/gestures.md I4).
+          bottomMargin: root.gestureStrip
           model: root.themes
           cacheBuffer: cellHeight * 2
 

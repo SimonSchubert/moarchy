@@ -109,6 +109,22 @@ Item {
       return "ok"
     }
     function close(): string { root.dismiss(); return "ok" }
+
+    // The control for docs/gestures.md I2. This surface takes no bottom margin,
+    // so its `h` is what a Top surface with a zero exclusive zone gets when it
+    // is arranged normally -- the number the three extended sheets must each
+    // exceed by exactly one strip. `strip=0` and `gap=-1` say "not applicable"
+    // rather than "measured zero".
+    function geometry(): string {
+      return "w=" + deviceWindow.width
+           + " h=" + deviceWindow.height
+           + " margin=" + deviceWindow.margins.bottom
+           + " strip=0"
+           + " gap=-1"
+           + " screen=" + (deviceWindow.screen
+               ? deviceWindow.screen.width + "x" + deviceWindow.screen.height : "?")
+    }
+
     function toggle(): string {
       if (root.shell) root.shell.toggle(root.pluginId, "{}")
       return root.opened ? "open" : "closed"
@@ -165,12 +181,26 @@ Item {
   }
 
   PanelWindow {
+    id: deviceWindow
+
     visible: root.opened
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
 
     WlrLayershell.namespace: "mobileomarchy-device"
     WlrLayershell.layer: WlrLayer.Top
+
+    // No bottom margin here, deliberately, and this is the one surface that
+    // must not get one. The drawer, Settings and the theme picker extend under
+    // the gesture strip; this stays arranged inside the usable area so it can
+    // be the control they are measured against -- same layer, same zero zone,
+    // no margin, so the difference between its height and theirs is the margin
+    // and nothing else (docs/gestures.md I2).
+    //
+    // An absolute assertion would not do instead: the workspace rect carries a
+    // `gaps inner` inset that layer-surface arrangement does not, so it would
+    // fail on arithmetic rather than on behaviour. Before removing the
+    // asymmetry, read I2.
     exclusiveZone: 0
     WlrLayershell.keyboardFocus: root.opened ? WlrKeyboardFocus.Exclusive
                                              : WlrKeyboardFocus.None

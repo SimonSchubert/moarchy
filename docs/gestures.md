@@ -234,6 +234,108 @@ is self-evident, so removing the close button makes per-card dismissal
 something you have to know about; the bulk control is what keeps emptying the
 shade from depending on a gesture nobody told you about.
 
+
+## I. What the strip is drawn over
+
+The strip reserves its band off every *window*. The shell's own full-screen
+surfaces are not windows, and until this section they were treated as if they
+were: the drawer, Settings and the theme picker are Top with a zero exclusive
+zone, so sway arranges them into the usable area and each stopped short of the
+bottom edge, leaving a band of wallpaper with the pill drawn on it. The keyboard
+stopped there too. They now extend under the strip. Nothing about what the strip
+*reserves* changes -- that half is what keeps the keyboard from burying the pill,
+and it stays exactly as it was.
+
+Sizes are never written as numbers here. `Style.space(20)` rounds a *scaled*
+value, and the scale comes from the theme's `shell.toml`: at the default ~1.15
+the nominal-20 strip actually reserves 23. Every check below takes the height
+from `geometry`'s `strip` field rather than assuming one.
+
+**I1** With the drawer, Settings, the theme picker or the keyboard up, the
+surface reaches the bottom row of the screen. No band of wallpaper, and no band
+of the app underneath, shows beneath it. The keyboard is `moarchy-keyboard`'s
+own surface and gets there its own way -- see its SPEC.md 45-48 -- but the
+result this asks for is the same.
+→ one `grim` capture: the pixel a strip-height above the last row equals the
+pixel in the last row, sampled left of the centred pill
+
+**I2** Each of the three sheets is exactly one strip taller than a Top surface
+with the same zero exclusive zone and no margin. That is the negative margin
+having taken effect, and it is the only way to know it did: sway's IPC does not
+list layer surfaces, so this cannot be read from the compositor.
+→ `omarchy-shell {drawer,settings,themes} geometry` each report `h` equal to
+`omarchy-shell device geometry`'s `h` plus `strip`
+
+`mobileomarchy.device` is the control, and is deliberately left unchanged for
+that purpose: same layer, same zero zone, no margin. An absolute assertion
+against the workspace rect would not do -- the rect carries a `gaps inner` inset
+that layer-surface arrangement does not, so it would fail on arithmetic rather
+than on behaviour.
+
+**I3** Extending a surface reserves nothing. The strip still takes its band off
+every window and the bar still takes its own off the top, with any sheet open.
+→ the focused workspace's rect is byte-identical open and closed
+
+**I4** Nothing tappable comes to rest under the pill. On every sheet the last
+content pixel settles at least one strip above the bottom of the surface,
+however its list is scrolled. Content may *pass* under the pill mid-scroll; it
+may not stop there.
+→ `... geometry` reports `gap` >= `strip` on all three
+
+**I5** The drawer still reflows above the on-screen keyboard -- the reason its
+exclusive zone is zero in the first place. Raising the keyboard shortens the
+drawer's surface, and the grid ends the same distance above the keyboard as it
+did before the surface grew.
+→ `drawer geometry` `h` is smaller with the keyboard up than with it down, and
+`gap` is identical between the two
+
+**I5a** The drawer's bottom inset is dropped while the keyboard is up, and this
+is not an optimisation. A negative margin does not extend a surface "under the
+strip" -- it extends it past the bottom of the *usable area*, and what sits
+there is whatever is reserving. With the keyboard down that is the strip, which
+is on Overlay and draws over us. With the keyboard up it is the keyboard, which
+is on Top like the drawer and mapped earlier, so the drawer wins the overlap and
+paints over it. Measured before the gate existed: the whole `qwertyuiop` row
+reduced to a sliver under the drawer's app labels.
+→ `drawer geometry` reports `margin=0` while the search field has focus and
+`margin=-<strip>` otherwise
+
+**I5b** The keyboard reserves the same space whether or not it draws under the
+strip. sway reduces the usable area by `exclusive_zone + margin.bottom`, so a
+surface with a negative bottom margin has to add it back to its zone or it
+quietly under-reserves by exactly that much.
+→ with the keyboard up, `drawer geometry` `h` is `screen - bar - panelHeight`;
+at 176 rather than 200 the drawer settles over the top key row
+
+**I6** The pill still works over all four. The three sheets need no mask for
+this: they are on Top, the strip is on Overlay, and every Overlay surface sits
+above every Top one. **The keyboard is the exception and needs one** -- it is on
+Overlay itself and maps after the strip, so an unmasked keyboard extended under
+the strip lands above the pill and swallows every touch meant for it.
+→ A7 with the drawer; `omarchy-shell {settings,themes} state` == `closed` after
+an up-flick from the strip; and, with the keyboard up, an up-flick still goes
+home
+
+**I7** Drawing a sheet under the pill does not make the pill harder to see than
+it already was.
+
+Measured on tokyo-night, at rest: over the wallpaper the pill composites to
+`4A3E53` on `150D20`, and over the drawer's sheet to `45485B` on `1A1B26`. Both
+are **1.90:1**. That equality is not a coincidence and is the point of this AC:
+the pill is `Util.alpha(Color.foreground, 0.3)`, and a constant-alpha overlay's
+contrast against its *own* backdrop is set by the alpha and the
+foreground-to-background gap, very nearly independent of what is behind. So this
+change moves the pill from an unbounded backdrop to a known one without moving
+the number.
+
+It also means **3:1 (WCAG 1.4.11) is unreachable at 0.3 and never was reached**
+-- asserting it here would be asserting something no version of this UI has ever
+satisfied. Whether 0.3 is the right resting alpha is a live question, and a real
+one at 1.90:1, but it is a decision about the pill and not about what is drawn
+behind it. It is deliberately not smuggled in here.
+→ the pill's composited colour over a sheet is within 0.1 of its composited
+colour over the wallpaper, for the same theme
+
 ---
 
 ## Constraints
@@ -241,7 +343,11 @@ shade from depending on a gesture nobody told you about.
 Not acceptance criteria — the boundaries any implementation works inside.
 
 - **The strip reserves 20px off every window, permanently.** That is what keeps
-  the on-screen keyboard from burying the pill.
+  the on-screen keyboard from burying the pill. It reserves that band off
+  *windows*; the shell's own full-screen surfaces deliberately draw under it
+  (I1-I4), so the pill always has a known, flat backdrop instead of whatever
+  wallpaper happens to be behind. Reserving and drawing-under are separate
+  questions, and only the first is what the keyboard depends on.
 - **Only the left edge may take touch ahead of an app, and only 16px of it.**
   The home-screen surface (D) sits *below* windows, so it can never intercept
   anything an app would have received and a bug in it cannot make the

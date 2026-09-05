@@ -1043,6 +1043,145 @@ confidently on squeekboard while a different implementation owned the name.
 
 46/0, three consecutive runs, against the replacement keyboard.
 
+## 6k. Drawing under the bottom strip
+
+Six full-screen surfaces, and until now two of them behaved differently from the
+other four for no reason anybody had decided. `recents` and `shade` are
+`ExclusionMode.Ignore` and take the whole output. The drawer, Settings, the theme
+picker and `device` are Top with a zero exclusive zone, so sway arranges them
+*into* the usable area -- and each stopped at the top of the gesture strip,
+leaving a 20px band of wallpaper along the bottom edge with the home pill drawn
+on it. The drawer's scrim did not cover that band either, so it was the one part
+of the screen that did not join the open animation.
+
+The three sheets now extend under the strip. `device` deliberately does not --
+see below.
+
+**`ExclusionMode.Ignore` was the obvious fix and is wrong twice.** It takes the
+whole output, so it would also swallow the top status bar; and the zero exclusive
+zone is the entire reason the drawer's search field works, because a surface that
+reserves nothing is *arranged around* the keyboard instead of being buried by it
+(6b, 6c). What is wanted is one edge, not both.
+
+**A negative bottom margin is the mechanism, and it is legal rather than a
+trick.** Sway does no box arithmetic of its own: `arrange_surface()` hands off to
+wlroots' `wlr_scene_layer_surface_v1_configure()` and adds no validation.
+`wlr_layer_surface_v1_state.margin` is **`int32_t`** -- signed, so a negative
+margin is a first-class protocol value -- and for a surface anchored top+bottom
+with a desired height of 0 that function computes
+
+```c
+box.y      = bounds.y + state->margin.top;
+box.height = bounds.height - (state->margin.top + state->margin.bottom);
+```
+
+with no clamping and no `max()`. `margin.bottom = -20` therefore adds 20 to the
+height and leaves the top alone: still below the bar, now down to the screen
+edge. Measured, before and after, on the device: `h` 674 -> 694 against a 720px
+screen and a 26px bar.
+
+`Bar.qml` already ships `margins.top: -barSize` to hide the bar, but that is
+weaker precedent than it looks -- it runs with `Ignore` and a fixed height, which
+is the `exclusive_zone == -1`, `desired_height != 0` path. It proves Quickshell
+forwards a negative margin rather than clamping it in its own API. It does not
+exercise this arrangement, which is why AC I2 exists.
+
+**The pill keeps working with no mask and no geometry**, because these three are
+on Top and the strip is on Overlay, and every Overlay surface sits above every
+Top one -- the same property that already let the carousel take the whole output
+(6c). The shade needs a mask only because it is on Overlay itself.
+
+**`mobileomarchy.device` is the control, and that is why it was left alone.**
+Layer surfaces are invisible to sway's IPC: `swaymsg -t get_tree` does not list
+them, so there is no way to ask the compositor how tall a layer surface is. Each
+plugin answers a new `geometry` verb instead, reporting the configure its
+`PanelWindow` received. `h` is the compositor's number; `margin` read back is
+only our own property and proves the assignment was accepted, never that it was
+honoured. With `device` unchanged -- same layer, same zero zone, no margin -- the
+assertion is `sheet_h == device_h + strip`, and the difference is the margin and
+nothing else.
+
+That indirection is not fastidiousness. The obvious version, against the
+workspace rect, is wrong: the rect reads `29 668` on a 720px screen where the
+bar is 26 and the strip 20, because `gaps inner 3` insets it at both edges. An
+absolute assertion would have failed on arithmetic while the behaviour was
+correct.
+
+**Three things the first pass got wrong, each caught by measurement.**
+
+- **The grid's height cap defeats its own scroll padding.** `bottomMargin` is
+  what keeps the last row from resting under the pill, but the drawer's grid is
+  `height: Math.min(parent.height - y, contentHeight)` -- capped so it cannot
+  swallow the close-drag below the last row (6e). With the margin outside the
+  cap, a grid whose apps fit becomes scrollable by exactly the margin, which
+  makes it interactive where it was not and hands it the H1 drag. The cap has to
+  be `contentHeight + bottomMargin`.
+
+- **The first I1 check compared the wrong two pixels.** It sampled the last row
+  against a pixel one strip higher, expecting both to be sheet. On Settings the
+  higher sample landed on a row card, so it compared card against sheet and
+  failed a surface that was reaching the edge perfectly well. What I1 actually
+  asks is whether that band is the sheet or still what is behind -- a question
+  about the *difference between open and closed*, which is what it samples now
+  (`76193C -> 1A1B26`, wallpaper to sheet).
+
+- **The keyboard gate that looked necessary and was not.** The tempting version
+  is `margins.bottom: searchField.activeFocus ? 0 : -strip`, so nothing goes
+  behind the keyboard. Measured, the content position is invariant either way:
+  with the keyboard up the surface shortens by exactly the keyboard's zone
+  (694 -> 494) and `gap` holds at 30, because the Flickable's trailing margin is
+  scroll padding and absorbs it. Only blank sheet goes behind the keyboard, and
+  blank sheet behind a keyboard is invisible. Gating would have cost something
+  real: `closeTravel` and the sheet's `y` both read `drawerWindow.height`, so
+  flipping the margin mid-gesture would jump the sheet and break the 1:1 travel
+  6e exists to defend.
+
+**The pill's contrast does not change, and the number is worse than anyone had
+checked.** At rest the pill is `Util.alpha(Color.foreground, 0.3)`. Over the
+wallpaper it composites to `4A3E53` on `150D20`; over the drawer's sheet to
+`45485B` on `1A1B26`. Both are **1.90:1**. That equality is structural rather
+than lucky: a constant-alpha overlay's contrast against its own backdrop is set
+by the alpha and the foreground-to-background gap, very nearly independently of
+what is behind. So this change moves the pill from an unbounded backdrop to a
+known one without moving the number -- and it also means 3:1 (WCAG 1.4.11) is
+unreachable at 0.3 and never was reached. Whether 0.3 is the right resting alpha
+is a real question at 1.90:1, but it is a question about the pill, not about what
+is drawn behind it, and AC I7 is written not to smuggle it in.
+
+**A negative margin does not mean "under the strip", and that cost two bugs.**
+It means "past the bottom of the usable area", and what sits there is whatever
+is reserving at the time. With the keyboard down that is the strip -- Overlay,
+above everything, exactly what was wanted. With the keyboard up it is the
+keyboard, which is on Top like the drawer and mapped earlier, so the drawer won
+the overlap and painted over it: the whole `qwertyuiop` row reduced to a sliver
+under the drawer's app labels. The content compensation is no help, because the
+grid's `bottomMargin` moves the last row and not the surface. The drawer's inset
+is now dropped while its search field has focus.
+
+That is the argument three paragraphs up, reversed by a screenshot. Every step
+of it was sound about *content* and it never asked what the surface was landing
+on. What settled it was cropping the boundary out of a capture and looking at
+it -- the third time in this log that reading pixels rather than reasoning about
+them is what found the bug.
+
+**And the keyboard under-reserved by exactly its own inset.** Running
+`moarchy-keyboard`'s background under the strip needs the same negative margin,
+and sway reduces the usable area by `exclusive_zone + margin.bottom` rather than
+by the zone alone. So a 200px panel with a -24 margin reserved 176, the drawer
+was arranged 24px lower than it should have been, and it clipped the top key
+row. The zone carries `+ stripInset` to cancel it. The keys had not moved in
+either bug, which is what made both look like paint bugs rather than
+arrangement ones.
+
+**A session that has been driving overlays for a while stops raising the
+keyboard.** The tap lands, the injector is fine -- the same one still drives
+every gesture check in the same run -- and the search field simply never
+activates its text input again. `mobileomarchy-restart-shell` clears it every
+time. `--surfaces` skips I5 rather than failing it when the keyboard will not
+come up, because a check that reports a stale session as a defect teaches you to
+ignore it (the same reasoning as the retry on every state read in 6c).
+
+
 ## 7. Hardware status
 
 | | |

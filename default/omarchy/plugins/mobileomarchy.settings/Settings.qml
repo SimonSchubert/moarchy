@@ -92,6 +92,17 @@ Item {
   property string confirmText: ""
   property var confirmRow: null
 
+  // Must match mobileomarchy.gestures' own stripHeight. Duplicated rather than
+  // read across plugins for the same reason the shade duplicates it: this
+  // surface has to know the number even when the gestures plugin failed to
+  // load, and a sheet that ran off the bottom of the screen in that case would
+  // be worse than one that leaves the band unused.
+  //
+  // Not 20 pixels. Style.space rounds a *scaled* value and the scale comes from
+  // the theme's shell.toml, so this is nearer 23 at the default ~1.15 -- which
+  // is why nothing here or in the selftest writes the number down.
+  readonly property int gestureStrip: Style.space(20)
+
   readonly property int radiusCard: Style.space(18)
 
   // NOT `onSurface` / `onAccent` -- see the header.
@@ -604,6 +615,33 @@ Item {
 
     function lastLaunch(): string { return root.lastLaunch }
 
+    // What the compositor actually granted this surface. Nothing else can
+    // answer it: sway's IPC does not list layer surfaces, so `swaymsg -t
+    // get_tree` is silent about every one of them.
+    //
+    // `h` is the configure this window received, so it is the compositor's
+    // number rather than ours -- which is what makes it evidence. `margin` is
+    // only our own property read back: it proves the assignment was accepted,
+    // never that it was honoured. When the two disagree, `h` is the one that
+    // is telling the truth (docs/gestures.md I2).
+    //
+    // `gap` is how far the last content pixel comes to rest above the bottom of
+    // the surface. It must never fall below `strip`, or a row settles under the
+    // home pill where it cannot be tapped (I4, I5).
+    //
+    // Meaningless while the surface is closed or mid-slide: open it first.
+    function geometry(): string {
+      var gap = Math.round(settingsWindow.height - rowList.mapToItem(null, 0, rowList.height).y + rowList.bottomMargin)
+      return "w=" + settingsWindow.width
+           + " h=" + settingsWindow.height
+           + " margin=" + settingsWindow.margins.bottom
+           + " strip=" + root.gestureStrip
+           + " gap=" + gap
+           + " screen=" + (settingsWindow.screen
+               ? settingsWindow.screen.width + "x" + settingsWindow.screen.height : "?")
+    }
+
+
     // Emitted from Pages.js, not from the doc -- which is what makes coverage
     // parity a bash assertion rather than a promise.
     function coverage(): string {
@@ -630,6 +668,27 @@ Item {
 
     exclusionMode: ExclusionMode.Normal
     exclusiveZone: 0
+
+    // Extend past the bottom of the usable area, under the gesture strip. A
+    // zero exclusive zone means sway arranges this *into* what the exclusive
+    // surfaces left, so without this the sheet stops at the top of the strip
+    // and a band of wallpaper -- or of the app behind -- shows under it with
+    // the pill drawn on it (docs/gestures.md I1).
+    //
+    // The exclusion mode is deliberately untouched. The strip still reserves
+    // its band off every window and this surface is still arranged around the
+    // on-screen keyboard, because a margin moves only this surface's own bottom
+    // edge. Reserving and drawing-under are separate questions.
+    //
+    // Negative is legal, not a trick: wlroots stores layer-shell margins as
+    // int32_t and computes `box.height = bounds.height - (margin.top +
+    // margin.bottom)` with no clamping, and sway delegates to it and adds no
+    // validation of its own.
+    //
+    // Unconditional here: no page has a text input -- every row is
+    // nav/plugin/switch/choice/action/link/info -- so there is no keyboard
+    // case to gate on.
+    margins.bottom: -root.gestureStrip
     WlrLayershell.keyboardFocus: root.opened ? WlrKeyboardFocus.Exclusive
                                              : WlrKeyboardFocus.None
 
@@ -695,6 +754,9 @@ Item {
           height: Math.max(0, parent.height - y)
           clip: true
           spacing: Style.space(6)
+          // Scroll padding, so the last row rests a strip clear of the home
+          // pill now that the page runs under it (docs/gestures.md I4).
+          bottomMargin: root.gestureStrip
           model: root.currentRows
           boundsBehavior: Flickable.StopAtBounds
           interactive: contentHeight > height
