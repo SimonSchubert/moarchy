@@ -74,6 +74,15 @@ Item {
   property var dynamicRows: []
   property bool dynamicLoaded: false
 
+  // Bumped on every page change and every refresh. A batch that comes back
+  // carrying an older number is answering a question about a page we have left,
+  // and applying it would paint one page with another's state.
+  //
+  // Restarting matters as much as tagging: `Process.running = true` is a no-op
+  // on a process already running, so setting a new command while the last batch
+  // is still in flight would leave the old one to answer for it.
+  property int generation: 0
+
   // Set by `settings dryRun 1`. Records what would have run instead of running
   // it, which is what lets the selftest exercise every bridged row on a phone
   // it is not allowed to reboot.
@@ -275,20 +284,28 @@ Item {
     var p = root.pageDef
     if (!p) return
     if ((p.provider || p.text) && !root.dynamicLoaded) {
+      root.generation += 1
+      dynamicProc.wanted = root.generation
+      if (dynamicProc.running) dynamicProc.running = false
       dynamicProc.command = ["bash", "-lc", p.provider ? p.provider.list : p.text]
       dynamicProc.running = true
       return
     }
     var script = Guards.build(root.currentRows, p.reader || "")
     if (!script) return
+    root.generation += 1
+    guardProc.wanted = root.generation
+    if (guardProc.running) guardProc.running = false
     guardProc.command = ["bash", "-lc", script]
-    if (!guardProc.running) guardProc.running = true
+    guardProc.running = true
   }
 
   Process {
     id: dynamicProc
+    property int wanted: 0
     stdout: StdioCollector {
       onStreamFinished: {
+        if (dynamicProc.wanted !== root.generation) return
         var p = root.pageDef
         if (!p) return
         var lines = String(text || "").split("\n")
@@ -320,8 +337,10 @@ Item {
 
   Process {
     id: guardProc
+    property int wanted: 0
     stdout: StdioCollector {
       onStreamFinished: {
+        if (guardProc.wanted !== root.generation) return
         var parsed = Guards.parse(String(text || ""))
         root.whenMap = parsed.when
         root.valueMap = parsed.value
@@ -361,10 +380,13 @@ Item {
     if (!cmd) return
     root.lastLaunch = String(cmd)
     if (root.dryRun) return
-    switchProc.command = ["bash", "-lc", String(cmd)]
     // Process.running rather than execDetached: the write is only half of it,
-    // and onExited is what tells us to read the state back.
-    if (!switchProc.running) switchProc.running = true
+    // and onExited is what tells us to read the state back. Stopped first
+    // because assigning `running = true` to a process already running is a
+    // no-op, so a second tap would set a command nothing ever runs.
+    if (switchProc.running) switchProc.running = false
+    switchProc.command = ["bash", "-lc", String(cmd)]
+    switchProc.running = true
   }
 
   Process {

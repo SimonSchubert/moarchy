@@ -68,6 +68,11 @@ function build(rows, pageReader) {
         out.push("printf '%s:v:%s\\n' " + body[m].id
                  + " \"$(printf '%s' \"$" + body[m].name + "\" | tr '\\n' ' ')\"");
 
+    // Nothing to ask means no process at all. Several pages are pure navigation
+    // -- Apps & defaults, System, Help & docs -- and a fork per page visit on a
+    // 1.15GHz A53 is worth not paying.
+    if (out.length === 0 && lines.length === 0) return "";
+
     return out.concat(lines).join("\n") + "\n";
 }
 
