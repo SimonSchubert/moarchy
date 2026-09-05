@@ -882,6 +882,48 @@ the same 3.14:1 from independent implementations once its checker grew a
 `mix(base;over;alpha)` form, which is better evidence than either of us checking
 our own arithmetic.
 
+## 6h. Three fixes that came from other people's measurements
+
+**A single alpha cannot make secondary text readable.** `subdued` was
+foreground at 0.6, and against the surfaces it actually sits on -- a raised
+card, a container tile, the sheet -- that measured 3.95-4.29:1 where 4.5:1 is
+the threshold. Raising it to 0.75 cleared all three, and that fix was still
+wrong: it was calibrated against one theme. Measured across all 22, foreground
+at 0.7 over a lifted card fails in six of them and reaches **3.14:1 on
+rose-pine**, while Catppuccin passes the same pair at 5.44 -- so the theme I
+happened to be running is one of the most forgiving for it. The constant that
+clears AA everywhere is 0.9, at which point a subtitle is within ten percent of
+its label and the hierarchy the alpha existed to create is gone.
+
+So it is computed per theme now: start at 0.55 and walk toward the foreground
+only until the pair clears 4.5:1, measured against the **composited**
+background rather than the surface, because `container` is painted with alpha
+and measuring against the surface alone overstates the contrast by the width of
+that lift. Every theme ends up as quiet as it can afford. Verified on rendered
+pixels, not arithmetic: 6.97:1 for the shade's date line.
+
+**The first back gesture after a shell restart was being eaten by its own
+probe.** `performBack` takes the keyboard branch whenever the probe has not
+answered -- correct, because that branch is the reversible one -- but the DBus
+path is cold on the first call and the whole retry budget goes on it. The probe
+is warmed once at startup now, so the first real gesture is not the one that
+pays for the connection.
+
+**A suite that inherits the last session's state is measuring the last
+session.** One run in three failed A1/A3 with "0 samples", which reads as a
+dead gesture and was nothing of the kind: a shade left open from an earlier
+screenshot meant the strip's up-drag correctly meant "put that away" (A8), so
+the recents drag never latched. The gesture was behaving exactly as specified
+and failing a check that assumed a bare screen. A4 then passed *because* it
+closed the shade, which is how the failure looked intermittent rather than
+positional. The gesture block now closes every overlay before it starts, and
+that is verified the only way worth verifying it: by running three passes from
+a deliberately dirty start, with the shade open, and getting 43/43 three times.
+
+All three came from someone else looking. The contrast sweep started in another
+session; the probe timing was reported by a third; the dirty-state failure was
+mine, found only because the other two had already cleared the noise around it.
+
 ## 7. Hardware status
 
 | | |

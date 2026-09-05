@@ -130,7 +130,51 @@ Item {
   readonly property color containerHigh: Util.alpha(Color.popups.text, 0.14)
   readonly property color accent: Color.accent
   readonly property color textOnAccent: Color.background
-  readonly property color subdued: Util.alpha(Color.popups.text, 0.62)
+  readonly property color subduedBase: root.mix(
+    Qt.rgba(root.surface.r, root.surface.g, root.surface.b, 1), Color.popups.text, 0.08)
+  readonly property color subdued: root.readableOn(root.subduedBase,
+                                                   Color.popups.text, 0.55, 4.5)
+
+  // WCAG 2.1 relative luminance and contrast, and a linear composite, so the
+  // secondary text colour can be computed per theme instead of guessed.
+  //
+  // A constant alpha cannot do this job. Measured across all 22 themes'
+  // colors.toml, foreground at 0.7 over a lifted card falls below AA in six of
+  // them and reaches 3.14:1 on rose-pine; the alpha that clears AA everywhere
+  // is 0.9, and at 0.9 a subtitle is within ten percent of its label and the
+  // hierarchy the alpha existed to create is gone. Calibrating on Catppuccin --
+  // which passes at 5.44 -- is exactly how a single number looks correct and
+  // is not. (Method and measurements from the settings work, 4ff1e7f.)
+  //
+  // `container` is painted with alpha over the surface, so the background the
+  // text actually lands on is the blend of the two: measuring against the
+  // surface alone overstates the contrast by the width of that lift.
+  function luminance(c) {
+    function chan(v) { return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4) }
+    return 0.2126 * chan(c.r) + 0.7152 * chan(c.g) + 0.0722 * chan(c.b)
+  }
+
+  function contrastRatio(a, b) {
+    var la = root.luminance(a), lb = root.luminance(b)
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
+  }
+
+  function mix(bg, fg, a) {
+    return Qt.rgba(bg.r + a * (fg.r - bg.r),
+                   bg.g + a * (fg.g - bg.g),
+                   bg.b + a * (fg.b - bg.b), 1)
+  }
+
+  // Start quiet and walk toward the foreground only until the pair clears the
+  // ratio, so every theme ends up as quiet as it can afford.
+  function readableOn(bg, fg, from, minRatio) {
+    for (var a = from; a < 1.0; a += 0.01) {
+      var c = root.mix(bg, fg, a)
+      if (root.contrastRatio(c, bg) >= minRatio) return c
+    }
+    return fg
+  }
+
 
   // ---------------------------------------------------------- drag state
   property real progress: 0        // 0 shut .. 1 open

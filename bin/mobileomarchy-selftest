@@ -383,6 +383,18 @@ print(found[0] if found else "")'; }
     # do with gestures.
     swaymsg "output * power on" >/dev/null 2>&1
     swaymsg "input type:touch events enabled" >/dev/null 2>&1
+
+    # Start from a bare screen. Anything left open changes what the strip's
+    # up-drag *means* -- with the shade down it correctly means "put that away"
+    # (A8), so the recents drag never latches and A1/A3 reports 0 samples. That
+    # is the gesture behaving exactly as specified, failing a check that assumed
+    # nothing was on screen. A suite that inherits the last session's state is
+    # measuring the last session.
+    for overlay in shade drawer recents themes settings; do
+      timeout 8 omarchy-shell "$overlay" close >/dev/null 2>&1
+    done
+    sleep 2
+
     for _ in 1 2; do
       setsid foot --app-id=moa-selftest -e sh -c 'while :; do sleep 300; done' >/dev/null 2>&1 </dev/null &
       sleep 4

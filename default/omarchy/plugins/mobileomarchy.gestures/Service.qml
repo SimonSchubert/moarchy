@@ -416,6 +416,14 @@ Item {
     onTriggered: root.performBack()
   }
 
+  // Warmed once at startup, so the first back gesture is not the one that pays
+  // for a cold DBus connection. The probe is fast once the path has been
+  // exercised and slow the very first time, and performBack spends its whole
+  // retry budget waiting before falling back to the keyboard branch -- correct,
+  // but it means the first back after a shell restart gets consumed by the
+  // probe instead of reaching the overlay underneath.
+  Component.onCompleted: root.startKeyboardProbe()
+
   function startKeyboardProbe(): void {
     root.keyboardKnown = false
     root.backRetries = 0
