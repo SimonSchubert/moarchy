@@ -12,7 +12,7 @@ v4.0.2 (`346e69e1`). Every one of them appears below exactly once.
 
 | Class | Meaning |
 | --- | --- |
-| **Native** | Reimplemented as a phone control or screen. mobileomarchy code, not Omarchy's. |
+| **Native** | Reimplemented as a phone control or screen. mobileomarchy code, not Omarchy's. Container rows that become one of our screens are Native too -- nothing of upstream's runs. |
 | **Bridged** | Upstream's own script runs unchanged; only the way it is launched changes -- a fullscreen TUI instead of a floating terminal, epiphany instead of a Chromium web app. |
 | **Shade** | Already a control in the pull-down shade. Deliberately not repeated in Settings. |
 | **Unsupported** | Hidden from the UI. The reason names the missing binary, the x86_64 constraint, or the Hyprland dependency. |
@@ -31,14 +31,17 @@ Unsupported.
 `omarchy-*` scripts they name exist upstream. Because `bin/` here shadows
 `$OMARCHY_PATH/bin` by PATH order, one shim for that wrapper -- routing to
 `mobileomarchy-launch-tui`, a fullscreen foot at font size 7 -- makes the whole
-class work without reimplementing any of it.
+class work without reimplementing any of it. 65 of the bridged rows run a command
+byte-identical to upstream's `action`; the selftest asserts it. The exceptions are
+the three package rows, where upstream's `xdg-terminal-exec --app-id=...` is
+replaced by the fullscreen terminal, which is the entire point of bridging.
 
 ## Totals
 
 | Class | Entries |
 | --- | ---: |
-| Native | 63 |
-| Bridged | 78 |
+| Native | 66 |
+| Bridged | 75 |
 | Shade | 1 |
 | Unsupported | 178 |
 | **Total** | **320** |
@@ -99,7 +102,7 @@ Native 2 · Bridged 6 · Unsupported 2
 
 ## Trigger (47)
 
-Native 11 · Bridged 10 · Shade 1 · Unsupported 25
+Native 12 · Bridged 9 · Shade 1 · Unsupported 25
 
 | id | label | class | lands at | note |
 | --- | --- | --- | --- | --- |
@@ -109,7 +112,7 @@ Native 11 · Bridged 10 · Shade 1 · Unsupported 25
 | `trigger.capture` | Capture | Native | Tools | only Screenshot survives |
 | `trigger.capture.screenshot` | Screenshot | Native | Tools > Screenshot | `mobileomarchy-capture-screenshot` (grim/slurp/satty) |
 | `trigger.capture.screenrecord.stop` | Stop Screenrecording | Bridged | Tools > Screen record | upstream `when` on the running process kept |
-| `trigger.capture.screenrecord` | Screenrecord | Bridged | Tools > Screen record | `when: omarchy-cmd-present gpu-screen-recorder`; extras-only, aarch64-verified |
+| `trigger.capture.screenrecord` | Screenrecord | Native | Tools > Screen record | container, presence-guarded on gpu-screen-recorder: extras-only but aarch64-verified |
 | `trigger.capture.text` | Text | Unsupported | -- | `omarchy-capture-text` needs tesseract, which has no aarch64 build |
 | `trigger.capture.qr` | QR Code | Unsupported | -- | `omarchy-capture-qr` needs zbarimg; zbar is not in the package set |
 | `trigger.capture.color` | Color | Unsupported | -- | `hyprpicker` is Hyprland-only |
@@ -153,7 +156,7 @@ Native 11 · Bridged 10 · Shade 1 · Unsupported 25
 
 ## Style (21)
 
-Native 6 · Bridged 8 · Unsupported 7
+Native 8 · Bridged 6 · Unsupported 7
 
 | id | label | class | lands at | note |
 | --- | --- | --- | --- | --- |
@@ -166,8 +169,8 @@ Native 6 · Bridged 8 · Unsupported 7
 | `style.bar.position` | Position | Unsupported | -- | `mobileomarchy.bar` declares `readonly property string position: "top"` |
 | `style.bar.transparency` | Transparency | Native | Appearance > Status bar > Transparent | needs Bar.qml to bind `transparent` to `barConfig` first, or the write is a silent no-op |
 | `style.hyprland` | Hyprland | Unsupported | -- | edits `~/.config/hypr/looknfeel.lua`; Hyprland cannot run here |
-| `style.screensaver` | Screensaver | Bridged | Appearance > Branding |  |
-| `style.about` | About | Bridged | Appearance > Branding |  |
+| `style.screensaver` | Screensaver | Native | Appearance > Branding | container; its three children are the bridged rows |
+| `style.about` | About | Native | Appearance > Branding | container; its three children are the bridged rows |
 | `style.bar.position.top` | Top | Unsupported | -- | the bar is hard-coded to the top |
 | `style.bar.position.bottom` | Bottom | Unsupported | -- | the gesture strip owns the bottom edge |
 | `style.bar.position.left` | Left | Unsupported | -- | the back-gesture band owns the left edge |

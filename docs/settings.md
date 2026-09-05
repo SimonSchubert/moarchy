@@ -81,8 +81,8 @@ show `omarchy.menu` open
 
 **A4** Settings opens directly at any page by id, and an unknown id is refused
 rather than silently landing on the root.
-→ `settings open appearance.bar` == `ok` and `settings page` == `appearance.bar`;
-`settings open nope` == `unknown page: nope`
+→ `settings openAt appearance.bar` == `ok` and `settings page` == `appearance.bar`;
+`settings openAt nope` == `unknown page: nope`
 
 **A5** `open()` never blocks. The page paints with whatever state it has and fills
 in afterwards; no `FileView` and no synchronous read runs inside it.
@@ -189,8 +189,12 @@ and `value=zed`
 `omarchy-launch-screensaver force`, and no new window appears
 
 **E2** Every bridged row's command is byte-identical to the `action` string in
-`omarchy-menu.jsonc` for the id it covers.
-→ `settings lastLaunch` matches `jq -r '.["<id>"].action'` of the upstream file
+`omarchy-menu.jsonc` for the id it covers, with three declared exceptions.
+→ a static diff of `Pages.js` against the upstream file: 65 of 68 match exactly.
+`install.package`, `install.aur` and `remove.package` differ only in dropping
+upstream's `xdg-terminal-exec --app-id=...` for the fullscreen terminal, which is
+the point of bridging. Checked statically rather than through `lastLaunch`,
+because `lastLaunch` records the wrapped form that actually ran
 
 **E3** Every command named by a Native or Bridged row resolves on the shell's PATH.
 → `command -v <first word>` succeeds under the PATH in
@@ -220,8 +224,9 @@ and vanish.
 ## F. Hidden when unsupported
 
 **F1** No id classified Unsupported is reachable as a row anywhere.
-→ the intersection of `settings coverage` Unsupported ids and every id in
-`settings rows --all` is empty
+→ `settings coverage` never lists an Unsupported id, because a row is the only
+thing that can name one. The check is that every id the upstream file classifies
+Unsupported is absent from `settings coverage`
 
 **F2** A container row whose page has no visible child is itself hidden.
 → no `visible=1` row on any page targets a page with zero visible rows
@@ -259,8 +264,10 @@ is empty
 **G3** Every class is one of the four words.
 → `settings coverage | cut -f2 | sort -u` == `Bridged Native Shade Unsupported`
 
-**G4** Every Native and Bridged id resolves to a page and row that exist.
-→ `settings rows <pageId>` contains `<rowId>` for each
+**G4** Every Native and Bridged id resolves to a page and a row that exist, or
+names the surface outside this stack that satisfies it.
+→ `settings rowsOn <pageId>` contains `<rowId>` for each. The one exception is
+`apps`, which is the app drawer: it names `mobileomarchy.drawer` and no row
 
 **G5** Every Unsupported id carries a non-empty reason.
 → no Unsupported row has an empty reason field
@@ -270,21 +277,22 @@ is empty
 `docs/menu-coverage.md` is empty
 
 **G7** The class totals are the ones committed to.
-→ `settings coverage | cut -f2 | sort | uniq -c` == 78 Bridged, 63 Native,
+→ `settings coverage | cut -f2 | sort | uniq -c` == 75 Bridged, 66 Native,
 1 Shade, 178 Unsupported
 
 ## H. Not repeating the shade
 
 **H1** No control the shade owns appears in Settings: Wi-Fi radio, Bluetooth radio,
 airplane mode, brightness, volume, silent, torch, rotate, media transport.
-→ no row label matches `^(wi-?fi|bluetooth|airplane|brightness|volume|silent|torch|rotate)$`
+→ no row on any page has a `switch` whose label matches
+`^(wi-?fi|bluetooth|airplane|brightness|volume|silent|torch|rotate)`
 
 The two rows that open `impala` and `bluetui` are network *configuration*, not
 radio toggles, and are named "Wi-Fi networks" and "Bluetooth devices".
 
 **H2** The single Shade-class id is recorded and not rendered.
-→ `settings coverage` shows `trigger.toggle.notifications` as `Shade`;
-`settings rows --all` does not contain it
+→ `settings coverage` shows `trigger.toggle.notifications` as `Shade` with an
+empty row field
 
 ## I. Robustness
 
@@ -315,24 +323,35 @@ has a page.
 
 These verbs exist so the ACs above are checkable without touching the screen.
 
+Quickshell's typed IPC has no optional arguments -- a declared parameter is
+required -- so the no-argument and one-argument forms are separate verbs rather
+than one with a default.
+
 ```
 omarchy-shell settings state                -> open | closed
-omarchy-shell settings open [<pageId>]      -> ok | unknown page: <id>
+omarchy-shell settings open                 -> ok                (at the root)
+omarchy-shell settings openAt <pageId>      -> ok | unknown page: <id>
 omarchy-shell settings close                -> ok
 omarchy-shell settings page                 -> <pageId>
 omarchy-shell settings stack                -> pageIds, root first
 omarchy-shell settings goto <pageId>        -> ok | unknown page: <id>
 omarchy-shell settings back                 -> <pageId> | closed
-omarchy-shell settings rows [<pageId>]      -> TSV rowId type label visible detail
+omarchy-shell settings rows                 -> TSV, the open page
+omarchy-shell settings rowsOn <pageId>      -> TSV, another page
 omarchy-shell settings value <rowId>        -> on | off | <choice value> | ""
 omarchy-shell settings set <rowId> <value>  -> ok | hidden | unknown row
 omarchy-shell settings activate <rowId>     -> ok | hidden | unknown row
-omarchy-shell settings guards [<pageId>]    -> TSV rowId 0|1
+omarchy-shell settings guards               -> TSV rowId 0|1
 omarchy-shell settings refresh              -> ok
 omarchy-shell settings dryRun <0|1>         -> ok
-omarchy-shell settings lastLaunch           -> argv of the last bridged launch
-omarchy-shell settings coverage             -> TSV upstreamId class pageId rowId reason
+omarchy-shell settings lastLaunch           -> the command line of the last launch
+omarchy-shell settings coverage             -> TSV upstreamId class pageId rowId
 ```
+
+The `rows` TSV is `rowId, type, label, visible, checked, detail`. Visibility and
+state are only real for the page that is open; `rowsOn` answers `?` for another
+page's, because its guards have not been run and `0` would read as "hidden"
+rather than "not asked".
 
 `coverage` is emitted from `Pages.js`, not from this doc. That is what makes
 parity a bash assertion rather than a promise.
