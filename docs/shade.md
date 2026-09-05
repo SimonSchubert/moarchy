@@ -37,7 +37,7 @@ Everything the Omarchy menu reaches that is not an app lives there.
 
 **S3** The power button opens Settings at its Power page and closes the shade on
 the way. It used to summon the Omarchy menu at its `system` route; that menu is
-a popup with no tap-outside dismiss in this port, since `install/port-4x.sh`
+a popup with no tap-outside dismiss in this port, since the port patch
 stubs out `HyprlandFocusGrab`, so it was a trapdoor. Lock, Suspend, Log out,
 Restart and Power off are native rows now — see `docs/settings.md`.
 

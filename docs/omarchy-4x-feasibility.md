@@ -80,7 +80,8 @@ So the concrete work is:
 ## It runs: the 4.x bar renders under Sway
 
 `scripts/port-4x-shell.sh` first reproduced this from a clean checkout; the
-translation it prototyped is now `install/port-4x.sh`, applied by every install.
+translation it prototyped is now `pkgbuilds/omarchy-config/port-4x.patch`,
+applied at build time in that package's `prepare()`.
 After the translation below, **Omarchy v4.0.2's bar renders on the PinePhone under Sway**,
 populated with workspaces, clock, bluetooth, wifi, volume and battery. RSS
 settles around 200-260 MB.

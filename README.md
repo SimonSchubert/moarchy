@@ -92,7 +92,8 @@ correction. The 3.8.4 port is gone; it exists only in git history.
 
 **Why 4.x is portable.** The shell is quickshell/QML —
 architecture-neutral, and `quickshell` builds for aarch64. What is left is
-Hyprland coupling in five QML files, and `install/port-4x.sh` translates those
+Hyprland coupling in five QML files, and `pkgbuilds/omarchy-config/port-4x.patch`
+translates those
 mechanically: `Quickshell.Hyprland` becomes `Quickshell.I3`, which speaks Sway's
 IPC. The one genuine gap is `HyprlandFocusGrab`, which has no I3 counterpart, so
 vendored popups lose click-outside-to-dismiss.

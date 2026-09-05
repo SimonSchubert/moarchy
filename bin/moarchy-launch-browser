@@ -1,6 +1,6 @@
 #!/bin/bash
 # Omarchy's omarchy-launch-browser expects a configured desktop browser.
-# Chromium is in moarchy-extras.packages, not the base set.
+# Chromium is an optdepend of moarchy-meta, not a hard dependency.
 for b in "$BROWSER" chromium firefox epiphany; do
   [[ -n $b ]] && command -v "$b" >/dev/null && exec "$b" "$@"
 done

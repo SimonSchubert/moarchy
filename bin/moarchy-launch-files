@@ -1,5 +1,5 @@
 #!/bin/bash
-# Prefer a GUI file manager if one is installed (see moarchy-extras.packages),
+# Prefer a GUI file manager if one is installed (see moarchy-meta's optdepends),
 # otherwise open a TUI one in the terminal. Nautilus is deliberately not in the
 # base set: it is heavy for 2-3 GB of RAM.
 for f in nautilus thunar pcmanfm-qt; do
