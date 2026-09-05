@@ -133,6 +133,8 @@ mkdir -p ~/.config/omarchy/plugins
 # Scoped to the mobileomarchy.* namespace on purpose: plugins installed from
 # elsewhere are the user's, and a sweep that removed those would be a far worse
 # bug than the one it fixes.
+# >>> plugin-sweep (scripts/test-plugin-sweep.sh extracts between these markers
+# and runs the real code, so do not rename them without updating that script)
 repo_plugins=""
 for plugin_dir in "$MOBILEOMARCHY_PATH"/default/omarchy/plugins/*/; do
   [[ -d $plugin_dir ]] || continue
@@ -172,6 +174,7 @@ else
     echo "    removed stale desktop entry $(basename "$entry")"
   done
 fi
+# <<< plugin-sweep
 
 for plugin_dir in "$MOBILEOMARCHY_PATH"/default/omarchy/plugins/*/; do
   plugin_id=$(basename "$plugin_dir")

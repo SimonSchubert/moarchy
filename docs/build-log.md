@@ -882,7 +882,7 @@ the same 3.14:1 from independent implementations once its checker grew a
 `mix(base;over;alpha)` form, which is better evidence than either of us checking
 our own arithmetic.
 
-## 6h. Three fixes that came from other people's measurements
+## 6i. Three fixes that came from other people's measurements
 
 **A single alpha cannot make secondary text readable.** `subdued` was
 foreground at 0.6, and against the surfaces it actually sits on -- a raised
@@ -923,6 +923,58 @@ a deliberately dirty start, with the shade open, and getting 43/43 three times.
 All three came from someone else looking. The contrast sweep started in another
 session; the probe timing was reported by a third; the dirty-state failure was
 mine, found only because the other two had already cleared the noise around it.
+
+## 6j. A cleanup pass that deleted the phone
+
+Plugins are installed by copying every directory under
+`default/omarchy/plugins/` into `~/.config/omarchy/plugins/`, and a plugin that
+ships a `.desktop` has it moved into `~/.local/share/applications` so the drawer
+lists it like an app. Nothing removed either one when a plugin left the repo. The
+loop only iterates what the repo still ships, so a deleted plugin is never
+visited: its directory stayed, the shell went on loading it, its id stayed in
+`shell.json`, and its icon stayed in the drawer launching nothing. Another
+session spotted the orphaned icon; checking it found the other two.
+
+The sweep that fixes it derives the set of plugins the repo ships and removes any
+installed `mobileomarchy.*` not in that set. Desktop entries carry an
+`X-MobileOmarchy-Plugin=<id>` marker and are matched on it rather than on
+filename, so an entry named after something else is still caught and an entry we
+never installed is never touched.
+
+**Then the interesting part.** I scoped the sweep to the `mobileomarchy.*`
+namespace so a user's third-party plugins could not be caught by it, dry-ran
+exactly that -- stale one goes, third-party one stays -- and shipped it. What I
+never ran was the branch that deletes. If `MOBILEOMARCHY_PATH` is unset or wrong,
+or `default/omarchy/plugins/` is missing or caught half-written by another
+session's checkout in this shared worktree, the glob does not expand and the
+derived set is **empty**. Every installed plugin then fails the membership test.
+Reproduced against the committed version: bar, drawer, shade, recents, gestures,
+settings, themes and device all deleted in one pass, leaving only the
+third-party plugin the namespace scoping had so carefully protected. The copy
+loop that would restore them iterates the same empty glob, so it restores
+nothing. The phone comes up with no UI at all, recoverable only over ssh.
+
+An empty derived list is not "everything is stale", it is "I could not read the
+repo", and the two must not share a code path when one of them ends in `rm -rf`.
+The sweep is skipped with a warning now. Skipping it leaves a stale icon, which
+is the whole bug it was written to fix; running it on a half-read repo leaves no
+phone. Same reasoning as upstream `omarchy-menu` discarding an incomplete batch
+rather than acting on it.
+
+Two things worth carrying forward. The first is that I dry-ran the branch that
+was already correct and shipped the branch that deletes -- the safe path passing
+says nothing about the destructive one, and this is the only `rm -rf` in the repo
+aimed at a directory the user owns. `scripts/test-plugin-sweep.sh` now covers all
+four branches over a fake `HOME`, needs no device, and extracts the sweep from
+`install/config.sh` between marker comments so it tests the shipping code rather
+than a copy of it. Against the unguarded version it fails three of four.
+
+The second is a trap the sweep introduces: **provisioning is authoritative, so a
+plugin hand-copied to the phone for testing is now deleted by the next
+provision** rather than merely overwritten. That is correct behaviour and it is
+silent. `mobileomarchy.device` spent a day in exactly that state -- scp'd,
+uncommitted, live -- and the next provision would have removed it. Commit a
+plugin before you rely on it surviving.
 
 ## 7. Hardware status
 
