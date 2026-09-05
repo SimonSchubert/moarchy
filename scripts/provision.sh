@@ -25,8 +25,13 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
+. "$REPO_ROOT/scripts/manifest.sh"
+
 PHONE="${PHONE:-alarm@192.168.0.18}"
-RELEASE="${RELEASE:-20251224}"
+# One pin, read here and in scripts/flash-sd.sh, rather than the same date
+# written out in both (docs/structure.md V1).
+RELEASE="${RELEASE:-$(manifest_get danctnix release)}"
+[[ -n $RELEASE ]] || exit 1
 CACHE="${CACHE:-$HOME/Downloads/moarchy}"
 IMG="$CACHE/archlinux-pinephone-barebone-${RELEASE}.img"
 SSH_OPTS=(-o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10)
@@ -84,7 +89,10 @@ EOS
 }
 
 step_build() {
-  say "build aarch64 packages (moarchy-keyboard, yay, xdg-terminal-exec, ttf-ia-writer)"
+  # The names come from the manifest rather than from this string: a hand-kept
+  # list in a progress message is still a list, and it is the one nobody
+  # updates. cbonsai was missing from it for exactly that reason.
+  say "build aarch64 packages (moarchy-keyboard, $(manifest_aur_packages | tr '\n' ' ' | sed 's/ $//'))"
   docker info >/dev/null 2>&1 || die "Docker is not running"
   docker build --platform linux/arm64 -f docker/Dockerfile.builder -t moarchy-builder . >/dev/null
   mkdir -p packages

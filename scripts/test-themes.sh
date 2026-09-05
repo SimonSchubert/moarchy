@@ -10,24 +10,26 @@ set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Read from the installer rather than repeated here. This file carried its own
-# copy of the pin, and when the branch moved to 4.0.2 it stayed on 3.8.4 -- so
-# it fetched a theme set the phone does not install, rendered those, and passed.
-# A check that measures something the device never sees is not a weaker check,
-# it is a check that has stopped being one.
-PIN="${OMARCHY_PIN:-$(sed -n 's/^OMARCHY_PIN="\${OMARCHY_PIN:-\([a-f0-9]*\)}".*/\1/p' \
-                      "$REPO_ROOT/install/vendor-omarchy.sh")}"
-if [[ -z $PIN ]]; then
-  echo "could not read OMARCHY_PIN from install/vendor-omarchy.sh" >&2
-  exit 1
-fi
+. "$REPO_ROOT/scripts/manifest.sh"
+
+# Read the pin rather than repeating it. This file carried its own copy, and
+# when the branch moved to 4.0.2 it stayed on 3.8.4 -- so it fetched a theme set
+# the phone does not install, rendered those, and passed. A check that measures
+# something the device never sees is not a weaker check, it is a check that has
+# stopped being one.
+#
+# It used to scrape the pin out of install/vendor-omarchy.sh, which worked but
+# meant a second file had to know that one's syntax. Both read manifest.toml now.
+PIN="${OMARCHY_PIN:-$(manifest_get omarchy ref)}"
+[[ -n $PIN ]] || exit 1
+URL="$(manifest_get omarchy url)" || exit 1
 
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
 echo "==> fetching Omarchy at ${PIN:0:7}"
 git clone --quiet --filter=blob:none --no-checkout \
-  https://github.com/basecamp/omarchy "$WORK/omarchy"
+  "$URL" "$WORK/omarchy"
 git -C "$WORK/omarchy" checkout --quiet --detach "$PIN"
 
 export OMARCHY_PATH="$WORK/omarchy"

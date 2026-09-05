@@ -78,8 +78,8 @@ and an assumption about Omarchy 4.x that turned out to be wrong twice over).
 ## Omarchy 4.x
 
 moarchy runs **Omarchy v4.0.2** (`346e69e`), pinned in
-`install/vendor-omarchy.sh`. There is no waybar, walker, mako or swayosd in the
-package set: in 4.x the bar, launcher, notifications and OSD are one
+[`manifest.toml`](manifest.toml). There is no waybar, walker, mako or swayosd
+in the package set: in 4.x the bar, launcher, notifications and OSD are one
 **quickshell/QML** shell, and the phone UI is a set of plugins on top of it
 rather than a patched copy of it.
 
@@ -137,6 +137,7 @@ moarchy-selftest --gestures   # drives real synthetic touch via /dev/uinput
 
 | Path | What it is |
 | --- | --- |
+| `manifest.toml` | The version pins. The only file that says what version of anything is built |
 | `install.sh`, `install/` | On-device installer. Never invokes upstream's. |
 | `moarchy-base.packages` | aarch64 package set, with every omission explained |
 | `default/sway/bindings.conf` | Omarchy's bindings, translated to Sway, key-for-key |
@@ -174,7 +175,8 @@ Change both passwords.
 > but never carrying. That path was tried and removed.
 
 **3. Build the missing packages** (optional but recommended — on the Mac, where
-an aarch64 container runs natively):
+an aarch64 container runs natively). Everything it builds comes from the commit
+named in `manifest.toml`, so two runs a month apart produce the same packages:
 
 ```bash
 docker build --platform linux/arm64 -f docker/Dockerfile.builder -t moarchy-builder .

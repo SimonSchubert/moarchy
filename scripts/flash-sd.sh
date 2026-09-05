@@ -9,9 +9,17 @@
 
 set -euo pipefail
 
-RELEASE="${RELEASE:-20251224}"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+. "$REPO_ROOT/scripts/manifest.sh"
+
+# The release is a pin, not a constant in this script: it is one of the inputs
+# this project does not version itself, so it lives in manifest.toml with the
+# rest (docs/structure.md V1). RELEASE= still overrides it, for flashing an
+# older card without editing the manifest.
+RELEASE="${RELEASE:-$(manifest_get danctnix release)}"
+[[ -n $RELEASE ]] || exit 1
+BASE_URL="$(manifest_get danctnix url)/${RELEASE}" || exit 1
 IMAGE="archlinux-pinephone-barebone-${RELEASE}.img.xz"
-BASE_URL="https://github.com/dreemurrs-embedded/Pine64-Arch/releases/download/${RELEASE}"
 CACHE="${CACHE:-$HOME/Downloads/moarchy}"
 
 DISK="${1:-}"

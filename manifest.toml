@@ -1,0 +1,108 @@
+# manifest.toml -- the version pins.
+#
+# This is the only file in this project that says what version of anything is
+# built. Nothing here clones at HEAD (docs/structure.md V2): every input this
+# project does not itself version names its upstream and an exact commit, so
+# two builds of the same manifest install the same bytes.
+#
+# Read it from bash with scripts/manifest.sh:
+#
+#   . scripts/manifest.sh
+#   ref=$(manifest_get omarchy ref) || exit 1
+#
+# A missing or empty pin is a hard error there, never an empty string -- an
+# unread pin that degrades to "" is a clone at HEAD wearing a disguise, which
+# is the exact failure these pins exist to prevent.
+#
+# To move a pin: change it here, rebuild, and nothing else. Bumping a pin is
+# the only supported way to change what an image contains (V5).
+
+# ---------------------------------------------------------------------------
+# Upstream Omarchy -- the configuration and theme layer we vendor.
+#
+# 4.x replaced the shell wholesale: no waybar, walker, mako or swayosd, all one
+# quickshell/QML shell. install/port-4x.sh translates its Hyprland coupling to
+# Sway. See docs/omarchy-4x-feasibility.md. Moved here from
+# install/vendor-omarchy.sh, which was the pin's home until 2026-09-06 (V3).
+# ---------------------------------------------------------------------------
+[omarchy]
+url     = "https://github.com/basecamp/omarchy"
+ref     = "346e69e1cec6c4e8924531874af6ba010a1bc99e"
+version = "v4.0.2"
+
+# ---------------------------------------------------------------------------
+# Our own components. Separate repos, consumed as built packages and never as
+# submodules (docs/structure.md B1); this is the pin that buys what a submodule
+# would have, without dragging the source tree in.
+#
+# Neither repo tags releases yet, so these are commit SHAs. When they tag, ref
+# becomes the tag and `makepkg` can verify it (P10).
+# ---------------------------------------------------------------------------
+[moarchy-keyboard]
+url        = "https://github.com/SimonSchubert/moarchy-keyboard"
+ref        = "634f8baf495b2d7ec3c29330eb150bc566d39158"
+version    = "0.1.0"
+# The PKGBUILD lives in packaging/, not at the repo root.
+pkgbuilddir = "packaging"
+
+# ---------------------------------------------------------------------------
+# AUR packages with no aarch64 binary anywhere -- neither in Arch Linux ARM nor
+# in Omarchy's own repo, which has no aarch64 tree at all
+# (pkgs.omarchy.org/stable/aarch64/omarchy.db -> 404).
+#
+# This list is what docker/build-packages.sh builds and what
+# install/build-src.sh falls back to building on the phone. Adding one here
+# adds it to both; there is no second list to keep in step.
+#
+# `version` is what the pinned commit's PKGBUILD produces. It is a record, not
+# an input -- nothing reads it, and it is here so that a pin bump shows the
+# version change in the diff instead of hiding it.
+# ---------------------------------------------------------------------------
+[aur.yay]
+ref     = "cb43f84828ab4f9700f7c6f9c6d7a923d4cfaff0"
+version = "13.0.1-1"
+
+[aur.xdg-terminal-exec]
+ref     = "a52e8f23c0be7d482b944c6cf5ddee172da171e4"
+version = "0.14.3-1"
+
+[aur.ttf-ia-writer]
+ref     = "e9aa94080338d7a7f83a561ce64bf30ab4fb24e4"
+version = "20181225-1"
+
+# cbonsai backs the Screensaver entry in omarchy-menu (docs/menu-coverage.md).
+# It shipped in packages/ as a prebuilt tarball with no recipe anywhere in the
+# repo -- built once by hand and never written down. Listing it here is what
+# makes it rebuildable.
+[aur.cbonsai]
+ref     = "6a643ecb56b91b3ef5f54f4fbfd69c9745b8437c"
+version = "1.4.2-1"
+
+# ---------------------------------------------------------------------------
+# The base image we flash and install onto, from DanctNIX (Pine64-Arch).
+# Consumed as a release, never rebuilt (docs/structure.md §2). Was written in
+# two places -- scripts/flash-sd.sh and scripts/provision.sh -- until it moved
+# here.
+# ---------------------------------------------------------------------------
+[danctnix]
+release = "20251224"
+url     = "https://github.com/dreemurrs-embedded/Pine64-Arch/releases/download"
+image   = "archlinux-pinephone-barebone-20251224.img.xz"
+
+# ---------------------------------------------------------------------------
+# The container that builds the aarch64 packages. A floating tag is a clone at
+# HEAD by another name, so it is pinned by digest; this one is a multi-arch
+# index that carries linux/arm64, which is what makes it run natively on Apple
+# Silicon rather than under emulation.
+#
+# Re-resolve a tag to its digest with:
+#   TOKEN=$(curl -s "https://auth.docker.io/token?service=registry.docker.io&scope=repository:menci/archlinuxarm:pull" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
+#   curl -sI -H "Authorization: Bearer $TOKEN" \
+#     -H "Accept: application/vnd.oci.image.index.v1+json" \
+#     https://registry-1.docker.io/v2/menci/archlinuxarm/manifests/base-devel |
+#     grep -i docker-content-digest
+# ---------------------------------------------------------------------------
+[builder]
+image  = "menci/archlinuxarm"
+tag    = "base-devel"
+digest = "sha256:f7c6f64c0f246f41775e01793340c49f8e9abf3991141c25405361d56b100ccb"

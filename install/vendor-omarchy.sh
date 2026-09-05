@@ -6,7 +6,7 @@
 # hardcodes it. We never run install.sh from it.
 #
 # ---------------------------------------------------------------------------
-# Why v4.0.2
+# Why 4.x
 # ---------------------------------------------------------------------------
 # 4.x replaced the whole shell layer: no waybar, walker, elephant, mako or
 # swayosd. The bar, launcher, notifications and OSD are all one quickshell/QML
@@ -19,11 +19,22 @@
 #
 # The v3.8.4 (waybar-based) port was replaced, not kept on a branch; it exists
 # only in git history.
+#
+# Which commit of 4.x is not decided here. It is [omarchy] in manifest.toml,
+# alongside every other pin, because a version written in a script is a version
+# that gets written in a second script later (docs/structure.md V1, V3).
 # ---------------------------------------------------------------------------
 
 echo "==> vendoring Omarchy config layer"
 
-OMARCHY_PIN="${OMARCHY_PIN:-346e69e1cec6c4e8924531874af6ba010a1bc99e}"   # v4.0.2
+. "$MOARCHY_PATH/scripts/manifest.sh"
+
+# OMARCHY_PIN= still overrides, for bisecting against upstream without touching
+# the manifest. Everything else reads the pin.
+OMARCHY_PIN="${OMARCHY_PIN:-$(manifest_get omarchy ref)}"
+[[ -n $OMARCHY_PIN ]] || exit 1
+OMARCHY_URL="$(manifest_get omarchy url)" || exit 1
+OMARCHY_VERSION="$(manifest_get omarchy version)" || exit 1
 
 if [[ -d $OMARCHY_PATH/.git ]]; then
   echo "    updating existing clone"
@@ -31,17 +42,26 @@ if [[ -d $OMARCHY_PATH/.git ]]; then
 else
   mkdir -p "$(dirname "$OMARCHY_PATH")"
   git clone --quiet --filter=blob:none --no-checkout \
-    https://github.com/basecamp/omarchy "$OMARCHY_PATH"
+    "$OMARCHY_URL" "$OMARCHY_PATH"
 fi
 
 git -C "$OMARCHY_PATH" checkout --quiet --detach "$OMARCHY_PIN"
 
-echo "    pinned at $(git -C "$OMARCHY_PATH" rev-parse --short HEAD) (v4.0.2)"
+# Prove the checkout landed on the pin rather than trusting an exit status: a
+# clone that was already here at a different commit and a fetch that quietly
+# did nothing both leave a working tree that looks fine.
+got=$(git -C "$OMARCHY_PATH" rev-parse HEAD)
+if [[ $got != "$OMARCHY_PIN" ]]; then
+  echo "    !! asked for $OMARCHY_PIN, got $got" >&2
+  exit 1
+fi
+
+echo "    pinned at ${OMARCHY_PIN:0:7} ($OMARCHY_VERSION)"
 echo "    themes: $(find "$OMARCHY_PATH/themes" -maxdepth 2 -name colors.toml | wc -l | tr -d ' ') with colors.toml"
 
 for required in shell config/omarchy themes; do
   if [[ ! -e $OMARCHY_PATH/$required ]]; then
-    echo "    !! $required missing -- is OMARCHY_PIN pointing at a pre-4.x commit?" >&2
+    echo "    !! $required missing -- is [omarchy] ref pointing at a pre-4.x commit?" >&2
     exit 1
   fi
 done

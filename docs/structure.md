@@ -4,9 +4,10 @@ How the three repos, the packages, the package repository and the image builder
 fit together, and what has to be true before a PinePhone image can be built at
 all.
 
-Status: **proposed, not agreed.** Nothing here is built yet. The acceptance
-criteria are the contract to argue with before any of it is; where one is my
-reading rather than your decision it is marked **?**.
+Status: **M1 agreed and built (2026-09-06); M2–M4 proposed, not agreed.** The
+acceptance criteria are the contract to argue with before any of them is; where
+one is my reading rather than your decision it is marked **?**. Each AC below
+carries its state, and §11 has the per-milestone summary.
 
 The archaeology of how we got here lives in [build-log.md](build-log.md). This
 file is the destination.
@@ -102,8 +103,8 @@ version (§8), never as source trees.
 > Qt6 C++; under a package it is built once. A submodule also has no upgrade
 > path — a phone in the field runs `pacman -Syu`, and no submodule can serve
 > that. The one thing a submodule genuinely buys, a reproducible pin, §8 buys
-> without dragging in the source. `docker/build-packages.sh:22` already clones
-> the keyboard from GitHub rather than vendoring it; this makes that deliberate
+> without dragging in the source. `docker/build-packages.sh` already clones the
+> keyboard from GitHub rather than vendoring it; this makes that deliberate
 > instead of incidental.
 >
 > Submodules would be right if the components were edited in lockstep with the
@@ -160,8 +161,9 @@ path under `/etc` that another package owns.
 > is also what upstream does: `omarchy` is a package in `pkgs.omarchy.org`.
 
 **P2** `omarchy-config` (`arch=any`) contains upstream Omarchy's configuration
-and theme layer at the pin currently in `install/vendor-omarchy.sh`
-(`346e69e`, v4.0.2), installed to the path upstream hardcodes.
+and theme layer at the pin in `manifest.toml`'s `[omarchy]` (`346e69e`, v4.0.2 —
+it lived in `install/vendor-omarchy.sh` until V3), installed to the path
+upstream hardcodes.
 
 **P3** The Hyprland→Sway translation that `install/port-4x.sh` performs at
 install time is applied at **build** time, in `omarchy-config`'s `prepare()`.
@@ -286,18 +288,37 @@ while the image is not ours.
 
 **V1** `manifest.toml` names, for every input this project does not itself
 version: the upstream repo and the exact tag or commit built. It is the only
-place a version is written.
+place a version is written. **Met 2026-09-06.**
 
-**V2** No build step clones at `HEAD`.
+**V2** No build step clones at `HEAD`. **Met 2026-09-06.**
 
-> This is broken today and it is the cheapest thing on this list to fix.
-> `docker/build-packages.sh` clones the keyboard and all five AUR packages with
-> `--depth 1` — no ref. Two builds a week apart produce different images and
-> nothing records why. Until this holds, "reproducible image" is not a claim
-> that can be made, so V1–V2 come before any of §6 or §7.
+> This was broken and it was the cheapest thing on this list to fix.
+> `docker/build-packages.sh` cloned the keyboard and every AUR package with
+> `--depth 1` — no ref. Two builds a week apart produced different images and
+> nothing recorded why. Until this held, "reproducible image" was not a claim
+> that could be made, so V1–V2 came before any of §6 or §7.
+>
+> Four things clone now, and each checks out a commit named in `manifest.toml`
+> and then asserts `rev-parse HEAD` equals it. Trusting the exit status is not
+> enough: a clone that was already on disk at another commit, and a fetch that
+> quietly did nothing, both leave a working tree that looks correct.
+>
+> The builder container was the fifth. `menci/archlinuxarm:base-devel` is a
+> floating tag, which is a clone at `HEAD` by another name, so it is pinned by
+> digest. `FROM` cannot read a file, so that digest is the one pin written in
+> two places — `Dockerfile.builder` and `[builder]` — and both say so.
+>
+> **What V2 does not yet cover: the toolchain.** The container still runs
+> `pacman -Syu`, which installs whatever Arch Linux ARM has today. So the
+> *sources* are pinned and the *build environment* is not, and that gap is
+> measurable rather than theoretical — see Q3 in §12. **?**
 
 **V3** The upstream Omarchy pin moves out of `install/vendor-omarchy.sh` into
-`manifest.toml` alongside the rest.
+`manifest.toml` alongside the rest. **Met 2026-09-06.**
+
+> `scripts/test-themes.sh` used to recover that pin by `sed`-ing the assignment
+> out of the installer, having already once tested a theme set the phone did not
+> install. It reads `manifest.toml` now, as the installer does.
 
 **V4** A published image records the exact version of every package in it, in a
 manifest inside the image and next to it on the download.
@@ -352,9 +373,26 @@ have been that plus every installed device.
 Four milestones. Each is independently useful; each is a prerequisite for the
 next.
 
-**M1 — Pins.** V1–V3. No new infrastructure, no restructuring; a manifest file
-and six clone commands that take a ref. After this, two builds of the same
-manifest agree.
+**M1 — Pins. Done 2026-09-06.** V1–V3. No new infrastructure, no restructuring;
+a manifest file and the clone commands taught to take a ref. Two builds of the
+same manifest now agree.
+
+> `manifest.toml` and its reader, `scripts/manifest.sh`, are what landed.
+> Six consumers read it: the builder container and its `Dockerfile`, the
+> on-device fallback build, the Omarchy vendoring step, the SD flasher and the
+> provisioner. Nothing else names a version.
+>
+> The reader dies on a pin it cannot read instead of returning `""`. That is the
+> whole point of it: an unread pin that degrades to an empty string is a clone
+> at `HEAD` wearing a disguise, and it would have passed every check here.
+>
+> Two things came out of writing it down that were not in the plan. `cbonsai`
+> shipped in `packages/` as a prebuilt tarball with no recipe anywhere — built
+> once by hand, never recorded — and is now in the manifest with the rest. And
+> the AUR package list existed twice, in the container build and in the
+> on-device fallback; both read the `[aur.*]` sections now, which is P5's
+> argument arriving three milestones early because the cost of not doing it was
+> already visible.
 
 **M2 — One transaction.** P1–P10. `install.sh` reduces to:
 
@@ -387,7 +425,19 @@ Marked **?** above, collected here:
 2. **Where `moarchy.db` is hosted.** GitHub Pages off this repo is the cheap
    answer and needs no domain. A `pkgs.moarchy.org` mirrors what upstream
    Omarchy does and survives moving off GitHub. Not decided.
-3. **Whether `omarchy-config` should be a package at all**, versus vendoring the
+3. **How to pin the build environment, given that ALARM has no archive.**
+   `Dockerfile.builder` pins the base image by digest and then runs
+   `pacman -Syu`, which floats. The two builds of `moarchy-keyboard` on
+   2026-09-05 measure the cost: same pinned source, same `0.1.0-1`, identical
+   file list, and an installed size of 470,286 vs 540,529 bytes seven hours
+   apart. Arch proper would be pinned with `archive.archlinux.org`; Arch Linux
+   ARM publishes no equivalent (`archive.archlinuxarm.org` does not resolve,
+   while the live mirror answers), so the options are a mirror snapshot we host
+   ourselves, freezing the whole toolchain into the base image, or accepting
+   that the environment floats and saying so on every image. Not decided, and
+   it belongs to M3 rather than M1 — the package repo is what would host a
+   snapshot.
+4. **Whether `omarchy-config` should be a package at all**, versus vendoring the
    ~95 QML files of upstream's shell directly into this repo with the port
    already applied. The package keeps the upstream diff visible and the update
    path mechanical; vendoring is simpler and admits that a Sway port of a
