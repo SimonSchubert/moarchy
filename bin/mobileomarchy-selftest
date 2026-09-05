@@ -294,5 +294,279 @@ else
   ok "an input source is configured"
 fi
 
+# --- real touch, opt-in ------------------------------------------------------
+# Off by default because it needs root for /dev/uinput and it closes a window at
+# the end. With it, every gesture is checked the way a thumb would drive it
+# rather than through the IPC shortcut -- which is the only way the touch path
+# itself is ever exercised.
+if [[ ${1:-} == "--gestures" ]]; then
+  head_ "gestures (synthetic touch)"
+
+  # Every check below names the acceptance criterion it proves, from
+  # docs/gestures.md. That file is the contract; this is the part of it a
+  # machine can check. An AC with no check here is visible by its absence --
+  # which matters, because the last version of this suite passed 37/37 on
+  # behaviour that was wrong: the tests had been written to match the code
+  # rather than the spec, so green meant nothing.
+
+  # Without this, `foot` below silently fails to map and every check that
+  # needs a window on screen fails for a reason that has nothing to do with
+  # gestures -- the shell reports focus=none and reads like a broken plugin.
+  # A session shell inherits it; an ssh session does not.
+  : "${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
+  export XDG_RUNTIME_DIR
+  export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-$(basename "$(ls "$XDG_RUNTIME_DIR"/wayland-[0-9] 2>/dev/null | head -1)" 2>/dev/null)}"
+
+  touch_bin="$HOME/.local/share/mobileomarchy/bin/mobileomarchy-touch"
+  ws() { swaymsg -t get_workspaces | python3 -c 'import json,sys; print(([w["name"] for w in json.load(sys.stdin) if w["focused"]] or [""])[0])'; }
+  # Sway's own layout string for the focused workspace -- "V[foot]" with a
+  # window on it, empty without. Read here through swaymsg, never through the
+  # shell, so the check is independent of the thing under test.
+  ws_rep() { swaymsg -t get_workspaces | python3 -c 'import json,sys; print(([w.get("representation") or "" for w in json.load(sys.stdin) if w["focused"]] or [""])[0])'; }
+  scratch() { pgrep -fc "foot --app-id=moa-selftest" || true; }
+  cards() { timeout 8 omarchy-shell recents list 2>/dev/null | grep -c . || true; }
+
+  # Right after a full-screen surface maps on this GPU the shell can be busy
+  # for long enough that omarchy-shell gives up and prints nothing. An empty
+  # answer is not "closed" -- it is "ask again".
+  shell_state() {
+    local target=$1 out
+    for _ in 1 2 3; do
+      if out=$(timeout 8 omarchy-shell "$target" state 2>/dev/null) && [[ -n $out ]]; then
+        echo "$out"; return
+      fi
+      sleep 1
+    done
+    echo "unknown"
+  }
+
+  # Panel pixels; the output is scaled 2, so every figure is twice the logical
+  # travel the plugin sees. Against a 324 logical pullTravel:
+  #   60  panel =  30 logical =  9%  -> under the 15% recents commit
+  #   300 panel = 150 logical = 46%  -> recents (tops out at 40%)
+  #   560 panel = 280 logical = 86%  -> home (commits at 75%)
+  # All dragged over 2000ms, ~0.08 logical px/ms, an order of magnitude under
+  # the 0.6 fling threshold -- so these test the distance bands, which is the
+  # whole point of the bands being distance-only.
+  STRIP_Y=1420
+
+  ac() { printf '  \033[90m%-4s\033[0m ' "$1"; }
+  okac()  { ac "$1"; shift; ok "$@"; }
+  noac()  { ac "$1"; shift; no "$@"; }
+
+  if [[ ! -x $touch_bin ]]; then
+    no "mobileomarchy-touch is missing" "cannot drive touch without it"
+  elif ! sudo -n true 2>/dev/null; then
+    no "passwordless sudo is unavailable" "/dev/uinput is root-only, so touch cannot be synthesised"
+  else
+    swaymsg "output * power on" >/dev/null 2>&1
+    for _ in 1 2; do
+      setsid foot --app-id=moa-selftest -e sh -c 'while :; do sleep 300; done' >/dev/null 2>&1 </dev/null &
+      sleep 4
+    done
+    start_ws=$(ws)
+
+    # --- B. strip, sideways ------------------------------------------------
+    sudo -n "$touch_bin" swipe 550 $STRIP_Y 120 $STRIP_Y 250 >/dev/null 2>&1
+    sleep 2
+    if [[ $(ws) != "$start_ws" ]]; then
+      okac B1 "swipe left changes workspace"
+    else
+      noac B1 "swipe left did nothing"
+    fi
+
+    sudo -n "$touch_bin" swipe 120 $STRIP_Y 550 $STRIP_Y 250 >/dev/null 2>&1
+    sleep 2
+    if [[ $(ws) == "$start_ws" ]]; then
+      okac B1 "swipe right changes it back"
+    else
+      noac B1 "swipe right did not return to $start_ws"
+    fi
+
+    # --- C. no hold-to-close ----------------------------------------------
+    before=$(scratch)
+    sudo -n "$touch_bin" hold 360 $STRIP_Y 2000 >/dev/null 2>&1
+    sleep 3
+    if [[ $(scratch) == "$before" ]]; then
+      okac C1 "a 2s hold on the strip closes nothing"
+    else
+      noac C1 "holding on the strip closed a window" \
+              "hold-to-close was removed; nothing on the strip may close a window"
+    fi
+
+    # --- A. strip, up ------------------------------------------------------
+    timeout 8 omarchy-shell recents close >/dev/null 2>&1; sleep 2
+    sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 1360 900 >/dev/null 2>&1
+    sleep 3
+    if [[ $(shell_state recents) == "closed" ]]; then
+      okac A2 "a short drag springs back"
+    else
+      noac A2 "a 9% drag left recents $(shell_state recents)"
+    fi
+
+    sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 1120 2000 >/dev/null 2>&1
+    sleep 3
+    samples=$(timeout 8 omarchy-shell recents dragTrace 2>/dev/null | wc -w)
+    if [[ $(shell_state recents) == "open" ]] && (( samples >= 8 )); then
+      okac A1/A3 "the recents band opens the carousel ($samples samples)"
+    else
+      noac A1/A3 "the recents drag left $samples samples and state $(shell_state recents)" \
+                 "under 8 means it jumped to open rather than following the drag"
+    fi
+
+    # A5 is the correction this whole rewrite exists for: the strip must never
+    # bring the drawer up, in any state.
+    if [[ $(shell_state drawer) == "closed" ]]; then
+      okac A5 "the strip did not open the drawer"
+    else
+      noac A5 "an up-swipe from the strip opened the drawer" \
+              "the strip is recents-then-home only; the drawer is a home-screen gesture"
+    fi
+
+    # --- E. the carousel ---------------------------------------------------
+    before=$(cards)
+    sudo -n "$touch_bin" swipe 360 704 360 300 400 >/dev/null 2>&1
+    sleep 3
+    after=$(cards)
+    if (( after == before - 1 )); then
+      okac E3 "flicking a card up closes that app ($before -> $after)"
+    else
+      noac E3 "the card count went $before -> $after" \
+              "expected one fewer; a horizontal steal by the pager leaves it unchanged"
+    fi
+
+    sudo -n "$touch_bin" tap 360 704 >/dev/null 2>&1
+    sleep 3
+    if [[ $(shell_state recents) == "closed" ]] && [[ -n $(ws_rep) ]]; then
+      okac E2 "tapping a card focuses that app"
+    else
+      noac E2 "recents is $(shell_state recents), workspace holds '$(ws_rep)'"
+    fi
+
+    # --- A4/F. home --------------------------------------------------------
+    timeout 8 omarchy-shell recents close >/dev/null 2>&1; sleep 2
+    before=$(cards)
+    sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 860 2000 >/dev/null 2>&1
+    sleep 3
+    if [[ -z $(ws_rep) ]] && [[ $(shell_state recents) == "closed" ]]; then
+      okac A4 "the home band lands on a blank workspace"
+    else
+      noac A4 "the home drag left workspace $(ws) holding '$(ws_rep)'"
+    fi
+    if (( $(cards) == before )); then
+      okac F2 "going home closed nothing ($before apps still open)"
+    else
+      noac F2 "the app count changed going home: $before -> $(cards)"
+    fi
+
+    # --- D. the home screen ------------------------------------------------
+    # The drag that used to be tested on the strip. It has to work here now,
+    # and only here. Panel y 700 is the middle of the wallpaper.
+    sudo -n "$touch_bin" swipe 360 700 360 200 2000 >/dev/null 2>&1
+    sleep 3
+    samples=$(timeout 8 omarchy-shell drawer dragTrace 2>/dev/null | wc -w)
+    if [[ $(shell_state drawer) == "open" ]] && (( samples >= 8 )); then
+      okac D1 "dragging up on the workspace opens the drawer ($samples samples)"
+    else
+      noac D1 "the workspace drag left $samples samples and state $(shell_state drawer)" \
+              "the drawer is opened by dragging the home screen itself, not the strip"
+    fi
+
+    # --- A7. the strip clears what is covering the screen ------------------
+    # The drawer is up from D1. An up-flick from the strip has to put it away
+    # -- and, with A5, must never be able to bring it back.
+    sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 1160 600 >/dev/null 2>&1
+    sleep 3
+    if [[ $(shell_state drawer) == "closed" ]]; then
+      okac A7 "an up-flick from the strip puts the drawer away"
+    else
+      noac A7 "the drawer is $(shell_state drawer) after an up-flick"
+    fi
+    # Put it back for the G3 check below.
+    sudo -n "$touch_bin" swipe 360 700 360 200 2000 >/dev/null 2>&1
+    sleep 3
+
+    # --- G. back -----------------------------------------------------------
+    # With the drawer up, back closes the overlay and leaves the apps alone.
+    before=$(cards)
+    sudo -n "$touch_bin" swipe 4 700 200 700 300 >/dev/null 2>&1
+    sleep 3
+    if [[ $(shell_state drawer) == "closed" ]] && (( $(cards) == before )); then
+      okac G3 "back closes the overlay and leaves the apps alone"
+    else
+      noac G3 "drawer is $(shell_state drawer), apps went $before -> $(cards)"
+    fi
+
+    # G2 before G4, because back is a priority order and the keyboard outranks
+    # the app. Forced rather than observed: whether foot has raised squeekboard
+    # is not something this suite should be at the mercy of, and an unforced
+    # run of this check is what made G4 look broken when it was obeying G2.
+    osk() { busctl --user call sm.puri.OSK0 /sm/puri/OSK0 sm.puri.OSK0 SetVisible b "$1" >/dev/null 2>&1; }
+    osk_visible() { busctl --user get-property sm.puri.OSK0 /sm/puri/OSK0 sm.puri.OSK0 Visible 2>/dev/null; }
+
+    swaymsg '[app_id=moa-selftest] focus' >/dev/null 2>&1
+    sleep 2
+    osk true; sleep 2
+    before=$(cards)
+    if [[ $(osk_visible) == *true* ]]; then
+      sudo -n "$touch_bin" swipe 4 700 200 700 300 >/dev/null 2>&1
+      sleep 3
+      if [[ $(osk_visible) != *true* ]] && (( $(cards) == before )); then
+        okac G2 "back dismisses the keyboard and leaves the app open"
+      else
+        noac G2 "keyboard is $(osk_visible), apps went $before -> $(cards)" \
+                "the keyboard outranks the app; back must not close one to hide the other"
+      fi
+    else
+      no "the on-screen keyboard would not come up" "cannot test the back priority order without it"
+    fi
+
+    # And with nothing above it, back asks the app to close.
+    osk false; sleep 2
+    swaymsg '[app_id=moa-selftest] focus' >/dev/null 2>&1
+    sleep 2
+    before=$(cards)
+    sudo -n "$touch_bin" swipe 4 700 200 700 300 >/dev/null 2>&1
+    sleep 3
+    if (( $(cards) == before - 1 )); then
+      okac G4 "back closes the focused app ($before -> $(cards))"
+    else
+      noac G4 "the app count went $before -> $(cards)" \
+              "a left-edge swipe on an app has to close it"
+    fi
+
+    # A short drag from the edge must not.
+    osk false; sleep 1
+    swaymsg '[app_id=moa-selftest] focus' >/dev/null 2>&1
+    sleep 2
+    before=$(cards)
+    sudo -n "$touch_bin" swipe 4 700 30 700 300 >/dev/null 2>&1
+    sleep 3
+    if (( $(cards) == before )); then
+      okac G6 "brushing the edge closes nothing"
+    else
+      noac G6 "a 13-logical-px drag from the edge closed an app"
+    fi
+  fi
+  pkill -f "foot --app-id=moa-selftest" 2>/dev/null
+
+  # An AC with no check here is a gap, and a gap nobody can see is the same as
+  # a gap nobody fixed. These are the ones this suite does not prove:
+  #
+  #   A6      carousel open, drag up again -> home
+  #   A8      shade down, up-flick puts it away
+  #   A9      no apps open at all -> nothing. Needs every window on the device
+  #           closed, including the user's, so it is not run here.
+  #   B2      a curved thumb swipe still resolves
+  #   D2/D3   drawer springs back; a drag on an app does nothing
+  #   D4      sideways/down on the home screen do nothing
+  #   E1/E4   card order and paging -- both visual
+  #   E5/E6   dismiss returns you; last card goes home
+  #   E7/G5   absences, and a close-request that only a prompting app shows
+  #   F1      home picks the lowest free workspace
+  #   G7/G8/G9 constants, not behaviour
+  printf '  \033[90m%-4s\033[0m   \033[90mnot covered: A6 A8 A9 B2 D2 D3 D4 E1 E4 E5 E6 E7 F1 G5 G7 G8 G9\033[0m\n' ""
+fi
+
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 (( fail == 0 ))

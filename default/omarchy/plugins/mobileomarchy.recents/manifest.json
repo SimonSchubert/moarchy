@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "mobileomarchy.recents",
+  "name": "Recent apps",
+  "version": "1.0.0",
+  "author": "mobileomarchy",
+  "description": "Android-style carousel of open apps: tap a card to focus it, swipe it up to close it.",
+  "kinds": [
+    "overlay"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "Recents.qml"
+  }
+}

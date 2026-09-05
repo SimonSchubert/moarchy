@@ -1,8 +1,8 @@
 # mobileomarchy
 
 <p align="center">
-  <img src="docs/screenshots/home.png" width="45%" alt="The home screen: Omarchy's bar on top, the gesture drawer's home pill on the bottom edge">
-  <img src="docs/screenshots/papers.png" width="45%" alt="Papers showing a PDF, with the drawer reserving the bottom edge">
+  <img src="docs/screenshots/home.png" width="45%" alt="The home screen: Omarchy's bar on top, the home pill on the bottom edge">
+  <img src="docs/screenshots/papers.png" width="45%" alt="Papers showing a PDF, with the gesture strip reserving the bottom edge">
 </p>
 
 Omarchy's look, keybindings and theming on an original **PinePhone**, running on
@@ -90,6 +90,42 @@ Neither is portable to this device: herdr has no aarch64 build, and a Lua
 **v3.8.4 (`8fcc9d6`) is the last release built on waybar + walker + mako +
 swayosd**, all of which either ship for aarch64 or are Go programs we can build.
 Tracking 4.x is a separate porting project, not a version bump.
+
+## Touch gestures
+
+Sway's `bindgesture` only fires for touchpads, so the gestures are a Quickshell
+plugin that owns the bottom edge as a layer surface and reads the touch itself.
+Everything follows the finger rather than firing at a threshold.
+
+One drag up from the home pill has three stops, the way Android's does:
+
+```
+0 ---- 40% -------- 75% ---- 100%
+app    RECENTS       HOME
+```
+
+| Gesture | What it does |
+| --- | --- |
+| Swipe up, short | The recents carousel: every open app as a card |
+| Swipe up, further | Home — a workspace with nothing on it |
+| Swipe up **from home** | The app drawer |
+| Swipe left / right | Previous / next workspace, which is previous / next app |
+| Press and hold | Arms; release closes the focused window |
+| Tap a card | Focus that app |
+| Swipe a card up | Close that app |
+| Pull down from the status bar | The shade: quick settings, brightness, media |
+
+Which of the two overlays the up-drag reaches is decided by what is on screen:
+an occupied workspace gets recents, a blank one gets the drawer. So the drawer
+is one swipe from home and two from an app.
+
+Everything is reachable without a finger, which is how the selftest asserts it:
+
+```bash
+omarchy-shell recents list          # one line per open app
+omarchy-shell gestures swipe home
+mobileomarchy-selftest --gestures   # drives real synthetic touch via /dev/uinput
+```
 
 ## Layout
 

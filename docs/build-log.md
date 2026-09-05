@@ -364,6 +364,322 @@ is empty on a bare install), and a real log destination —
 `mobileomarchy-restart-shell` used to send the shell's stdout to `/dev/null`,
 which threw away the only diagnosis a failed bar plugin ever produces.
 
+## 6c. The bottom edge: recents, home, drawer
+
+The top edge was finished before the bottom one was. The shade pulls down and
+the drawer pulls up, but "pull up" was the only thing an upward swipe could
+ever mean: no way to see what was running, no way to reach an app except
+swiping sideways through workspaces one at a time, and no way to close one
+except a 500 ms hold that killed whatever happened to be focused.
+
+It is the Android arrangement now. One drag from the home pill, three stops:
+
+```
+0 ---- 40% -------- 75% ---- 100%   of a 0.45 x screen-height travel
+app    RECENTS       HOME
+```
+
+**Which two stops you get is decided on press, and that is the whole design.**
+An occupied workspace means the swipe is about the apps you already have open,
+so it drives the recents carousel and then home. A blank workspace means the
+swipe is about starting one, so it drives the drawer, exactly as it did before.
+The consequence is that the drawer is one swipe from home and two from an app
+-- and that a blank workspace is worth landing on, which is what makes home a
+destination rather than a gap between apps.
+
+Occupancy comes from `I3.focusedWorkspace.lastIpcObject.representation` being
+non-empty. That test is not new: `install/port-4x.sh` already patches it into
+the vendored Workspaces widget, because `I3Workspace` has no `toplevels` model
+-- that shape is Hyprland's, and reading it throws. Sway's raw IPC workspace
+carries a layout string instead, `V[foot]` or empty, and it is the only
+occupancy signal the protocol offers.
+
+**Home is a blank workspace, not a sixth surface.** One app per workspace
+already makes an unoccupied workspace the thing a home screen is: wallpaper,
+bar, home pill, nothing else. A real home layer would have cost another
+always-mapped surface and its bindings, permanently, to draw what was already
+there. Picking the target reuses the rule
+`bin/mobileomarchy-one-app-per-workspace` uses -- the lowest number with
+nothing on it -- so the sideways swipe order stays contiguous. `number` is the
+visible workspace number; `id` is an internal Sway handle, and dispatching
+against it switches somewhere else, silently.
+
+**Distance decides home; speed is only allowed to rescue a flick.** A fling
+past 0.6 logical px/ms can commit the recents band that a short fast swipe
+did not quite reach, because that is a gesture people make when they already
+know where they are going. It is deliberately *not* allowed to carry the drag
+past a stop the finger never reached. Velocity-triggered home would mean a
+quick swipe sometimes lands on the carousel and sometimes on the wallpaper
+depending on how hard you flicked, and the drawer would become unreachable by
+accident.
+
+**`ToplevelManager` is the find, and it is the first thing here that reads
+compositor state from QML without forking.** `zwlr-foreign-toplevel-management-v1`,
+which Sway implements, hands over `appId`, `title`, which window is active, a
+`closed()` signal, and the only two verbs a card needs: `activate()` and
+`close()`. Tapping a card is one `activate()` -- Sway focuses the window and
+switches to its workspace on its own, so there is no con_id to look up and no
+`get_tree` walk. Everything else in this repo that wants compositor state
+shells out to `swaymsg`; while `Quickshell.I3` was imported for the occupancy
+test anyway, the workspace switches went the same way, which takes a fork off
+the most common gesture on the phone.
+
+**Cards are icons, not thumbnails, and there are two independent reasons.**
+Quickshell 0.3.1's `ScreencopyView.captureSource` takes a `ShellScreen` --
+through `wlr-screencopy`, which is what grim uses -- or a `Toplevel`. The
+toplevel path is wired only to `hyprland-toplevel-export-v1`, which Sway does
+not implement, so there is no per-window capture to be had at all. And even
+given the protocol there would be nothing to capture: Sway does not render a
+workspace that is not visible, so the one frame a recents card wants is the one
+frame nobody is drawing. Android solves that by snapshotting each app as it is
+backgrounded, which here would mean N 720x1440 textures resident inside this
+budget on a Mali-400 -- the same cost that stopped the theme picker using each
+theme's `preview.png`.
+
+**Three things about the carousel that were wrong in a way nothing reported.**
+
+- **A pitch-wide delegate, not view margins.** The obvious way to centre the
+  first and last cards is `leftMargin`/`rightMargin` on the ListView. That
+  fights `StrictlyEnforceRange`: the margins and the highlight range each want
+  to decide `contentX`, and the view settles with one card filling the screen
+  and its neighbours pushed out of sight -- no warning, no binding loop, just a
+  carousel that looks like a single card. Making the delegate one *pitch* wide
+  -- card plus its gap, with the card centred inside it -- and the highlight
+  range the same width gives exactly one position per card, and the next app
+  peeks in at the edge again. That peek is the only thing that says the row can
+  be paged at all.
+- **A correct card can still be invisible.** Painted flat at
+  `Color.menu.background` the cards were exactly right and could not be seen:
+  the scrim is that same background colour over a dark app, so an unfocused
+  card matched its surroundings to the byte. Sampling settled it -- the
+  neighbour at (660,700) read `#111c18` and so did the empty space next to it,
+  which is not a card that failed to draw, it is a card with nowhere to stand
+  out against. Cards are a tinted surface with an edge on every one now, accent
+  and heavier on the active one. This is the second time here that reading
+  pixels rather than looking at the screenshot is what found the bug.
+- **Dismiss is vertical, paging is horizontal, and that is why both work.**
+  The delegate's `MouseArea` drags on `Drag.YAxis` with `preventStealing`
+  false, so the enclosing Flickable takes a horizontal drag once it passes its
+  own threshold and a vertical one stays on the card. The shade rejected
+  swipe-to-dismiss for its notifications for the opposite reason: there both
+  gestures wanted the same axis as the scroll. A `DragHandler` is still no use
+  -- over a sheet of delegates it gets one translation event for a whole
+  gesture, because the delegates' MouseAreas hold the exclusive grab.
+
+**The carousel takes the whole output, and the drawer must not.** The drawer
+is on Top with a zero exclusive zone, which means it is *arranged into*
+whatever the exclusive surfaces left -- and that is the feature: its search
+field needs squeekboard, so the grid reflowing above the keyboard is the point.
+Copying that for the carousel put it in the top two thirds of the screen
+whenever the app behind happened to have a text field focused, with "Clear all"
+pushed under the keyboard and untappable. Nothing was wrong in the
+arrangement; it was the right arrangement applied to the wrong kind of surface.
+`ExclusionMode.Ignore` takes the whole output, the way the shade does, and the
+keyboard is simply behind it. It needs none of the shade's mask to keep the
+home pill live either: the gesture strip is on Overlay, every Overlay surface
+sits above every Top one, and so the pill stays touchable over the carousel
+with no geometry at all -- which is what lets one drag carry on past the
+recents stop into the home band.
+
+Related, and only visible once the surface was full-height: the scrim has to
+reach **fully opaque** at the top of the drag. Half-open, seeing the app
+through it is what says the sheet is still moving. Fully open it is a switcher,
+and anything showing through is noise -- with a text field focused behind, that
+noise is an entire on-screen keyboard ghosting under the cards.
+
+**The carousel never takes keyboard focus, and that is a decision.** The
+drawer needs `Exclusive` for its search field and pays for it: gating
+`keyboardFocus` on `opened` there dropped interactivity on the first frame of a
+close drag, Sway handed focus back to a window, and the focus change cancelled
+the touch the surface was still holding. A carousel has no text input, so
+`None` sidesteps that whole class of bug rather than working around it. Touch
+reaches a layer surface either way.
+
+**Two things that cost an hour and were not the code.**
+
+- **`sudo` resets PATH.** `sudo -n mobileomarchy-touch swipe ...` is
+  `command not found`, and with the output redirected it is a swipe that
+  silently does not happen. Every band read as "the gesture does nothing"
+  while the plugin was never sent a single touch event. The selftest had this
+  right all along -- it invokes the injector by absolute path.
+- **A blanked screen disables touch.** `mobileomarchy-screen` turns the touch
+  input off with the panel, so after an idle timeout synthetic swipes land
+  nowhere, `grim` blocks with no frames to capture, and IPC calls time out
+  behind a busy compositor. It looks precisely like a deadlocked shell. What
+  distinguishes them is that a deadlock does not have a load average of 0.24:
+  `swaymsg -t get_outputs` reporting `power: false` is the one-line answer, and
+  powering the output back on is not enough -- the input has to be re-enabled
+  too, which is why `mobileomarchy-screen on` exists and `swaymsg output * power
+  on` is not a substitute.
+
+**`mobileomarchy-restart-shell` needed `WAYLAND_DISPLAY`.** It already derives
+`SWAYSOCK` so a restart from an ssh session works; without `WAYLAND_DISPLAY` Qt
+falls through to the xcb platform plugin, fails to reach a display, and aborts
+before reading a line of QML -- `FATAL: no Qt platform plugin could be
+initialized`, which reads like a broken shell rather than a missing variable and
+leaves the phone with no bar until someone restarts it from a terminal on the
+device.
+
+**An empty IPC answer is not a "no".** The escape-hatch check failed one run in
+three, on a result it had actually got right: right after a full-screen surface
+maps on this GPU the shell can be busy for long enough that `omarchy-shell`
+gives up and prints nothing, and `"" == "closed"` is false. Driven by hand the
+same gesture passed three times out of three, with the trace showing the
+carousel lifting to 23% and springing back exactly as designed. Every state
+read in the gesture suite retries now. A check that reports a transient as a
+failure costs more than the bug it was looking for -- it teaches you to ignore
+it.
+
+**Measured: 315 MB RSS with all six plugins loaded and nothing opened yet,
+351 MB after a session of driving every one of them, against 1118 MB
+available.** Not a comparison with 6b's 361 MB -- that was measured after use,
+and these two are the ends of the same range. The point is only that the sixth
+plugin does not move it: the carousel holds one decoded icon per open window
+and no textures. The selftest
+covers all three stops with synthetic touch, and three consecutive clean runs:
+55 samples opening the carousel, a card count that drops when a card is flicked
+away, a focused workspace whose `representation` is empty after the home band,
+and the drawer still tracking the finger at 47-49 samples -- from a blank
+workspace, which is now the only place the strip can reach it from.
+
+## 6d. Rebuilding the bottom edge against a written spec
+
+6c described a bottom edge that passed 37/37 and was wrong. The drawer opened
+from the nav strip, which is not where Android puts it, and it opened there
+*most of the time* rather than only when it should have. Both of those are one
+mistake, and the tests could not have caught it: they had been written to match
+the code, so green only ever confirmed the inference that produced the code.
+
+So the spec came first this time. `docs/gestures.md` is 34 numbered acceptance
+criteria, each with the command that decides it, agreed before a line of QML
+changed; the checks in `--gestures` name the ids they prove and the suite ends
+by printing the ids it does not. That last part matters more than it sounds: a
+gap nobody can see is the same as a gap nobody fixed.
+
+**The bug and the redesign were the same fix.** The strip chose between the
+carousel and the drawer by asking whether the focused workspace was empty,
+through `I3.focusedWorkspace.lastIpcObject.representation`. That value is
+refreshed on *workspace* events, so a workspace that was empty when it was
+created and later received a window still reads empty -- which is "most of the
+time". Moving the drawer onto the home screen deletes the question rather than
+fixing the answer, and nothing in the gesture plugin asks about workspace
+occupancy any more.
+
+**Layer order replaced the predicate.** The home-screen surface is full-screen
+on the **Bottom** layer: above the wallpaper, below every window. On a blank
+workspace it receives the touch; on an occupied one the app is over it and it
+receives nothing. No test, no staleness, and nothing to get wrong -- and
+because it can never intercept what an app would have received, a bug in it
+cannot make the touchscreen unusable. `gaps outer 0` is what makes this exact
+rather than approximate: a lone window reaches the screen edge, so there is no
+border for it to catch a stray swipe in.
+
+**The back gesture is the one place that does steal input from apps.** It has
+to sit above windows to work, so it is 16px on Overlay and, like the strip, it
+never grows -- the worst a bug there can do is cost 16px down one side. Looking
+at how Android does it was worth more for what it *cannot* lend us than for its
+numbers: Android has the same tap-swallowing problem and solves it with
+`setSystemGestureExclusionRects`, letting an app carve regions back out, capped
+at 200dp per edge -- a limit sized explicitly as four 48dp touch targets. There
+is no Wayland equivalent. So this edge is strictly more expensive here than on
+Android, with no mitigation available to apps, and the fix if it bites is to
+narrow it or drop it rather than to go looking for an API that does not exist.
+Android also declines to publish a fixed inset at all: it is device-configurable,
+user-adjustable, and queryable by apps. Three admissions that no one number is
+right, so ours is a property rather than a constant in a binding.
+
+**`ToplevelManager.activeToplevel` reads null with a window plainly focused.**
+The back gesture found nothing and closed nothing while `toplevels` was
+populated the whole time. The per-toplevel `activated` flag does track focus --
+it is what puts the accent border on the right card -- so both the back gesture
+and the carousel's ordering now prefer the singleton and fall back to the flag
+that works. Worth noticing that the carousel had been leaning on the same
+broken property for its "most recent first" ordering and looked fine, because
+creation order happened to agree.
+
+**Two hours went to environment, not code.** `sudo` resets PATH, so
+`sudo mobileomarchy-touch ...` is `command not found` -- and with output
+redirected, a swipe that silently never happens. Every band read as "the
+gesture does nothing" while the plugin was never sent one touch event. Then
+`foot` would not map, because an ssh session has no `WAYLAND_DISPLAY`, and the
+shell reported `focus=none` -- which reads exactly like a broken plugin rather
+than a missing variable. Both are fixed at the source now: `--gestures` derives
+`WAYLAND_DISPLAY` the way `mobileomarchy-restart-shell` already derives
+`SWAYSOCK`, and both invoke the injector by absolute path.
+
+**A test that assumes state it could control is not a test.** G4 -- "back
+closes the focused app" -- failed while the code was correct: `foot` had raised
+squeekboard, and back is a priority order in which the keyboard outranks the
+app, so it correctly dismissed the keyboard instead. The check now forces the
+keyboard up, asserts back puts it down without closing anything (G2), forces it
+down, and only then asserts the app closes (G4). Chasing that failure is what
+produced the G2 check, which had not existed at all.
+
+**16 checks over 14 ACs, three consecutive clean runs**, and seventeen ids
+printed as uncovered. Two of those are worth naming: A9 needs every window on
+the device closed, including the user's, so it is deliberately not run; and E5,
+E6 and E1 are visual enough that a state dump would not prove them.
+
+## 6e. Dragging the sheets shut
+
+Two overlays could only be closed by a 26px band at the top of their own sheet.
+Dragging on the body did nothing, and that was never a decision -- it was where
+build-log 6b's investigation stopped once it had *a* working handle. The spec
+had no ACs for it either, which is how a gap survives being written down.
+
+**The same three-line pattern unlocked both, and it is the carousel's.** Every
+tile and every app icon is a `MouseArea`, and a `MouseArea` holds the exclusive
+grab for the whole gesture -- which is why 6b found a sheet-wide `DragHandler`
+receiving exactly one event, and why an area placed *behind* the content never
+sees a thing. So the controls do both jobs: a touch that never travels
+activates, one past the slop drags the sheet shut.
+
+**Scene coordinates, not local ones, and this is not a style preference.**
+Every one of those MouseAreas is a child of the sheet, and the sheet is the
+thing being moved. A delta measured in a frame that travels with the item it is
+driving feeds back into itself. `mapToItem(null, ...)` is stationary, so a
+finger that stops moving produces a delta that stops changing.
+
+**`released` fires before `clicked`, and that cost an app launch.** The flag
+saying "this was a drag, not a tap" was being cleared in the release handler,
+so it was already false when the click arrived and the delegate launched
+whatever the drag happened to start on. The symptom read as a *threshold* bug
+-- a short drag that "closed" the drawer -- because launching an app dismisses
+the drawer on the way out. The flag is cleared on the next press now.
+
+**A `Flickable` swallows the press whether or not it has anything there.** Both
+sheets stretched their list to fill: the drawer's `GridView` and the shade's
+notification `ListView` each covered the empty sheet below their last row and
+ate every drag that started in it. Capping each to `contentHeight` hands that
+space back to the sheet, and gating `interactive` on overflow gives H5 for
+free: while the list can scroll it owns vertical drags, and closing the shade
+out from under someone reading their notifications is exactly the conflict this
+gesture is not allowed to create.
+
+**The brightness and volume sliders had to hand the gesture over rather than
+share it.** They commit on *press* -- tap-to-set, which is right on a phone --
+so by the time it is known whether the finger is going sideways or up, the
+value has already moved. They now watch for a vertical drag, hand it to the
+sheet, and put the value back, which for the live one means undoing a commit it
+has already sent.
+
+**Two edges had to be masked out of the shade.** It is on Overlay and maps when
+it opens, so it lands *above* the always-mapped back-edge surface and swallowed
+every left-edge swipe: back closed the drawer and the carousel and left the
+shade untouched, because those two are on Top and this one is not. Its open
+region already excluded the home pill's band along the bottom for the same
+reason; it excludes the back edge down the left now too. A masked-out band
+falls through to the next surface in the layer, which is the whole mechanism.
+
+**Distance alone cannot commit a drag that starts near the far end.** Begin a
+close 150px from the top of the shade and there is not 25% of the sheet left
+above to travel through -- the gesture is unambiguous and the threshold is
+unreachable. Speed settles those, the way it already did for the strip and the
+grab band. Measured after: the shade closes from anywhere below the sliders on
+a slow drag and from anywhere at all on a flick; the drawer closes on a long
+drag from the search row, an icon, or empty sheet, and on a 90px flick; and a
+60px slow drag on either still springs back.
+
 ## 7. Hardware status
 
 | | |
