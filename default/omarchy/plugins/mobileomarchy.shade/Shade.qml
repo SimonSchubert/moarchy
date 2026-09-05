@@ -707,13 +707,30 @@ Item {
     radius: width / 2
     color: root.container
 
+    // Filled and aligned, not centred as a shrink-wrapped item.
+    //
+    // `anchors.centerIn` sizes the Text to the glyph and then centres that
+    // item, which puts its origin at a fractional position -- (36 - 13.39) / 2
+    // -- and the glyph lands a pixel or so off. Measured on the gear and the
+    // power icon, the ink sat 1.5 device pixels left of the circle's centre in
+    // both: small, and on a 72px circle with nothing else to line up against,
+    // plainly visible.
+    //
+    // Filling the button and letting Text align inside it keeps the item on
+    // integer coordinates and hands the centring to the font's own metrics.
+    // (TextMetrics was tried first and reported the ink as already centred
+    // *within the item* -- which is what pointed at the item's placement
+    // rather than the glyph's bearings.)
     Text {
-      anchors.centerIn: parent
+      anchors.fill: parent
+      horizontalAlignment: Text.AlignHCenter
+      verticalAlignment: Text.AlignVCenter
       text: rb.glyph
       font.family: Style.font.family
       font.pixelSize: Style.font.icon
       color: root.textOnSurface
     }
+
     MouseArea {
       anchors.fill: parent
       onPressed: mouse => root.sheetPress(this, mouse)

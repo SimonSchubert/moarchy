@@ -359,7 +359,12 @@ if [[ ${1:-} == "--gestures" ]]; then
   elif ! sudo -n true 2>/dev/null; then
     no "passwordless sudo is unavailable" "/dev/uinput is root-only, so touch cannot be synthesised"
   else
+    # Powering the panel back on is not enough: mobileomarchy-screen turns the
+    # touch input off with it, so after an idle blank every synthetic swipe
+    # lands nowhere and the whole suite fails for a reason that has nothing to
+    # do with gestures.
     swaymsg "output * power on" >/dev/null 2>&1
+    swaymsg "input type:touch events enabled" >/dev/null 2>&1
     for _ in 1 2; do
       setsid foot --app-id=moa-selftest -e sh -c 'while :; do sleep 300; done' >/dev/null 2>&1 </dev/null &
       sleep 4

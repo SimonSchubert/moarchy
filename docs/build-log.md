@@ -680,6 +680,55 @@ a slow drag and from anywhere at all on a flick; the drawer closes on a long
 drag from the search row, an icon, or empty sheet, and on a 90px flick; and a
 60px slow drag on either still springs back.
 
+## 6f. Three defects the first pass shipped
+
+Found after the gesture work was committed, all three by looking at the shell
+log *after* exercising the phone rather than after starting it. Nothing logs at
+startup; these only speak once a finger moves.
+
+**`var` is function-scoped, so a declaration inside an `if` is hoisted and
+undefined.** `var now = Date.now()` sat inside the latched branch of
+`onUpdated`, and `root.lastT = now` at the bottom ran on every touch move --
+including the un-latched ones, where `now` had never been assigned. QML rejects
+`undefined` for a double and logs it, so `lastT` silently kept a stale value and
+the first latched frame measured its velocity over the wrong interval. Same
+shape in two handlers, because the second was written from the first.
+
+**`representation` went stale in the one place it was left.** `firstFreeWorkspace()`
+asked each workspace whether its layout string was empty -- the same field, and
+the same staleness, that made the strip open the drawer when it should have
+opened the carousel: it changes on *window* events while I3 refreshes
+workspaces on *workspace* events. Home switched onto an occupied workspace, and
+the check named the bug for itself:
+`the home drag left workspace 2 holding 'V[moa-selftest]'`. Existence does not
+go stale the same way -- Sway destroys an empty workspace as soon as it loses
+focus -- so it picks the lowest number the list does not contain, and asks
+nothing about contents. The lesson is narrower than "do not use
+representation": a value refreshed on one class of event cannot answer a
+question about another.
+
+Also here: home from home used to hop to a *different* empty workspace. There
+is a reliable emptiness test after all, just not that one -- no toplevel is
+`activated` while focus is on an empty workspace, which is the same property
+the back gesture had to fall back to when `activeToplevel` read null.
+
+**Powering the panel on does not turn touch back on.** `mobileomarchy-screen`
+disables the touch input with the display, so after an idle blank every
+synthetic swipe lands nowhere and the suite fails wholesale for a reason that
+has nothing to do with gestures. It cost an hour once already; the suite
+enables the input explicitly now.
+
+**And one piece of polish.** The shade's gear and power glyphs sat 1.5 device
+pixels left of their circles. `anchors.centerIn` shrink-wraps the Text to the
+glyph and then centres *that*, which lands the item on a fractional x --
+(36 - 13.39) / 2 -- and the ink with it. Filling the button and letting Text
+align inside keeps the item on integer coordinates. TextMetrics was tried
+first and is what ruled out the obvious suspect: it reported the ink as already
+centred *within the item*, which pointed at the item's placement rather than
+the font's bearings. Measured after: the gear moved from -1.5 to +0.5 device
+pixels, the power glyph stayed at -1.5 because its ink genuinely overhangs its
+cell to the left, and at that size both read as centred.
+
 ## 7. Hardware status
 
 | | |

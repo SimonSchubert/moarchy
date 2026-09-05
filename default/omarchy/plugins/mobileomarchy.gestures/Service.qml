@@ -190,31 +190,31 @@ Item {
     return null
   }
 
-  // F1. The lowest-numbered workspace with nothing on it -- the same rule
-  // bin/mobileomarchy-one-app-per-workspace uses to pick a slot, which is what
-  // keeps the sideways swipe order contiguous. Sway destroys an empty
-  // workspace as soon as it loses focus, so a number missing from
-  // I3.workspaces is free rather than unknown.
+  // F1. The lowest workspace number Sway does not currently have.
+  //
+  // This used to ask each workspace whether its `representation` was empty,
+  // and that was wrong for the same reason it was wrong when the strip used it
+  // to choose between the carousel and the drawer: `representation` changes on
+  // *window* events and I3 refreshes workspaces on *workspace* events, so a
+  // workspace that gained a window still reads empty. Home then switched
+  // straight onto an occupied workspace. It failed as
+  // `the home drag left workspace 2 holding 'V[moa-selftest]'`, which is the
+  // bug naming itself.
+  //
+  // Existence does not go stale the same way: Sway destroys an empty
+  // workspace as soon as it loses focus, so a number that is not in the list
+  // is one that has nothing on it. Same rule
+  // bin/mobileomarchy-one-app-per-workspace uses to pick a slot, and it keeps
+  // the sideways swipe order contiguous.
   //
   // `number` is the visible workspace number. `id` is an internal Sway handle,
   // and dispatching against it switches somewhere else, silently.
-  //
-  // NOTE this reads `representation` only to find an *empty* workspace to move
-  // to, never to decide what a gesture means. That distinction matters: the
-  // value is refreshed on workspace events, so it can lag a window opening --
-  // which is survivable when picking a destination and was not when it was
-  // deciding between the drawer and the carousel.
   function firstFreeWorkspace(): int {
-    var used = ({})
+    var taken = ({})
     var list = I3.workspaces ? I3.workspaces.values : []
-    for (var i = 0; i < list.length; i++) {
-      var ws = list[i]
-      if (!ws) continue
-      var ipc = ws.lastIpcObject
-      var rep = (ipc && typeof ipc.representation === "string") ? ipc.representation : ""
-      if (rep.length > 0) used[ws.number] = true
-    }
-    for (var n = 1; n <= 10; n++) if (!used[n]) return n
+    for (var i = 0; i < list.length; i++)
+      if (list[i]) taken[list[i].number] = true
+    for (var n = 1; n <= 10; n++) if (!taken[n]) return n
     return 10
   }
 
@@ -299,7 +299,14 @@ Item {
   function run(action: string): void {
     if (action === "next") root.dispatch("workspace next_on_output")
     else if (action === "prev") root.dispatch("workspace prev_on_output")
-    else if (action === "home") root.dispatch("workspace number " + root.firstFreeWorkspace())
+    else if (action === "home") {
+      // Already on a home screen: no toplevel is activated when focus is on an
+      // empty workspace, which makes this the one reliable "is this workspace
+      // empty" question available here. Without it, home from home would hop
+      // to a *different* empty workspace and churn the numbering for nothing.
+      if (root.focusedToplevel())
+        root.dispatch("workspace number " + root.firstFreeWorkspace())
+    }
     else if (action === "clear") {
       if (!root.shell) return
       if (root.isOpen("mobileomarchy.shade")) root.shell.hide("mobileomarchy.shade")
@@ -541,6 +548,13 @@ Item {
       onUpdated: pts => {
         if (pts.length === 0 || !root.tracking) return
         var y = pts[0].sceneY
+        // Declared here, not inside the latched branch below. `var` is
+        // function-scoped, so a declaration inside the `if` is hoisted but
+        // stays undefined until that branch runs -- and `root.lastT = now` at
+        // the bottom then assigns undefined to a double on every un-latched
+        // move. QML rejects it and logs, so lastT kept a stale value and the
+        // first latched frame measured its velocity over the wrong interval.
+        var now = Date.now()
         root.dx = pts[0].sceneX - root.startX
         root.dy = y - root.startY
 
@@ -552,7 +566,6 @@ Item {
           root.dragMode = root.pendingMode
 
         if (root.dragMode !== "none") {
-          var now = Date.now()
           var dt = Math.max(1, now - root.lastT)
           // Smoothed, so one jittery frame at the end of a slow drag cannot
           // read as a fling. Negative is upward, so the sign is flipped to
@@ -649,6 +662,7 @@ Item {
       onUpdated: pts => {
         if (pts.length === 0 || !root.tracking) return
         var y = pts[0].sceneY
+        var now = Date.now()
         root.dx = pts[0].sceneX - homeStartX
         root.dy = y - homeStartY
 
@@ -659,7 +673,6 @@ Item {
         }
 
         if (homeDragging) {
-          var now = Date.now()
           var dt = Math.max(1, now - root.lastT)
           root.velocity = root.velocity * 0.6 + ((root.lastY - y) / dt) * 0.4
           root.pull = root.dragStartPull - root.dy / root.pullTravel
