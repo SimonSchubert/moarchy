@@ -20,6 +20,9 @@ visible.
 | **reader** | The command a `switch` or `choice` page reads its state from. |
 | **bridged launch** | Running an upstream `omarchy-*` command unchanged, in a fullscreen TUI or the browser. |
 | **the shade** | The pull-down (`mobileomarchy.shade`), which owns the radios and sliders. |
+| **running** | Summoned and not yet closed. Settings stays running across any number of hides, and has a carousel card for exactly that span (`gestures.md` K1). |
+| **hidden** | Off screen but running. The strip's up-swipe hides; the page stack survives. |
+| **closed** | Not running. The card is gone and the stack is back at the root. |
 
 ## The screen tree
 
@@ -91,6 +94,13 @@ in afterwards; no `FileView` and no synchronous read runs inside it.
 where every reader has been made slow
 
 **A6** Closing and reopening lands on the root, never on the page last left.
+
+*Closing*, specifically — which since `gestures.md` K is not the only way to
+leave the screen. Being hidden and resumed from the carousel card keeps the
+page you were on (K5); it is closing that resets the stack, and the two ways to
+close are the card flick and the back gesture at the root (K6). Written when
+those were the same act, and the criterion is unchanged for the case it was
+written about.
 → `settings close; settings open; settings page` == `root`
 
 ## B. The page stack and back
@@ -105,9 +115,28 @@ where every reader has been made slow
 root is on top. It never closes the app underneath.
 → from depth 2: `settings page` moves up one and the open-window count is unchanged
 
-**B4** An up-swipe from the strip puts Settings away and does nothing else —
-`gestures.md` A8 applied to this surface.
-→ `settings state` == `closed`; open-window count unchanged
+**B4** An up-swipe from the strip treats Settings as the app it is: the carousel
+rises over it with the Settings card leading (`gestures.md` K3), and a drag
+carried on into the home band hides Settings and lands on a home screen (K4).
+Hidden, not closed — the card is still there to come back to, and the
+open-window count is still unchanged.
+→ `recents list`'s first line is `mobileomarchy.settings`; after the home band
+`settings state` == `closed`, that line is still in `recents list`, and the
+focused workspace's `representation` is empty
+
+This replaces a criterion that was only ever half true. It read "an up-swipe
+puts Settings away and does nothing else — A8 applied to this surface", and the
+code applied A8 to Settings in exactly one case: with no window open anywhere
+the strip had nothing to raise and fell through to clearing the topmost
+surface. With an app running, the same swipe raised the carousel *over*
+Settings and left it there, so the sheet was still up the moment the carousel
+was dismissed. The fix is not to clear Settings in both cases — it is that the
+two cases were disagreeing about whether Settings is an app, and K answers
+that.
+
+Hidden rather than closed is the half of this that is a decision rather than a
+repair. An up-swipe on an app hides it and leaves it in the carousel; doing
+anything else to Settings would make "treated as an app" stop at the card.
 
 **B5** The back gesture dismisses whichever overlay is topmost, including vendored
 ones. `HyprlandFocusGrab` is stubbed in this port, so no vendored popup dismisses
@@ -211,8 +240,11 @@ because `lastLaunch` records the wrapped form that actually ran
 focusing its prompt raises `sm.puri.OSK0`
 
 **E6** Launching a bridged row puts Settings away first, so the terminal is not
-covered by a layer surface.
-→ `settings state` == `closed` when the child process starts
+covered by a layer surface. It is put away *hidden*, so Settings and the
+terminal it launched are both cards and you can get back to the row you came
+from (`gestures.md` K12).
+→ `settings state` == `closed` when the child process starts, and
+`recents list` holds both `mobileomarchy.settings` and the terminal
 
 **E7** A bridged row that summons a vendored picker reaches it.
 → after `settings activate shell.plugins.enable`, `omarchy-shell shell listPlugins`

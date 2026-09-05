@@ -34,6 +34,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
+import qs.Ui as Ui
 import "Pages.js" as Pages
 import "Guards.js" as Guards
 
@@ -55,6 +56,13 @@ Item {
   readonly property string pluginId: "mobileomarchy.settings"
 
   property bool opened: false
+
+  // K1. Summoned and not yet closed, which is a longer life than `opened`:
+  // the strip's up-swipe, a bridged launch and handing off to the theme picker
+  // all put this surface away without ending it. The carousel keeps a card for
+  // exactly this span, and the page stack below survives it.
+  property bool running: false
+
   property string returnTo: ""
 
   // The page stack, root first. currentPage is its top.
@@ -130,6 +138,11 @@ Item {
   readonly property color subdued: root.readableOn(root.cardOpaque, Color.menu.text,
                                                    0.55, 4.5)
   readonly property color accent: Color.accent
+
+  // The same weight the bar runs at. Light text on a dark surface reads thinner
+  // than it measures; mobileomarchy.bar's textWeight carries the ink
+  // measurements behind DemiBold rather than Medium.
+  readonly property int textWeight: Font.DemiBold
 
   readonly property var pageDef: Pages.page(root.currentPage)
   readonly property string pageTitle: root.pageDef ? root.pageDef.title : "Settings"
@@ -271,23 +284,51 @@ Item {
 
     root.returnTo = ""
     var start = "root"
+    var resume = false
     try {
       var payload = JSON.parse(String(payloadJson || "{}"))
       if (payload.returnTo) root.returnTo = String(payload.returnTo)
       if (payload.page && Pages.exists(String(payload.page)))
         start = String(payload.page)
+      resume = payload.resume === true
     } catch (e) {
       // A malformed payload is not worth refusing to open over.
     }
 
-    root.stack = root.stackFor(start)
+    // K5. A resume is the carousel handing the screen back to a Settings that
+    // was hidden rather than closed, so it comes back on the page it left.
+    //
+    // `running` is read before it is set, and that ordering is the whole
+    // guard: after a close (K6) it is false, so a stale `{resume:true}` --
+    // from a card that outlived its screen, or a hand-typed IPC call --
+    // rebuilds the stack instead of resuming a page nobody is standing on.
+    // docs/settings.md A6 is untouched by this: reopening a *closed* Settings
+    // still lands on the root.
+    if (!resume || !root.running) root.stack = root.stackFor(start)
     root.confirmText = ""
+    root.running = true
     root.opened = true
     // Deferred, always. See note 1 in the header.
     Qt.callLater(root.refresh)
   }
 
+  // Hidden, not closed. Every hide in this shell lands here -- shell.hide()
+  // calls it -- so `running` deliberately survives: the card stays in the
+  // carousel and the stack stays standing for K5 to resume.
   function close() { root.opened = false }
+
+  // K6. Closed for good: the card leaves the carousel and the next opening is
+  // a fresh one at the root. Exactly two gestures reach this -- flicking the
+  // card away (E3) and back on the root page (B3) -- and nothing else may, or
+  // a screen that was merely put away comes back having forgotten where it
+  // was.
+  function quit(): void {
+    root.running = false
+    root.stack = ["root"]
+    root.confirmText = ""
+    root.confirmRow = null
+    root.hideOnly()
+  }
 
   // Put the surface away without going anywhere. Handing off to another plugin
   // and launching a command both need this: dismiss() would additionally summon
@@ -298,10 +339,13 @@ Item {
     else root.close()
   }
 
+  // Every caller of this means *close*: the header chevron and Escape on the
+  // root page, and the two IPC verbs that spell it. K6, so it quits rather
+  // than hiding -- the gestures that hide go through shell.hide() instead.
   function dismiss() {
     var back = root.returnTo
     root.returnTo = ""
-    root.hideOnly()
+    root.quit()
     if (back && root.shell && typeof root.shell.summon === "function")
       root.shell.summon(back, "{}")
   }
@@ -513,6 +557,23 @@ Item {
 
     function state(): string { return root.opened ? "open" : "closed" }
 
+    // K1/K6. `state` answers whether the surface is on screen, which stopped
+    // being the same question once a hidden Settings kept its card. Both
+    // verbs below are here so a test can tell the two apart without reading
+    // the carousel's list and inferring.
+    function running(): string { return root.running ? "running" : "stopped" }
+
+    // Hide without closing -- what the strip's up-swipe does (K4), reachable
+    // without a finger. `close` remains the one that quits.
+    function hide(): string { root.hideOnly(); return "ok" }
+
+    // K5. What tapping the card does: come back on the page it was hidden on.
+    function resume(): string {
+      if (root.shell)
+        root.shell.summon(root.pluginId, JSON.stringify({ resume: true }))
+      return "ok"
+    }
+
     // Quickshell's typed IPC has no optional arguments -- a declared parameter
     // is required -- so the no-argument and one-argument forms are separate
     // functions rather than one with a default.
@@ -722,11 +783,16 @@ Item {
             radius: width / 2
             color: root.container
 
-            Text {
-              anchors.centerIn: parent
-              text: "󰅁"
-              font.family: Style.font.family
-              font.pixelSize: Style.font.icon
+            // fa-angle-left, and centred on its ink rather than on its advance
+            // -- both for the same reason the row chevron is. `anchors.centerIn`
+            // centres the box the font reserves, and a Nerd Font glyph is rarely
+            // centred inside that box; measured on this circle the gear in the
+            // shade's matching button sat 4 device pixels right of centre.
+            Ui.OpticalGlyph {
+              anchors.fill: parent
+              text: ""
+              fontFamily: Style.font.family
+              fontSize: Style.font.icon
               color: root.textOnSurface
             }
             MouseArea {
@@ -743,6 +809,7 @@ Item {
             text: root.pageTitle
             font.family: Style.font.family
             font.pixelSize: Style.font.heading
+            font.weight: root.textWeight
             color: root.textOnSurface
             elide: Text.ElideRight
           }
@@ -808,6 +875,7 @@ Item {
               wrapMode: Text.WordWrap
               font.family: Style.font.family
               font.pixelSize: Style.font.body
+              font.weight: root.textWeight
               color: root.textOnSurface
             }
 
@@ -822,6 +890,7 @@ Item {
                 Text {
                   anchors.centerIn: parent; text: "Cancel"
                   font.family: Style.font.family; font.pixelSize: Style.font.body
+                  font.weight: root.textWeight
                   color: root.textOnSurface
                 }
                 MouseArea {
@@ -837,6 +906,7 @@ Item {
                 Text {
                   anchors.centerIn: parent; text: "Continue"
                   font.family: Style.font.family; font.pixelSize: Style.font.body
+                  font.weight: root.textWeight
                   color: root.surface
                 }
                 MouseArea {
