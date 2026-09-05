@@ -268,9 +268,11 @@ list layer surfaces, so this cannot be read from the compositor.
 
 `mobileomarchy.device` is the control, and is deliberately left unchanged for
 that purpose: same layer, same zero zone, no margin. An absolute assertion
-against the workspace rect would not do -- the rect carries a `gaps inner` inset
-that layer-surface arrangement does not, so it would fail on arithmetic rather
-than on behaviour.
+against the workspace rect would not do -- the rect has the bar's and the
+strip's exclusive zones taken out of it and an `ExclusionMode.Ignore` surface
+does not, so it would fail on arithmetic rather than on behaviour. (It carried a
+`gaps inner 3` inset too, until docs/windows.md W1 took the gaps to zero; the
+exclusive zones are still there and the argument is unchanged.)
 
 **I3** Extending a surface reserves nothing. The strip still takes its band off
 every window and the bar still takes its own off the top, with any sheet open.

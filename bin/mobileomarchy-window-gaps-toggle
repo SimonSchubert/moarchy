@@ -1,14 +1,28 @@
 #!/bin/bash
-# Toggle gaps on/off. Sway counterpart to omarchy-hyprland-window-gaps-toggle.
-STATE="${XDG_STATE_HOME:-$HOME/.local/state}/mobileomarchy/gaps-off"
+# Toggle gaps on, and off again. Sway counterpart to
+# omarchy-hyprland-window-gaps-toggle, inverted.
+#
+# Upstream's first press *removes* gaps, because a desktop has them. This phone
+# does not: default/sway/pinephone.conf sets `gaps inner 0` so an app is flush
+# to its workspace (docs/windows.md W1). Against that default the desktop
+# script's first press was a no-op and its second press added padding to a
+# phone, which is exactly backwards. So the state file says "on", and the first
+# press is what puts gaps there -- for the rare split where seeing the boundary
+# is worth 6px. See docs/windows.md W4.
+STATE="${XDG_STATE_HOME:-$HOME/.local/state}/mobileomarchy/gaps-on"
 mkdir -p "$(dirname "$STATE")"
+
+# The name this script used before the inversion. Left over from a session that
+# ran the old version, it means nothing now, and leaving it would make the next
+# reader think there are two states to reconcile.
+rm -f "$(dirname "$STATE")/gaps-off"
 
 if [[ -f $STATE ]]; then
   rm -f "$STATE"
-  swaymsg gaps inner all set 3
+  swaymsg gaps inner all set 0
   swaymsg gaps outer all set 0
 else
   touch "$STATE"
-  swaymsg gaps inner all set 0
+  swaymsg gaps inner all set 3
   swaymsg gaps outer all set 0
 fi

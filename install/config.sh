@@ -200,7 +200,7 @@ if bar.get("id") != "mobileomarchy.bar":
 plugins = d.setdefault("plugins", [])
 for pid in ("mobileomarchy.gestures", "mobileomarchy.drawer", "mobileomarchy.recents",
             "mobileomarchy.shade", "mobileomarchy.themes", "mobileomarchy.settings",
-            "mobileomarchy.device"):
+            "mobileomarchy.device", "mobileomarchy.splash"):
     if not os.path.isdir(os.path.expanduser("~/.config/omarchy/plugins/" + pid)):
         continue
     if not any(isinstance(e, dict) and e.get("id") == pid for e in plugins):

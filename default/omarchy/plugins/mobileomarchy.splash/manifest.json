@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "mobileomarchy.splash",
+  "name": "Launch splash",
+  "version": "1.0.0",
+  "author": "mobileomarchy",
+  "description": "The launching app's icon on the wallpaper, from the tap until its window appears.",
+  "kinds": [
+    "panel"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "panel": "Splash.qml"
+  }
+}

@@ -12,7 +12,7 @@
 # Read-only apart from hiding the on-screen keyboard, which the checks need in a
 # known state and which the next text field will undo.
 #
-# Two opt-in suites take a flag, because each needs more than a read:
+# Four opt-in suites take a flag, because each needs more than a read:
 #
 #   --gestures   drives real touch through /dev/uinput. Needs root and
 #                python-evdev, and closes a window at the end.
@@ -21,6 +21,10 @@
 #   --surfaces   checks what the gesture strip is drawn over, against
 #                docs/gestures.md I. Opens every overlay in turn and takes one
 #                grim capture per sheet; I5 also needs the touch injector.
+#   --windows    the window area and the launch splash, against docs/windows.md.
+#                Opens a terminal and an app and closes both again, and turns
+#                gaps on for a second. Takes about a minute: L6 is a 15s
+#                timeout that has to be waited out.
 
 set -uo pipefail
 
@@ -283,7 +287,7 @@ else
   if (( top >= 20 && top <= 40 )); then
     ok "the bar reserves ${top}px at the top"
   else
-    no "the bar reserves ${top}px at the top" "expected roughly 29"
+    no "the bar reserves ${top}px at the top" "expected roughly 26"
   fi
   if (( bottom >= 15 && bottom <= 32 )); then
     ok "the drawer reserves ${bottom}px at the bottom"
@@ -1051,9 +1055,11 @@ print(r["x"], r["y"], r["width"], r["height"])'
   # zone, no margin. The difference between its height and a sheet's is the
   # margin and nothing else.
   #
-  # Deliberately NOT asserted against the workspace rect, which carries a
-  # `gaps inner 3` inset that layer-surface arrangement does not -- that would
-  # fail on arithmetic rather than on behaviour.
+  # Deliberately NOT asserted against the workspace rect, which has the bar's
+  # and the strip's exclusive zones taken out of it while an Ignore surface
+  # takes the whole output -- that would fail on arithmetic rather than on
+  # behaviour. (It carried a `gaps inner 3` inset as well until docs/windows.md
+  # W1; the zones remain, so the reason to avoid it does too.)
   open_ device; control=$(g device h); close_ device
   if [[ -z $control ]]; then
     no "I2 the device control did not report a geometry" \
@@ -1182,6 +1188,309 @@ print(r["x"], r["y"], r["width"], r["height"])'
   # I6  the pill over a sheet is A7 in --gestures, which already covers it for
   #     the drawer; settings/themes and the keyboard case want a finger.
   # I7  static, over every colors.toml -- a contrast sum, not a device question.
+fi
+
+# ---------------------------------------------------------------------------
+# --windows: the window area and the launch splash, against docs/windows.md
+#
+# Opt-in, because it launches real apps and closes them again, and because W4
+# turns gaps on for a second on a screen someone may be using.
+# ---------------------------------------------------------------------------
+if [[ ${1:-} == "--windows" ]]; then
+  head_ "windows (docs/windows.md)"
+
+  w_ok() { printf '  \033[90m%-4s\033[0m ' "$1"; shift; ok "$@"; }
+  w_no() { printf '  \033[90m%-4s\033[0m ' "$1"; shift; no "$@"; }
+  w_skip() { printf '  \033[90m%-4s   %s\033[0m\n' "$1" "$2"; }
+
+  ws_rect() { swaymsg -t get_workspaces | python3 -c 'import json,sys
+r=[w["rect"] for w in json.load(sys.stdin) if w["focused"]]
+print("%d %d %d %d" % (r[0]["x"], r[0]["y"], r[0]["width"], r[0]["height"]) if r else "")'; }
+
+  out_rect() { swaymsg -t get_outputs | python3 -c 'import json,sys
+o=[o["rect"] for o in json.load(sys.stdin) if o.get("active")]
+print("%d %d %d %d" % (o[0]["x"], o[0]["y"], o[0]["width"], o[0]["height"]) if o else "")'; }
+
+  # The focused *view*, from sway rather than from the shell, so a check never
+  # confirms the thing it is checking.
+  focused_rect() { swaymsg -t get_tree | python3 -c '
+import json, sys
+found = []
+def walk(n):
+    if n.get("focused") and n.get("pid"): found.append(n["rect"])
+    for k in ("nodes", "floating_nodes"):
+        for c in n.get(k, []): walk(c)
+walk(json.load(sys.stdin))
+print("%d %d %d %d" % (found[0]["x"], found[0]["y"], found[0]["width"], found[0]["height"]) if found else "")'; }
+
+  focused_app() { swaymsg -t get_tree | python3 -c '
+import json, sys
+found = []
+def walk(n):
+    if n.get("focused") and n.get("app_id"): found.append(n["app_id"])
+    for k in ("nodes", "floating_nodes"):
+        for c in n.get(k, []): walk(c)
+walk(json.load(sys.stdin))
+print(found[0] if found else "")'; }
+
+  # Every view con_id on the tree. Diffing this across a launch names the one
+  # window this suite created, so the cleanup kills that and nothing else --
+  # other sessions have windows on this phone too.
+  con_ids() { swaymsg -t get_tree | python3 -c '
+import json, sys
+out = []
+def walk(n):
+    if n.get("pid"): out.append(str(n["id"]))
+    for k in ("nodes", "floating_nodes"):
+        for c in n.get(k, []): walk(c)
+walk(json.load(sys.stdin))
+print(" ".join(out))'; }
+
+  # Right after a surface maps this GPU can keep the shell busy long enough
+  # that omarchy-shell gives up and prints nothing. Empty is "ask again", not
+  # "closed" -- the same trap the gesture suite hit.
+  splash_state() {
+    local out
+    for _ in 1 2 3; do
+      if out=$(timeout 8 omarchy-shell splash state 2>/dev/null) && [[ -n $out ]]; then
+        echo "$out"; return
+      fi
+      sleep 1
+    done
+    echo "unknown"
+  }
+
+  # --- W1, W2: the window area ---------------------------------------------
+  if ! grep -q '^gaps inner 0' "$HOME/.local/share/mobileomarchy/default/sway/pinephone.conf" 2>/dev/null; then
+    w_no W2 "pinephone.conf does not set gaps inner 0" \
+            "the installed config still insets every app"
+  else
+    w_ok W2 "pinephone.conf sets gaps inner 0"
+  fi
+
+  before_ids=$(con_ids)
+  swaymsg exec -- foot --app-id=moa-windows >/dev/null 2>&1
+  for _ in $(seq 25); do [[ $(focused_app) == "moa-windows" ]] && break; sleep 1; done
+
+  if [[ $(focused_app) != "moa-windows" ]]; then
+    w_no W1 "no window came up" "W1 and W4 cannot be measured without one"
+  else
+    wr=$(ws_rect); fr=$(focused_rect); orr=$(out_rect)
+    read -r wx wy ww wh <<<"$wr"
+    read -r _ox _oy ow _oh <<<"$orr"
+
+    # Two halves, and the first one is not optional. `swaymsg -t get_workspaces`
+    # reports the workspace rect with the gaps ALREADY SUBTRACTED, so
+    # window == workspace is true at gaps 3 exactly as it is at gaps 0 -- this
+    # check passed a deliberate `gaps inner all set 3` before the width test was
+    # added, which is the whole reason it is here.
+    #
+    # Width is what catches it: the bar and the strip are full-width surfaces
+    # and reserve nothing at the sides, so a workspace narrower than its output
+    # is gaps and can be nothing else.
+    if [[ -z $wr || -z $fr || -z $orr ]]; then
+      w_no W1 "could not read the geometry (window [$fr] workspace [$wr] output [$orr])" \
+              "nothing below can be measured"
+    elif (( wx != 0 || ww != ow )); then
+      w_no W1 "the workspace is ${ww}px of a ${ow}px output, offset ${wx}" \
+              "that inset is gaps: wallpaper is showing down both sides of the app"
+    elif [[ $fr != "$wr" ]]; then
+      w_no W1 "window [$fr], workspace [$wr]" \
+              "the window is inset inside its workspace -- a border is taking space"
+    else
+      w_ok W1 "a lone window fills the width of the output and its workspace ($fr)"
+    fi
+
+    # --- W4: the toggle ----------------------------------------------------
+    # Inverted from the desktop original, so the FIRST press must add gaps. A
+    # toggle that starts by removing what is already gone would pass a
+    # "restored" check while having done nothing at all, which is why both
+    # halves are asserted -- and why this refuses to run against a session that
+    # already has gaps, where there is no zero to add to.
+    #
+    # Measured as workspace-width-against-output, the same quantity W1 uses,
+    # and NOT as the window rect before and after. The window rect carries
+    # every exclusive zone on the screen: an earlier version of this check
+    # compared absolute rects and went red because the on-screen keyboard came
+    # up between two of its reads, which has nothing to do with gaps. Width is
+    # untouched by the bar, the strip and the keyboard alike.
+    ws_width() { ws_rect | cut -d' ' -f3; }
+    ws_x()     { ws_rect | cut -d' ' -f1; }
+
+    if (( wx != 0 )); then
+      w_skip W4 "W4 skipped: this session already has gaps (x=$wx), so there is no zero to add to"
+    else
+      mobileomarchy-window-gaps-toggle >/dev/null 2>&1; sleep 1
+      on_x=$(ws_x); on_w=$(ws_width)
+      mobileomarchy-window-gaps-toggle >/dev/null 2>&1; sleep 1
+      off_x=$(ws_x); off_w=$(ws_width)
+      if [[ $on_x == "3" && $on_w == "$(( ow - 6 ))" && $off_x == "0" && $off_w == "$ow" ]]; then
+        w_ok W4 "the gaps toggle adds 3 and takes it back (${ow} -> ${on_w} -> ${off_w})"
+      elif [[ $on_x == "0" ]]; then
+        w_no W4 "the first press changed nothing (workspace still at x=0, ${on_w}px)" \
+                "it is still the desktop script: press one removes gaps that are already gone"
+      else
+        w_no W4 "on [x=$on_x w=$on_w] wanted [x=3 w=$(( ow - 6 ))], off [x=$off_x w=$off_w] wanted [x=0 w=$ow]" \
+                "the toggle left the workspace somewhere neither state describes"
+      fi
+    fi
+  fi
+
+  # Kill only what this suite made.
+  for id in $(con_ids); do
+    [[ " $before_ids " == *" $id "* ]] || swaymsg "[con_id=$id] kill" >/dev/null 2>&1
+  done
+  sleep 1
+
+  # --- L1, L2, L6, L7: a launch that never arrives -------------------------
+  #
+  # A desktop id with no application behind it. gtk-launch fails, no toplevel
+  # ever appears, and the splash is therefore guaranteed to be up while the
+  # next three checks read it -- which a real app is not, because an app that
+  # maps in 400ms would fail L1 for being fast. It is also exactly the state L6
+  # is about.
+  if [[ $(timeout 8 omarchy-shell splash state 2>/dev/null) == "" ]]; then
+    w_no L1 "the splash plugin does not answer IPC" \
+            "mobileomarchy.splash is not loaded, so nothing below can be read"
+  else
+    timeout 8 omarchy-shell drawer launch moa-selftest-no-such-app >/dev/null 2>&1
+    sleep 1
+    st=$(splash_state)
+    if [[ $st == "open" ]]; then
+      w_ok L1 "the splash is up one second after the launch, not two"
+    else
+      w_no L1 "the splash reads $st a second after a launch" \
+              "either it never showed, or the 2s upstream delay is still in AppLibrary"
+    fi
+
+    # The pixels, not the source. A source that resolves to a file Qt cannot
+    # decode leaves exactly the blank square L7 is about, and `icon` alone
+    # would report it as fine.
+    drawn=$(timeout 8 omarchy-shell splash drawn 2>/dev/null)
+    case $drawn in
+      icon*)     w_ok L7 "an unresolvable app still gets a splash (${drawn##*/})" ;;
+      fallback)  w_ok L7 "an unresolvable app falls back to the outline" ;;
+      *)         w_no L7 "the splash is drawing ${drawn:-nothing}" \
+                        "the surface is up with no pixels on it" ;;
+    esac
+
+    geom=$(timeout 8 omarchy-shell splash geometry 2>/dev/null)
+    sw=$(ws_rect | cut -d' ' -f3)
+    gw=$(echo "$geom" | sed -n 's/.*w=\([0-9]*\).*/\1/p')
+    if [[ -n $gw && -n $sw ]] && (( gw > 0 && gw * 2 < sw )); then
+      w_ok L2 "the surface is the icon, not the screen (${gw} of ${sw}px)"
+    else
+      w_no L2 "splash surface w=${gw:-?} against a ${sw:-?}px screen" \
+              "a full-screen splash can swallow the pill and the back edge (L3)"
+    fi
+
+    # Read off the window, not restated here: sway draws a fullscreen view
+    # above the top layer, so on Top the splash is invisible behind exactly the
+    # apps pinephone.conf fullscreens.
+    layer=$(echo "$geom" | sed -n 's/.*layer=\([a-z?]*\).*/\1/p')
+    if [[ $layer == "overlay" ]]; then
+      w_ok L2a "the surface is on the overlay layer, in front of fullscreen apps"
+    else
+      w_no L2a "the splash surface is on layer ${layer:-?}" \
+               "anything but overlay is hidden by the first fullscreen window it meets"
+    fi
+
+    # --- L6: it gives up ---------------------------------------------------
+    # Upstream's 15s timeout, which the port patch must leave alone. Polled
+    # rather than slept through, so the elapsed time is evidence rather than
+    # the absence of a failure.
+    t0=$(date +%s); elapsed=""
+    for _ in $(seq 25); do
+      [[ $(splash_state) == "closed" ]] && { elapsed=$(( $(date +%s) - t0 )); break; }
+      sleep 1
+    done
+    if [[ -n $elapsed ]] && (( elapsed >= 10 && elapsed <= 20 )); then
+      w_ok L6 "it gives up after ${elapsed}s and clears the wallpaper"
+    elif [[ -n $elapsed ]]; then
+      w_no L6 "it gave up after ${elapsed}s, not the 15 upstream sets" \
+              "the port patch changed launchTimeout as well as launchDelay"
+    else
+      w_no L6 "still up 25s after a launch that will never arrive" \
+              "launchTimeout is gone: a failed launch now covers the screen until the next one"
+    fi
+  fi
+
+  # --- L1, L4: a real app --------------------------------------------------
+  entries=$(timeout 8 omarchy-shell drawer entries 2>/dev/null)
+  target=""
+  for cand in foot Alacritty org.gnome.Console org.gnome.Nautilus org.gnome.TextEditor; do
+    grep -qx "$cand" <<<"$entries" && { target=$cand; break; }
+  done
+
+  if [[ -z $target ]]; then
+    w_skip L4 "L1/L4 skipped: none of the expected apps is in the drawer's list"
+  else
+    before_ids=$(con_ids)
+    saw_open=""; saw_icon=""
+    timeout 8 omarchy-shell drawer launch "$target" >/dev/null 2>&1
+    for _ in $(seq 30); do
+      if [[ -z $saw_open && $(splash_state) == "open" ]]; then
+        saw_open=1
+        saw_icon=$(timeout 8 omarchy-shell splash icon 2>/dev/null)
+      fi
+      [[ $(con_ids) != "$before_ids" ]] && break
+      sleep 1
+    done
+
+    if [[ $(con_ids) == "$before_ids" ]]; then
+      w_no L4 "$target never opened a window" "L4 has nothing to have closed the splash"
+    else
+      sleep 2
+      st=$(splash_state)
+      if [[ $st == "closed" ]]; then
+        w_ok L4 "the splash goes when $target's window appears"
+      else
+        w_no L4 "the splash reads $st with the window up" \
+                "it will now sit on the app until the 15s timeout"
+      fi
+      if [[ -n $saw_open ]]; then
+        w_ok L1 "$target's launch showed a splash (${saw_icon##*/})"
+      else
+        w_skip L1 "L1 unproven for $target: it mapped before the first poll"
+      fi
+    fi
+
+    for id in $(con_ids); do
+      [[ " $before_ids " == *" $id "* ]] || swaymsg "[con_id=$id] kill" >/dev/null 2>&1
+    done
+    sleep 1
+  fi
+
+  # --- L5: a .desktop that summons a plugin --------------------------------
+  if ! grep -qx "mobileomarchy.device" <<<"$entries"; then
+    w_skip L5 "L5 skipped: mobileomarchy.device is not in the drawer's list"
+  else
+    timeout 8 omarchy-shell drawer launch mobileomarchy.device >/dev/null 2>&1
+    for _ in $(seq 10); do
+      [[ $(timeout 8 omarchy-shell device state 2>/dev/null) == "open" ]] && break
+      sleep 1
+    done
+    st=$(splash_state)
+    dev=$(timeout 8 omarchy-shell device state 2>/dev/null)
+    if [[ $dev != "open" ]]; then
+      w_no L5 "the Device screen did not open (state ${dev:-?})" \
+              "without it there is no plugin summon for L5 to be about"
+    elif [[ $st == "closed" ]]; then
+      w_ok L5 "a plugin summon takes the splash down without a toplevel"
+    else
+      w_no L5 "the splash reads $st over the Device screen" \
+              "no window will ever appear for it, so it stays for the full 15s"
+    fi
+    timeout 8 omarchy-shell device close >/dev/null 2>&1
+  fi
+
+  printf '  \033[90m%-4s\033[0m   \033[90mnot covered: W3 L3 L8\033[0m\n' ""
+  # W3  needs two windows on one workspace, which one-app-per-workspace exists
+  #     to prevent; arranging it means turning that off first.
+  # L3  the mask. The surface size is asserted (L2) and that is the half that
+  #     can be read without a finger; proving touch passes through the square
+  #     itself needs the injector and root, like I5.
+  # L8  an animation. A screenshot cannot tell a pulse from a still frame.
 fi
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"

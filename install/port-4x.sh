@@ -340,3 +340,103 @@ else:
 p.write_text(s, encoding="utf-8")
 BACKBTN_EOF
 echo "    Menu.qml: back button when a touchscreen is present or no real keyboard is"
+
+# --- Launch splash ---------------------------------------------------------
+# Upstream shows a launch OSD two seconds after a tap: a rounded panel reading
+# "Launching Files..." with a rocket glyph, taken down when a toplevel appears.
+# On this phone two seconds is most of an app launch, so that feedback arrived
+# after the moment it was for -- you tapped, nothing happened, you tapped again.
+#
+# mobileomarchy.splash draws the app's own icon on the wallpaper instead, from
+# the tap onwards. This rewires AppLibrary to feed it rather than duplicating
+# the bookkeeping: which app, whether a toplevel arrived and the 15s giving-up
+# timer all stay exactly where upstream put them. Three edits:
+#
+#   launchIcon    a new property, resolved from the desktop id at launch, which
+#                 is the one thing upstream never needed to know.
+#   interval 0    the delay is the bug; a splash is feedback for the tap.
+#   no osd calls  `launchOsdOpen` stops driving `omarchy-shell osd` and becomes
+#                 the plain flag the splash plugin binds to. Kept under its
+#                 upstream name so this patch stays small enough to survive the
+#                 next vendored bump.
+#
+# See docs/windows.md L1-L8.
+python3 - "$SHELL_DIR" <<'SPLASH_EOF'
+import pathlib, sys
+
+p = pathlib.Path(sys.argv[1]) / "services" / "AppLibrary.qml"
+if not p.exists():
+    print("    !! AppLibrary.qml missing -- launch splash not wired", file=sys.stderr)
+    raise SystemExit(0)
+s = p.read_text(encoding="utf-8")
+ok = True
+
+# --- launchIcon ------------------------------------------------------------
+anchor = '  property string launchOsdMessage: ""\n'
+addition = anchor + '''
+  // The icon mobileomarchy.splash draws. Resolved here rather than in the
+  // plugin because this is the only place that sees the desktop id.
+  property string launchIcon: ""
+
+  // One pass over the entry list, once per launch. Short enough on this device
+  // to be beneath measuring, and it leans on nothing but `id` and `icon` --
+  // the two fields every caller of launch() already relies on.
+  function launchIconFor(desktopId) {
+    var id = String(desktopId || "")
+    var entries = []
+    try { entries = DesktopEntries.applications.values || [] } catch (e) { entries = [] }
+    for (var i = 0; i < entries.length; i++) {
+      if (entries[i] && String(entries[i].id) === id) return root.iconSource(entries[i].icon)
+    }
+    return root.iconSource("")
+  }
+'''
+if anchor in s:
+    s = s.replace(anchor, addition, 1)
+else:
+    print("    !! launchOsdMessage anchor not found -- no launchIcon property", file=sys.stderr)
+    ok = False
+
+# Set it before the feedback starts, so the plugin never sees `launching` true
+# with last launch's icon still on it.
+old_launch = "    root.beginLaunchFeedback(name)\n"
+new_launch = "    root.launchIcon = root.launchIconFor(id)\n    root.beginLaunchFeedback(name)\n"
+if old_launch in s:
+    s = s.replace(old_launch, new_launch, 1)
+else:
+    print("    !! beginLaunchFeedback call not found -- launchIcon never set", file=sys.stderr)
+    ok = False
+
+# --- the delay -------------------------------------------------------------
+# Anchored on the id so this cannot land on one of the file's other Timers.
+old_delay = "    id: launchDelay\n    interval: 2000\n"
+new_delay = ("    id: launchDelay\n"
+             "    // 0, not 2000: the splash is feedback for the tap, and a tap\n"
+             "    // acknowledged two seconds later is a tap that got no answer.\n"
+             "    // Still a Timer rather than a direct assignment, so the guard\n"
+             "    // below keeps its chance to see a window that was already up.\n"
+             "    interval: 0\n")
+if old_delay in s:
+    s = s.replace(old_delay, new_delay, 1)
+else:
+    print("    !! launchDelay interval not found -- splash still waits 2s", file=sys.stderr)
+    ok = False
+
+# --- the OSD calls ---------------------------------------------------------
+# Dropped by line rather than matched as literals: the show call embeds a Nerd
+# Font glyph, and reproducing that exactly through two levels of heredoc is a
+# way to fail silently on an encoding rather than on the code.
+lines = s.split("\n")
+kept = [l for l in lines if 'execDetached(["omarchy-shell", "osd",' not in l]
+dropped = len(lines) - len(kept)
+if dropped == 2:
+    s = "\n".join(kept)
+else:
+    print("    !! expected 2 osd calls in AppLibrary.qml, found %d -- left alone" % dropped,
+          file=sys.stderr)
+    ok = False
+
+p.write_text(s, encoding="utf-8")
+if ok:
+    print("    AppLibrary.qml: launch feedback rewired to mobileomarchy.splash")
+SPLASH_EOF

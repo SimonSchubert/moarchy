@@ -366,6 +366,46 @@ Item {
                ? drawerWindow.screen.width + "x" + drawerWindow.screen.height : "?")
     }
 
+    // Drives a launch down the same path a tap does: find the entry the grid
+    // would have shown, then root.launch(), which starts the app and dismisses
+    // the sheet. It exists because docs/windows.md L1-L7 cannot be asserted any
+    // other way -- the splash is feedback for a tap, and a check has no finger.
+    //
+    // An id with no entry behind it still launches, straight through
+    // appLibrary, and says so in the answer. That is not a convenience: L6 is
+    // "what happens when nothing ever appears", and an id that resolves to no
+    // application is the only way to ask for that without installing a .desktop
+    // file that lies.
+    function launch(desktopId: string): string {
+      var id = String(desktopId || "")
+      if (!id) return "no id"
+      if (!root.shell || !root.shell.appLibrary) return "no shell"
+      // Rows, not entries: sortedEntries returns {entry, score, key, name}
+      // wrappers, the same shape the grid delegate below unwraps. Reading
+      // `.id` off a row yields undefined and launches nothing, silently.
+      var rows = root.shell.appLibrary.sortedEntries("") || []
+      for (var i = 0; i < rows.length; i++) {
+        var entry = rows[i] && rows[i].entry
+        if (entry && String(entry.id) === id) {
+          root.launch(entry)
+          return "ok"
+        }
+      }
+      root.shell.appLibrary.launch(id, id)
+      return "no-entry"
+    }
+
+    // Every id the grid would list, so a check can pick a real app instead of
+    // guessing at one that happens to be installed.
+    function entries(): string {
+      if (!root.shell || !root.shell.appLibrary) return ""
+      var out = []
+      var rows = root.shell.appLibrary.sortedEntries("") || []
+      for (var i = 0; i < rows.length; i++)
+        if (rows[i] && rows[i].entry) out.push(String(rows[i].entry.id))
+      return out.join("\n")
+    }
+
     function open(): string {
       if (root.shell) root.shell.summon(root.pluginId, "{}")
       return "ok"
