@@ -31,6 +31,14 @@ ref     = "346e69e1cec6c4e8924531874af6ba010a1bc99e"
 version = "v4.0.2"
 
 # ---------------------------------------------------------------------------
+# This project's own version. The packages built out of pkgbuilds/ carry it:
+# moarchy (bin/, default/, config/) and moarchy-meta (the package set).
+# Nothing else in the repo states a version.
+# ---------------------------------------------------------------------------
+[moarchy]
+version = "0.1.0"
+
+# ---------------------------------------------------------------------------
 # Our own components. Separate repos, consumed as built packages and never as
 # submodules (docs/structure.md B1); this is the pin that buys what a submodule
 # would have, without dragging the source tree in.

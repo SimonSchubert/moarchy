@@ -1,0 +1,52 @@
+# The phone layer itself: bin/, default/ and config/, and nothing else
+# (docs/structure.md P1).
+#
+# `pacman -Ql moarchy` lists no path under /home. Everything the old installer
+# wrote into $HOME is either a file under /etc here, or is populated per user
+# by moarchy-firstboot from what this package ships under /usr/share.
+#
+# Built from the working tree rather than from a tarball: this is the
+# integration repo's own content, so there is no upstream to fetch and no
+# checksum to verify. P10 is about not cloning someone else's source in
+# build(); it does not apply to the repo the PKGBUILD lives in.
+
+. "$startdir/../../scripts/manifest.sh"
+_ver=$(manifest_get moarchy version) || return 1
+_repo="$startdir/../.."
+
+pkgname=moarchy
+pkgver=$_ver
+pkgrel=1
+pkgdesc="Omarchy's look, keybindings and theming on a PinePhone, under Sway"
+arch=('any')
+url='https://github.com/SimonSchubert/moarchy'
+license=('MIT')
+depends=('bash' 'sway' 'omarchy-config')
+source=()
+
+package() {
+  # bin/ -- NOT /usr/bin. 19 of these names are also upstream Omarchy's, and
+  # two packages cannot own the same path. /etc/profile.d/zz-moarchy.sh puts
+  # this directory ahead of /usr/bin, which is the same shadowing the old
+  # installer arranged in ~/.profile.
+  install -d "$pkgdir/usr/lib/moarchy/bin"
+  for f in "$_repo"/bin/*; do
+    [ -f "$f" ] && install -Dm755 "$f" "$pkgdir/usr/lib/moarchy/bin/$(basename "$f")"
+  done
+
+  # default/ and config/, minus default/etc, which is installed to /etc below
+  # rather than shipped twice.
+  install -d "$pkgdir/usr/share/moarchy"
+  cp -a "$_repo/default" "$pkgdir/usr/share/moarchy/default"
+  rm -rf "$pkgdir/usr/share/moarchy/default/etc"
+  cp -a "$_repo/config" "$pkgdir/usr/share/moarchy/config"
+
+  # The two things a package can do that the installer had to do by hand.
+  # They live under default/etc in the repo so that this package still ships
+  # bin/, default/ and config/ and nothing else -- the source of truth stays
+  # somewhere you can read it.
+  install -Dm644 "$_repo/default/etc/profile.d/zz-moarchy.sh" \
+    "$pkgdir/etc/profile.d/zz-moarchy.sh"
+  install -Dm644 "$_repo/default/etc/systemd/logind.conf.d/10-power-key.conf" \
+    "$pkgdir/etc/systemd/logind.conf.d/10-power-key.conf"
+}

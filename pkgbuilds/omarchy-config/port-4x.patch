@@ -1,0 +1,378 @@
+diff --git a/shell/Ui/PopupCard.qml b/shell/Ui/PopupCard.qml
+index 058b068f..262570b5 100644
+--- a/shell/Ui/PopupCard.qml
++++ b/shell/Ui/PopupCard.qml
+@@ -1,6 +1,6 @@
+ import QtQuick
+ import Quickshell
+-import Quickshell.Hyprland
++import Quickshell.I3
+ import qs.Commons
+ 
+ PopupWindow {
+@@ -79,11 +79,8 @@ PopupWindow {
+   // is routed only to the listed windows; clicking anywhere else clears the
+   // grab and we close the popup. Skipped for hover-mode popups so the cursor
+   // can move freely between the trigger and the popup.
+-  HyprlandFocusGrab {
+-    active: root.open && root.triggerMode === "click"
+-    windows: root.anchorWindow ? [root, root.anchorWindow] : [root]
+-    onCleared: root.close()
+-  }
++  // FocusGrab has no Quickshell.I3 counterpart; click-outside-dismiss disabled
++  Item {}
+ 
+   anchor {
+     id: popupAnchor
+diff --git a/shell/plugins/bar/Bar.qml b/shell/plugins/bar/Bar.qml
+index def615af..33fce17b 100644
+--- a/shell/plugins/bar/Bar.qml
++++ b/shell/plugins/bar/Bar.qml
+@@ -1,5 +1,5 @@
+ import Quickshell
+-import Quickshell.Hyprland
++import Quickshell.I3
+ import Quickshell.Io
+ import Quickshell.Wayland
+ import QtQuick
+@@ -488,7 +488,7 @@ Item {
+   // belongs. Empty until Hyprland reports one, which leaves panel routing on
+   // its per-monitor fallback rather than guessing at an output.
+   function focusedScreenName() {
+-    var monitor = Hyprland.focusedMonitor
++    var monitor = I3.focusedMonitor
+     return monitor ? String(monitor.name || "") : ""
+   }
+ 
+diff --git a/shell/plugins/bar/widgets/KeyboardLayout.qml b/shell/plugins/bar/widgets/KeyboardLayout.qml
+index 5457d88e..38525fbe 100644
+--- a/shell/plugins/bar/widgets/KeyboardLayout.qml
++++ b/shell/plugins/bar/widgets/KeyboardLayout.qml
+@@ -1,6 +1,6 @@
+ import QtQuick
+ import Quickshell
+-import Quickshell.Hyprland
++import Quickshell.I3
+ import Quickshell.Io
+ import qs.Ui
+ import qs.Commons
+@@ -83,7 +83,7 @@ BarWidget {
+   }
+ 
+   Connections {
+-    target: Hyprland
++    target: I3
+     function onRawEvent(event) {
+       if (!event || !event.name) return
+       var name = String(event.name)
+diff --git a/shell/plugins/bar/widgets/Workspaces.qml b/shell/plugins/bar/widgets/Workspaces.qml
+index ec0482a5..fbffb4e1 100644
+--- a/shell/plugins/bar/widgets/Workspaces.qml
++++ b/shell/plugins/bar/widgets/Workspaces.qml
+@@ -1,6 +1,6 @@
+ import QtQuick
+ import QtQuick.Layouts
+-import Quickshell.Hyprland
++import Quickshell.I3
+ import qs.Commons
+ import qs.Ui
+ 
+@@ -8,21 +8,38 @@ BarWidget {
+   id: root
+   moduleName: "omarchy.workspaces"
+ 
++  // sway exposes the visible number as .number (.num on some versions);
++
++  // .id is an internal handle. Hyprland conflated the two.
++
++  function wsNumber(ws) {
++
++    if (!ws) return -1
++
++    if (ws.number !== undefined && ws.number !== null) return ws.number
++
++    if (ws.num !== undefined && ws.num !== null) return ws.num
++
++    return ws.id
++
++  }
++
++
+   function workspaceById(id) {
+-    var values = Hyprland.workspaces.values
++    var values = I3.workspaces.values
+     for (var i = 0; i < values.length; i++) {
+-      if (values[i].id === id) return values[i]
++      if (root.wsNumber(values[i]) === id) return values[i]
+     }
+ 
+     return null
+   }
+ 
+   function workspaceIds() {
+-    var ids = [1, 2, 3, 4, 5]
+-    var values = Hyprland.workspaces.values
++    var ids = [1, 2, 3]
++    var values = I3.workspaces.values
+ 
+     for (var i = 0; i < values.length; i++) {
+-      var id = values[i].id
++      var id = root.wsNumber(values[i])
+       if (id > 0 && id <= 10 && ids.indexOf(id) === -1) ids.push(id)
+     }
+ 
+@@ -32,7 +49,7 @@ BarWidget {
+ 
+   function focusWorkspace(id) {
+     if (!root.bar) return
+-    root.bar.run("hyprctl dispatch " + Util.shellQuote("hl.dsp.focus({ workspace = \"" + id + "\" })"))
++    root.bar.run("swaymsg workspace number " + id)
+   }
+ 
+   readonly property real trailingGap: root.vertical ? 0 : Style.spaceReal(1.5)
+@@ -55,8 +72,18 @@ BarWidget {
+         required property int modelData
+ 
+         readonly property var workspace: root.workspaceById(modelData)
+-        readonly property bool occupied: workspace !== null && workspace.toplevels.values.length > 0
+-        readonly property bool focused: Hyprland.focusedWorkspace !== null && Hyprland.focusedWorkspace.id === modelData
++        readonly property bool occupied: {
++          if (!workspace) return false
++          // Hyprland exposes a toplevel model; I3Workspace does not.
++          if (workspace.toplevels && workspace.toplevels.values)
++            return workspace.toplevels.values.length > 0
++          // sway: `representation` is empty only when the workspace is empty.
++          var ipc = workspace.lastIpcObject
++          if (ipc && typeof ipc.representation === "string")
++            return ipc.representation.length > 0
++          return false
++        }
++        readonly property bool focused: I3.focusedWorkspace !== null && root.wsNumber(I3.focusedWorkspace) === modelData
+ 
+         bar: root.bar
+         text: focused ? "\uDB85\uDCFB" : (modelData === 10 ? "0" : String(modelData))
+diff --git a/shell/plugins/menu/Menu.qml b/shell/plugins/menu/Menu.qml
+index 1d620278..20f88dcc 100644
+--- a/shell/plugins/menu/Menu.qml
++++ b/shell/plugins/menu/Menu.qml
+@@ -19,6 +19,7 @@ Item {
+   property string pendingInitialMenu: "root"
+ 
+   function open(payloadJson) {
++    Qt.callLater(function() { inputDevicesFile.reload() })
+     var payload = ({})
+     try { payload = JSON.parse(payloadJson || "{}") } catch (e) { payload = ({}) }
+ 
+@@ -71,6 +72,89 @@ Item {
+   property var items: ({})
+   property var itemOrder: []
+   property var navStack: []
++
++  // Does this machine have the keys the launcher's navigation assumes?
++  //
++  // Defaults say "no keyboard" so the button is present on the first frame:
++  // blockLoading resolves the probe during construction, but if /proc ever
++  // fails to read, a spare back button on a desktop is the harmless way to be
++  // wrong -- a phone with no way back is not.
++  property bool hasTouchscreen: false
++  property bool hasHardwareKeyboard: false
++  readonly property bool showBackButton: root.hasTouchscreen || !root.hasHardwareKeyboard
++
++  // The icon has to predict what the button will do. goBackOrClose() retreats
++  // through filter -> menu -> close, so the only state that actually closes is
++  // the root menu with an empty filter -- and that is the one that shows an x.
++  // (dmenu prompts sit at "root" too, where closing is also the right answer.)
++  readonly property bool backClosesMenu: root.activeMenu === "root" && !root.filterText
++
++  // /proc/bus/input/devices prints capability bitmaps as space-separated hex
++  // words, most significant first, so the LAST word holds bits 0-63. Indexing
++  // by hex digit keeps this clear of JS's 32-bit bitwise operators (and of
++  // BigInt, which the QML engine does not guarantee).
++  function evdevBit(mask, bit) {
++    if (!mask) return false
++    var words = String(mask).split(/\s+/).filter(function(w) { return w.length > 0 })
++    var w = words.length - 1 - Math.floor(bit / 64)
++    if (w < 0 || w >= words.length) return false
++    var within = bit % 64
++    var digit = words[w].length - 1 - Math.floor(within / 4)   // 4 bits per hex digit
++    if (digit < 0) return false
++    var nibble = parseInt(words[w].charAt(digit), 16)
++    if (isNaN(nibble)) return false
++    return ((nibble >> (within % 4)) & 1) === 1
++  }
++
++  // Classify by capability, the way libinput itself does:
++  //
++  //   keyboard    KEY_ESC + KEY_1 + KEY_Q + KEY_SPACE. A key-emitting device
++  //               that cannot type a letter is a button, not a keyboard --
++  //               which is exactly what the PinePhone's four pseudo-keyboards
++  //               are (power, volume, wakeup, headset jack).
++  //   touchscreen BTN_TOUCH + INPUT_PROP_DIRECT. The PROP is what separates a
++  //               touchscreen from a touchpad; both report BTN_TOUCH.
++  function classifyInputDevices(text) {
++    var KEY_ESC = 1, KEY_1 = 2, KEY_Q = 16, KEY_SPACE = 57
++    var BTN_TOUCH = 0x14a, INPUT_PROP_DIRECT = 1
++    var touch = false, keyboard = false
++    var blocks = String(text || "").split(/\n\s*\n/)
++    for (var i = 0; i < blocks.length; i++) {
++      var lines = blocks[i].split("\n")
++      var name = "", key = "", prop = "", m
++      for (var j = 0; j < lines.length; j++) {
++        if ((m = lines[j].match(/^N: Name="(.*)"/))) name = m[1]
++        else if ((m = lines[j].match(/^B: KEY=(.*)$/))) key = m[1]
++        else if ((m = lines[j].match(/^B: PROP=(.*)$/))) prop = m[1]
++      }
++      if (!name) continue
++      if (root.evdevBit(key, BTN_TOUCH) && root.evdevBit(prop, INPUT_PROP_DIRECT)) touch = true
++      if (root.evdevBit(key, KEY_ESC) && root.evdevBit(key, KEY_1)
++          && root.evdevBit(key, KEY_Q) && root.evdevBit(key, KEY_SPACE)) keyboard = true
++    }
++    root.hasTouchscreen = touch
++    root.hasHardwareKeyboard = keyboard
++  }
++
++  // Read once during construction (blockLoading, so the first frame is already
++  // right), then re-read on each open -- /proc/bus/input/devices delivers no
++  // inotify events, and an open is the only moment the answer is needed. It is
++  // 1.5 KB.
++  FileView {
++    id: inputDevicesFile
++    path: "/proc/bus/input/devices"
++    blockLoading: true
++    onLoaded: root.classifyInputDevices(inputDevicesFile.text())
++    onLoadFailed: { root.hasTouchscreen = false; root.hasHardwareKeyboard = false }
++  }
++
++  // One affordance for all three retreats, so the button never dead-ends:
++  // narrow the search, then climb the menu, then close. Same order as Escape
++  // and Backspace, so touch and keyboard stay in step.
++  function goBackOrClose() {
++    if (root.filterText) root.setFilter("")
++    else if (!root.goBack()) root.cancel()
++  }
+   property var providersLoaded: ({})
+   property var providerQueue: []
+   property int providerRevision: 0
+@@ -1150,9 +1234,39 @@ Item {
+           radius: root.cornerRadius
+           color: "transparent"
+ 
++          // Square on the header's own height, so the tap target is as tall as
++          // the row it sits in rather than as tall as the glyph.
++          Rectangle {
++            id: backButton
++            visible: root.showBackButton
++            width: visible ? root.headerHeight : 0
++            height: root.headerHeight
++            anchors.left: parent.left
++            anchors.verticalCenter: parent.verticalCenter
++            radius: root.cornerRadius
++            color: backTap.pressed ? root.selectedBackground : "transparent"
++
++            Text {
++              anchors.centerIn: parent
++              textFormat: Text.PlainText
++              text: root.backClosesMenu ? "\uf00d" : "\uf053"   // nf-fa-times / nf-fa-chevron_left
++              color: backTap.pressed ? root.selectedText : root.foreground
++              opacity: backTap.pressed ? 1 : 0.58   // matches the idle prompt
++              font.family: root.fontFamily
++              font.pixelSize: Style.font.iconLarge
++            }
++
++            MouseArea {
++              id: backTap
++              anchors.fill: parent
++              onClicked: root.goBackOrClose()
++            }
++          }
++
+           Text {
+             textFormat: Text.PlainText
+-            anchors.left: parent.left
++            anchors.left: backButton.visible ? backButton.right : parent.left
++            anchors.leftMargin: backButton.visible ? Style.space(4) : 0
+             anchors.right: parent.right
+             anchors.verticalCenter: parent.verticalCenter
+             text: root.filterText || (root.dmenuActive ? (root.dmenuPrompt + "…") : ((root.item(root.activeMenu) ? (root.item(root.activeMenu).title || root.item(root.activeMenu).label) : "Go") + "…"))
+diff --git a/shell/plugins/services/idle/Service.qml b/shell/plugins/services/idle/Service.qml
+index 488f2961..61e48c76 100644
+--- a/shell/plugins/services/idle/Service.qml
++++ b/shell/plugins/services/idle/Service.qml
+@@ -1,6 +1,6 @@
+ import QtQuick
+ import Quickshell
+-import Quickshell.Hyprland
++import Quickshell.I3
+ import Quickshell.Io
+ import Quickshell.Wayland
+ import "IdleModel.js" as IdleModel
+@@ -281,7 +281,7 @@ Item {
+   }
+ 
+   Connections {
+-    target: Hyprland
++    target: I3
+     function onRawEvent(event) { root.handleHyprlandEvent(event) }
+   }
+ 
+diff --git a/shell/services/AppLibrary.qml b/shell/services/AppLibrary.qml
+index 738529de..9c447191 100644
+--- a/shell/services/AppLibrary.qml
++++ b/shell/services/AppLibrary.qml
+@@ -32,6 +32,23 @@ Item {
+   property bool launchOsdOpen: false
+   property string launchOsdMessage: ""
+ 
++  // The icon moarchy.splash draws. Resolved here rather than in the
++  // plugin because this is the only place that sees the desktop id.
++  property string launchIcon: ""
++
++  // One pass over the entry list, once per launch. Short enough on this device
++  // to be beneath measuring, and it leans on nothing but `id` and `icon` --
++  // the two fields every caller of launch() already relies on.
++  function launchIconFor(desktopId) {
++    var id = String(desktopId || "")
++    var entries = []
++    try { entries = DesktopEntries.applications.values || [] } catch (e) { entries = [] }
++    for (var i = 0; i < entries.length; i++) {
++      if (entries[i] && String(entries[i].id) === id) return root.iconSource(entries[i].icon)
++    }
++    return root.iconSource("")
++  }
++
+   // Emitted whenever the visible application set may have changed: desktop
+   // entries appeared or vanished, or the hidden-entry filters reloaded.
+   signal appsChanged()
+@@ -77,6 +94,7 @@ Item {
+   function launch(desktopId, name) {
+     var id = String(desktopId || "")
+     if (!id) return
++    root.launchIcon = root.launchIconFor(id)
+     root.beginLaunchFeedback(name)
+     // Start gtk-launch inside a scope under app-graphical.slice so apps do not
+     // inherit wayland-wm@.service. Keeping gtk-launch as the desktop-entry
+@@ -171,7 +189,6 @@ Item {
+     launchDelay.stop()
+     launchTimeout.stop()
+     if (root.launchOsdOpen) {
+-      Quickshell.execDetached(["omarchy-shell", "osd", "close"])
+       root.launchOsdOpen = false
+     }
+   }
+@@ -238,11 +255,14 @@ Item {
+ 
+   Timer {
+     id: launchDelay
+-    interval: 2000
++    // 0, not 2000: the splash is feedback for the tap, and a tap
++    // acknowledged two seconds later is a tap that got no answer.
++    // Still a Timer rather than a direct assignment, so the guard
++    // below keeps its chance to see a window that was already up.
++    interval: 0
+     onTriggered: {
+       if (root.toplevelCount() > root.launchToplevelCount || ToplevelManager.activeToplevel !== root.launchActiveToplevel) return
+       root.launchOsdOpen = true
+-      Quickshell.execDetached(["omarchy-shell", "osd", "show", JSON.stringify({ icon: "󱓞", message: root.launchOsdMessage, duration: 0 })])
+     }
+   }
+ 

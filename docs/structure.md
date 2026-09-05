@@ -4,7 +4,7 @@ How the three repos, the packages, the package repository and the image builder
 fit together, and what has to be true before a PinePhone image can be built at
 all.
 
-Status: **M1 agreed and built (2026-09-06); M2–M4 proposed, not agreed.** The
+Status: **M1 done (2026-09-06); M2 in progress; M3–M4 proposed, not agreed.** The
 acceptance criteria are the contract to argue with before any of them is; where
 one is my reading rather than your decision it is marked **?**. Each AC below
 carries its state, and §11 has the per-milestone summary.
@@ -394,7 +394,32 @@ same manifest now agree.
 > argument arriving three milestones early because the cost of not doing it was
 > already visible.
 
-**M2 — One transaction.** P1–P10. `install.sh` reduces to:
+**M2 — One transaction. In progress.** P1–P10. Done so far: **P1–P5, P7, P10**
+— `pkgbuilds/` builds `omarchy-config`, `moarchy` and `moarchy-meta`, all three
+verified in the aarch64 container. Outstanding: **P6** (delete the two
+`.packages` files), **P8** (the per-user setup) and **P9** (delete the
+installer), which are one piece of work and are sequenced last so the current
+installer keeps working until its replacement does.
+
+> **The collision the old installer hid.** `moarchy` ships 19 scripts whose
+> names upstream Omarchy also uses — `omarchy-toggle-bar`, `omarchy-system-lock`,
+> `omarchy-launch-browser` and the rest. On the phone they won by PATH order,
+> because both were checkouts in `$HOME`. As packages they cannot both own
+> `/usr/bin/omarchy-toggle-bar`, and pacman refuses the transaction.
+>
+> So upstream's `bin/` goes to `/usr/bin`, where its own package puts it and
+> where its `sudoers.d` entries name it by absolute path, and ours goes to
+> `/usr/lib/moarchy/bin` with `/etc/profile.d/zz-moarchy.sh` putting that
+> ahead of it. The shadowing is unchanged; only where it is written down is.
+> Verified by installing both packages together and asking a login shell:
+> `omarchy-toggle-bar` resolves to ours, `omarchy-theme-set` to upstream's.
+>
+> This also fixes a known-bad entry for free. `omarchy-theme-set-browser-policy`
+> failed on every theme change because its `sudoers.d` entry names
+> `/usr/bin/...` and we shipped a checkout rather than a package. There is a
+> package now.
+
+`install.sh` reduces to:
 
 ```
 pacman -S moarchy-meta

@@ -1,0 +1,10 @@
+#!/bin/bash
+# Shim for Omarchy 4.x's shell under Sway. It reads exactly two options; answer
+# those with Sway's equivalents and return valid empty JSON for anything else.
+for a in "$@"; do
+  case "$a" in
+    decoration:rounding) echo '{"option":"decoration:rounding","int":0}'; exit 0 ;;
+    general:gaps_out)    echo '{"option":"general:gaps_out","custom":"0"}'; exit 0 ;;
+  esac
+done
+echo "{}"
