@@ -28,8 +28,8 @@ upstream's dmenu. Ten rows:
 
 ```
 Settings
-├─ Network & internet   Private DNS · Wi-Fi networks · Bluetooth devices · Wi-Fi QR · Speed test
-├─ Display              Night light · Stay awake · Screen blanks after
+├─ Network & internet   Private DNS · Wi-Fi networks · Bluetooth devices · Wi-Fi QR
+├─ Display              Night light · Stay awake
 ├─ Sound & notifications Audio devices · Crash capture
 ├─ Appearance           Theme · Wallpaper · Font · Status bar · Branding · Get more
 ├─ Apps & defaults      Default apps · Web apps · Terminal apps · Packages
@@ -37,7 +37,7 @@ Settings
 ├─ Security             Remote access · Passwordless sudo · Change password
 ├─ Tools                Screenshot · Screen record · Emoji · Reminders · Screensaver · Speed tests
 ├─ System               Date & time · Restart hardware · Power
-└─ About phone          Version · Keybindings · Help & docs · About Omarchy
+└─ About phone          Version · Kernel · Device · Keybindings · Help & docs · About Omarchy
 ```
 
 Four departures from upstream, each deliberate:
