@@ -784,6 +784,82 @@ waited for Sway to map it to an output. Every caller pays that wait anyway, so
 it is 2s now and the warm-up is gone. A warm-up that exists to survive a
 too-short sleep is the sleep being wrong.
 
+## 6h. Settings: the menu becomes screens
+
+Omarchy's menu is 320 entries. The phone's Settings screen was eight rows, seven
+of which summoned `omarchy.menu` at a route and handed over the desktop list.
+That list is a popup, and `install/port-4x.sh` stubs out `HyprlandFocusGrab`
+because Quickshell.I3 has no counterpart — so it does not dismiss on
+tap-outside. The physical power button was bound straight into it.
+
+**Classify before building.** All 320 entries went into `docs/menu-coverage.md`
+first, each exactly once, as Native / Bridged / Shade / Unsupported. The table
+is generated against the pinned `omarchy-menu.jsonc` rather than transcribed, so
+no id can be invented or missed, and the split came out 66 / 75 / 1 / 178. The
+two thirds that are dropped are Steam, twenty language runtimes behind `mise`,
+six browsers with no aarch64 build, and Hyprland's own config files.
+
+**One shim covered 128 rows.** They are all
+`omarchy-launch-floating-terminal-with-presentation <script>`, every script it
+names exists upstream, and our `bin/` shadows `$OMARCHY_PATH/bin` by PATH order.
+Replacing that one wrapper — upstream's logo/done presentation kept verbatim,
+only the terminal swapped for a fullscreen foot at font 7 — made all of them
+work with nothing reimplemented. 65 of the bridged rows run a command
+byte-identical to upstream's `action`; the selftest asserts it.
+
+**Guards batch per page, not per tree.** Upstream evaluates all ~90 shell
+conditions at once because a dmenu you type into must know what every row would
+match before you have typed. A stack shows one page, so it asks about one:
+opening the root costs three reads and no `pacman`, and eleven of the
+thirty-six pages cost nothing at all. Repeated readers are captured once, the
+way `MenuModel.js` does it, so the nine-row agent page forks
+`omarchy-default-agent` once rather than nine times.
+
+**A shell heredoc ate 55 icons.** Every glyph in `omarchy-menu.jsonc` below
+U+FFFF is three bytes of UTF-8; the supplementary-plane ones are four. Writing
+`Pages.js` through a bash heredoc dropped exactly the three-byte ones, leaving
+`glyph: ""` on 55 of 141 rows — which renders as a row with no icon and a label
+sitting where the icon should have been, and reads as a design choice rather
+than a defect. **The existing icon check passed all 55**: it asks whether a
+literal is one character and whether a font covers it, and an empty literal is
+neither multi-character nor uncovered. Write glyphs from explicit codepoints
+with a file write, never through a shell.
+
+The check that catches it now was itself wrong first. Matching row objects with
+a brace-matching regex skipped every row containing a nested `covers: { ... }`
+— it found 6 of 55 against a deliberately broken copy. It is line-based now,
+and it was verified against that broken copy rather than against the good file.
+A check only proven on passing input has not been proven.
+
+**Three switches wrote state nothing read.** `mobileomarchy-toggle-bar` did
+`pkill -x quickshell`, which made sense when the bar was all the shell drew and
+now takes the drawer, the shade, the gesture strip and Settings with it — from a
+row labelled "Menu Bar". `omarchy-bar transparent` committed to `shell.json`
+while `Bar.qml` held an unbound `property bool transparent: false`. Battery
+percentage had no reader at all. And Stay Awake would have read and written its
+flag correctly while `swayidle` blanked the screen anyway, because nothing under
+Sway consulted it.
+
+Negative polarity is the convention here and it is easy to get backwards:
+`bar-off`, `screensaver-off`, `crash-capture-off`, `suspend-off` and now
+`battery-percentage-off` all mean the feature is **off** when the file exists. An
+inverted switch still toggles, still persists, still survives a restart — it is
+merely wrong, and wrong-but-consistent survives review. `invert: true` lives in
+the row data with a test per flag.
+
+**The first back gesture after a shell restart is not yours.** `performBack()`
+takes the keyboard branch whenever its probe has not answered, deliberately,
+because hiding the keyboard is the reversible outcome. So a test that issues one
+`gestures back` right after a restart is testing the probe's timing, not the
+gesture — it failed once here and looked exactly like a real regression.
+
+**Contrast has to be measured, not reasoned about.** Sampling pixels from a
+device screenshot: labels 9.47:1, detail lines **4.50:1** — AA to two decimal
+places, with the antialiased glyph edges below it. The cause is that subtitles
+sit on a raised card rather than the background, and that 8% lift is what eats
+the margin. Any alpha under 1.0 over a raised surface loses more than it looks
+like it should.
+
 ## 7. Hardware status
 
 | | |
@@ -800,7 +876,10 @@ too-short sleep is the sleep being wrong.
   windows and the bar reserves its exclusive zone (`foot y=27`), but nothing above
   swaybg paints. First seen after running a browser; a reboot cleared it once,
   then it recurred and persisted. Not root-caused.
-- `HyprlandFocusGrab` stubbed out — menus do not dismiss on tap-outside.
+- `HyprlandFocusGrab` stubbed out — menus do not dismiss on tap-outside. The
+  back gesture now reaches them: `mobileomarchy.gestures` walks the host's
+  `openPanelIds` for `omarchy.` surfaces after its own, so a vendored popup can
+  at least be dismissed. Tapping outside one still does nothing.
 - `I3.workspaces` shape differs from Hyprland's in ways not fully explored.
 
 The v3.8.4 (waybar-based) port on `main` ran stably for hours and is the fallback.
