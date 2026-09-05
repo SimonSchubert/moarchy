@@ -98,7 +98,14 @@ Item {
   readonly property color surface: Color.menu.background
   readonly property color textOnSurface: Color.menu.text
   readonly property color container: Util.alpha(Color.menu.text, 0.08)
-  readonly property color subdued: Util.alpha(Color.menu.text, 0.6)
+
+  // 0.7, not the 0.6 the other surfaces use. Detail lines sit on `container`
+  // rather than on the background, and that 8% lift costs contrast: measured
+  // off the device on Catppuccin, 0.6 lands at exactly 4.50:1 -- AA to two
+  // decimal places, with the antialiased edges of the glyphs below it. 0.7
+  // gives 5.47:1 on the card and stays well short of the label's 9.5:1, so the
+  // hierarchy survives.
+  readonly property color subdued: Util.alpha(Color.menu.text, 0.7)
   readonly property color accent: Color.accent
 
   readonly property var pageDef: Pages.page(root.currentPage)
@@ -194,6 +201,10 @@ Item {
   // treating every info row as guard-answered blanked all of them.
   function rowDetail(row) {
     if (!row) return ""
+    // A switch's `read` answers `checked`, not the second line. Without this
+    // every switch printed its own raw state under its label -- "Show status
+    // bar / false" next to a toggle that was visibly on.
+    if (row.type === "switch") return String(row.detail || "")
     if (row.read || row.detailCmd) return String(root.valueMap[row.id] || "")
     return String(row.detail || "")
   }

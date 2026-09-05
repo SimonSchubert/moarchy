@@ -74,19 +74,19 @@ var PAGES = {
     detailCmd: "omarchy-dns", covers: { "setup": "N", "setup.network": "N" } },
   { id: "display", type: "nav", page: "display", glyph: "󰍹", label: "Display",
     covers: { "trigger.toggle": "N" } },
-  { id: "sound", type: "nav", page: "sound", glyph: "", label: "Sound & notifications" },
-  { id: "appearance", type: "nav", page: "appearance", glyph: "", label: "Appearance",
+  { id: "sound", type: "nav", page: "sound", glyph: "", label: "Sound & notifications" },
+  { id: "appearance", type: "nav", page: "appearance", glyph: "", label: "Appearance",
     detailCmd: "omarchy-theme-current", covers: { "style": "N" } },
   { id: "apps", type: "nav", page: "apps", glyph: "󰀻", label: "Apps & defaults",
     covers: { "install": "N", "remove": "N" } },
   { id: "shell", type: "nav", page: "shell", glyph: "󰍜", label: "Shell & plugins" },
-  { id: "security", type: "nav", page: "security", glyph: "", label: "Security",
+  { id: "security", type: "nav", page: "security", glyph: "", label: "Security",
     covers: { "setup.security": "N", "remove.security": "N" } },
   { id: "tools", type: "nav", page: "tools", glyph: "󱓞", label: "Tools",
     covers: { "trigger": "N" } },
-  { id: "system", type: "nav", page: "system", glyph: "", label: "System",
+  { id: "system", type: "nav", page: "system", glyph: "", label: "System",
     covers: { "system": "N", "update": "N" } },
-  { id: "about", type: "nav", page: "about", glyph: "", label: "About phone",
+  { id: "about", type: "nav", page: "about", glyph: "", label: "About phone",
     detailCmd: "omarchy-version", covers: { "learn": "N" } }
 ]},
 
@@ -137,7 +137,7 @@ var PAGES = {
 
 // -------------------------------------------------------------------- sound
 "sound": { title: "Sound & notifications", rows: [
-  { id: "mixer", type: "action", glyph: "", label: "Audio devices & volume",
+  { id: "mixer", type: "action", glyph: "", label: "Audio devices & volume",
     run: "wiremix", launch: "tui" },
   { id: "crashcapture", type: "switch", glyph: "󱚡", label: "Crash capture",
     detail: "Keep a log when an app dies",
@@ -153,14 +153,14 @@ var PAGES = {
   { id: "theme", type: "plugin", plugin: "mobileomarchy.themes", glyph: "󰸌",
     label: "Theme", detailCmd: "omarchy-theme-current",
     covers: { "style.theme": "N" } },
-  { id: "background", type: "nav", page: "appearance.background", glyph: "",
+  { id: "background", type: "nav", page: "appearance.background", glyph: "",
     label: "Wallpaper", detailCmd: "basename \"$(omarchy-theme-bg-current)\"",
     covers: { "style.background": "N" } },
-  { id: "font", type: "nav", page: "appearance.font", glyph: "", label: "Font",
+  { id: "font", type: "nav", page: "appearance.font", glyph: "", label: "Font",
     detailCmd: "omarchy-font-current", covers: { "style.font": "N" } },
   { id: "bar", type: "nav", page: "appearance.bar", glyph: "󰍜", label: "Status bar",
     covers: { "style.bar": "N" } },
-  { id: "branding", type: "nav", page: "appearance.branding", glyph: "",
+  { id: "branding", type: "nav", page: "appearance.branding", glyph: "",
     label: "Branding", covers: { "style.about": "N", "style.screensaver": "N" } },
   { id: "more", type: "nav", page: "appearance.more", glyph: "󰉉", label: "Get more",
     covers: { "install.style": "N" } }
@@ -199,13 +199,13 @@ var PAGES = {
 ]},
 
 "appearance.branding": { title: "Branding", rows: [
-  { id: "about-text", type: "action", glyph: "", label: "About: edit text",
+  { id: "about-text", type: "action", glyph: "", label: "About: edit text",
     run: "omarchy-branding-about text", launch: "tui",
     covers: { "style.about.text": "B" } },
-  { id: "about-image", type: "action", glyph: "", label: "About: set from image",
+  { id: "about-image", type: "action", glyph: "", label: "About: set from image",
     run: "omarchy-branding-about image", launch: "tui",
     covers: { "style.about.image": "B" } },
-  { id: "about-reset", type: "action", glyph: "", label: "About: restore default",
+  { id: "about-reset", type: "action", glyph: "", label: "About: restore default",
     run: "omarchy-branding-about reset", launch: "tui",
     covers: { "style.about.default": "B" } },
   { id: "saver-text", type: "action", glyph: "󱄄", label: "Screensaver: edit text",
@@ -223,10 +223,10 @@ var PAGES = {
   { id: "theme-install", type: "action", glyph: "󰸌", label: "Install a theme",
     run: "omarchy-launch-floating-terminal-with-presentation omarchy-theme-install",
     launch: "none", covers: { "install.style.theme": "B" } },
-  { id: "bg-install", type: "action", glyph: "", label: "Install a wallpaper",
+  { id: "bg-install", type: "action", glyph: "", label: "Install a wallpaper",
     run: "omarchy-theme-bg-install", launch: "menu",
     covers: { "install.style.background": "B" } },
-  { id: "font-install", type: "nav", page: "appearance.more.font", glyph: "",
+  { id: "font-install", type: "nav", page: "appearance.more.font", glyph: "",
     label: "Install a font", covers: { "install.style.font": "N" } },
   { id: "theme-remove", type: "action", glyph: "󰭌", label: "Remove a theme",
     run: "omarchy-theme-remove", launch: "menu", covers: { "remove.theme": "B" } },
@@ -237,41 +237,41 @@ var PAGES = {
 ]},
 
 "appearance.more.font": { title: "Install a font", rows: [
-  { id: "cascadia", type: "action", glyph: "", label: "Cascadia Mono",
+  { id: "cascadia", type: "action", glyph: "", label: "Cascadia Mono",
     run: "omarchy-install-font 'Cascadia Mono' ttf-cascadia-mono-nerd 'CaskaydiaMono Nerd Font'",
     launch: "tui", covers: { "install.style.font.cascadia": "B" } },
-  { id: "meslo", type: "action", glyph: "", label: "Meslo LG Mono",
+  { id: "meslo", type: "action", glyph: "", label: "Meslo LG Mono",
     run: "omarchy-install-font 'Meslo LG Mono' ttf-meslo-nerd 'MesloLGL Nerd Font'",
     launch: "tui", covers: { "install.style.font.meslo": "B" } },
-  { id: "fira", type: "action", glyph: "", label: "Fira Code",
+  { id: "fira", type: "action", glyph: "", label: "Fira Code",
     run: "omarchy-install-font 'Fira Code' ttf-firacode-nerd 'FiraCode Nerd Font'",
     launch: "tui", covers: { "install.style.font.fira": "B" } },
-  { id: "victor", type: "action", glyph: "", label: "Victor Code",
+  { id: "victor", type: "action", glyph: "", label: "Victor Code",
     run: "omarchy-install-font 'Victor Code' ttf-victor-mono-nerd 'VictorMono Nerd Font'",
     launch: "tui", covers: { "install.style.font.victor": "B" } },
-  { id: "bitstream", type: "action", glyph: "", label: "Bitstream Vera Mono",
+  { id: "bitstream", type: "action", glyph: "", label: "Bitstream Vera Mono",
     run: "omarchy-install-font 'Bitstream Vera Code' ttf-bitstream-vera-mono-nerd 'BitstromWera Nerd Font'",
     launch: "tui", covers: { "install.style.font.bitstream": "B" } },
-  { id: "iosevka", type: "action", glyph: "", label: "Iosevka",
+  { id: "iosevka", type: "action", glyph: "", label: "Iosevka",
     run: "omarchy-install-font Iosevka ttf-iosevka-nerd 'Iosevka Nerd Font Mono'",
     launch: "tui", covers: { "install.style.font.iosevka": "B" } }
 ]},
 
 // ----------------------------------------------------------------- apps
 "apps": { title: "Apps & defaults", rows: [
-  { id: "defaults", type: "nav", page: "apps.default", glyph: "", label: "Default apps",
+  { id: "defaults", type: "nav", page: "apps.default", glyph: "", label: "Default apps",
     covers: { "setup.default": "N" } },
-  { id: "webapps", type: "nav", page: "apps.webapps", glyph: "", label: "Web apps" },
-  { id: "tuis", type: "nav", page: "apps.tuis", glyph: "", label: "Terminal apps" },
+  { id: "webapps", type: "nav", page: "apps.webapps", glyph: "", label: "Web apps" },
+  { id: "tuis", type: "nav", page: "apps.tuis", glyph: "", label: "Terminal apps" },
   { id: "packages", type: "nav", page: "apps.packages", glyph: "󰣇", label: "Packages" }
 ]},
 
 "apps.default": { title: "Default apps", rows: [
-  { id: "browser", type: "nav", page: "apps.default.browser", glyph: "", label: "Browser",
+  { id: "browser", type: "nav", page: "apps.default.browser", glyph: "", label: "Browser",
     detailCmd: "omarchy-default-browser", covers: { "setup.default.browser": "N" } },
-  { id: "terminal", type: "nav", page: "apps.default.terminal", glyph: "", label: "Terminal",
+  { id: "terminal", type: "nav", page: "apps.default.terminal", glyph: "", label: "Terminal",
     detailCmd: "omarchy-default-terminal", covers: { "setup.default.terminal": "N" } },
-  { id: "editor", type: "nav", page: "apps.default.editor", glyph: "", label: "Editor",
+  { id: "editor", type: "nav", page: "apps.default.editor", glyph: "", label: "Editor",
     detailCmd: "omarchy-default-editor", covers: { "setup.default.editor": "N" } },
   { id: "agent", type: "nav", page: "apps.default.agent", glyph: "󰚩", label: "AI agent",
     detailCmd: "omarchy-default-agent", covers: { "setup.default.agent": "N" } }
@@ -351,7 +351,7 @@ var PAGES = {
 ]},
 
 "apps.webapps": { title: "Web apps", rows: [
-  { id: "add", type: "action", glyph: "", label: "Add a web app",
+  { id: "add", type: "action", glyph: "", label: "Add a web app",
     run: "omarchy-launch-floating-terminal-with-presentation omarchy-webapp-install",
     launch: "none", covers: { "install.webapp": "B" } },
   { id: "remove", type: "action", glyph: "󰭌", label: "Remove a web app",
@@ -360,7 +360,7 @@ var PAGES = {
 ]},
 
 "apps.tuis": { title: "Terminal apps", rows: [
-  { id: "add", type: "action", glyph: "", label: "Add a terminal app",
+  { id: "add", type: "action", glyph: "", label: "Add a terminal app",
     run: "omarchy-launch-floating-terminal-with-presentation omarchy-tui-install",
     launch: "none", covers: { "install.tui": "B" } },
   { id: "remove", type: "action", glyph: "󰭌", label: "Remove a terminal app",
@@ -385,11 +385,11 @@ var PAGES = {
   covers: { "install.browser": "N", "install.editor": "N", "install.terminal": "N",
             "remove.browser": "N" },
   rows: [
-  { id: "firefox-install", type: "action", glyph: "", label: "Install Firefox",
+  { id: "firefox-install", type: "action", glyph: "", label: "Install Firefox",
     when: "! omarchy-pkg-present firefox",
     run: "omarchy-launch-floating-terminal-with-presentation 'omarchy-install-browser firefox'",
     launch: "none", covers: { "install.browser.firefox": "B" } },
-  { id: "firefox-remove", type: "action", glyph: "", label: "Remove Firefox",
+  { id: "firefox-remove", type: "action", glyph: "", label: "Remove Firefox",
     when: "omarchy-pkg-present firefox",
     run: "omarchy-launch-floating-terminal-with-presentation 'omarchy-remove-browser firefox'",
     launch: "none", covers: { "remove.browser.firefox": "B" } },
@@ -397,28 +397,28 @@ var PAGES = {
     when: "! omarchy-pkg-present signal-desktop",
     run: "omarchy-launch-floating-terminal-with-presentation omarchy-install-service-signal",
     launch: "none", covers: { "install.service.signal": "B" } },
-  { id: "vim", type: "action", glyph: "", label: "Install Vim",
+  { id: "vim", type: "action", glyph: "", label: "Install Vim",
     when: "! omarchy-pkg-present vim", run: "omarchy-install-app Vim vim",
     launch: "tui", covers: { "install.editor.vim": "B" } },
-  { id: "helix", type: "action", glyph: "", label: "Install Helix",
+  { id: "helix", type: "action", glyph: "", label: "Install Helix",
     when: "! omarchy-pkg-present helix",
     run: "omarchy-launch-floating-terminal-with-presentation omarchy-install-editor-helix",
     launch: "none", covers: { "install.editor.helix": "B" } },
-  { id: "ghostty", type: "action", glyph: "", label: "Install Ghostty",
+  { id: "ghostty", type: "action", glyph: "", label: "Install Ghostty",
     when: "! omarchy-pkg-present ghostty",
     run: "omarchy-launch-floating-terminal-with-presentation 'omarchy-install-terminal ghostty'",
     launch: "none", covers: { "install.terminal.ghostty": "B" } },
-  { id: "kitty", type: "action", glyph: "", label: "Install Kitty",
+  { id: "kitty", type: "action", glyph: "", label: "Install Kitty",
     when: "! omarchy-pkg-present kitty",
     run: "omarchy-launch-floating-terminal-with-presentation 'omarchy-install-terminal kitty'",
     launch: "none", covers: { "install.terminal.kitty": "B" } },
   // Both are installed, so both stay hidden. Kept so the pair is represented
   // and the coverage map has somewhere to point.
-  { id: "alacritty", type: "action", glyph: "", label: "Install Alacritty",
+  { id: "alacritty", type: "action", glyph: "", label: "Install Alacritty",
     when: "! omarchy-pkg-present alacritty",
     run: "omarchy-launch-floating-terminal-with-presentation 'omarchy-install-terminal alacritty'",
     launch: "none", covers: { "install.terminal.alacritty": "B" } },
-  { id: "foot", type: "action", glyph: "", label: "Install Foot",
+  { id: "foot", type: "action", glyph: "", label: "Install Foot",
     when: "! omarchy-pkg-present foot",
     run: "omarchy-launch-floating-terminal-with-presentation 'omarchy-install-terminal foot'",
     launch: "none", covers: { "install.terminal.foot": "B" } }
@@ -432,7 +432,7 @@ var PAGES = {
     detail: "Bar, drawer, shade and gestures",
     run: "mobileomarchy-restart-shell", launch: "none",
     covers: { "update.process.shell": "N", "update.process": "N" } },
-  { id: "tmux", type: "action", glyph: "", label: "Reset tmux config",
+  { id: "tmux", type: "action", glyph: "", label: "Reset tmux config",
     run: "omarchy-launch-floating-terminal-with-presentation omarchy-refresh-tmux",
     launch: "none", covers: { "update.config.tmux": "B", "update.config": "N" } }
 ]},
@@ -472,20 +472,20 @@ var PAGES = {
   { id: "sudo", type: "action", glyph: "󰟵", label: "Passwordless sudo",
     run: "omarchy-launch-floating-terminal-with-presentation omarchy-sudo-passwordless",
     launch: "none", covers: { "setup.security.passwordless-sudo": "B" } },
-  { id: "passwd", type: "action", glyph: "", label: "Change password",
+  { id: "passwd", type: "action", glyph: "", label: "Change password",
     run: "omarchy-launch-floating-terminal-with-presentation passwd",
     launch: "none", covers: { "update.password.user": "B", "update.password": "N" } }
 ]},
 
 // -------------------------------------------------------------------- tools
 "tools": { title: "Tools", rows: [
-  { id: "screenshot", type: "action", glyph: "", label: "Screenshot",
+  { id: "screenshot", type: "action", glyph: "", label: "Screenshot",
     run: "mobileomarchy-capture-screenshot", launch: "none",
     covers: { "trigger.capture.screenshot": "N", "trigger.capture": "N" } },
-  { id: "record", type: "nav", page: "tools.record", glyph: "", label: "Screen record",
+  { id: "record", type: "nav", page: "tools.record", glyph: "", label: "Screen record",
     when: "omarchy-cmd-present gpu-screen-recorder",
     covers: { "trigger.capture.screenrecord": "N" } },
-  { id: "emoji", type: "action", glyph: "", label: "Emoji",
+  { id: "emoji", type: "action", glyph: "", label: "Emoji",
     run: "omarchy-menu-emoji", launch: "none",
     covers: { "trigger.emoji": "B" } },
   { id: "reminders", type: "nav", page: "tools.reminders", glyph: "󰢌", label: "Reminders",
@@ -498,14 +498,14 @@ var PAGES = {
 ]},
 
 "tools.record": { title: "Screen record", rows: [
-  { id: "stop", type: "action", glyph: "", label: "Stop recording",
+  { id: "stop", type: "action", glyph: "", label: "Stop recording",
     when: "pgrep -f '^gpu-screen-recorder'",
     run: "omarchy-capture-screenrecording --stop-recording", launch: "none",
     covers: { "trigger.capture.screenrecord.stop": "B" } },
-  { id: "silent", type: "action", glyph: "", label: "Record with no audio",
+  { id: "silent", type: "action", glyph: "", label: "Record with no audio",
     run: "omarchy-capture-screenrecording", launch: "none",
     covers: { "trigger.capture.screenrecord.no-audio": "B" } },
-  { id: "desktop-audio", type: "action", glyph: "", label: "Record with desktop audio",
+  { id: "desktop-audio", type: "action", glyph: "", label: "Record with desktop audio",
     run: "omarchy-capture-screenrecording --with-desktop-audio", launch: "none",
     covers: { "trigger.capture.screenrecord.desktop-audio": "B" } }
 ]},
@@ -533,24 +533,24 @@ var PAGES = {
 
 // ------------------------------------------------------------------- system
 "system": { title: "System", rows: [
-  { id: "time", type: "nav", page: "system.time", glyph: "", label: "Date & time" },
+  { id: "time", type: "nav", page: "system.time", glyph: "", label: "Date & time" },
   { id: "hardware", type: "nav", page: "system.hardware", glyph: "󰇅",
     label: "Restart hardware", covers: { "update.hardware": "N" } },
   { id: "power", type: "nav", page: "system.power", glyph: "󰐥", label: "Power" }
 ]},
 
 "system.time": { title: "Date & time", rows: [
-  { id: "timezone", type: "action", glyph: "", label: "Time zone",
+  { id: "timezone", type: "action", glyph: "", label: "Time zone",
     detailCmd: "timedatectl show -p Timezone --value",
     run: "omarchy-menu-timezone", launch: "menu",
     covers: { "update.timezone": "B" } },
-  { id: "time", type: "action", glyph: "", label: "Set the time",
+  { id: "time", type: "action", glyph: "", label: "Set the time",
     run: "omarchy-launch-floating-terminal-with-presentation omarchy-update-time",
     launch: "none", covers: { "update.time": "B" } }
 ]},
 
 "system.hardware": { title: "Restart hardware", rows: [
-  { id: "audio", type: "action", glyph: "", label: "Audio",
+  { id: "audio", type: "action", glyph: "", label: "Audio",
     run: "omarchy-launch-floating-terminal-with-presentation omarchy-restart-audio",
     launch: "none", covers: { "update.hardware.audio": "B" } },
   { id: "wifi", type: "action", glyph: "󱚾", label: "Wi-Fi",
@@ -562,7 +562,7 @@ var PAGES = {
 ]},
 
 "system.power": { title: "Power", rows: [
-  { id: "lock", type: "action", glyph: "", label: "Lock",
+  { id: "lock", type: "action", glyph: "", label: "Lock",
     run: "mobileomarchy-system-lock", launch: "none",
     covers: { "system.lock": "N" } },
   { id: "suspend", type: "action", glyph: "󰒲", label: "Suspend",
@@ -588,14 +588,14 @@ var PAGES = {
 
 // -------------------------------------------------------------------- about
 "about": { title: "About phone", rows: [
-  { id: "version", type: "info", glyph: "", label: "Omarchy", read: "omarchy-version" },
+  { id: "version", type: "info", glyph: "", label: "Omarchy", read: "omarchy-version" },
   { id: "kernel", type: "info", glyph: "󰌢", label: "Kernel", read: "uname -r" },
   { id: "device", type: "info", glyph: "󰄤", label: "Device",
     read: "tr -d '\\0' < /proc/device-tree/model 2>/dev/null || echo unknown" },
-  { id: "keys", type: "nav", page: "about.keys", glyph: "", label: "Keybindings",
+  { id: "keys", type: "nav", page: "about.keys", glyph: "", label: "Keybindings",
     covers: { "learn.keybindings": "N" } },
   { id: "help", type: "nav", page: "about.help", glyph: "󰧑", label: "Help & docs" },
-  { id: "aboutomarchy", type: "action", glyph: "", label: "About Omarchy",
+  { id: "aboutomarchy", type: "action", glyph: "", label: "About Omarchy",
     run: "omarchy-launch-about", launch: "tui", covers: { "about": "B" } }
 ]},
 
@@ -605,15 +605,15 @@ var PAGES = {
 "about.keys": { title: "Keybindings", text: "omarchy-menu-keybindings --print", rows: [] },
 
 "about.help": { title: "Help & docs", rows: [
-  { id: "manual", type: "link", glyph: "", label: "Omarchy manual",
+  { id: "manual", type: "link", glyph: "", label: "Omarchy manual",
     url: "https://omarchy.org/manual/", covers: { "learn.omarchy": "B" } },
   { id: "arch", type: "link", glyph: "󰣇", label: "Arch wiki",
     url: "https://wiki.archlinux.org/title/Main_page", covers: { "learn.arch": "B" } },
   { id: "bash", type: "link", glyph: "󱆃", label: "Bash",
     url: "https://devhints.io/bash", covers: { "learn.bash": "B" } },
-  { id: "neovim", type: "link", glyph: "", label: "Neovim",
+  { id: "neovim", type: "link", glyph: "", label: "Neovim",
     url: "https://www.lazyvim.org/keymaps", covers: { "learn.neovim": "B" } },
-  { id: "tmux", type: "action", glyph: "", label: "Tmux keybindings",
+  { id: "tmux", type: "action", glyph: "", label: "Tmux keybindings",
     run: "omarchy-menu-tmux-keybindings", launch: "menu",
     covers: { "learn.tmux-keybindings": "B" } },
   { id: "community", type: "action", glyph: "󰙯", label: "Community",
