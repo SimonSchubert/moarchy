@@ -853,12 +853,34 @@ because hiding the keyboard is the reversible outcome. So a test that issues one
 `gestures back` right after a restart is testing the probe's timing, not the
 gesture — it failed once here and looked exactly like a real regression.
 
-**Contrast has to be measured, not reasoned about.** Sampling pixels from a
-device screenshot: labels 9.47:1, detail lines **4.50:1** — AA to two decimal
-places, with the antialiased glyph edges below it. The cause is that subtitles
-sit on a raised card rather than the background, and that 8% lift is what eats
-the margin. Any alpha under 1.0 over a raised surface loses more than it looks
-like it should.
+**Contrast has to be measured, not reasoned about — and not on one theme.**
+Sampling pixels from a device screenshot: labels 9.47:1, detail lines
+**4.50:1** — AA to two decimal places, with the antialiased glyph edges below
+it. The cause is that subtitles sit on a raised card rather than the
+background, and that 8% lift is what eats the margin.
+
+Raising the alpha and calling it fixed was the mistake underneath the mistake.
+Catppuccin happened to be on the phone, and it is one of the *forgiving* themes
+for that pair. Run across all 22 `colors.toml` files, foreground at 0.7 over the
+card is below AA in six of them and reaches **3.14:1 on rose-pine**;
+`mobileomarchy.themes`, at a flat 0.6 on the bare background, was **2.72:1**.
+One theme measured and 21 assumed.
+
+No constant is defensible here. At 0.55 — quiet enough to read as secondary —
+18 of 22 are under AA. At 0.9 — the lowest value that clears AA everywhere —
+the subtitle is within ten percent of its label and the hierarchy the alpha
+existed to create is gone. A constant has to be tuned for the worst theme and is
+therefore wrong for the other 21. So the colour is computed per theme: start at
+0.55 and walk toward the foreground only until the pair clears 4.5:1. Worst case
+becomes 4.52:1 and sixteen of the twenty-two stay below 0.70.
+
+The measurement must use the *composited* background. The card is 8% alpha over
+the base, and a sweep naming two palette roles cannot express that — it reports
+the base or `lighter_background`, and both overstate the contrast. The
+moarchy-keyboard session and this one arrived at the same six failing themes and
+the same 3.14:1 from independent implementations once its checker grew a
+`mix(base;over;alpha)` form, which is better evidence than either of us checking
+our own arithmetic.
 
 ## 7. Hardware status
 
