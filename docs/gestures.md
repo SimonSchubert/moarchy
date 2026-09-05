@@ -6,20 +6,20 @@ archaeology of *why* lives in `docs/build-log.md`; this file is the contract.
 Every line here is agreed. Nothing is inferred — where a choice was open it was
 put to a decision, and the ones that removed capability (C1, E7) record why.
 
-Each AC is checkable from a terminal. `bin/mobileomarchy-selftest --gestures`
+Each AC is checkable from a terminal. `bin/moarchy-selftest --gestures`
 cites these ids, so an AC with no test is visible.
 
 ## Vocabulary
 
 | Term | What it means |
 | --- | --- |
-| **strip** | The reserved 20px band at the very bottom holding the home pill. Owned by `mobileomarchy.gestures`. |
+| **strip** | The reserved 20px band at the very bottom holding the home pill. Owned by `moarchy.gestures`. |
 | **home screen** | A sway workspace with no windows on it: wallpaper, bar, pill. One app per workspace, so an empty workspace *is* the home screen. |
 | **app** | A workspace with a window on it, or Settings, which is treated as one (K). |
 | **shell app** | A screen this shell draws itself that behaves like an app: it has a carousel card and the strip hides it. Settings is the only one (K11). |
-| **carousel** | The recent-apps switcher (`mobileomarchy.recents`). |
-| **drawer** | The searchable app grid (`mobileomarchy.drawer`). |
-| **shade** | The pull-down from the top edge (`mobileomarchy.shade`). |
+| **carousel** | The recent-apps switcher (`moarchy.recents`). |
+| **drawer** | The searchable app grid (`moarchy.drawer`). |
+| **shade** | The pull-down from the top edge (`moarchy.shade`). |
 | **travel** | Drag distance as a fraction of 0.45 × screen height (~324 logical px). |
 
 ---
@@ -170,6 +170,29 @@ hold-to-close it removed in C, it has no undo.
 
 **F1** Home is the lowest-numbered workspace with nothing on it, so the sideways
 swipe order stays contiguous.
+
+**Known defect, recorded and deliberately not fixed.** `firstFreeWorkspace()`
+scans 1..10 and then falls through to `return 10` — a number `taken` has just
+recorded as occupied — so once ten workspaces exist, going home lands on an app
+instead of a home screen.
+
+It is worth writing down because it does not look like one bug. A4 and K4 both
+end in that fall-through, so the two trade an intermittent failure between them
+depending on how many workspaces happen to be occupied, and on a phone shared
+between sessions that is luck. Measured, same build, minutes apart: K4 failed
+with `workspace 10 holding 'V[moa-selftest]'` while A4 passed, then A4 failed
+with the identical message while K4 passed. Both sessions working on this
+suite read it as churn for a day. Confirmed at the mechanism rather than
+inferred from runs — filling workspaces 1-12 and going home from an occupied
+one leaves you where you were, with Settings open and with it closed alike, so
+it is F1's implementation and has nothing to do with K4a.
+
+Not patched here on purpose. What home should do when nothing is free is a
+question about F1 itself: raising the ceiling past ten only moves the wall,
+since one app per workspace will exhaust any ceiling, and dropping the "with
+nothing on it" clause makes home land on an app, which is not what a home
+screen is. That is a decision about the spec, not a constant to change quietly
+on the way past.
 
 **F2** Going home never closes anything. Every app is still in the carousel
 afterwards.
@@ -352,7 +375,7 @@ list layer surfaces, so this cannot be read from the compositor.
 → `omarchy-shell {drawer,settings,themes} geometry` each report `h` equal to
 `omarchy-shell device geometry`'s `h` plus `strip`
 
-`mobileomarchy.device` is the control, and is deliberately left unchanged for
+`moarchy.device` is the control, and is deliberately left unchanged for
 that purpose: same layer, same zero zone, no margin. An absolute assertion
 against the workspace rect would not do -- the rect has the bar's and the
 strip's exclusive zones taken out of it and an `ExclusionMode.Ignore` surface
@@ -514,7 +537,7 @@ points at criteria that already exist.
 running: from the summon that opened it until it is closed (K6). Hiding it does
 not end that — a hidden app is still in the switcher, which is the whole
 purpose of the switcher.
-→ `omarchy-shell recents list` has a `mobileomarchy.settings` line while
+→ `omarchy-shell recents list` has a `moarchy.settings` line while
 Settings is running and no such line when it is not
 
 **K2** The card is icon, name and title, the same three lines a window's card
@@ -528,12 +551,12 @@ from an app: the carousel rises, following the finger, with the Settings card
 leading and marked (A1, E1). It is not A8's "clear whatever is covering the
 screen" any more — that criterion keeps the shade and the drawer.
 → `recents state` == `open` and `recents list`'s first line is
-`mobileomarchy.settings`
+`moarchy.settings`
 
 **K4** Carried on into the home band, that same drag hides Settings and lands
 on a home screen (A4). Hidden, not closed: the card is still in the carousel.
 → `settings state` == `closed`, the focused workspace's `representation` is
-empty, and `recents list` still has its `mobileomarchy.settings` line
+empty, and `recents list` still has its `moarchy.settings` line
 
 **K4a** Reaching a home screen from Settings takes a workspace switch whenever
 *any* window is open, not only when one is on the workspace underneath.
@@ -566,7 +589,7 @@ flicking the card away (E3), and the back gesture on the root page (G, and
 `settings.md` B3). That pairing is not new — it is exactly what those two
 gestures already do to a window, where E3 closes a card and G4 closes the
 focused app.
-→ after either, `recents list` has no `mobileomarchy.settings` line and
+→ after either, `recents list` has no `moarchy.settings` line and
 `settings stack` is one line
 
 **K7** Closing the Settings card when it is the only card leaves a home screen,
