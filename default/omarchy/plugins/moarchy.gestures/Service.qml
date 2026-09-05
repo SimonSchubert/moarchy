@@ -201,18 +201,18 @@ Item {
   // still on screen, so nothing looked wrong until you dismissed it and found
   // the app gone. Adding a screen must not mean remembering two lists.
   readonly property var overlayIds: [
-    "mobileomarchy.shade",
-    "mobileomarchy.drawer",
-    "mobileomarchy.recents",
-    "mobileomarchy.themes",
-    "mobileomarchy.settings"
+    "moarchy.shade",
+    "moarchy.drawer",
+    "moarchy.recents",
+    "moarchy.themes",
+    "moarchy.settings"
   ]
 
   // K11. The shell's own screens that are apps rather than sheets: they get a
   // carousel card and the strip hides them instead of clearing them. One, and
   // deliberately so -- adding a second is a decision, not a discovery.
   function isShellApp(id: string): bool {
-    return id === "mobileomarchy.settings"
+    return id === "moarchy.settings"
   }
 
   // A7, A8. The surfaces an up-swipe *clears* rather than switches away from.
@@ -232,7 +232,7 @@ Item {
   function coveringSheet(): bool {
     for (var i = 0; i < root.overlayIds.length; i++) {
       var id = root.overlayIds[i]
-      if (id === "mobileomarchy.recents" || root.isShellApp(id)) continue
+      if (id === "moarchy.recents" || root.isShellApp(id)) continue
       if (root.isOpen(id)) return true
     }
     return false
@@ -256,10 +256,12 @@ Item {
     // through to closing the app rather than throwing here.
     //
     // `omarchy.` only, and never the bar. That list carries everything mounted,
-    // including surfaces that are always up: hiding mobileomarchy.gestures
+    // including surfaces that are always up: hiding moarchy.gestures
     // would take away the strip the gesture arrived on, with no way back. The
-    // prefix test excludes our own ids for free -- "mobileomarchy." does not
-    // start with "omarchy.".
+    // prefix test excludes our own ids for free -- "moarchy." does not
+    // start with "omarchy.". Since the rename those two differ by a single
+    // transposition (m-o-a versus o-m-a), so this is worth stating rather
+    // than leaving to the eye: it reads like a prefix and is not one.
     var open = root.shell ? root.shell.openPanelIds : null
     if (open && open.length) {
       for (var j = open.length - 1; j >= 0; j--) {
@@ -319,7 +321,7 @@ Item {
   // doing what it did before this section.
   function hasApps(): bool {
     if (root.hasWindows()) return true
-    var recents = root.panelItem("mobileomarchy.recents")
+    var recents = root.panelItem("moarchy.recents")
     return !!(recents && recents.shellAppsRunning)
   }
 
@@ -354,7 +356,7 @@ Item {
   // Existence does not go stale the same way: Sway destroys an empty
   // workspace as soon as it loses focus, so a number that is not in the list
   // is one that has nothing on it. Same rule
-  // bin/mobileomarchy-one-app-per-workspace uses to pick a slot, and it keeps
+  // bin/moarchy-one-app-per-workspace uses to pick a slot, and it keeps
   // the sideways swipe order contiguous.
   //
   // `number` is the visible workspace number. `id` is an internal Sway handle,
@@ -381,7 +383,7 @@ Item {
     // 40% of the travel, so an open one starts the next drag already there --
     // which is what lets a second swipe carry straight on into the home band
     // (A6).
-    root.dragStartPull = id === "mobileomarchy.recents"
+    root.dragStartPull = id === "moarchy.recents"
       ? progress * root.recentsFull
       : progress
   }
@@ -398,12 +400,12 @@ Item {
   function armPreview(): void {
     if (root.dragMode !== "recents" || !root.dragTarget) return
     if (!root.dragTarget.armPreview) return
-    if (root.isOpen("mobileomarchy.recents")) return
+    if (root.isOpen("moarchy.recents")) return
     // K10. Settings is an app and gets the shrink too. It is on screen and is
     // being rendered, which is the whole of J10's reasoning -- but it holds
     // the keyboard, so every window under it reads deactivated and
     // focusedToplevel() alone would refuse to arm here.
-    if (!root.focusedToplevel() && !root.isOpen("mobileomarchy.settings")) return
+    if (!root.focusedToplevel() && !root.isOpen("moarchy.settings")) return
     root.dragTarget.armPreview()
   }
 
@@ -434,8 +436,8 @@ Item {
   // toggling the wrong way.
   function releaseTarget(open): void {
     if (!root.dragTarget) return
-    var id = root.dragMode === "recents" ? "mobileomarchy.recents"
-                                         : "mobileomarchy.drawer"
+    var id = root.dragMode === "recents" ? "moarchy.recents"
+                                         : "moarchy.drawer"
     root.dragTarget.dragging = false
     if (root.dragMode === "recents" && !open) root.dragTarget.homeHint = 0
     if (open && root.shell) root.shell.summon(id, "{}")
@@ -501,8 +503,8 @@ Item {
       // cannot drift, and hidden *before* the switch, because a full-screen
       // sheet left standing over a home screen is the exact state this
       // gesture exists to get out of.
-      var settingsWasUp = root.isOpen("mobileomarchy.settings")
-      if (settingsWasUp && root.shell) root.shell.hide("mobileomarchy.settings")
+      var settingsWasUp = root.isOpen("moarchy.settings")
+      if (settingsWasUp && root.shell) root.shell.hide("moarchy.settings")
 
       // Already on a home screen: no toplevel is activated when focus is on an
       // empty workspace, which makes this the one reliable "is this workspace
@@ -674,7 +676,7 @@ Item {
           return "ok: cleared"
         }
         if (!root.hasApps()) return "ok: nothing (no apps open)"
-        if (root.shell) root.shell.summon("mobileomarchy.recents", "{}")
+        if (root.shell) root.shell.summon("moarchy.recents", "{}")
         return "ok: recents"
       }
       return "usage: swipe left|right|up|home"
@@ -711,7 +713,7 @@ Item {
     implicitHeight: root.stripHeight
     color: "transparent"
 
-    WlrLayershell.namespace: "mobileomarchy-gestures"
+    WlrLayershell.namespace: "moarchy-gestures"
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
@@ -790,12 +792,12 @@ Item {
         // in both cases, which they did not before.
         if (root.coveringSheet())
           root.pendingMode = "none"
-        else if (root.isOpen("mobileomarchy.recents") || root.hasApps())
+        else if (root.isOpen("moarchy.recents") || root.hasApps())
           root.pendingMode = "recents"
         else
           root.pendingMode = "none"
 
-        if (root.pendingMode === "recents") root.resolveTarget("mobileomarchy.recents")
+        if (root.pendingMode === "recents") root.resolveTarget("moarchy.recents")
         watchdog.restart()
       }
 
@@ -889,7 +891,7 @@ Item {
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
 
-    WlrLayershell.namespace: "mobileomarchy-home"
+    WlrLayershell.namespace: "moarchy-home"
     WlrLayershell.layer: WlrLayer.Bottom
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
@@ -919,7 +921,7 @@ Item {
         root.tracking = true
         root.dragMode = "none"
         root.pendingMode = "drawer"
-        root.resolveTarget("mobileomarchy.drawer")
+        root.resolveTarget("moarchy.drawer")
         watchdog.restart()
       }
 
@@ -981,7 +983,7 @@ Item {
     implicitWidth: root.backEdgeWidth
     color: "transparent"
 
-    WlrLayershell.namespace: "mobileomarchy-back"
+    WlrLayershell.namespace: "moarchy-back"
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
     exclusionMode: ExclusionMode.Ignore

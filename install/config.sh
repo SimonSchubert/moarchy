@@ -3,6 +3,60 @@
 
 echo "==> config"
 
+# --- Retire the mobileomarchy name ----------------------------------------
+# ONE RELEASE ONLY. The project was called mobileomarchy until 2026-09-05, and
+# a phone provisioned before then has the old name in five places that nothing
+# else here would ever revisit. Delete this block, the two legacy globs in the
+# plugin sweep below, the legacy prefix in the shell.json filter, and the
+# legacy case in scripts/test-plugin-sweep.sh, once every device you care about
+# has run this installer at least once.
+#
+# Plugins and desktop entries are *not* handled here -- the sweep below already
+# removes anything that is not in the repo, and teaching it the old namespace
+# is both smaller and the thing that is already tested.
+if [[ -d ~/.local/state/mobileomarchy && ! -d ~/.local/state/moarchy ]]; then
+  # Carries screen-locked, shell-off and gaps-on across. Moved rather than
+  # dropped: these are toggles the user set, and silently resetting them looks
+  # like the update broke something.
+  mv ~/.local/state/mobileomarchy ~/.local/state/moarchy
+  echo "    migrated ~/.local/state/mobileomarchy -> moarchy"
+fi
+
+# The old PATH export. This is the one that actually breaks a phone: the guard
+# further down greps for MOARCHY_PATH, which is *not* a substring of
+# MOBILEOMARCHY_PATH, so without this it appends a second block and leaves
+# ~/.local/share/mobileomarchy/bin -- a directory this same run deletes --
+# ahead of the real one on PATH. Every moarchy-* command then resolves to
+# nothing on the next login.
+if [[ -f ~/.profile ]] && grep -q MOBILEOMARCHY_PATH ~/.profile; then
+  python3 - <<'LEGACY_PROFILE_EOF'
+import os, re
+p = os.path.expanduser("~/.profile")
+s = open(p).read()
+# The block as install/config.sh wrote it: a "# mobileomarchy" comment through
+# the export PATH line that mentions it. Anchored at both ends so a profile the
+# user has since edited by hand loses only what we put there.
+out = re.sub(r"\n*# mobileomarchy\n(?:.*\n)*?export PATH=\"\$MOBILEOMARCHY_PATH/bin.*\n", "\n", s)
+if out != s:
+    open(p, "w").write(out)
+LEGACY_PROFILE_EOF
+  if grep -q MOBILEOMARCHY_PATH ~/.profile; then
+    echo "    !! ~/.profile still mentions MOBILEOMARCHY_PATH -- remove it by hand," >&2
+    echo "    !! or its stale bin/ shadows this install on the next login" >&2
+  else
+    echo "    removed the legacy MOBILEOMARCHY_PATH block from ~/.profile"
+  fi
+fi
+
+# The old checkout. Guarded on the new one existing and being a different
+# directory, so a half-set MOARCHY_PATH cannot make this delete the tree it is
+# currently running from.
+if [[ -d ~/.local/share/mobileomarchy && -d $MOARCHY_PATH ]] &&
+   ! [[ ~/.local/share/mobileomarchy -ef $MOARCHY_PATH ]]; then
+  rm -rf ~/.local/share/mobileomarchy
+  echo "    removed the old ~/.local/share/mobileomarchy checkout"
+fi
+
 # 4.x keeps the *current* theme under ~/.local/state; ~/.config/omarchy holds
 # only user-supplied overrides (themes, templates, shell.json).
 mkdir -p ~/.config/omarchy/themed ~/.local/state/omarchy/current ~/.config/sway/config.d
@@ -35,7 +89,7 @@ fi
 # which inherit a weight, so there is no one place in QML to set this -- and
 # doing it in fontconfig brings every GTK and Qt app along, which is the point.
 mkdir -p ~/.config/fontconfig/conf.d
-cp "$MOBILEOMARCHY_PATH/default/fontconfig/50-mobileomarchy-weight.conf" \
+cp "$MOARCHY_PATH/default/fontconfig/50-moarchy-weight.conf" \
    ~/.config/fontconfig/conf.d/
 fc-cache -f >/dev/null 2>&1
 
@@ -86,20 +140,20 @@ fi
 # --- Mobile tweak: btop -----------------------------------------------------
 # A fullscreen terminal here is 47x41 characters, and btop refuses to draw below
 # 60 columns whatever shown_boxes says. Trimming the boxes still helps in a
-# split; mobileomarchy-launch-tui is what actually makes it fit, by dropping the
+# split; moarchy-launch-tui is what actually makes it fit, by dropping the
 # font size.
 if [[ -f ~/.config/btop/btop.conf ]]; then
   sed -i 's/^shown_boxes = .*/shown_boxes = "cpu mem"/' ~/.config/btop/btop.conf
 fi
 
 # --- Our Sway config -------------------------------------------------------
-cp "$MOBILEOMARCHY_PATH/config/sway/config" ~/.config/sway/config
+cp "$MOARCHY_PATH/config/sway/config" ~/.config/sway/config
 
 # --- The one new theme template -------------------------------------------
 # omarchy-theme-set-templates already processes $HOME/.config/omarchy/themed
 # before its own built-ins, so adding sway.conf.tpl there themes Sway from every
 # theme's colors.toml without patching upstream at all.
-cp "$MOBILEOMARCHY_PATH/default/themed/sway.conf.tpl" ~/.config/omarchy/themed/
+cp "$MOARCHY_PATH/default/themed/sway.conf.tpl" ~/.config/omarchy/themed/
 
 # --- The 4.x shell ---------------------------------------------------------
 # shell.json is the shell's config; upstream ships a default we copy verbatim so
@@ -136,19 +190,19 @@ mkdir -p ~/.config/omarchy/plugins
 # -- an app that launches nothing, which is not the sort of thing anyone
 # reports as a bug.
 #
-# Scoped to the mobileomarchy.* namespace on purpose: plugins installed from
+# Scoped to the moarchy.* namespace on purpose: plugins installed from
 # elsewhere are the user's, and a sweep that removed those would be a far worse
 # bug than the one it fixes.
 # >>> plugin-sweep (scripts/test-plugin-sweep.sh extracts between these markers
 # and runs the real code, so do not rename them without updating that script)
 repo_plugins=""
-for plugin_dir in "$MOBILEOMARCHY_PATH"/default/omarchy/plugins/*/; do
+for plugin_dir in "$MOARCHY_PATH"/default/omarchy/plugins/*/; do
   [[ -d $plugin_dir ]] || continue
   repo_plugins="$repo_plugins $(basename "$plugin_dir")"
 done
 
 # An empty list is not "every installed plugin is stale", it is "I could not
-# read the repo": MOBILEOMARCHY_PATH unset or wrong, the directory missing, or
+# read the repo": MOARCHY_PATH unset or wrong, the directory missing, or
 # a checkout or rebase in a worktree several sessions share catching it half
 # written. Acting on that reading deletes every plugin on the device -- bar,
 # drawer, shade, recents, gestures, settings -- and the copy loop below
@@ -158,10 +212,15 @@ done
 # So refuse. The sweep is a tidying pass; skipping it leaves a stale icon,
 # while running it on a half-read repo leaves no phone.
 if [[ -z ${repo_plugins// /} ]]; then
-  echo "    !! no plugins found in $MOBILEOMARCHY_PATH/default/omarchy/plugins" >&2
+  echo "    !! no plugins found in $MOARCHY_PATH/default/omarchy/plugins" >&2
   echo "    !! skipping the stale sweep rather than deleting every installed plugin" >&2
 else
-  for installed in ~/.config/omarchy/plugins/mobileomarchy.*/; do
+  # The mobileomarchy.* half is the rename migration (see the top of this
+  # file) and comes out with it: repo_plugins never contains an old-namespace
+  # id, so every one of them is stale by definition and the loop below removes
+  # it. Nothing else here needs to know the project changed name.
+  for installed in ~/.config/omarchy/plugins/moarchy.*/ \
+                   ~/.config/omarchy/plugins/mobileomarchy.*/; do
     [[ -d $installed ]] || continue
     installed_id=$(basename "$installed")
     [[ " $repo_plugins " == *" $installed_id "* ]] && continue
@@ -173,7 +232,11 @@ else
   # filename, so an entry named after something else still gets cleaned up.
   for entry in ~/.local/share/applications/*.desktop; do
     [[ -e $entry ]] || continue
-    owner=$(sed -n 's/^X-MobileOmarchy-Plugin=//p' "$entry" | head -1)
+    # Both spellings of the marker: an entry written before the rename says
+    # X-MobileOmarchy-Plugin, and an entry we no longer recognise is an entry
+    # we can never clean up -- it keeps a drawer icon that launches nothing.
+    owner=$(sed -n -e 's/^X-Moarchy-Plugin=//p' \
+                   -e 's/^X-MobileOmarchy-Plugin=//p' "$entry" | head -1)
     [[ -n $owner ]] || continue
     [[ " $repo_plugins " == *" $owner "* ]] && continue
     rm -f "$entry"
@@ -182,7 +245,7 @@ else
 fi
 # <<< plugin-sweep
 
-for plugin_dir in "$MOBILEOMARCHY_PATH"/default/omarchy/plugins/*/; do
+for plugin_dir in "$MOARCHY_PATH"/default/omarchy/plugins/*/; do
   plugin_id=$(basename "$plugin_dir")
   rm -rf ~/.config/omarchy/plugins/"$plugin_id"
   cp -r "$plugin_dir" ~/.config/omarchy/plugins/
@@ -211,7 +274,7 @@ done
 #   everything    falls through to findEntryLocation(), which only finds
 #   else          `{"id": ...}` objects in plugins[].
 #
-# bar.layout is deliberately left alone even though mobileomarchy.bar ignores
+# bar.layout is deliberately left alone even though moarchy.bar ignores
 # it: it is what `omarchy bar use omarchy.bar` falls back to, and a phone with a
 # broken shell plugin should still come up with a bar that works.
 python3 - <<'PLUGIN_EOF'
@@ -226,14 +289,14 @@ except Exception:
 dirty = False
 
 bar = d.setdefault("bar", {})
-if bar.get("id") != "mobileomarchy.bar":
-    bar["id"] = "mobileomarchy.bar"
+if bar.get("id") != "moarchy.bar":
+    bar["id"] = "moarchy.bar"
     dirty = True
 
 plugins = d.setdefault("plugins", [])
-for pid in ("mobileomarchy.gestures", "mobileomarchy.drawer", "mobileomarchy.recents",
-            "mobileomarchy.shade", "mobileomarchy.themes", "mobileomarchy.settings",
-            "mobileomarchy.device", "mobileomarchy.splash"):
+for pid in ("moarchy.gestures", "moarchy.drawer", "moarchy.recents",
+            "moarchy.shade", "moarchy.themes", "moarchy.settings",
+            "moarchy.device", "moarchy.splash"):
     if not os.path.isdir(os.path.expanduser("~/.config/omarchy/plugins/" + pid)):
         continue
     if not any(isinstance(e, dict) and e.get("id") == pid for e in plugins):
@@ -244,9 +307,15 @@ for pid in ("mobileomarchy.gestures", "mobileomarchy.drawer", "mobileomarchy.rec
 # plugin removed from the repo stayed listed here and the shell went on trying
 # to load a directory that the sweep had already deleted. Scoped to our own
 # namespace for the same reason the sweep is.
+#
+# The mobileomarchy. prefix is the rename migration and comes out with it. It
+# has to be listed explicitly: "mobileomarchy.shade" does not start with
+# "moarchy.", so without it every pre-rename id stays in shell.json pointing at
+# a directory the sweep above has just deleted. (bar.id needs no such care --
+# it is assigned unconditionally a few lines up.)
 keep = [e for e in plugins
         if not (isinstance(e, dict)
-                and str(e.get("id", "")).startswith("mobileomarchy.")
+                and str(e.get("id", "")).startswith(("moarchy.", "mobileomarchy."))
                 and not os.path.isdir(os.path.expanduser("~/.config/omarchy/plugins/" + e["id"])))]
 if len(keep) != len(plugins):
     plugins[:] = keep
@@ -259,14 +328,14 @@ PLUGIN_EOF
 # --- Make omarchy-* scripts work outside the installer ---------------------
 PROFILE=~/.profile
 touch "$PROFILE"
-if ! grep -q "MOBILEOMARCHY_PATH" "$PROFILE"; then
+if ! grep -q "MOARCHY_PATH" "$PROFILE"; then
   cat >>"$PROFILE" <<'PROFILE_EOF'
 
-# mobileomarchy
+# moarchy
 export OMARCHY_PATH="$HOME/.local/share/omarchy"
-export MOBILEOMARCHY_PATH="$HOME/.local/share/mobileomarchy"
-# mobileomarchy's bin comes first so its Sway shims shadow Omarchy's Hyprland scripts
-export PATH="$MOBILEOMARCHY_PATH/bin:$OMARCHY_PATH/bin:$PATH"
+export MOARCHY_PATH="$HOME/.local/share/moarchy"
+# moarchy's bin comes first so its Sway shims shadow Omarchy's Hyprland scripts
+export PATH="$MOARCHY_PATH/bin:$OMARCHY_PATH/bin:$PATH"
 PROFILE_EOF
 fi
 
@@ -281,7 +350,7 @@ fi
 # quickshell shell owns the OSD -- but the target is still what makes every
 # other graphical-session unit start.
 mkdir -p ~/.config/systemd/user
-cp "$MOBILEOMARCHY_PATH/default/systemd/sway-session.target" ~/.config/systemd/user/
+cp "$MOARCHY_PATH/default/systemd/sway-session.target" ~/.config/systemd/user/
 systemctl --user daemon-reload 2>/dev/null || true
 
 # --- Pick a starting theme (also generates ~/.local/state/omarchy/current/theme/sway.conf)

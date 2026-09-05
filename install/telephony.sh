@@ -41,7 +41,7 @@ sudo systemctl enable --now eg25-manager.service 2>/dev/null || true
 
 mkdir -p ~/.config/systemd/user
 for unit in calls-daemon.service sm.puri.Chatty-daemon.service; do
-  cp "$MOBILEOMARCHY_PATH/default/systemd/$unit" ~/.config/systemd/user/
+  cp "$MOARCHY_PATH/default/systemd/$unit" ~/.config/systemd/user/
 done
 
 systemctl --user daemon-reload 2>/dev/null || true

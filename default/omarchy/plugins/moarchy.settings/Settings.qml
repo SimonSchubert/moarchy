@@ -53,7 +53,7 @@ Item {
   property var pluginRegistry: null
   property var service: null
 
-  readonly property string pluginId: "mobileomarchy.settings"
+  readonly property string pluginId: "moarchy.settings"
 
   property bool opened: false
 
@@ -100,7 +100,7 @@ Item {
   property string confirmText: ""
   property var confirmRow: null
 
-  // Must match mobileomarchy.gestures' own stripHeight. Duplicated rather than
+  // Must match moarchy.gestures' own stripHeight. Duplicated rather than
   // read across plugins for the same reason the shade duplicates it: this
   // surface has to know the number even when the gestures plugin failed to
   // load, and a sheet that ran off the bottom of the screen in that case would
@@ -140,7 +140,7 @@ Item {
   readonly property color accent: Color.accent
 
   // The same weight the bar runs at. Light text on a dark surface reads thinner
-  // than it measures; mobileomarchy.bar's textWeight carries the ink
+  // than it measures; moarchy.bar's textWeight carries the ink
   // measurements behind DemiBold rather than Medium.
   readonly property int textWeight: Font.DemiBold
 
@@ -276,8 +276,8 @@ Item {
   // ------------------------------------------------------------ lifecycle
   function open(payloadJson) {
     if (root.shell && typeof root.shell.isPluginOpen === "function") {
-      var others = ["mobileomarchy.shade", "mobileomarchy.drawer",
-                    "mobileomarchy.recents", "mobileomarchy.themes"]
+      var others = ["moarchy.shade", "moarchy.drawer",
+                    "moarchy.recents", "moarchy.themes"]
       for (var i = 0; i < others.length; i++)
         if (root.shell.isPluginOpen(others[i])) root.shell.hide(others[i])
     }
@@ -724,7 +724,7 @@ Item {
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
 
-    WlrLayershell.namespace: "mobileomarchy-settings"
+    WlrLayershell.namespace: "moarchy-settings"
     WlrLayershell.layer: WlrLayer.Top
 
     exclusionMode: ExclusionMode.Normal

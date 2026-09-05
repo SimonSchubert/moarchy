@@ -1,2 +1,2 @@
 #!/bin/bash
-exec mobileomarchy-window-transparency-toggle "$@"
+exec moarchy-window-transparency-toggle "$@"

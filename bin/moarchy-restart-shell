@@ -37,10 +37,10 @@ export SWAYSOCK="${SWAYSOCK:-$(ls "$XDG_RUNTIME_DIR"/sway-ipc.* 2>/dev/null | he
 export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-$(basename "$(ls "$XDG_RUNTIME_DIR"/wayland-[0-9] 2>/dev/null | head -1)" 2>/dev/null)}"
 [[ -n $WAYLAND_DISPLAY ]] || echo "warning: no WAYLAND_DISPLAY; the shell will not start" >&2
 
-# Set by hand only, since mobileomarchy-toggle-bar stopped killing the shell to
+# Set by hand only, since moarchy-toggle-bar stopped killing the shell to
 # hide the bar. Kept as the escape hatch for debugging: touch it and the shell
 # stays down across restarts.
-STATE="${XDG_STATE_HOME:-$HOME/.local/state}/mobileomarchy/shell-off"
+STATE="${XDG_STATE_HOME:-$HOME/.local/state}/moarchy/shell-off"
 pkill -x quickshell 2>/dev/null
 [[ -f $STATE ]] && exit 0
 
@@ -69,7 +69,7 @@ done
 # word on screen. Sent to /dev/null that warning was the only diagnosis there is
 # and it was being thrown away, which is how you end up bisecting QML by
 # screenshot. Truncated per start, so the log is always this session's.
-LOG="${XDG_STATE_HOME:-$HOME/.local/state}/mobileomarchy/shell.log"
+LOG="${XDG_STATE_HOME:-$HOME/.local/state}/moarchy/shell.log"
 mkdir -p "$(dirname "$LOG")"
 
 QS_DISABLE_FILE_WATCHER=1 QS_NO_RELOAD_POPUP=1 \

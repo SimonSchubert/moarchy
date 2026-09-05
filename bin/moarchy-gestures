@@ -14,12 +14,12 @@
 DEVICE=/dev/input/by-path/platform-1c2ac00.i2c-event
 
 if [[ ! -e $DEVICE ]]; then
-  echo "mobileomarchy-gestures: $DEVICE is missing -- is this a PinePhone?" >&2
+  echo "moarchy-gestures: $DEVICE is missing -- is this a PinePhone?" >&2
   exit 1
 fi
 
 if [[ ! -r $DEVICE ]]; then
-  echo "mobileomarchy-gestures: cannot read $DEVICE." >&2
+  echo "moarchy-gestures: cannot read $DEVICE." >&2
   echo "  $(id -un) is not in the 'input' group. Fix with:" >&2
   echo "    sudo usermod -aG input $(id -un)   # then log out and back in" >&2
   exit 1
@@ -33,6 +33,6 @@ fi
 # "1,DU,B,*,R" is a one-finger swipe up, starting at the bottom edge, any
 # distance, fired on release. Commands must not contain commas.
 exec lisgd -d "$DEVICE" -w 720 -h 1440 \
-  -g "1,DU,B,*,R,mobileomarchy-toggle-keyboard" \
+  -g "1,DU,B,*,R,moarchy-toggle-keyboard" \
   -g "1,LR,L,*,R,swaymsg workspace prev_on_output" \
   -g "1,RL,R,*,R,swaymsg workspace next_on_output"

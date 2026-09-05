@@ -3,10 +3,10 @@
 # All verified available for aarch64, but each is heavy for an Allwinner A64
 # with 2-3 GB of RAM. Install what you actually want:
 #
-#   sudo pacman -S --needed $(grep -v '^#' mobileomarchy-extras.packages | grep -v '^$')
+#   sudo pacman -S --needed $(grep -v '^#' moarchy-extras.packages | grep -v '^$')
 
 chromium          # usable, but it is the heaviest thing you can run on this SoC
-nautilus          # GUI file manager; mobileomarchy-launch-files picks it up automatically
+nautilus          # GUI file manager; moarchy-launch-files picks it up automatically
 mpv
 imv
 signal-desktop
@@ -14,7 +14,7 @@ kdenlive
 libreoffice-fresh
 gpu-screen-recorder
 
-# Needed only by bin/mobileomarchy-touch, which synthesises touchscreen input
-# through /dev/uinput so bin/mobileomarchy-selftest --gestures can drive the
+# Needed only by bin/moarchy-touch, which synthesises touchscreen input
+# through /dev/uinput so bin/moarchy-selftest --gestures can drive the
 # gesture drawer without a finger. Not needed to run the phone, only to test it.
 python-evdev

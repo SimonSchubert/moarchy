@@ -11,7 +11,7 @@
 #
 # The presentation wrapper is upstream's, kept verbatim -- logo, then the
 # command, then the done prompt unless the user interrupted it (130). Only the
-# terminal changes: mobileomarchy-launch-tui is a fullscreen foot at font size 7,
+# terminal changes: moarchy-launch-tui is a fullscreen foot at font size 7,
 # which is the ~60 columns btop and friends need.
 
 # Theme the gum widgets to the current theme. Absent on a partial install, and a
@@ -24,4 +24,4 @@ cmd="$*"
 # `$?` is escaped so it is evaluated inside the spawned bash, not here.
 presentation="omarchy-show-logo; $cmd; if (( \$? != 130 )); then omarchy-show-done; fi"
 
-exec setsid mobileomarchy-launch-tui bash -lc "$presentation"
+exec setsid moarchy-launch-tui bash -lc "$presentation"

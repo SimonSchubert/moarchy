@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "id": "mobileomarchy.themes",
+  "id": "moarchy.themes",
   "name": "Themes",
   "version": "1.0.0",
-  "author": "mobileomarchy",
+  "author": "moarchy",
   "description": "Pick an Omarchy theme from a grid of live colour swatches.",
   "kinds": [
     "overlay"

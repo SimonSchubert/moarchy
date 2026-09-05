@@ -4,8 +4,8 @@
 # On Apple Silicon this container runs NATIVELY (linux/arm64), so these build at
 # full speed rather than at PinePhone speed (4x Cortex-A53 @ 1.15GHz, 2-3 GB).
 #
-#   docker build --platform linux/arm64 -f docker/Dockerfile.builder -t mobileomarchy-builder .
-#   docker run --rm -v "$PWD/packages:/out" mobileomarchy-builder
+#   docker build --platform linux/arm64 -f docker/Dockerfile.builder -t moarchy-builder .
+#   docker run --rm -v "$PWD/packages:/out" moarchy-builder
 
 FROM --platform=linux/arm64 menci/archlinuxarm:base-devel
 

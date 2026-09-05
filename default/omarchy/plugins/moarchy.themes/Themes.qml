@@ -45,7 +45,7 @@ Item {
   property var pluginRegistry: null
   property var service: null
 
-  readonly property string pluginId: "mobileomarchy.themes"
+  readonly property string pluginId: "moarchy.themes"
 
   property bool opened: false
   property var themes: []
@@ -63,7 +63,7 @@ Item {
   // rather than on Appearance, one level below where you actually were.
   property string returnPage: ""
 
-  // Must match mobileomarchy.gestures' own stripHeight. Duplicated rather than
+  // Must match moarchy.gestures' own stripHeight. Duplicated rather than
   // read across plugins for the same reason the shade duplicates it: this
   // surface has to know the number even when the gestures plugin failed to
   // load, and a sheet that ran off the bottom of the screen in that case would
@@ -88,7 +88,7 @@ Item {
   // measured across all 22 colors.toml files -- and no single alpha clears AA
   // everywhere without being loud enough to stop reading as secondary. Walk
   // from quiet toward the foreground and stop the moment it is legible. Same
-  // arithmetic as mobileomarchy.settings/Settings.qml; four small pure
+  // arithmetic as moarchy.settings/Settings.qml; four small pure
   // functions rather than an import, because plugins are separate directories
   // and a relative path across them is the kind of thing that breaks silently.
   readonly property color subdued: root.readableOn(root.surface, Color.menu.text,
@@ -120,8 +120,8 @@ Item {
 
   function open(payloadJson) {
     if (root.shell && typeof root.shell.isPluginOpen === "function") {
-      if (root.shell.isPluginOpen("mobileomarchy.shade")) root.shell.hide("mobileomarchy.shade")
-      if (root.shell.isPluginOpen("mobileomarchy.drawer")) root.shell.hide("mobileomarchy.drawer")
+      if (root.shell.isPluginOpen("moarchy.shade")) root.shell.hide("moarchy.shade")
+      if (root.shell.isPluginOpen("moarchy.drawer")) root.shell.hide("moarchy.drawer")
     }
     root.opened = true
     root.returnTo = ""
@@ -295,7 +295,7 @@ Item {
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
 
-    WlrLayershell.namespace: "mobileomarchy-themes"
+    WlrLayershell.namespace: "moarchy-themes"
     WlrLayershell.layer: WlrLayer.Top
 
     // Reserve nothing, but be arranged into what the exclusive surfaces left,

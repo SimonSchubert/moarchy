@@ -28,7 +28,7 @@
 // for this one. A splash must never eat a touch: the phone's only navigation is
 // the home pill and the back edge, and both are live while an app is opening.
 // A surface sized to its own content cannot swallow anything outside it -- the
-// same argument mobileomarchy.gestures makes for its strip -- so L3 holds by
+// same argument moarchy.gestures makes for its strip -- so L3 holds by
 // construction rather than by getting a mask right. The mask is set as well,
 // and belt and braces is deliberate here: an app that never opens leaves this
 // on screen for fifteen seconds.
@@ -55,7 +55,7 @@ Item {
   property var pluginRegistry: null
   property var service: null
 
-  readonly property string pluginId: "mobileomarchy.splash"
+  readonly property string pluginId: "moarchy.splash"
 
   // ------------------------------------------------------------- launch state
   //
@@ -122,7 +122,7 @@ Item {
   // --------------------------------------------------------- early finishing
   //
   // A .desktop entry can summon a shell plugin instead of starting a process --
-  // mobileomarchy.device is one, and its Exec is `omarchy-shell shell toggle`.
+  // moarchy.device is one, and its Exec is `omarchy-shell shell toggle`.
   // No toplevel ever appears for those, so the completion AppLibrary watches
   // for never arrives and this would sit over the screen it was announcing
   // until the 15s timeout. A plugin surface opening is the same event for our
@@ -148,7 +148,7 @@ Item {
   }
 
   // Lets the splash be asserted without a camera, which is how
-  // `mobileomarchy-selftest --launch` proves L1-L7.
+  // `moarchy-selftest --launch` proves L1-L7.
   IpcHandler {
     target: "splash"
 
@@ -200,7 +200,7 @@ Item {
     implicitHeight: root.surfaceSize
     color: "transparent"
 
-    WlrLayershell.namespace: "mobileomarchy-splash"
+    WlrLayershell.namespace: "moarchy-splash"
 
     // Overlay, not Top, and that was measured rather than chosen. Sway renders
     // a fullscreen view ABOVE the top layer -- only Overlay stays in front of

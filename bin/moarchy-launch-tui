@@ -7,10 +7,10 @@
 # trimming boxes does not help. Dropping to size 7 yields ~60 columns, which is
 # still legible on a 5.95" panel.
 #
-# Override with MOBILEOMARCHY_TUI_FONT_SIZE if you want a different trade-off.
-FONT_SIZE="${MOBILEOMARCHY_TUI_FONT_SIZE:-7}"
+# Override with MOARCHY_TUI_FONT_SIZE if you want a different trade-off.
+FONT_SIZE="${MOARCHY_TUI_FONT_SIZE:-7}"
 
-[[ $# -gt 0 ]] || { echo "usage: mobileomarchy-launch-tui <command> [args...]" >&2; exit 1; }
+[[ $# -gt 0 ]] || { echo "usage: moarchy-launch-tui <command> [args...]" >&2; exit 1; }
 
 exec foot --app-id=moa-tui \
   --font="JetBrainsMono Nerd Font:size=$FONT_SIZE" \

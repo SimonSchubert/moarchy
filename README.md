@@ -1,4 +1,4 @@
-# mobileomarchy
+# moarchy
 
 <p align="center">
   <img src="docs/screenshots/home.png" width="45%" alt="The home screen: Omarchy's bar on top, the home pill on the bottom edge">
@@ -57,7 +57,7 @@ upstream themes then work on Sway with no per-theme effort, and
 `alacritty.toml.tpl`, `foot.ini.tpl` and `btop.theme.tpl`, are reused untouched.
 
 Better still, that template engine already processes a *user* template directory
-(`~/.config/omarchy/themed`) ahead of its own built-ins — so mobileomarchy adds
+(`~/.config/omarchy/themed`) ahead of its own built-ins — so moarchy adds
 Sway theming **without patching the vendored upstream at all**.
 
 ## What runs on it
@@ -77,7 +77,7 @@ and an assumption about Omarchy 4.x that turned out to be wrong twice over).
 
 ## Omarchy 4.x
 
-mobileomarchy runs **Omarchy v4.0.2** (`346e69e`), pinned in
+moarchy runs **Omarchy v4.0.2** (`346e69e`), pinned in
 `install/vendor-omarchy.sh`. There is no waybar, walker, mako or swayosd in the
 package set: in 4.x the bar, launcher, notifications and OSD are one
 **quickshell/QML** shell, and the phone UI is a set of plugins on top of it
@@ -130,7 +130,7 @@ Everything is reachable without a finger, which is how the selftest asserts it:
 ```bash
 omarchy-shell recents list          # one line per open app
 omarchy-shell gestures swipe home
-mobileomarchy-selftest --gestures   # drives real synthetic touch via /dev/uinput
+moarchy-selftest --gestures   # drives real synthetic touch via /dev/uinput
 ```
 
 ## Layout
@@ -138,11 +138,11 @@ mobileomarchy-selftest --gestures   # drives real synthetic touch via /dev/uinpu
 | Path | What it is |
 | --- | --- |
 | `install.sh`, `install/` | On-device installer. Never invokes upstream's. |
-| `mobileomarchy-base.packages` | aarch64 package set, with every omission explained |
+| `moarchy-base.packages` | aarch64 package set, with every omission explained |
 | `default/sway/bindings.conf` | Omarchy's bindings, translated to Sway, key-for-key |
 | `default/sway/pinephone.conf` | 720×1440 @ scale 2, touch, tightened gaps |
 | `default/themed/sway.conf.tpl` | The one file that themes Sway from any Omarchy theme |
-| `bin/mobileomarchy-*` | Sway counterparts to Omarchy's Hyprland helpers |
+| `bin/moarchy-*` | Sway counterparts to Omarchy's Hyprland helpers |
 | `bin/omarchy-*` | Shims with upstream's names, so `omarchy-menu` keeps working |
 | `docker/` | aarch64 container that builds moarchy-keyboard/yay natively on Apple Silicon |
 | `scripts/flash-sd.sh` | Guarded SD-card flasher for macOS |
@@ -154,7 +154,7 @@ mobileomarchy-selftest --gestures   # drives real synthetic touch via /dev/uinpu
 ```bash
 # Optional: put wifi credentials in the image so it joins on first boot.
 WIFI_SSID='MyNetwork' WIFI_PSK='secret' \
-  ./scripts/patch-image.sh ~/Downloads/mobileomarchy/archlinux-pinephone-barebone-20251224.img.xz
+  ./scripts/patch-image.sh ~/Downloads/moarchy/archlinux-pinephone-barebone-20251224.img.xz
 
 ./scripts/flash-sd.sh /dev/diskN     # run `diskutil list` first to find N
 ```
@@ -177,8 +177,8 @@ Change both passwords.
 an aarch64 container runs natively):
 
 ```bash
-docker build --platform linux/arm64 -f docker/Dockerfile.builder -t mobileomarchy-builder .
-docker run --rm -v "$PWD/packages:/out" mobileomarchy-builder
+docker build --platform linux/arm64 -f docker/Dockerfile.builder -t moarchy-builder .
+docker run --rm -v "$PWD/packages:/out" moarchy-builder
 scp packages/*.pkg.tar.zst alarm@<its address>:~/
 ```
 
@@ -189,8 +189,8 @@ There is no fallback for it: without the keyboard the phone cannot type at all.
 **4. Install:**
 
 ```bash
-git clone <this repo> ~/.local/share/mobileomarchy
-~/.local/share/mobileomarchy/install.sh
+git clone <this repo> ~/.local/share/moarchy
+~/.local/share/moarchy/install.sh
 ```
 
 ## What you get, and what you don't
@@ -206,7 +206,7 @@ never have driven: blur, shadows, rounded corners, animations, gradient borders,
 Also dropped: universal copy/paste (Hyprland `sendshortcut` has no Sway
 equivalent), OCR capture (`tesseract` has no aarch64 build), dictation
 (`voxtype` is x86-only), and every x86-only proprietary app — 1Password, Spotify,
-Obsidian, Typora. See the bottom of `mobileomarchy-base.packages` for the full
+Obsidian, Typora. See the bottom of `moarchy-base.packages` for the full
 list with reasons.
 
 ## Measured on the device
@@ -220,7 +220,7 @@ Numbers from a real PinePhone (Allwinner A64, 2 GB), not estimates:
 | Fullscreen terminal | 47x41 characters at font size 9 |
 | btop minimum | 60 columns, regardless of `shown_boxes` |
 
-That last pair is why `mobileomarchy-launch-tui` drops TUIs to font size 7 (~60
+That last pair is why `moarchy-launch-tui` drops TUIs to font size 7 (~60
 columns) and opens them fullscreen: at Omarchy's desktop font size, btop simply
 refuses to draw on this screen.
 

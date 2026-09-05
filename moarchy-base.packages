@@ -1,4 +1,4 @@
-# mobileomarchy core package list (aarch64 / Arch Linux ARM + DanctNIX)
+# moarchy core package list (aarch64 / Arch Linux ARM + DanctNIX)
 # Installed by install/packages.sh. Every entry here was verified to exist for
 # aarch64 on archlinuxarm.org. Packages Omarchy installs that are x86_64-only
 # are listed at the bottom of this file as comments, with the reason.
@@ -73,8 +73,8 @@ libbsd
 # Qt client and needs it to make its panel a layer surface.
 layer-shell-qt
 
-# lisgd is no longer started (default/omarchy/plugins/mobileomarchy.gestures
-# replaced it) but bin/mobileomarchy-gestures still needs it for anyone who
+# lisgd is no longer started (default/omarchy/plugins/moarchy.gestures
+# replaced it) but bin/moarchy-gestures still needs it for anyone who
 # wants the old edge-swipe bindings back.
 lisgd
 

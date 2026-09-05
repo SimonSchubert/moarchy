@@ -2,7 +2,7 @@
 
 Which of Omarchy 4.0.2's menu entries the phone supports, which it adapts, and
 which it drops. This file is the *record*; `docs/settings.md` is the contract the
-Settings UI is built to, and `bin/mobileomarchy-selftest --settings` checks both
+Settings UI is built to, and `bin/moarchy-selftest --settings` checks both
 against the code.
 
 Upstream ships **320 entries** in `default/omarchy/omarchy-menu.jsonc`, pinned at
@@ -12,14 +12,14 @@ v4.0.2 (`346e69e1`). Every one of them appears below exactly once.
 
 | Class | Meaning |
 | --- | --- |
-| **Native** | Reimplemented as a phone control or screen. mobileomarchy code, not Omarchy's. Container rows that become one of our screens are Native too -- nothing of upstream's runs. |
+| **Native** | Reimplemented as a phone control or screen. moarchy code, not Omarchy's. Container rows that become one of our screens are Native too -- nothing of upstream's runs. |
 | **Bridged** | Upstream's own script runs unchanged; only the way it is launched changes -- a fullscreen TUI instead of a floating terminal, epiphany instead of a Chromium web app. |
 | **Shade** | Already a control in the pull-down shade. Deliberately not repeated in Settings. |
 | **Unsupported** | Hidden from the UI. The reason names the missing binary, the x86_64 constraint, or the Hyprland dependency. |
 
 Two rules decide the hard cases.
 
-**A package in `mobileomarchy-extras.packages` is Bridged, not Unsupported.**
+**A package in `moarchy-extras.packages` is Bridged, not Unsupported.**
 Those are aarch64-verified and merely not installed by default, so the row gets a
 `when: omarchy-cmd-present <bin>` guard and appears once the user installs it.
 "Not installed" is not "impossible". Genuine hardware blocks -- the microphone
@@ -30,7 +30,7 @@ Unsupported.
 `omarchy-launch-floating-terminal-with-presentation <script>`, and all 137
 `omarchy-*` scripts they name exist upstream. Because `bin/` here shadows
 `$OMARCHY_PATH/bin` by PATH order, one shim for that wrapper -- routing to
-`mobileomarchy-launch-tui`, a fullscreen foot at font size 7 -- makes the whole
+`moarchy-launch-tui`, a fullscreen foot at font size 7 -- makes the whole
 class work without reimplementing any of it. 65 of the bridged rows run a command
 byte-identical to upstream's `action`; the selftest asserts it. The exceptions are
 the three package rows, where upstream's `xdg-terminal-exec --app-id=...` is
@@ -76,10 +76,10 @@ Native 3 · Bridged 3 · Unsupported 2
 | --- | --- | --- | --- | --- |
 | `system` | System | Native | System > Power | also the shade's power glyph target |
 | `system.screensaver` | Screensaver | Bridged | Tools > Screensaver | cbonsai is prebuilt in `packages/` |
-| `system.lock` | Lock | Native | System > Power > Lock | `mobileomarchy-system-lock`; blanks unless a hardware keyboard is present |
+| `system.lock` | Lock | Native | System > Power > Lock | `moarchy-system-lock`; blanks unless a hardware keyboard is present |
 | `system.suspend` | Suspend | Unsupported | -- | suspending locks the session: install/config.sh starts sway-session.target, which brings up 4.x's omarchy-sleep-lock unit, and the lock it raises is an ext-session-lock surface -- so the on-screen keyboard is hidden by the very prompt asking for a password. Same trap idle-lock was disabled for. Locked a phone out on 2026-09-05 |
 | `system.hibernate` | Hibernate | Unsupported | -- | `omarchy-hibernation-available` tests for swap; the SD root has no resume device or RAM-sized swap |
-| `system.logout` | Logout | Native | System > Power > Log out | needs a new `mobileomarchy-system-logout` (`swaymsg exit`); upstream's exits Hyprland |
+| `system.logout` | Logout | Native | System > Power > Log out | needs a new `moarchy-system-logout` (`swaymsg exit`); upstream's exits Hyprland |
 | `system.reboot` | Reboot | Bridged | System > Power > Restart |  |
 | `system.shutdown` | Shutdown | Bridged | System > Power > Power off |  |
 
@@ -110,7 +110,7 @@ Native 12 · Bridged 9 · Shade 1 · Unsupported 25
 | `trigger.emoji` | Emoji | Bridged | Tools > Emoji | `omarchy-shell shell toggle omarchy.emojis`, a vendored QML picker |
 | `trigger.reminder` | Reminder | Native | Tools > Reminders |  |
 | `trigger.capture` | Capture | Native | Tools | only Screenshot survives |
-| `trigger.capture.screenshot` | Screenshot | Native | Tools > Screenshot | `mobileomarchy-capture-screenshot` (grim/slurp/satty) |
+| `trigger.capture.screenshot` | Screenshot | Native | Tools > Screenshot | `moarchy-capture-screenshot` (grim/slurp/satty) |
 | `trigger.capture.screenrecord.stop` | Stop Screenrecording | Bridged | Tools > Screen record | upstream `when` on the running process kept |
 | `trigger.capture.screenrecord` | Screenrecord | Native | Tools > Screen record | container, presence-guarded on gpu-screen-recorder: extras-only but aarch64-verified |
 | `trigger.capture.text` | Text | Unsupported | -- | `omarchy-capture-text` needs tesseract, which has no aarch64 build |
@@ -145,8 +145,8 @@ Native 12 · Bridged 9 · Shade 1 · Unsupported 25
 | `trigger.toggle.notifications` | Notifications | Shade | shade > Silent tile | already a shade control; not repeated |
 | `trigger.toggle.crash-capture` | Crash Capture | Native | Sound & notifications > Crash capture | switch; negative-polarity flag `crash-capture-off` |
 | `trigger.toggle.screensaver` | Screensaver | Unsupported | -- | the `screensaver-off` flag gates Omarchy's idle screensaver; the phone's swayidle blanks the panel instead |
-| `trigger.toggle.nightlight` | Nightlight | Native | Display > Night light | switch; needs a wlsunset-backed `mobileomarchy-toggle-nightlight` keeping the `--status` JSON shape |
-| `trigger.toggle.top-bar` | Menu Bar | Native | Appearance > Status bar > Show status bar | switch; `omarchy-toggle bar-off` + `syncHidden()`, NOT today's shell-killing `mobileomarchy-toggle-bar` |
+| `trigger.toggle.nightlight` | Nightlight | Native | Display > Night light | switch; needs a wlsunset-backed `moarchy-toggle-nightlight` keeping the `--status` JSON shape |
+| `trigger.toggle.top-bar` | Menu Bar | Native | Appearance > Status bar > Show status bar | switch; `omarchy-toggle bar-off` + `syncHidden()`, NOT today's shell-killing `moarchy-toggle-bar` |
 | `trigger.toggle.battery-percentage` | Battery Percentage | Native | Appearance > Status bar > Battery percentage | upstream targets a desktop-bar widget we never instantiate; new flag read by Bar.qml |
 | `trigger.toggle.workspace-layout` | Workspace Layout | Unsupported | -- | `omarchy-hyprland-workspace-layout-toggle` switches Hyprland dwindle/master |
 | `trigger.toggle.window-gaps` | Window Gaps | Unsupported | -- | Hyprland-only; one app per workspace means gaps only inset a single fullscreen window |
@@ -161,12 +161,12 @@ Native 8 · Bridged 6 · Unsupported 7
 | id | label | class | lands at | note |
 | --- | --- | --- | --- | --- |
 | `style` | Style | Native | Appearance |  |
-| `style.theme` | Theme | Native | Appearance > Theme | `mobileomarchy.themes` with `returnTo` |
+| `style.theme` | Theme | Native | Appearance > Theme | `moarchy.themes` with `returnTo` |
 | `style.background` | Background | Native | Appearance > Wallpaper | native 2-up grid; the vendored image-selector is a 300-unit desktop card with no tap-outside dismiss |
 | `style.unlock` | Unlock | Unsupported | -- | plymouth is not installed; the phone boots u-boot from SD with no plymouth stage |
 | `style.font` | Font | Native | Appearance > Font | provider list from `omarchy-font-list` / `-current` / `-set` |
 | `style.bar` | Menu Bar | Native | Appearance > Status bar |  |
-| `style.bar.position` | Position | Unsupported | -- | `mobileomarchy.bar` declares `readonly property string position: "top"` |
+| `style.bar.position` | Position | Unsupported | -- | `moarchy.bar` declares `readonly property string position: "top"` |
 | `style.bar.transparency` | Transparency | Native | Appearance > Status bar > Transparent | needs Bar.qml to bind `transparent` to `barConfig` first, or the write is a silent no-op |
 | `style.hyprland` | Hyprland | Unsupported | -- | edits `~/.config/hypr/looknfeel.lua`; Hyprland cannot run here |
 | `style.screensaver` | Screensaver | Native | Appearance > Branding | container; its three children are the bridged rows |
@@ -237,7 +237,7 @@ Native 25 · Bridged 15 · Unsupported 22
 | `setup.plugin.disable` | Disable Plugin | Bridged | Shell & plugins > Plugins | `omarchy-menu-select` |
 | `setup.plugin.add` | Add Plugin | Bridged | Shell & plugins > Plugins | fullscreen TUI |
 | `setup.plugin.clone` | Clone Plugin | Bridged | Shell & plugins > Plugins | `omarchy-menu-select` |
-| `setup.plugin.remove` | Remove Plugin | Bridged | Shell & plugins > Plugins | guard is TRUE here (six mobileomarchy.* manifests) -- this row can uninstall the phone UI; confirm sheet added |
+| `setup.plugin.remove` | Remove Plugin | Bridged | Shell & plugins > Plugins | guard is TRUE here (six moarchy.* manifests) -- this row can uninstall the phone UI; confirm sheet added |
 | `setup.security` | Security | Native | Security |  |
 | `setup.config` | Config | Unsupported | -- | every child unsupported |
 | `setup.security.fingerprint` | Fingerprint | Unsupported | -- | `omarchy-hw-fingerprint` is false; fprintd is not installed |
@@ -290,7 +290,7 @@ Native 6 · Bridged 20 · Unsupported 61
 | `install.service.1password` | 1Password | Unsupported | -- | x86_64-only |
 | `install.service.dropbox` | Dropbox | Unsupported | -- | x86_64-only |
 | `install.service.spotify` | Spotify | Unsupported | -- | x86_64-only |
-| `install.service.signal` | Signal | Bridged | Packages > More software | signal-desktop is aarch64-verified in `mobileomarchy-extras.packages` |
+| `install.service.signal` | Signal | Bridged | Packages > More software | signal-desktop is aarch64-verified in `moarchy-extras.packages` |
 | `install.service.tailscale` | Tailscale | Unsupported | -- | x86_64-only |
 | `install.service.nordvpn` | NordVPN | Unsupported | -- | x86_64-only |
 | `install.service.once` | ONCE | Unsupported | -- | x86_64-only |
@@ -429,12 +429,12 @@ Native 6 · Bridged 8 · Unsupported 14
 | `update.channel.edge` | Edge | Unsupported | -- | as `update.channel.stable` |
 | `update.channel.dev` | Dev | Unsupported | -- | as `update.channel.stable` |
 | `update.process.hyprsunset` | Hyprsunset | Unsupported | -- | hyprsunset is Hyprland-only |
-| `update.process.shell` | Shell | Native | Shell & plugins > Restart shell | `mobileomarchy-restart-shell` shadows `omarchy-restart-shell` on PATH |
+| `update.process.shell` | Shell | Native | Shell & plugins > Restart shell | `moarchy-restart-shell` shadows `omarchy-restart-shell` on PATH |
 | `update.config.hyprland` | Hyprland | Unsupported | -- | Hyprland cannot run here |
 | `update.config.hyprsunset` | Hyprsunset | Unsupported | -- | hyprsunset is Hyprland-only |
 | `update.config.plymouth` | Plymouth | Unsupported | -- | plymouth is not installed |
 | `update.config.tmux` | Tmux | Bridged | Shell & plugins > Reset tmux config | tmux is installed |
-| `update.config.shell` | Shell | Unsupported | -- | `omarchy-refresh-shell` rewrites shell.json from Omarchy's defaults, dropping `bar.id` and every mobileomarchy.* plugin -- it succeeds, then restarts into the desktop bar with no drawer, shade or gestures |
+| `update.config.shell` | Shell | Unsupported | -- | `omarchy-refresh-shell` rewrites shell.json from Omarchy's defaults, dropping `bar.id` and every moarchy.* plugin -- it succeeds, then restarts into the desktop bar with no drawer, shade or gestures |
 | `update.hardware.audio` | Audio | Bridged | System > Restart hardware |  |
 | `update.hardware.wifi` | Wi-Fi | Bridged | System > Restart hardware |  |
 | `update.hardware.bluetooth` | Bluetooth | Bridged | System > Restart hardware |  |

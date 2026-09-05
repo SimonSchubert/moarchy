@@ -4,7 +4,7 @@
 // ---------------------------------------------------------------------------
 // Where this sits in the bottom gesture
 // ---------------------------------------------------------------------------
-// One upward drag from the home pill passes through two stops. mobileomarchy
+// One upward drag from the home pill passes through two stops. moarchy
 // gestures owns the strip and writes this plugin's `progress` as the finger
 // moves, exactly the way it already drives the drawer:
 //
@@ -69,7 +69,7 @@ Item {
   property var pluginRegistry: null
   property var service: null
 
-  readonly property string pluginId: "mobileomarchy.recents"
+  readonly property string pluginId: "moarchy.recents"
 
   // ------------------------------------------------------------ drag contract
   //
@@ -330,7 +330,7 @@ Item {
 
   function resolveSettings(): void {
     var loader = root.shell && root.shell.panelLoaders
-      ? root.shell.panelLoaders["mobileomarchy.settings"] : null
+      ? root.shell.panelLoaders["moarchy.settings"] : null
     root.settingsItem = loader && loader.item ? loader.item : null
   }
 
@@ -353,7 +353,7 @@ Item {
     id: settingsApp
 
     readonly property bool shellApp: true
-    readonly property string appId: "mobileomarchy.settings"
+    readonly property string appId: "moarchy.settings"
     readonly property string name: "Settings"
 
     // K2. The same gear the shade's button that opens it wears. One character
@@ -594,7 +594,7 @@ Item {
   // workspace logic.
   function goHomeAndDismiss(): void {
     if (root.shell && root.shell.panelLoaders) {
-      var loader = root.shell.panelLoaders["mobileomarchy.gestures"]
+      var loader = root.shell.panelLoaders["moarchy.gestures"]
       if (loader && loader.item && typeof loader.item.run === "function")
         loader.item.run("home")
     }
@@ -607,10 +607,10 @@ Item {
     // here means this still holds when the shade was opened by its own drag
     // and this plugin never heard about it.
     if (root.shell && typeof root.shell.isPluginOpen === "function") {
-      if (root.shell.isPluginOpen("mobileomarchy.shade"))
-        root.shell.hide("mobileomarchy.shade")
-      if (root.shell.isPluginOpen("mobileomarchy.drawer"))
-        root.shell.hide("mobileomarchy.drawer")
+      if (root.shell.isPluginOpen("moarchy.shade"))
+        root.shell.hide("moarchy.shade")
+      if (root.shell.isPluginOpen("moarchy.drawer"))
+        root.shell.hide("moarchy.drawer")
     }
     root.rebuildMru()
     // An app installed since the shell started has no icon until this. Same
@@ -714,7 +714,7 @@ Item {
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
 
-    WlrLayershell.namespace: "mobileomarchy-recents"
+    WlrLayershell.namespace: "moarchy-recents"
     WlrLayershell.layer: WlrLayer.Top
 
     // Ignore, not the drawer's zero-zone Normal, and the difference is the

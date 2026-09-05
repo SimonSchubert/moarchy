@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "id": "mobileomarchy.device",
+  "id": "moarchy.device",
   "name": "Device",
   "version": "1.0.0",
-  "author": "mobileomarchy",
+  "author": "moarchy",
   "description": "Live hardware state: battery, thermals, CPU, memory and storage.",
   "kinds": [
     "overlay"

@@ -7,7 +7,7 @@ window that would have to share a workspace is moved to a free one instead, and
 focus follows it -- tap an app in the launcher and you land *in* it, full width.
 
 The workspace then becomes the unit a swipe moves through
-(default/omarchy/plugins/mobileomarchy.gestures), so "next workspace" reads as
+(default/omarchy/plugins/moarchy.gestures), so "next workspace" reads as
 "next app".
 
 Deliberately NOT handled, because both should stay with their parent:

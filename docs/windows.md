@@ -34,13 +34,13 @@ a fresh session, to catch up.
 
 **W3** The 2px border stays and costs nothing in the normal case: `looknfeel.conf`'s
 `hide_edge_borders smart` drops every border of the only visible window on a
-workspace, and `mobileomarchy-one-app-per-workspace` makes that the normal case.
+workspace, and `moarchy-one-app-per-workspace` makes that the normal case.
 Split a workspace and the borders come back — they are then the only thing
 saying which pane has focus.
 → W1 holds with one window; with two, each window's `rect` is inset by the
 border and the two are adjacent
 
-**W4** `mobileomarchy-window-gaps-toggle` adds gaps and takes them away again.
+**W4** `moarchy-window-gaps-toggle` adds gaps and takes them away again.
 Inverted from the desktop original, whose first press *removed* gaps: with the
 default now none, that press did nothing at all and the second one added
 padding to a phone.
@@ -87,7 +87,7 @@ not revealed by a jump cut.
 → `omarchy-shell splash state` reads `closed` once the window has mapped
 
 **L5** A `.desktop` entry that summons a shell plugin rather than starting a
-process — `mobileomarchy.device` is one — never produces a window. The splash
+process — `moarchy.device` is one — never produces a window. The splash
 goes when that plugin's surface opens instead.
 → launching Device leaves `omarchy-shell splash state` at `closed`
 
@@ -117,6 +117,6 @@ what the Mali-400 can afford.
 ### What the splash does not cover
 
 Apps started from a terminal, from a keybinding, or by
-`mobileomarchy-launch-terminal` and friends. The splash hangs off
+`moarchy-launch-terminal` and friends. The splash hangs off
 `AppLibrary.launch()`, which is the drawer's and the Omarchy menu's path and
 nothing else's.

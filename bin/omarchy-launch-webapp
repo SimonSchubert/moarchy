@@ -7,4 +7,4 @@
 # A web app and a tab are the same thing on a phone anyway -- the window is
 # fullscreen either way and there is no taskbar to tell them apart.
 [[ $# -gt 0 ]] || { echo "usage: omarchy-launch-webapp <url> [args...]" >&2; exit 1; }
-exec setsid mobileomarchy-launch-browser "$@"
+exec setsid moarchy-launch-browser "$@"

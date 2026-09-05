@@ -5,21 +5,21 @@ menu entry lands where is recorded in `docs/menu-coverage.md`; the archaeology o
 *why* lives in `docs/build-log.md`. This file is the contract.
 
 Each AC is checkable from a terminal over ssh, with no finger on the screen.
-`bin/mobileomarchy-selftest --settings` cites these ids, so an AC with no test is
+`bin/moarchy-selftest --settings` cites these ids, so an AC with no test is
 visible.
 
 ## Vocabulary
 
 | Term | What it means |
 | --- | --- |
-| **Settings** | The `mobileomarchy.settings` overlay. One plugin, many pages. |
+| **Settings** | The `moarchy.settings` overlay. One plugin, many pages. |
 | **page** | One screen in the stack, addressed by a dotted id (`appearance.bar`). |
 | **stack** | The pages currently pushed, root first. Back pops one. |
 | **row** | A line on a page. One of `nav`, `plugin`, `switch`, `choice`, `action`, `link`, `info`. |
 | **guard** | A `when:` shell condition copied verbatim from `omarchy-menu.jsonc`. A row whose guard fails is not rendered. |
 | **reader** | The command a `switch` or `choice` page reads its state from. |
 | **bridged launch** | Running an upstream `omarchy-*` command unchanged, in a fullscreen TUI or the browser. |
-| **the shade** | The pull-down (`mobileomarchy.shade`), which owns the radios and sliders. |
+| **the shade** | The pull-down (`moarchy.shade`), which owns the radios and sliders. |
 | **running** | Summoned and not yet closed. Settings stays running across any number of hides, and has a carousel card for exactly that span (`gestures.md` K1). |
 | **hidden** | Off screen but running. The strip's up-swipe hides; the page stack survives. |
 | **closed** | Not running. The card is gone and the stack is back at the root. |
@@ -120,7 +120,7 @@ rises over it with the Settings card leading (`gestures.md` K3), and a drag
 carried on into the home band hides Settings and lands on a home screen (K4).
 Hidden, not closed — the card is still there to come back to, and the
 open-window count is still unchanged.
-→ `recents list`'s first line is `mobileomarchy.settings`; after the home band
+→ `recents list`'s first line is `moarchy.settings`; after the home band
 `settings state` == `closed`, that line is still in `recents list`, and the
 focused workspace's `representation` is empty
 
@@ -233,7 +233,7 @@ because `lastLaunch` records the wrapped form that actually ran
 **E4** The bridge shims exist and shadow upstream.
 → `command -v` for `omarchy-launch-floating-terminal-with-presentation`,
 `omarchy-launch-config-editor` and `omarchy-launch-webapp` each starts with
-`$MOBILEOMARCHY_PATH/bin`
+`$MOARCHY_PATH/bin`
 
 **E5** A bridged TUI opens fullscreen, identifiable, and typeable.
 → `swaymsg -t get_tree` shows an `app_id == "moa-tui"` node filling the workspace;
@@ -244,7 +244,7 @@ covered by a layer surface. It is put away *hidden*, so Settings and the
 terminal it launched are both cards and you can get back to the row you came
 from (`gestures.md` K12).
 → `settings state` == `closed` when the child process starts, and
-`recents list` holds both `mobileomarchy.settings` and the terminal
+`recents list` holds both `moarchy.settings` and the terminal
 
 **E7** A bridged row that summons a vendored picker reaches it.
 → after `settings activate shell.plugins.enable`, `omarchy-shell shell listPlugins`
@@ -300,7 +300,7 @@ is empty
 **G4** Every Native and Bridged id resolves to a page and a row that exist, or
 names the surface outside this stack that satisfies it.
 → `settings rowsOn <pageId>` contains `<rowId>` for each. The one exception is
-`apps`, which is the app drawer: it names `mobileomarchy.drawer` and no row
+`apps`, which is the app drawer: it names `moarchy.drawer` and no row
 
 **G5** Every Unsupported id carries a non-empty reason.
 → no Unsupported row has an empty reason field
@@ -331,7 +331,7 @@ empty row field
 ## I. Robustness
 
 **I1** A Settings plugin that fails to load is loud, not a gear that does nothing.
-→ `omarchy-shell shell listPlugins` contains `mobileomarchy.settings`, and
+→ `omarchy-shell shell listPlugins` contains `moarchy.settings`, and
 `settings state` answers rather than `Target not found.`
 
 **I2** Every icon literal is exactly one character.
@@ -349,7 +349,7 @@ has a page.
 → `grep -n 'summon("omarchy.menu"' Settings.qml Shade.qml` returns only the
 `launch: menu` bridge helper
 
-**I5** `$MOBILEOMARCHY_PATH/bin` comes first on the shell's PATH.
+**I5** `$MOARCHY_PATH/bin` comes first on the shell's PATH.
 → the PATH in `/proc/$(pgrep -x quickshell)/environ` lists it before
 `$OMARCHY_PATH/bin`. If upstream wins, every bridge shim opens nothing
 
@@ -400,11 +400,11 @@ parity a bash assertion rather than a promise.
 
 - **`update.config.shell` stays hidden permanently.** `omarchy-refresh-shell`
   rewrites `~/.config/omarchy/shell.json` from Omarchy's defaults, dropping
-  `bar.id: mobileomarchy.bar` and every `mobileomarchy.*` entry from `plugins[]`.
+  `bar.id: moarchy.bar` and every `moarchy.*` entry from `plugins[]`.
   It succeeds, then restarts into the thirteen-widget desktop bar with no drawer,
   shade or gestures.
 - **`setup.plugin.remove` can uninstall the phone UI.** Its upstream guard is true
-  here — six `mobileomarchy.*` manifests match it. Kept, behind a confirm.
+  here — six `moarchy.*` manifests match it. Kept, behind a confirm.
 - **No vendored popup dismisses on tap-outside.** `install/port-4x.sh` stubs
   `HyprlandFocusGrab`, which has no `Quickshell.I3` counterpart. AC B5 is the
   compensation, not a fix.

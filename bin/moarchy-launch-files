@@ -1,5 +1,5 @@
 #!/bin/bash
-# Prefer a GUI file manager if one is installed (see mobileomarchy-extras.packages),
+# Prefer a GUI file manager if one is installed (see moarchy-extras.packages),
 # otherwise open a TUI one in the terminal. Nautilus is deliberately not in the
 # base set: it is heavy for 2-3 GB of RAM.
 for f in nautilus thunar pcmanfm-qt; do
@@ -7,7 +7,7 @@ for f in nautilus thunar pcmanfm-qt; do
 done
 
 for t in yazi ranger nnn; do
-  if command -v "$t" >/dev/null; then exec mobileomarchy-launch-terminal -e "$t"; fi
+  if command -v "$t" >/dev/null; then exec moarchy-launch-terminal -e "$t"; fi
 done
 
-exec mobileomarchy-launch-terminal
+exec moarchy-launch-terminal

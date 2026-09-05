@@ -3,7 +3,7 @@
 #
 # 16 of the omarchy-* scripts we vendor launch things as `uwsm-app -- <cmd>`,
 # which puts each app in its own systemd scope under a uwsm-managed session.
-# mobileomarchy starts Sway straight from the login shell (uwsm is a lot of
+# moarchy starts Sway straight from the login shell (uwsm is a lot of
 # machinery for a phone), so the honest translation is "just run it".
 #
 # Without this shim, SUPER+SPACE (the Omarchy menu), the editor, the TUIs and background

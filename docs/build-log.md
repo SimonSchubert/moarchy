@@ -163,7 +163,7 @@ Measured, not guessed:
 | Fullscreen terminal | **47×41 characters** at font size 9 |
 | btop minimum | **60 columns**, regardless of `shown_boxes` |
 
-Hence `mobileomarchy-launch-tui` runs TUIs fullscreen at font size 7. `btm`
+Hence `moarchy-launch-tui` runs TUIs fullscreen at font size 7. `btm`
 (bottom) is the system monitor that *does* fit a normal tiled terminal, so the
 bar stays visible.
 
@@ -361,7 +361,7 @@ panels — stop being instantiated.
 **Two things needed outside the shell:** `usermod -aG feedbackd` for the torch
 (`/sys/class/leds/white:flash/brightness` is `root:feedbackd 0664` and the group
 is empty on a bare install), and a real log destination —
-`mobileomarchy-restart-shell` used to send the shell's stdout to `/dev/null`,
+`moarchy-restart-shell` used to send the shell's stdout to `/dev/null`,
 which threw away the only diagnosis a failed bar plugin ever produces.
 
 ## 6c. The bottom edge: recents, home, drawer
@@ -399,7 +399,7 @@ already makes an unoccupied workspace the thing a home screen is: wallpaper,
 bar, home pill, nothing else. A real home layer would have cost another
 always-mapped surface and its bindings, permanently, to draw what was already
 there. Picking the target reuses the rule
-`bin/mobileomarchy-one-app-per-workspace` uses -- the lowest number with
+`bin/moarchy-one-app-per-workspace` uses -- the lowest number with
 nothing on it -- so the sideways swipe order stays contiguous. `number` is the
 visible workspace number; `id` is an internal Sway handle, and dispatching
 against it switches somewhere else, silently.
@@ -497,22 +497,22 @@ reaches a layer surface either way.
 
 **Two things that cost an hour and were not the code.**
 
-- **`sudo` resets PATH.** `sudo -n mobileomarchy-touch swipe ...` is
+- **`sudo` resets PATH.** `sudo -n moarchy-touch swipe ...` is
   `command not found`, and with the output redirected it is a swipe that
   silently does not happen. Every band read as "the gesture does nothing"
   while the plugin was never sent a single touch event. The selftest had this
   right all along -- it invokes the injector by absolute path.
-- **A blanked screen disables touch.** `mobileomarchy-screen` turns the touch
+- **A blanked screen disables touch.** `moarchy-screen` turns the touch
   input off with the panel, so after an idle timeout synthetic swipes land
   nowhere, `grim` blocks with no frames to capture, and IPC calls time out
   behind a busy compositor. It looks precisely like a deadlocked shell. What
   distinguishes them is that a deadlock does not have a load average of 0.24:
   `swaymsg -t get_outputs` reporting `power: false` is the one-line answer, and
   powering the output back on is not enough -- the input has to be re-enabled
-  too, which is why `mobileomarchy-screen on` exists and `swaymsg output * power
+  too, which is why `moarchy-screen on` exists and `swaymsg output * power
   on` is not a substitute.
 
-**`mobileomarchy-restart-shell` needed `WAYLAND_DISPLAY`.** It already derives
+**`moarchy-restart-shell` needed `WAYLAND_DISPLAY`.** It already derives
 `SWAYSOCK` so a restart from an ssh session works; without `WAYLAND_DISPLAY` Qt
 falls through to the xcb platform plugin, fails to reach a display, and aborts
 before reading a line of QML -- `FATAL: no Qt platform plugin could be
@@ -598,13 +598,13 @@ broken property for its "most recent first" ordering and looked fine, because
 creation order happened to agree.
 
 **Two hours went to environment, not code.** `sudo` resets PATH, so
-`sudo mobileomarchy-touch ...` is `command not found` -- and with output
+`sudo moarchy-touch ...` is `command not found` -- and with output
 redirected, a swipe that silently never happens. Every band read as "the
 gesture does nothing" while the plugin was never sent one touch event. Then
 `foot` would not map, because an ssh session has no `WAYLAND_DISPLAY`, and the
 shell reported `focus=none` -- which reads exactly like a broken plugin rather
 than a missing variable. Both are fixed at the source now: `--gestures` derives
-`WAYLAND_DISPLAY` the way `mobileomarchy-restart-shell` already derives
+`WAYLAND_DISPLAY` the way `moarchy-restart-shell` already derives
 `SWAYSOCK`, and both invoke the injector by absolute path.
 
 **A test that assumes state it could control is not a test.** G4 -- "back
@@ -712,7 +712,7 @@ is a reliable emptiness test after all, just not that one -- no toplevel is
 `activated` while focus is on an empty workspace, which is the same property
 the back gesture had to fall back to when `activeToplevel` read null.
 
-**Powering the panel on does not turn touch back on.** `mobileomarchy-screen`
+**Powering the panel on does not turn touch back on.** `moarchy-screen`
 disables the touch input with the display, so after an idle blank every
 synthetic swipe lands nowhere and the suite fails wholesale for a reason that
 has nothing to do with gestures. It cost an hour once already; the suite
@@ -779,7 +779,7 @@ real user:
 
 **And one fix that was a workaround.** The suite had grown a discarded warm-up
 gesture because the first real gesture of a run was sometimes swallowed. The
-cause is that a fresh uinput device needs longer than `mobileomarchy-touch`
+cause is that a fresh uinput device needs longer than `moarchy-touch`
 waited for Sway to map it to an output. Every caller pays that wait anyway, so
 it is 2s now and the warm-up is gone. A warm-up that exists to survive a
 too-short sleep is the sleep being wrong.
@@ -831,7 +831,7 @@ a brace-matching regex skipped every row containing a nested `covers: { ... }`
 and it was verified against that broken copy rather than against the good file.
 A check only proven on passing input has not been proven.
 
-**Three switches wrote state nothing read.** `mobileomarchy-toggle-bar` did
+**Three switches wrote state nothing read.** `moarchy-toggle-bar` did
 `pkill -x quickshell`, which made sense when the bar was all the shell drew and
 now takes the drawer, the shade, the gesture strip and Settings with it — from a
 row labelled "Menu Bar". `omarchy-bar transparent` committed to `shell.json`
@@ -863,7 +863,7 @@ Raising the alpha and calling it fixed was the mistake underneath the mistake.
 Catppuccin happened to be on the phone, and it is one of the *forgiving* themes
 for that pair. Run across all 22 `colors.toml` files, foreground at 0.7 over the
 card is below AA in six of them and reaches **3.14:1 on rose-pine**;
-`mobileomarchy.themes`, at a flat 0.6 on the bare background, was **2.72:1**.
+`moarchy.themes`, at a flat 0.6 on the bare background, was **2.72:1**.
 One theme measured and 21 assumed.
 
 No constant is defensible here. At 0.55 — quiet enough to read as secondary —
@@ -898,7 +898,7 @@ ext-session-lock surface -- under that protocol the compositor draws the locker
 and nothing else, so the on-screen keyboard is hidden by the very prompt asking
 for a password. Touch-only, that is unrecoverable without ssh.
 
-This is the trap `autostart.conf` and `mobileomarchy-system-lock` already
+This is the trap `autostart.conf` and `moarchy-system-lock` already
 document and defend against, and the defence did not reach here: our shim guards
 `omarchy-system-lock`, the *script*, while the sleep unit and the shell's own
 `omarchy.lock` service raise their locker directly. Guarding a script does not
@@ -960,15 +960,15 @@ visited: its directory stayed, the shell went on loading it, its id stayed in
 session spotted the orphaned icon; checking it found the other two.
 
 The sweep that fixes it derives the set of plugins the repo ships and removes any
-installed `mobileomarchy.*` not in that set. Desktop entries carry an
-`X-MobileOmarchy-Plugin=<id>` marker and are matched on it rather than on
+installed `moarchy.*` not in that set. Desktop entries carry an
+`X-Moarchy-Plugin=<id>` marker and are matched on it rather than on
 filename, so an entry named after something else is still caught and an entry we
 never installed is never touched.
 
-**Then the interesting part.** I scoped the sweep to the `mobileomarchy.*`
+**Then the interesting part.** I scoped the sweep to the `moarchy.*`
 namespace so a user's third-party plugins could not be caught by it, dry-ran
 exactly that -- stale one goes, third-party one stays -- and shipped it. What I
-never ran was the branch that deletes. If `MOBILEOMARCHY_PATH` is unset or wrong,
+never ran was the branch that deletes. If `MOARCHY_PATH` is unset or wrong,
 or `default/omarchy/plugins/` is missing or caught half-written by another
 session's checkout in this shared worktree, the glob does not expand and the
 derived set is **empty**. Every installed plugin then fails the membership test.
@@ -996,7 +996,7 @@ than a copy of it. Against the unguarded version it fails three of four.
 The second is a trap the sweep introduces: **provisioning is authoritative, so a
 plugin hand-copied to the phone for testing is now deleted by the next
 provision** rather than merely overwritten. That is correct behaviour and it is
-silent. `mobileomarchy.device` spent a day in exactly that state -- scp'd,
+silent. `moarchy.device` spent a day in exactly that state -- scp'd,
 uncommitted, live -- and the next provision would have removed it. Commit a
 plugin before you rely on it surviving.
 
@@ -1037,7 +1037,7 @@ screenshot cannot be compatible with both.
 `squeekboard` by process name and went red the moment the keyboard changed,
 reporting a working phone as broken and naming the wrong cause. It asks whether
 *something* owns `sm.puri.OSK0` now -- which is the actual contract, the one
-`mobileomarchy-toggle-keyboard` and the back gesture both drive. The same error
+`moarchy-toggle-keyboard` and the back gesture both drive. The same error
 in the other direction cost a peer session an afternoon: its suite reported
 confidently on squeekboard while a different implementation owned the name.
 
@@ -1091,7 +1091,7 @@ on Top and the strip is on Overlay, and every Overlay surface sits above every
 Top one -- the same property that already let the carousel take the whole output
 (6c). The shade needs a mask only because it is on Overlay itself.
 
-**`mobileomarchy.device` is the control, and that is why it was left alone.**
+**`moarchy.device` is the control, and that is why it was left alone.**
 Layer surfaces are invisible to sway's IPC: `swaymsg -t get_tree` does not list
 them, so there is no way to ask the compositor how tall a layer surface is. Each
 plugin answers a new `geometry` verb instead, reporting the configure its
@@ -1176,7 +1176,7 @@ arrangement ones.
 **A session that has been driving overlays for a while stops raising the
 keyboard.** The tap lands, the injector is fine -- the same one still drives
 every gesture check in the same run -- and the search field simply never
-activates its text input again. `mobileomarchy-restart-shell` clears it every
+activates its text input again. `moarchy-restart-shell` clears it every
 time. `--surfaces` skips I5 rather than failing it when the keyboard will not
 come up, because a check that reports a stale session as a defect teaches you to
 ignore it (the same reasoning as the retry on every state read in 6c).
@@ -1199,7 +1199,7 @@ ignore it (the same reasoning as the retry on every state read in 6c).
   swaybg paints. First seen after running a browser; a reboot cleared it once,
   then it recurred and persisted. Not root-caused.
 - `HyprlandFocusGrab` stubbed out — menus do not dismiss on tap-outside. The
-  back gesture now reaches them: `mobileomarchy.gestures` walks the host's
+  back gesture now reaches them: `moarchy.gestures` walks the host's
   `openPanelIds` for `omarchy.` surfaces after its own, so a vendored popup can
   at least be dismissed. Tapping outside one still does nothing.
 - `I3.workspaces` shape differs from Hyprland's in ways not fully explored.

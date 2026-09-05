@@ -6,7 +6,7 @@
 # This is the only rm -rf in the repo aimed at a directory the user owns, and
 # three of its four branches are reachable only by breaking the environment on
 # purpose, so nobody will exercise them by hand. An earlier version wiped every
-# plugin on the device when MOBILEOMARCHY_PATH was unset.
+# plugin on the device when MOARCHY_PATH was unset.
 #
 # Runs anywhere bash does -- including macOS, with no device attached. The sweep
 # is extracted from install/config.sh between its plugin-sweep markers rather
@@ -24,7 +24,7 @@ trap 'rm -rf "$WORK"' EXIT
 SWEEP="$WORK/sweep.sh"
 {
   # install.sh sources config.sh under these flags; -u is deliberately absent,
-  # which is what lets an unset MOBILEOMARCHY_PATH expand to nothing.
+  # which is what lets an unset MOARCHY_PATH expand to nothing.
   echo '#!/usr/bin/env bash'
   echo 'set -eEo pipefail'
   awk '/^# >>> plugin-sweep/{f=1} f{print} /^# <<< plugin-sweep/{exit}' \
@@ -44,14 +44,23 @@ REPO_IDS=$(ls "$REPO_ROOT/default/omarchy/plugins")
 setup() {
   rm -rf "$WORK/home"
   mkdir -p "$WORK/home/.config/omarchy/plugins" "$WORK/home/.local/share/applications"
-  for id in $REPO_IDS "mobileomarchy.gone" "someoneelse.widget"; do
+  # mobileomarchy.shade is the rename migration: a phone provisioned before
+  # 2026-09-05 has the whole set under the old namespace, and they are stale by
+  # definition because the repo now ships moarchy.*. Retire this fixture when
+  # the legacy globs come out of install/config.sh.
+  for id in $REPO_IDS "moarchy.gone" "mobileomarchy.shade" "someoneelse.widget"; do
     mkdir -p "$WORK/home/.config/omarchy/plugins/$id"
   done
-  printf '[Desktop Entry]\nName=Device\nX-MobileOmarchy-Plugin=mobileomarchy.device\n' \
+  printf '[Desktop Entry]\nName=Device\nX-Moarchy-Plugin=moarchy.device\n' \
     > "$WORK/home/.local/share/applications/device.desktop"
   # Deliberately misnamed: the sweep must match on the marker, not the filename.
-  printf '[Desktop Entry]\nName=Gone\nX-MobileOmarchy-Plugin=mobileomarchy.gone\n' \
+  printf '[Desktop Entry]\nName=Gone\nX-Moarchy-Plugin=moarchy.gone\n' \
     > "$WORK/home/.local/share/applications/not-obviously-ours.desktop"
+  # Written by an install from before the rename, so it carries the old marker
+  # key. An entry whose marker we no longer read is an entry nothing can ever
+  # clean up -- a drawer icon that launches nothing, permanently.
+  printf '[Desktop Entry]\nName=Shade\nX-MobileOmarchy-Plugin=mobileomarchy.shade\n' \
+    > "$WORK/home/.local/share/applications/legacy.desktop"
   printf '[Desktop Entry]\nName=Firefox\n' \
     > "$WORK/home/.local/share/applications/firefox.desktop"
 }
@@ -69,8 +78,8 @@ check() {  # check <label> <expected> <actual>
   fi
 }
 
-untouched_plugins="$(printf '%s\n' $REPO_IDS mobileomarchy.gone someoneelse.widget | sort | tr '\n' ' ')"
-untouched_entries="device.desktop firefox.desktop not-obviously-ours.desktop "
+untouched_plugins="$(printf '%s\n' $REPO_IDS moarchy.gone mobileomarchy.shade someoneelse.widget | sort | tr '\n' ' ')"
+untouched_entries="device.desktop firefox.desktop legacy.desktop not-obviously-ours.desktop "
 swept_plugins="$(printf '%s\n' $REPO_IDS someoneelse.widget | sort | tr '\n' ' ')"
 swept_entries="device.desktop firefox.desktop "
 
@@ -80,24 +89,24 @@ swept_entries="device.desktop firefox.desktop "
 # provision racing another session's git checkout in the shared worktree can see
 # default/omarchy/plugins/ half written.
 
-echo "==> MOBILEOMARCHY_PATH unset"
+echo "==> MOARCHY_PATH unset"
 setup; HOME="$WORK/home" bash "$SWEEP" >/dev/null 2>&1
 check "nothing deleted" "$untouched_plugins" "$(installed)"
 check "no entry deleted" "$untouched_entries" "$(entries)"
 
-echo "==> MOBILEOMARCHY_PATH points somewhere that does not exist"
-setup; HOME="$WORK/home" MOBILEOMARCHY_PATH="$WORK/nope" bash "$SWEEP" >/dev/null 2>&1
+echo "==> MOARCHY_PATH points somewhere that does not exist"
+setup; HOME="$WORK/home" MOARCHY_PATH="$WORK/nope" bash "$SWEEP" >/dev/null 2>&1
 check "nothing deleted" "$untouched_plugins" "$(installed)"
 
 echo "==> plugins directory present but empty (a checkout caught mid-flight)"
 mkdir -p "$WORK/empty/default/omarchy/plugins"
-setup; HOME="$WORK/home" MOBILEOMARCHY_PATH="$WORK/empty" bash "$SWEEP" >/dev/null 2>&1
+setup; HOME="$WORK/home" MOARCHY_PATH="$WORK/empty" bash "$SWEEP" >/dev/null 2>&1
 check "nothing deleted" "$untouched_plugins" "$(installed)"
 
 # --- and the branch that must delete, precisely ------------------------------
 
 echo "==> healthy repo"
-setup; HOME="$WORK/home" MOBILEOMARCHY_PATH="$REPO_ROOT" bash "$SWEEP" >/dev/null 2>&1
+setup; HOME="$WORK/home" MOARCHY_PATH="$REPO_ROOT" bash "$SWEEP" >/dev/null 2>&1
 check "stale plugin gone, ours and third-party kept" "$swept_plugins" "$(installed)"
 check "stale entry gone by marker, not by name"      "$swept_entries" "$(entries)"
 

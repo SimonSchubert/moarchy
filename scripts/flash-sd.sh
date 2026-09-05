@@ -12,7 +12,7 @@ set -euo pipefail
 RELEASE="${RELEASE:-20251224}"
 IMAGE="archlinux-pinephone-barebone-${RELEASE}.img.xz"
 BASE_URL="https://github.com/dreemurrs-embedded/Pine64-Arch/releases/download/${RELEASE}"
-CACHE="${CACHE:-$HOME/Downloads/mobileomarchy}"
+CACHE="${CACHE:-$HOME/Downloads/moarchy}"
 
 DISK="${1:-}"
 if [[ -z $DISK ]]; then
@@ -140,6 +140,6 @@ Done. Next:
 
        sudo pacman-key --init && sudo pacman-key --populate archlinuxarm
        sudo pacman -Syu
-       git clone <this repo> ~/.local/share/mobileomarchy
-       ~/.local/share/mobileomarchy/install.sh
+       git clone <this repo> ~/.local/share/moarchy
+       ~/.local/share/moarchy/install.sh
 NEXT

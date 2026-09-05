@@ -26,7 +26,7 @@
 // Why the strip sits on top of the bar
 // ---------------------------------------------------------------------------
 // Overlay outranks the bar's Top, so this strip covers it and every touch along
-// the status bar arrives here. That is the reason mobileomarchy.bar is built
+// the status bar arrives here. That is the reason moarchy.bar is built
 // with no tap targets at all -- not a style choice that could be revisited. A
 // button added to that bar would be dead on arrival and the cause would not be
 // anywhere near it.
@@ -69,7 +69,7 @@ Item {
   property var pluginRegistry: null
   property var service: null
 
-  readonly property string pluginId: "mobileomarchy.shade"
+  readonly property string pluginId: "moarchy.shade"
   readonly property string historyDir:
     Quickshell.env("HOME") + "/.local/state/omarchy/notifications/history"
 
@@ -81,13 +81,13 @@ Item {
   readonly property int stripHeight: root.shell && root.shell.bar && root.shell.bar.barSize > 0
     ? root.shell.bar.barSize : Style.space(26)
 
-  // Must match mobileomarchy.gestures' own stripHeight. Duplicated rather than
+  // Must match moarchy.gestures' own stripHeight. Duplicated rather than
   // read across plugins because the shade has to know it even when the gestures
   // plugin failed to load, and a shade that swallowed the bottom edge in that
   // case would be much worse than one that leaves 20px unused.
   readonly property int gestureStrip: Style.space(20)
 
-  // Likewise mobileomarchy.gestures' backEdgeWidth. The shade is on Overlay
+  // Likewise moarchy.gestures' backEdgeWidth. The shade is on Overlay
   // and maps when it opens, so it lands *above* the always-mapped back-edge
   // surface and would otherwise swallow every left-edge swipe -- which is
   // exactly what it did: back closed the drawer and the carousel and left the
@@ -282,8 +282,8 @@ Item {
 
   function open(payloadJson) {
     if (root.shell && typeof root.shell.isPluginOpen === "function"
-        && root.shell.isPluginOpen("mobileomarchy.drawer"))
-      root.shell.hide("mobileomarchy.drawer")
+        && root.shell.isPluginOpen("moarchy.drawer"))
+      root.shell.hide("moarchy.drawer")
     root.expanded = true
     root.progress = 1
 
@@ -556,7 +556,7 @@ Item {
   // NetworkManager, and iwd.service is disabled -- but it is D-Bus activatable,
   // so launching impala would start iwd to fight NetworkManager for wlan0
   // rather than fail cleanly. nmtui-connect is NetworkManager's own list, and
-  // it fits: measured at the 60x41 grid mobileomarchy-launch-tui gives, the
+  // it fits: measured at the 60x41 grid moarchy-launch-tui gives, the
   // network list and its buttons are all on screen.
   readonly property string wifiPicker:
     "omarchy-launch-floating-terminal-with-presentation nmtui-connect"
@@ -1000,7 +1000,7 @@ Item {
     color: "transparent"
     surfaceFormat.opaque: false
 
-    WlrLayershell.namespace: "mobileomarchy-shade"
+    WlrLayershell.namespace: "moarchy-shade"
     WlrLayershell.layer: WlrLayer.Overlay
     // No text input anywhere in here, and None makes it structurally impossible
     // for the shade to steal focus from the app underneath -- so a pull-down,
@@ -1530,7 +1530,7 @@ Item {
   function openSettings(page) {
     root.dismiss()
     if (root.shell && typeof root.shell.summon === "function")
-      root.shell.summon("mobileomarchy.settings",
+      root.shell.summon("moarchy.settings",
                         page ? JSON.stringify({ page: page }) : "{}")
   }
 

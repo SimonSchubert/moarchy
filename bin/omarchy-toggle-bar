@@ -1,2 +1,2 @@
 #!/bin/bash
-exec mobileomarchy-toggle-bar "$@"
+exec moarchy-toggle-bar "$@"

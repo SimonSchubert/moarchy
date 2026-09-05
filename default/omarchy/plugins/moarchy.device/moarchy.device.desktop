@@ -6,7 +6,7 @@ Comment=Battery, thermals, CPU, memory and storage at a glance
 # A shell plugin is not a process you launch, it is a screen the shell already
 # holds. Asking the shell to summon it is what makes a plugin appear in the
 # drawer and behave like any other app.
-Exec=omarchy-shell shell toggle mobileomarchy.device
+Exec=omarchy-shell shell toggle moarchy.device
 Icon=computer-symbolic
 Terminal=false
 Categories=System;Monitor;
@@ -14,4 +14,4 @@ Keywords=battery;temperature;cpu;memory;hardware;
 # Ownership marker. install/config.sh sweeps entries whose named plugin is no
 # longer in the repo; without it a deleted plugin leaves a drawer icon that
 # launches nothing.
-X-MobileOmarchy-Plugin=mobileomarchy.device
+X-Moarchy-Plugin=moarchy.device

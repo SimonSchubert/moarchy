@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "id": "mobileomarchy.drawer",
+  "id": "moarchy.drawer",
   "name": "App drawer",
   "version": "1.0.0",
-  "author": "mobileomarchy",
+  "author": "moarchy",
   "description": "Full-screen app grid with search, opened by the bottom-edge swipe up.",
   "kinds": [
     "overlay"

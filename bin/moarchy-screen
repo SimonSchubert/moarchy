@@ -1,5 +1,5 @@
 #!/bin/bash
-# mobileomarchy-screen -- what the power button does on the phone.
+# moarchy-screen -- what the power button does on the phone.
 #
 # "Lock" here means: blank the panel and stop the touchscreen from producing
 # events. It deliberately does NOT start a password locker.
@@ -23,7 +23,7 @@
 
 set -uo pipefail
 
-STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/mobileomarchy"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/moarchy"
 FLAG="$STATE_DIR/screen-locked"
 
 # The Goodix panel shows up twice in get_inputs, as a touch device and as a

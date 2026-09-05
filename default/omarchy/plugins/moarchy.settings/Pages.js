@@ -4,7 +4,7 @@
 // Why a model rather than a plugin per screen
 // ---------------------------------------------------------------------------
 // A new plugin costs a manifest, an id in the hardcoded tuple in
-// install/config.sh, two more lists in bin/mobileomarchy-selftest, and ~350
+// install/config.sh, two more lists in bin/moarchy-selftest, and ~350
 // lines of PanelWindow/header/ListView that is byte-identical to the last one.
 // Fifteen screens that way is four thousand lines, ninety percent of it copied.
 // Here a screen is an entry in PAGES and a row is an object.
@@ -58,7 +58,7 @@
 // upstream's apps provider; repeating it inside Settings would be the mistake
 // the drawer's own comment warns about.
 var EXTERNAL = {
-    "apps": { cls: "N", where: "mobileomarchy.drawer" }
+    "apps": { cls: "N", where: "moarchy.drawer" }
 };
 
 // Already a shade control. Recorded so coverage is complete, never rendered.
@@ -127,9 +127,9 @@ var PAGES = {
 // ------------------------------------------------------------------ display
 "display": { title: "Display", rows: [
   { id: "nightlight", type: "switch", glyph: "󰔎", label: "Night light",
-    read: "mobileomarchy-toggle-nightlight --status | jq -r .enabled",
-    on: "mobileomarchy-toggle-nightlight on",
-    off: "mobileomarchy-toggle-nightlight off",
+    read: "moarchy-toggle-nightlight --status | jq -r .enabled",
+    on: "moarchy-toggle-nightlight on",
+    off: "moarchy-toggle-nightlight off",
     covers: { "trigger.toggle.nightlight": "N" } },
   { id: "stayawake", type: "switch", glyph: "󰅶", label: "Stay awake",
     detail: "Keep the screen on",
@@ -154,7 +154,7 @@ var PAGES = {
 
 // --------------------------------------------------------------- appearance
 "appearance": { title: "Appearance", rows: [
-  { id: "theme", type: "plugin", plugin: "mobileomarchy.themes", glyph: "󰸌",
+  { id: "theme", type: "plugin", plugin: "moarchy.themes", glyph: "󰸌",
     label: "Theme", detailCmd: "omarchy-theme-current",
     covers: { "style.theme": "N" } },
   { id: "background", type: "nav", page: "appearance.background", glyph: "",
@@ -187,7 +187,7 @@ var PAGES = {
   // Negative polarity: the flag existing means the bar is OFF.
   { id: "show", type: "switch", glyph: "󰍜", label: "Show status bar",
     read: "omarchy-toggle-enabled bar-off && echo true || echo false", invert: true,
-    on: "mobileomarchy-toggle-bar on", off: "mobileomarchy-toggle-bar off",
+    on: "moarchy-toggle-bar on", off: "moarchy-toggle-bar off",
     covers: { "trigger.toggle.top-bar": "N" } },
   // Negative polarity again, so the bar looks the same until this is touched.
   { id: "battery", type: "switch", glyph: "󰁹", label: "Battery percentage",
@@ -434,7 +434,7 @@ var PAGES = {
     covers: { "setup.plugin": "N" } },
   { id: "restart", type: "action", glyph: "󰍜", label: "Restart shell",
     detail: "Bar, drawer, shade and gestures",
-    run: "mobileomarchy-restart-shell", launch: "none",
+    run: "moarchy-restart-shell", launch: "none",
     covers: { "update.process.shell": "N", "update.process": "N" } },
   { id: "tmux", type: "action", glyph: "", label: "Reset tmux config",
     run: "omarchy-launch-floating-terminal-with-presentation omarchy-refresh-tmux",
@@ -454,11 +454,11 @@ var PAGES = {
   { id: "clone", type: "action", glyph: "󰆏", label: "Clone a plugin",
     run: "omarchy-menu-plugin clone", launch: "menu",
     covers: { "setup.plugin.clone": "B" } },
-  // Upstream's guard is true here -- six mobileomarchy.* manifests match it --
+  // Upstream's guard is true here -- six moarchy.* manifests match it --
   // so this row can uninstall the phone UI. Kept, behind a confirm.
   { id: "remove", type: "action", glyph: "󰭌", label: "Remove a plugin",
     when: "compgen -G \"$HOME/.config/omarchy/plugins/*/manifest.json\"",
-    confirm: "Removing a mobileomarchy plugin takes away part of the phone UI.",
+    confirm: "Removing a moarchy plugin takes away part of the phone UI.",
     run: "omarchy-menu-plugin remove", launch: "menu",
     covers: { "setup.plugin.remove": "B" } }
 ]},
@@ -484,7 +484,7 @@ var PAGES = {
 // -------------------------------------------------------------------- tools
 "tools": { title: "Tools", rows: [
   { id: "screenshot", type: "action", glyph: "", label: "Screenshot",
-    run: "mobileomarchy-capture-screenshot", launch: "none",
+    run: "moarchy-capture-screenshot", launch: "none",
     covers: { "trigger.capture.screenshot": "N", "trigger.capture": "N" } },
   { id: "record", type: "nav", page: "tools.record", glyph: "", label: "Screen record",
     when: "omarchy-cmd-present gpu-screen-recorder",
@@ -567,11 +567,11 @@ var PAGES = {
 
 "system.power": { title: "Power", rows: [
   { id: "lock", type: "action", glyph: "", label: "Lock",
-    run: "mobileomarchy-system-lock", launch: "none",
+    run: "moarchy-system-lock", launch: "none",
     covers: { "system.lock": "N" } },
   { id: "logout", type: "action", glyph: "󰍃", label: "Log out",
     confirm: "Log out of the session?",
-    run: "mobileomarchy-system-logout", launch: "none",
+    run: "moarchy-system-logout", launch: "none",
     covers: { "system.logout": "N" } },
   { id: "reboot", type: "action", glyph: "󰜉", label: "Restart",
     confirm: "Restart the phone?",

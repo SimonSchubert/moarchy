@@ -50,7 +50,7 @@ case "${1:-toggle}" in
   on|enable)   nightlight_on ;;
   off|disable) nightlight_off ;;
   toggle)      if running; then nightlight_off; else nightlight_on; fi ;;
-  *) echo "usage: mobileomarchy-toggle-nightlight [toggle|on|off|--status]" >&2; exit 1 ;;
+  *) echo "usage: moarchy-toggle-nightlight [toggle|on|off|--status]" >&2; exit 1 ;;
 esac
 
 # Upstream's indicator refresh. -q and guarded: a shell that is not up is not an

@@ -10,7 +10,7 @@
 
 echo "==> source-built packages"
 
-PKGDIR="$MOBILEOMARCHY_PATH/packages"
+PKGDIR="$MOARCHY_PATH/packages"
 shopt -s nullglob
 prebuilt=("$PKGDIR"/*.pkg.tar.*)
 
@@ -21,22 +21,22 @@ else
   echo "    no prebuilt packages found; building on-device (this is slow)"
   sudo pacman -S --needed --noconfirm base-devel git go
 
-  MOBILEOMARCHY_BUILD_DIR=$(mktemp -d)
+  MOARCHY_BUILD_DIR=$(mktemp -d)
 
   for pkg in yay xdg-terminal-exec ttf-ia-writer; do
     echo "    building $pkg"
     if git clone --depth 1 "https://aur.archlinux.org/$pkg.git" \
-         "$MOBILEOMARCHY_BUILD_DIR/$pkg" 2>/dev/null; then
-      ( cd "$MOBILEOMARCHY_BUILD_DIR/$pkg" && makepkg -si --noconfirm ) ||
+         "$MOARCHY_BUILD_DIR/$pkg" 2>/dev/null; then
+      ( cd "$MOARCHY_BUILD_DIR/$pkg" && makepkg -si --noconfirm ) ||
         echo "    !! $pkg failed to build; continuing without it" >&2
     else
       echo "    !! could not clone $pkg; skipping" >&2
     fi
   done
 
-  rm -rf "$MOBILEOMARCHY_BUILD_DIR"
+  rm -rf "$MOARCHY_BUILD_DIR"
 fi
 
 # 4.x has no separate launcher: SUPER+SPACE goes through the quickshell shell,
 # so walker and elephant are neither built nor installed. See the tail of
-# mobileomarchy-base.packages.
+# moarchy-base.packages.

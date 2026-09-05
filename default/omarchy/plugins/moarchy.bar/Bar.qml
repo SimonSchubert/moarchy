@@ -17,7 +17,7 @@
 // Why nothing here is tappable
 // ---------------------------------------------------------------------------
 // Android's status bar is not tappable either, and here that is forced rather
-// than chosen: mobileomarchy.shade owns the top edge with a layer-shell grab
+// than chosen: moarchy.shade owns the top edge with a layer-shell grab
 // strip on Overlay so a downward drag anywhere along the bar opens the shade.
 // Overlay outranks this surface's Top, so a tap here would never arrive. Rather
 // than fight for it, this surface draws and nothing else -- no HoverHandler, no
@@ -70,7 +70,7 @@ Item {
   //   toggleTransparency                                  omarchy-shell IPC
   //   panelWidgetIdAt                                     togglePanelAt IPC
   //   debugBarGeometry                                    debug IPC
-  // Ours, not upstream's, called by bin/mobileomarchy-toggle-bar and by the
+  // Ours, not upstream's, called by bin/moarchy-toggle-bar and by the
   // Settings battery-percentage switch:
   //   syncHidden                                          re-read the toggle flags
   readonly property int barSize: Style.bar.sizeHorizontal
@@ -371,7 +371,7 @@ Item {
         color: root.transparent ? "transparent" : root.background
         surfaceFormat.opaque: false
 
-        WlrLayershell.namespace: "mobileomarchy-bar"
+        WlrLayershell.namespace: "moarchy-bar"
         WlrLayershell.layer: WlrLayer.Top
         WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 

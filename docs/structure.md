@@ -36,7 +36,7 @@ Allwinner A64 BROM read u-boot SPL from raw sectors near the start of the boot
 medium. What ships is a GPT disk image, written with `dd`.
 
 Measured on `archlinux-pinephone-barebone-20251224.img`, which is what
-mobileomarchy installs onto today:
+moarchy installs onto today:
 
 | | |
 | --- | --- |
@@ -78,7 +78,7 @@ Explicitly out of scope, so the ACs stay honest:
   moarchy-store   ───┤            ┌──────────────┐        ┌─────────┐
   AUR rebuilds    ───┼──► build ──► moarchy.db   ├──► pacstrap ──► .img.xz
   omarchy-config  ───┤   (aarch64  │ (aarch64)   │        │ + boot  │
-  mobileomarchy   ───┘    container)             │        └─────────┘
+  moarchy   ───┘    container)             │        └─────────┘
                                   └──────┬───────┘
                                          │
                              pacman -Syu │ on a phone already in the field
@@ -111,18 +111,18 @@ version (§8), never as source trees.
 > their own build, their own tests and their own README.
 
 **B2** Each component repo owns the PKGBUILD that builds it. It is the single
-source of truth for *how* that component is built. `mobileomarchy` owns only
+source of truth for *how* that component is built. `moarchy` owns only
 *which version* is built.
 
-**B3** `mobileomarchy` is the integration repo. It owns the package
+**B3** `moarchy` is the integration repo. It owns the package
 definitions for things with no upstream of their own, the package repository
 tooling, the image builder, the device docs, and the dev loop.
 
 **B4** The package repository tooling and the image builder live in
-`mobileomarchy` under `repo/` and `image/`. They do not get their own repo until
+`moarchy` under `repo/` and `image/`. They do not get their own repo until
 one of them has CI worth isolating.
 
-**B5** No component repo depends on `mobileomarchy` at build time. The keyboard
+**B5** No component repo depends on `moarchy` at build time. The keyboard
 builds from a clean checkout with `cd packaging && makepkg`, as it does today;
 the store likewise. If either needs something from here, that thing is wrong.
 
@@ -131,16 +131,16 @@ the store likewise. If either needs something from here, that thing is wrong.
 ```
 moarchy-keyboard/          unchanged; packaging/PKGBUILD is its build recipe
 moarchy-store/             unchanged; PKGBUILD + its own signed catalogue
-mobileomarchy/
+moarchy/
 ├── manifest.toml          the version pins — the only file that says "v0.2.0"
 ├── pkgbuilds/
-│   ├── mobileomarchy/         bin/ default/ config/
+│   ├── moarchy/         bin/ default/ config/
 │   ├── omarchy-config/        upstream pin + port-4x.patch
-│   ├── mobileomarchy-meta/    the package list, as depends=()
+│   ├── moarchy-meta/    the package list, as depends=()
 │   └── <aur rebuilds>/        yay, xdg-terminal-exec, ttf-ia-writer, …
 ├── repo/                  build container → repo-add → moarchy.db → publish
 ├── image/                 pacstrap a rootfs + boot chain → .img.xz
-├── bin/ default/ config/  packaged by pkgbuilds/mobileomarchy
+├── bin/ default/ config/  packaged by pkgbuilds/moarchy
 ├── scripts/               dev loop: provision.sh, flash-sd.sh
 └── docs/
 ```
@@ -149,9 +149,15 @@ mobileomarchy/
 
 ## 5. Packages
 
-**P1** `mobileomarchy` (`arch=any`) contains `bin/`, `default/` and `config/`
-and nothing else. `pacman -Ql mobileomarchy` lists no path under `/home` and no
+**P1** `moarchy` (`arch=any`) contains `bin/`, `default/` and `config/`
+and nothing else. `pacman -Ql moarchy` lists no path under `/home` and no
 path under `/etc` that another package owns.
+
+> A package named `moarchy` inside a repository named `moarchy` (R1) is
+> deliberate, not an oversight of the rename. Pacman namespaces the two
+> separately — `moarchy/moarchy` is how it would be written out in full, and
+> `[moarchy]` in `pacman.conf` never collides with a package of that name. It
+> is also what upstream does: `omarchy` is a package in `pkgs.omarchy.org`.
 
 **P2** `omarchy-config` (`arch=any`) contains upstream Omarchy's configuration
 and theme layer at the pin currently in `install/vendor-omarchy.sh`
@@ -169,17 +175,17 @@ a script of `sed` expressions.
 > class of failure this project keeps paying for. 342 lines of imperative
 > rewriting is also not reviewable as a diff; a diff is.
 
-**P5** `mobileomarchy-meta` (`arch=any`) has no files. Its `depends=()` is the
+**P5** `moarchy-meta` (`arch=any`) has no files. Its `depends=()` is the
 package set, and it is the only place that set is written down.
 
 > The failure mode this prevents has already happened once: `docker/` built
 > `walker` and `elephant` while `install/build-src.sh` did not and
-> `mobileomarchy-base.packages` documented both as unused in 4.x — three lists,
+> `moarchy-base.packages` documented both as unused in 4.x — three lists,
 > two of them right. That divergence is fixed, but nothing structural stops the
 > next one. One list, in one file, with pacman resolving it, does.
 
-**P6** `mobileomarchy-base.packages` and `mobileomarchy-extras.packages` are
-deleted. Their contents become `mobileomarchy-meta`'s `depends`, and their
+**P6** `moarchy-base.packages` and `moarchy-extras.packages` are
+deleted. Their contents become `moarchy-meta`'s `depends`, and their
 comments — every one of which explains why a package is present or why an
 upstream one is absent — move with them.
 
@@ -210,14 +216,14 @@ fetched by `source=()` with a checksum, or by a tag `makepkg` can verify.
 > `.../aarch64/omarchy.db` → 404.
 
 **R2** It contains every package this project builds: the keyboard, the store,
-the AUR rebuilds, `mobileomarchy`, `omarchy-config`, `mobileomarchy-meta`.
+the AUR rebuilds, `moarchy`, `omarchy-config`, `moarchy-meta`.
 
 **R3** Packages are built in an `aarch64` container, natively on Apple Silicon —
 the existing `docker/Dockerfile.builder`, generalised from a fixed list to
 `manifest.toml`.
 
 **R4** Adding the repo to a stock DanctNIX phone is one `pacman.conf` stanza,
-and `pacman -S mobileomarchy-meta` then installs the whole environment.
+and `pacman -S moarchy-meta` then installs the whole environment.
 
 **R5** The repo database is signed, and the public key ships in a
 `moarchy-keyring` package. `SigLevel = Required` in the stanza from R4.
@@ -237,7 +243,7 @@ phone.
 from a single command, with no phone attached.
 
 **I2** The rootfs is built by `pacstrap`-ing into a directory: DanctNIX's base
-plus `mobileomarchy-meta` from the `moarchy` repo. It is never produced by
+plus `moarchy-meta` from the `moarchy` repo. It is never produced by
 booting a phone and imaging the card back.
 
 **I3** The boot chain — u-boot SPL at 128 KiB, the FAT `boot` partition, the
@@ -321,18 +327,23 @@ DanctNIX's.
 
 ## 10. Naming
 
-**N1** **?** The project settles on one prefix. Today it is `mobileomarchy`
-(this repo, 24 `bin/mobileomarchy-*` scripts, both `.packages` files) and
-`moarchy-*` (the keyboard and store, both already published under that name).
+**N1** The project uses one prefix: **`moarchy`**. Settled 2026-09-05. Until
+then this repo, its 22 `bin/mobileomarchy-*` scripts, its nine plugin ids and
+both `.packages` files said `mobileomarchy`, while the keyboard and the store —
+the two repos with an audience — were already published as `moarchy-*`.
 
-**N2** **?** My recommendation is `moarchy`: it is the better name, it is on the
-two repos that already have an audience, and `moarchy-keyboard` reads as part of
-a family in a way `mobileomarchy-keyboard` does not. GitHub redirects renamed
-repositories, so the cost is the `bin/` prefix, the package names and the docs.
+**N2** The alternative was renaming those two into `mobileomarchy`. `moarchy`
+won because it was already on the published repos, and because
+`moarchy-keyboard` reads as part of a family in a way `mobileomarchy-keyboard`
+does not.
 
-**N3** Whichever wins, it is decided before the first published package, because
-a package name is the one thing here that is genuinely expensive to change
-afterwards — it is in every `depends`, every `pacman.conf` and on every phone.
+**N3** It was decided before the first published package, which is the whole
+reason it was cheap. A package name is the one thing here that is genuinely
+expensive to change afterwards — it is in every `depends`, every `pacman.conf`
+and on every phone. Nothing had been published, so the bill was 417 lines
+across 80 files, 35 renamed paths, and a one-release migration in
+`install/config.sh` for phones already carrying the old name. After M3 it would
+have been that plus every installed device.
 
 ---
 
@@ -348,7 +359,7 @@ manifest agree.
 **M2 — One transaction.** P1–P10. `install.sh` reduces to:
 
 ```
-pacman -S mobileomarchy-meta
+pacman -S moarchy-meta
 ```
 
 **This is the gate.** Everything in §6 and §7 is downstream of it and none of it
@@ -361,7 +372,8 @@ is then mostly partition arithmetic.
 
 **M4 — The image.** I1–I9. Consumes what M3 published.
 
-Naming (§10) is not a milestone. It happens before M3, or it happens never.
+Naming (§10) was not a milestone. It happened before M3 — 2026-09-05, ahead of
+M1 — which is the only reason it cost 80 files rather than every phone.
 
 ---
 
@@ -369,14 +381,13 @@ Naming (§10) is not a milestone. It happens before M3, or it happens never.
 
 Marked **?** above, collected here:
 
-1. **N1/N2 — the name.** `moarchy` or `mobileomarchy`. Needs deciding before M3.
-2. **I3 — the boot chain.** Whether DanctNIX's boot partition and pre-GPT region
+1. **I3 — the boot chain.** Whether DanctNIX's boot partition and pre-GPT region
    can be assembled from their packages, or have to be copied verbatim out of a
    release image. Unverified; changes the shape of `image/` but not this plan.
-3. **Where `moarchy.db` is hosted.** GitHub Pages off this repo is the cheap
+2. **Where `moarchy.db` is hosted.** GitHub Pages off this repo is the cheap
    answer and needs no domain. A `pkgs.moarchy.org` mirrors what upstream
    Omarchy does and survives moving off GitHub. Not decided.
-4. **Whether `omarchy-config` should be a package at all**, versus vendoring the
+3. **Whether `omarchy-config` should be a package at all**, versus vendoring the
    ~95 QML files of upstream's shell directly into this repo with the port
    already applied. The package keeps the upstream diff visible and the update
    path mechanical; vendoring is simpler and admits that a Sway port of a

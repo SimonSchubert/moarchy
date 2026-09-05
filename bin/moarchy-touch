@@ -14,14 +14,14 @@ produce the pointer gestures Sway's `bindgesture` wants and a touchscreen
 produces the raw touch the plugin actually listens for.
 
 Coordinates are PANEL pixels (720x1440), not Sway's 360x720 logical space, the
-same convention bin/mobileomarchy-gestures used for lisgd. So the home drawer
+same convention bin/moarchy-gestures used for lisgd. So the home drawer
 sits at roughly y=1420, not y=710.
 
 Needs root, because /dev/uinput is root-only:
 
-    sudo mobileomarchy-touch swipe 500 1420 150 1420
-    sudo mobileomarchy-touch hold 360 1420 700
-    sudo mobileomarchy-touch tap 360 700
+    sudo moarchy-touch swipe 500 1420 150 1420
+    sudo moarchy-touch hold 360 1420 700
+    sudo moarchy-touch tap 360 700
 """
 
 import sys
@@ -54,7 +54,7 @@ class Touch:
     def __init__(self, settle=2.0):
         self.ui = UInput(
             CAPABILITIES,
-            name="mobileomarchy-virtual-touch",
+            name="moarchy-virtual-touch",
             input_props=[e.INPUT_PROP_DIRECT],
         )
         # libinput has to notice the hotplug and Sway has to map it to an output

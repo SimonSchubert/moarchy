@@ -37,7 +37,7 @@ Item {
   property var pluginRegistry: null
   property var service: null
 
-  readonly property string pluginId: "mobileomarchy.device"
+  readonly property string pluginId: "moarchy.device"
 
   property bool opened: false
   property string returnTo: ""
@@ -56,8 +56,8 @@ Item {
     // Only one full-screen plugin should be up at a time, or the one underneath
     // keeps its keyboard grab and swallows the back gesture.
     if (root.shell && typeof root.shell.isPluginOpen === "function") {
-      if (root.shell.isPluginOpen("mobileomarchy.shade")) root.shell.hide("mobileomarchy.shade")
-      if (root.shell.isPluginOpen("mobileomarchy.drawer")) root.shell.hide("mobileomarchy.drawer")
+      if (root.shell.isPluginOpen("moarchy.shade")) root.shell.hide("moarchy.shade")
+      if (root.shell.isPluginOpen("moarchy.drawer")) root.shell.hide("moarchy.drawer")
     }
     try {
       const payload = payloadJson ? JSON.parse(payloadJson) : {}
@@ -91,7 +91,7 @@ Item {
   }
 
   // Short target, matching every other plugin here -- the selftest and
-  // mobileomarchy-* scripts address these as `omarchy-shell device state`, not
+  // moarchy-* scripts address these as `omarchy-shell device state`, not
   // by plugin id.
   //
   // open() goes through the shell rather than calling root.open() directly.
@@ -187,7 +187,7 @@ Item {
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
 
-    WlrLayershell.namespace: "mobileomarchy-device"
+    WlrLayershell.namespace: "moarchy-device"
     WlrLayershell.layer: WlrLayer.Top
 
     // No bottom margin here, deliberately, and this is the one surface that

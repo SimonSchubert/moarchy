@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# End-to-end provisioning for mobileomarchy, driven from a macOS host.
+# End-to-end provisioning for moarchy, driven from a macOS host.
 #
 #   ./scripts/provision.sh all          # everything (pauses at the flash step)
 #   ./scripts/provision.sh <step>       # run one step
@@ -27,7 +27,7 @@ cd "$REPO_ROOT"
 
 PHONE="${PHONE:-alarm@192.168.0.18}"
 RELEASE="${RELEASE:-20251224}"
-CACHE="${CACHE:-$HOME/Downloads/mobileomarchy}"
+CACHE="${CACHE:-$HOME/Downloads/moarchy}"
 IMG="$CACHE/archlinux-pinephone-barebone-${RELEASE}.img"
 SSH_OPTS=(-o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10)
 
@@ -86,9 +86,9 @@ EOS
 step_build() {
   say "build aarch64 packages (moarchy-keyboard, yay, xdg-terminal-exec, ttf-ia-writer)"
   docker info >/dev/null 2>&1 || die "Docker is not running"
-  docker build --platform linux/arm64 -f docker/Dockerfile.builder -t mobileomarchy-builder . >/dev/null
+  docker build --platform linux/arm64 -f docker/Dockerfile.builder -t moarchy-builder . >/dev/null
   mkdir -p packages
-  docker run --rm --platform linux/arm64 -v "$PWD/packages:/out" mobileomarchy-builder
+  docker run --rm --platform linux/arm64 -v "$PWD/packages:/out" moarchy-builder
   info "built: $(ls -1 packages/*.pkg.tar.* 2>/dev/null | wc -l | tr -d ' ') packages"
 }
 
@@ -98,20 +98,32 @@ step_deploy() {
 
   # Passwordless sudo, so the long install steps do not stall on a prompt.
   if ! phone 'sudo -n true' 2>/dev/null; then
-    info "installing sudoers drop-in (remove later with: sudo rm /etc/sudoers.d/10-mobileomarchy)"
-    phone 'echo 123456 | sudo -S -k sh -c "echo \"$(id -un) ALL=(ALL) NOPASSWD: ALL\" > /etc/sudoers.d/10-mobileomarchy && chmod 440 /etc/sudoers.d/10-mobileomarchy && visudo -c -q"' 2>/dev/null ||
+    info "installing sudoers drop-in (remove later with: sudo rm /etc/sudoers.d/10-moarchy)"
+    phone 'echo 123456 | sudo -S -k sh -c "echo \"$(id -un) ALL=(ALL) NOPASSWD: ALL\" > /etc/sudoers.d/10-moarchy && chmod 440 /etc/sudoers.d/10-moarchy && visudo -c -q"' 2>/dev/null ||
       die "could not enable passwordless sudo (is the password still the default?)"
+  fi
+
+  # Rename migration, one release only (see install/config.sh). A phone
+  # provisioned before 2026-09-05 has 10-mobileomarchy, and the guard above
+  # skips right past it -- `sudo -n true` succeeds precisely *because* that
+  # file is there. Write the new drop-in and prove it parses before removing
+  # the old one: passwordless sudo is deliberate here, and the window where
+  # neither file grants it is the one thing this must not open.
+  if phone 'test -f /etc/sudoers.d/10-mobileomarchy' 2>/dev/null; then
+    info "renaming sudoers drop-in 10-mobileomarchy -> 10-moarchy"
+    phone 'sudo sh -c "echo \"$(id -un) ALL=(ALL) NOPASSWD: ALL\" > /etc/sudoers.d/10-moarchy && chmod 440 /etc/sudoers.d/10-moarchy && visudo -c -q && rm -f /etc/sudoers.d/10-mobileomarchy"' 2>/dev/null ||
+      info "!! could not rename the sudoers drop-in; 10-mobileomarchy is still in place and still works"
   fi
 
   local tarball; tarball=$(mktemp -t moa).tar.gz
   tar --exclude='.git' --exclude='packages' -czf "$tarball" .
   scp "${SSH_OPTS[@]}" -q "$tarball" "$PHONE:/tmp/moa.tar.gz"
   rm -f "$tarball"
-  phone 'mkdir -p ~/.local/share/mobileomarchy && tar xzf /tmp/moa.tar.gz -C ~/.local/share/mobileomarchy && rm /tmp/moa.tar.gz'
+  phone 'mkdir -p ~/.local/share/moarchy && tar xzf /tmp/moa.tar.gz -C ~/.local/share/moarchy && rm /tmp/moa.tar.gz'
 
   if compgen -G "packages/*.pkg.tar.*" >/dev/null; then
-    phone 'mkdir -p ~/.local/share/mobileomarchy/packages'
-    scp "${SSH_OPTS[@]}" -q packages/*.pkg.tar.* "$PHONE:/home/$(phone 'id -un')/.local/share/mobileomarchy/packages/"
+    phone 'mkdir -p ~/.local/share/moarchy/packages'
+    scp "${SSH_OPTS[@]}" -q packages/*.pkg.tar.* "$PHONE:/home/$(phone 'id -un')/.local/share/moarchy/packages/"
     info "shipped prebuilt packages"
   fi
   info "deployed"
@@ -134,7 +146,7 @@ step_install() {
   #                calls sudo itself for the system parts. Run the unit bare as
   #                root and every one of those lands in /root instead.
   #   --setenv     systemd sets no HOME for a system unit, so install.sh's
-  #                `${MOBILEOMARCHY_PATH:-$HOME/.local/share/...}` expanded to
+  #                `${MOARCHY_PATH:-$HOME/.local/share/...}` expanded to
   #                `/.local/share/...` and it died on the first source.
   #   XDG_...    `systemctl --user enable` needs XDG_RUNTIME_DIR to find the
   #                user manager. Without it install/telephony.sh silently fails
@@ -152,7 +164,7 @@ step_install() {
            --property=TimeoutStartSec=10800 \
            --uid=$(id -u) --gid=$(id -g) \
            --setenv=HOME=$HOME --setenv=XDG_RUNTIME_DIR=/run/user/$(id -u) \
-           bash -c "cd $HOME/.local/share/mobileomarchy && ./install.sh > /tmp/moa-install.log 2>&1"' >/dev/null
+           bash -c "cd $HOME/.local/share/moarchy && ./install.sh > /tmp/moa-install.log 2>&1"' >/dev/null
   info "started. follow with:  ./scripts/provision.sh watch"
 }
 
@@ -171,8 +183,8 @@ step_watch() {
 
 step_verify() {
   say "verify"
-  phone 'export MOBILEOMARCHY_PATH=$HOME/.local/share/mobileomarchy OMARCHY_PATH=$HOME/.local/share/omarchy
-    export PATH="$MOBILEOMARCHY_PATH/bin:$OMARCHY_PATH/bin:$PATH"
+  phone 'export MOARCHY_PATH=$HOME/.local/share/moarchy OMARCHY_PATH=$HOME/.local/share/omarchy
+    export PATH="$MOARCHY_PATH/bin:$OMARCHY_PATH/bin:$PATH"
     export XDG_RUNTIME_DIR=/run/user/$(id -u)
     echo "  GPU:        $(EGL_PLATFORM=surfaceless eglinfo 2>/dev/null | sed -n "s/^OpenGL ES profile version: //p" | head -1)"
     echo "  sway -C:    $(WLR_BACKENDS=headless sway -C -c ~/.config/sway/config >/dev/null 2>&1 && echo PASS || echo FAIL)"

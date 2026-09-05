@@ -13,7 +13,7 @@
 # keyboard or ssh -- from a row labelled "Menu Bar".
 #
 # So this flips the same `bar-off` flag upstream uses and asks the bar to re-read
-# it. mobileomarchy.bar's syncHidden() moves its exclusive zone and slides it off
+# it. moarchy.bar's syncHidden() moves its exclusive zone and slides it off
 # the top edge; everything else the shell draws stays up.
 #
 # `on`/`off` set an absolute state so a settings switch can write what it means
@@ -24,7 +24,7 @@ case "${1:-toggle}" in
   on)     omarchy-toggle bar-off off ;;   # bar on  == flag off
   off)    omarchy-toggle bar-off on  ;;
   toggle) omarchy-toggle bar-off toggle ;;
-  *) echo "usage: mobileomarchy-toggle-bar [toggle|on|off]" >&2; exit 1 ;;
+  *) echo "usage: moarchy-toggle-bar [toggle|on|off]" >&2; exit 1 ;;
 esac
 
 # The bar watches nothing, so tell it. -q because a shell that is not up yet is

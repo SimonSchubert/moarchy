@@ -11,7 +11,7 @@ fi
 
 ARCH=$(uname -m)
 if [[ $ARCH != "aarch64" ]]; then
-  echo "mobileomarchy targets aarch64; this is $ARCH." >&2
+  echo "moarchy targets aarch64; this is $ARCH." >&2
   echo "(For x86_64, use upstream Omarchy: https://omarchy.org)" >&2
   exit 1
 fi

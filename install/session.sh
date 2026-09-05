@@ -17,7 +17,7 @@ EOF2
 if ! grep -q "exec sway" ~/.bash_profile 2>/dev/null; then
   cat >>~/.bash_profile <<'EOF3'
 
-# mobileomarchy: start the session on the phone's own screen only
+# moarchy: start the session on the phone's own screen only
 if [[ -z $WAYLAND_DISPLAY && $XDG_VTNR == 1 ]]; then
   [[ -f ~/.profile ]] && source ~/.profile
   export XDG_CURRENT_DESKTOP=sway

@@ -3,7 +3,7 @@
 # equivalent introspection, so we read the binding file that is the source of
 # truth anyway, using the section comments as group headings.
 
-BINDINGS="${MOBILEOMARCHY_PATH:-$HOME/.local/share/mobileomarchy}/default/sway/bindings.conf"
+BINDINGS="${MOARCHY_PATH:-$HOME/.local/share/moarchy}/default/sway/bindings.conf"
 [[ -f $BINDINGS ]] || { echo "No bindings file at $BINDINGS" >&2; exit 1; }
 
 output_keybindings() {

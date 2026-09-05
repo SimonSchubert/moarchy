@@ -1,2 +1,2 @@
 #!/bin/bash
-exec mobileomarchy-window-close-all "$@"
+exec moarchy-window-close-all "$@"

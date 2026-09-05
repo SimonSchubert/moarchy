@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "id": "mobileomarchy.settings",
+  "id": "moarchy.settings",
   "name": "Settings",
   "version": "1.0.0",
-  "author": "mobileomarchy",
+  "author": "moarchy",
   "description": "The phone's settings list: themes, setup, packages, updates, system.",
   "kinds": [
     "overlay"

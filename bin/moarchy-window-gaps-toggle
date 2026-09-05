@@ -9,7 +9,7 @@
 # phone, which is exactly backwards. So the state file says "on", and the first
 # press is what puts gaps there -- for the rare split where seeing the boundary
 # is worth 6px. See docs/windows.md W4.
-STATE="${XDG_STATE_HOME:-$HOME/.local/state}/mobileomarchy/gaps-on"
+STATE="${XDG_STATE_HOME:-$HOME/.local/state}/moarchy/gaps-on"
 mkdir -p "$(dirname "$STATE")"
 
 # The name this script used before the inversion. Left over from a session that

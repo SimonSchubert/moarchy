@@ -347,7 +347,7 @@ echo "    Menu.qml: back button when a touchscreen is present or no real keyboar
 # On this phone two seconds is most of an app launch, so that feedback arrived
 # after the moment it was for -- you tapped, nothing happened, you tapped again.
 #
-# mobileomarchy.splash draws the app's own icon on the wallpaper instead, from
+# moarchy.splash draws the app's own icon on the wallpaper instead, from
 # the tap onwards. This rewires AppLibrary to feed it rather than duplicating
 # the bookkeeping: which app, whether a toplevel arrived and the 15s giving-up
 # timer all stay exactly where upstream put them. Three edits:
@@ -374,7 +374,7 @@ ok = True
 # --- launchIcon ------------------------------------------------------------
 anchor = '  property string launchOsdMessage: ""\n'
 addition = anchor + '''
-  // The icon mobileomarchy.splash draws. Resolved here rather than in the
+  // The icon moarchy.splash draws. Resolved here rather than in the
   // plugin because this is the only place that sees the desktop id.
   property string launchIcon: ""
 
@@ -438,5 +438,5 @@ else:
 
 p.write_text(s, encoding="utf-8")
 if ok:
-    print("    AppLibrary.qml: launch feedback rewired to mobileomarchy.splash")
+    print("    AppLibrary.qml: launch feedback rewired to moarchy.splash")
 SPLASH_EOF

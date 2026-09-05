@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "id": "mobileomarchy.bar",
+  "id": "moarchy.bar",
   "name": "Phone status bar",
   "version": "1.0.0",
-  "author": "mobileomarchy",
+  "author": "moarchy",
   "description": "Display-only phone status bar: clock, cellular, wifi, bluetooth, battery.",
   "kinds": [
     "bar"

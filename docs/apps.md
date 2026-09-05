@@ -91,7 +91,7 @@ anyway. Two measured constraints shape it:
 - A **fullscreen terminal is 47×41 characters** at font size 9.
 - **btop refuses to draw below 60 columns**, whatever `shown_boxes` says.
 
-So `mobileomarchy-launch-tui` opens TUIs fullscreen at font size 7. For something
+So `moarchy-launch-tui` opens TUIs fullscreen at font size 7. For something
 that fits a *tiled* terminal with the bar still visible, use **`btm`** (bottom) —
 it adapts, and shows CPU, memory, all three thermal zones, disks and network.
 

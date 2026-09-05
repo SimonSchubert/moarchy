@@ -12,4 +12,4 @@ path="${1-}"
 # tapped once the editor is fullscreen and the menu is gone.
 omarchy-notification-send -u low "Editing config file" "$path" 2>/dev/null || true
 
-exec setsid mobileomarchy-launch-tui "${EDITOR:-nvim}" "$path"
+exec setsid moarchy-launch-tui "${EDITOR:-nvim}" "$path"

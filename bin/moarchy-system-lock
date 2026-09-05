@@ -21,14 +21,14 @@
 # producing events. That gives the thing you actually want from a pocket, and
 # the hardware power button is outside that state, so it can always undo it.
 #
-# MOBILEOMARCHY_FORCE_LOCK=1 overrides, for anyone who means it and has ssh.
+# MOARCHY_FORCE_LOCK=1 overrides, for anyone who means it and has ssh.
 # ---------------------------------------------------------------------------
 
 BIN="$(dirname "$(readlink -f "$0")")"
 
-if [[ ${MOBILEOMARCHY_FORCE_LOCK:-0} != 1 ]] && ! "$BIN/mobileomarchy-has-keyboard"; then
+if [[ ${MOARCHY_FORCE_LOCK:-0} != 1 ]] && ! "$BIN/moarchy-has-keyboard"; then
   echo "${0##*/}: no hardware keyboard -- blanking instead of locking" >&2
-  exec "$BIN/mobileomarchy-screen" lock
+  exec "$BIN/moarchy-screen" lock
 fi
 
 THEME="$HOME/.local/state/omarchy/current/theme"

@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "id": "mobileomarchy.splash",
+  "id": "moarchy.splash",
   "name": "Launch splash",
   "version": "1.0.0",
-  "author": "mobileomarchy",
+  "author": "moarchy",
   "description": "The launching app's icon on the wallpaper, from the tap until its window appears.",
   "kinds": [
     "panel"

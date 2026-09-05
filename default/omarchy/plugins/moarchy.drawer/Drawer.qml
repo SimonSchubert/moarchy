@@ -10,7 +10,7 @@
 // in, and it should be an icon grid you recognise rather than a list you read.
 //
 // The palette is not lost. Everything it could reach lives in
-// mobileomarchy.settings, behind the shade's gear -- which is where system
+// moarchy.settings, behind the shade's gear -- which is where system
 // administration belongs on a phone, rather than one mis-tap from an app icon
 // on the launcher. $mod+Alt+Space still opens the menu at its root for anyone
 // with a keyboard attached.
@@ -22,7 +22,7 @@
 // ---------------------------------------------------------------------------
 // Why this owns no edge of its own
 // ---------------------------------------------------------------------------
-// mobileomarchy.gestures already owns the bottom strip, and two exclusive
+// moarchy.gestures already owns the bottom strip, and two exclusive
 // layer surfaces cannot share an edge -- the second one is arranged above the
 // first rather than on top of it. So the gesture plugin keeps the input and
 // toggles this plugin through the shell. The drawer itself is only ever a
@@ -183,12 +183,12 @@ Item {
   }
 
   property string query: ""
-  readonly property string pluginId: "mobileomarchy.drawer"
+  readonly property string pluginId: "moarchy.drawer"
 
   readonly property int columns: 4
   readonly property int iconSize: Style.space(42)
 
-  // Must match mobileomarchy.gestures' own stripHeight. Duplicated rather than
+  // Must match moarchy.gestures' own stripHeight. Duplicated rather than
   // read across plugins for the same reason the shade duplicates it: this
   // surface has to know the number even when the gestures plugin failed to
   // load, and a sheet that ran off the bottom of the screen in that case would
@@ -277,8 +277,8 @@ Item {
     // tracking it here means this still holds when the shade was opened by its
     // own drag and this plugin never heard about it.
     if (root.shell && typeof root.shell.isPluginOpen === "function"
-        && root.shell.isPluginOpen("mobileomarchy.shade"))
-      root.shell.hide("mobileomarchy.shade")
+        && root.shell.isPluginOpen("moarchy.shade"))
+      root.shell.hide("moarchy.shade")
 
     root.query = ""
     searchField.text = ""
@@ -424,7 +424,7 @@ Item {
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
 
-    WlrLayershell.namespace: "mobileomarchy-drawer"
+    WlrLayershell.namespace: "moarchy-drawer"
     WlrLayershell.layer: WlrLayer.Top
 
     // Reserve nothing, but be arranged into what the exclusive surfaces left.

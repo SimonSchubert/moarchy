@@ -12,11 +12,11 @@
 # property, so the toggle can ask before it acts instead of guessing.
 #
 # It used to send SIGRTMIN to wvkbd, and before that drove squeekboard on this
-# same bus name. See mobileomarchy-base.packages for why each was replaced.
+# same bus name. See moarchy-base.packages for why each was replaced.
 #
 # Caveat unchanged: this cannot type into swaylock. Under ext-session-lock the
 # compositor draws only the locker's own surface and every layer-shell client is
-# hidden, the keyboard included. That is why bin/mobileomarchy-system-lock
+# hidden, the keyboard included. That is why bin/moarchy-system-lock
 # blanks instead of locking when no hardware keyboard is attached.
 
 set -euo pipefail
