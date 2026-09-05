@@ -374,6 +374,24 @@ fi
 if [[ ${1:-} == "--gestures" ]]; then
   head_ "gestures (synthetic touch)"
 
+  # Is the plugin half of a check actually on this shell?
+  #
+  # A check and the IPC it calls live in different files with different owners,
+  # and nothing makes them travel together: a suite committed ahead of its
+  # plugin half leaves main failing a check for a reason nowhere near what the
+  # check is about. That happened -- H2 landed calling `shade dragTrace` while
+  # dragTrace was still uncommitted in Shade.qml, and the K block landed calling
+  # `settings running`/`hide`/`resume` from an uncommitted Settings.qml.
+  #
+  # Probe with a read-only function only. `omarchy-shell` answers an absent one
+  # with "Function not found.", so this costs one round trip and never fires a
+  # verb with a side effect.
+  ipc_present() {
+    local out
+    out=$(timeout 5 omarchy-shell "$1" "$2" 2>&1) || true
+    [[ $out != *"Function not found"* && $out != *"Target not found"* ]]
+  }
+
   # Every check below names the acceptance criterion it proves, from
   # docs/gestures.md. That file is the contract; this is the part of it a
   # machine can check. An AC with no check here is visible by its absence --
@@ -648,6 +666,9 @@ print(found[0] if found else "")'; }
     # fast when the shade jumps shut, and the 220ms fall after release looks
     # like an animation whether or not anything followed the finger, so a check
     # that watched either would have passed throughout the bug.
+    if ! ipc_present shade dragTrace; then
+      printf '  \033[90m%-4s\033[0m   \033[90mH2 skipped: this shell has no `shade dragTrace`, so the drag leaves no record to read\033[0m\n' ""
+    else
     timeout 8 omarchy-shell shade open >/dev/null 2>&1
     sleep 2
     sudo -n "$touch_bin" swipe 360 1300 360 800 1500 >/dev/null 2>&1
@@ -660,6 +681,7 @@ print(found[0] if found else "")'; }
               "0 samples means it was dismissed by a tap that travelled, not dragged shut"
     fi
     timeout 8 omarchy-shell shade close >/dev/null 2>&1
+    fi
     sleep 2
 
     # --- S6, S6a, S6c. hold a wide tile to open its picker -----------------
@@ -1005,6 +1027,9 @@ print("armed=%d mid=%d lag=%d stop=%d landed_ok=%s landed=%s"
     # What was wrong is what the *strip* decides, so that half has to arrive
     # the way a thumb does; what Settings remembers is not a gesture question
     # and a swipe would only make it slower to ask.
+    if ! ipc_present settings running; then
+      printf '  \033[90m%-4s\033[0m   \033[90mK skipped: this shell has no `settings running`, so Settings-as-an-app is not present to test\033[0m\n' ""
+    else
     timeout 8 omarchy-shell settings close >/dev/null 2>&1; sleep 1
     setsid foot --app-id=moa-selftest -e sh -c 'while :; do sleep 300; done' >/dev/null 2>&1 </dev/null &
     sleep 4
@@ -1101,8 +1126,11 @@ print("armed=%d mid=%d lag=%d stop=%d landed_ok=%s landed=%s"
     fi
 
     timeout 8 omarchy-shell recents close >/dev/null 2>&1; sleep 1
+    fi
   fi
-  pkill -f "foot --app-id=moa-selftest" 2>/dev/null
+  # Not `pkill -f`: the pattern matches its own command line when this runs over
+  # ssh, and the suite kills the session it is reporting to.
+  swaymsg '[app_id=moa-selftest] kill' >/dev/null 2>&1
 
   # An AC with no check here is a gap, and a gap nobody can see is the same as
   # a gap nobody fixed. These are the ones this suite does not prove:
