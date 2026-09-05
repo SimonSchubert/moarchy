@@ -15,7 +15,8 @@ cites these ids, so an AC with no test is visible.
 | --- | --- |
 | **strip** | The reserved 20px band at the very bottom holding the home pill. Owned by `mobileomarchy.gestures`. |
 | **home screen** | A sway workspace with no windows on it: wallpaper, bar, pill. One app per workspace, so an empty workspace *is* the home screen. |
-| **app** | A workspace with a window on it. |
+| **app** | A workspace with a window on it, or Settings, which is treated as one (K). |
+| **shell app** | A screen this shell draws itself that behaves like an app: it has a carousel card and the strip hides it. Settings is the only one (K11). |
 | **carousel** | The recent-apps switcher (`mobileomarchy.recents`). |
 | **drawer** | The searchable app grid (`mobileomarchy.drawer`). |
 | **shade** | The pull-down from the top edge (`mobileomarchy.shade`). |
@@ -54,8 +55,26 @@ gesture is "get me out of here", not a toggle.
 does nothing else. Whatever is covering the screen, this gesture clears it.
 → `omarchy-shell shade state` == `closed`; nothing else opened
 
-**A9** With no apps open anywhere, an up-swipe from the strip does nothing. An
+"Whatever" is now every sheet this shell can put over an app, and no longer
+just those two. Settings comes *out* of it — it is an app (K), so the strip
+raises the carousel over it (K3) and hides it on the way home (K4) — and the
+theme picker goes *in*, which it had never actually been: the gate named the
+shade and the drawer by hand, so a swipe from the theme picker fell through to
+the carousel whenever a window happened to be open. It is a page reached from
+Settings and returned to it (K11), not a screen of its own, so clearing it is
+what this criterion always meant.
+
+The list is derived from the one the back gesture already walks, minus the
+carousel — which a second drag continues rather than clears (A6) — and minus
+the shell apps. Three hand-kept lists of overlay ids is how Settings and Themes
+came to be missing from the back gesture, and this is the third one not being
+written.
+
+**A9** With nothing open anywhere, an up-swipe from the strip does nothing. An
 empty switcher is a dead end you would only have to dismiss.
+
+*Nothing* means no windows **and** no shell app: a phone whose only running
+thing is Settings has one card, so the strip has a carousel worth raising (K1).
 
 With E6, this means **the carousel has no empty state**: it can never be on
 screen with zero cards, so that state is not built. (`Recents.qml` currently
@@ -93,6 +112,20 @@ the strip — opens the drawer, following the finger.
 **D2** Released short of the threshold, the drawer springs back and nothing
 happens.
 
+**D2a** The open drag is 1:1 with the finger: one pixel of travel is one pixel
+of sheet, measured against the drawer's own height. Not a preference — the
+close drag has always been 1:1, because its handle is the sheet it moves (H1),
+and the open drag was measuring against 45% of the screen instead. The same
+finger movement therefore opened the drawer 2.2x faster than it closed it, and
+a drag from mid-screen arrived fully open with half the screen still to go.
+Android's launcher tracks 1:1 in both directions.
+→ a drag of *n* logical px leaves `drawer dragTrace` ending within a few
+percent of `n / 720`; measured 300px→42%, 435px→63%, 635px→91%
+
+The strip keeps its shorter travel. It is a fixed band that does not move under
+the thumb, so a full-screen reach there would be a cost with nothing bought —
+the pill is not the thing being dragged.
+
 **D3** On a workspace with an app, dragging on the app does nothing to the
 shell. The app receives the touch — everywhere except the left edge band, which
 belongs to the back gesture (G).
@@ -104,13 +137,16 @@ workspace and the top edge still opens the shade.
 ## E. The carousel
 
 **E1** One card per open app, most recent first, with the app you just left
-leading and marked.
-→ `omarchy-shell recents list` has one line per open window
+leading and marked. Settings has a card here on the same terms as a window
+(K1); everything E says about a card applies to it unchanged.
+→ `omarchy-shell recents list` has one line per open window, plus one for
+Settings while it is running
 
 **E2** Tapping a card focuses that app and closes the carousel.
 → focused workspace holds that window; `recents state` == `closed`
 
-**E3** Swiping a card up closes that app, and its card leaves the row.
+**E3** Swiping a card up closes that app, and its card leaves the row. On the
+Settings card that is a close and not a hide, so the page stack resets (K6).
 → `recents list` is one line shorter
 
 **E4** Swiping sideways pages the row. The next card is partly visible, so it is
@@ -138,6 +174,45 @@ swipe order stays contiguous.
 **F2** Going home never closes anything. Every app is still in the carousel
 afterwards.
 → `recents list` count unchanged across a home gesture
+
+**F3** Going home puts the on-screen keyboard away. A home screen has nothing
+to type into, so the keyboard leaves with the app it belonged to.
+
+Reported as "the keyboard pops up when I navigate out of an app to the home
+screen", which is the opposite of what happens: it fails to go *down*. Sway
+sends the text-input leave when focus moves off the app, but home is an *empty*
+workspace and there is no window there to take the input state over, so nothing
+lowers it -- and standing alone on the wallpaper it reads as having just
+appeared. Measured: up after 3 of 5 homes, down in exactly the two that landed
+on a workspace which still had a window; and with the keyboard already down, 6
+of 6 homes left it down, so nothing on this path raises it.
+
+Confirmed at the mechanism after the fix: forced up, then home, then `Visible`
+false at 8 of 8 samples over 4s. Hiding before the workspace switch and after
+it both stick, and `SetVisible false` sticks even with the text field still
+focused, so the call needs no ordering against the switch.
+→ with the keyboard up, `omarchy-shell gestures swipe home`, then
+`sm.puri.OSK0` `Visible` is false and *stays* false across ~3s of sampling. One
+late reading cannot tell "never went down" from "went down and something raised
+it again", which on a shared phone is a real second case.
+
+**F4** The carousel does not flash on its way out. Everything that signals the
+home band -- the scrim thinning, the cards fading, the row travelling up -- is
+at its *weakest* there, because that is the cue that letting go returns to the
+wallpaper. So the carousel has to leave from that weakened state and not from
+its fully-open one.
+
+Reported as "the carousel goes to full alpha before it disappears", and that is
+exactly what it did: `homeHint` was zeroed instantly on release while `progress`
+still had 200ms of animation left, so the scrim went 0.4 -> 1.0, the cards
+0.45 -> 1.0 and the sheet jumped down a `space(80)`, all held for the length of
+the fade. Three separate snaps, one cause -- `progress` had a Behavior and
+`homeHint` did not.
+→ `omarchy-shell recents retireTrace` reports `progress:homeHint` per frame
+across the release; `homeHint` must not be 0 in the first frame. Measured
+without the fix `100:0 63:0 46:0 33:0 ...`, and with it
+`100:73 73:54 54:40 40:27 ...` -- so peak scrim alpha goes from 1.0 to 0.56,
+falling monotonically from there instead of jumping
 
 ## G. Left edge — back
 
@@ -194,7 +269,18 @@ implementation stopped.
 → `omarchy-shell drawer dragTrace` leaves ≥ 8 samples; `drawer state` == `closed`
 
 **H2** Dragging **up** anywhere on the shade closes it, following the finger.
-→ `omarchy-shell shade state` == `closed`
+"Anywhere" includes the band of scrim below the sheet -- the bottom ~70px of
+the screen, which is where a thumb starts an up-swipe. That band used to answer
+`clicked` and nothing else, so a drag begun there moved nothing and then
+dismissed the shade outright on release: it looked like a shade with no close
+animation, and it was one being shut by a tap that happened to have travelled
+250px.
+→ `omarchy-shell shade dragTrace` leaves ≥ 8 samples; `shade state` == `closed`
+
+`state` alone cannot check this and never could. A shade that jumps shut
+reaches `closed` exactly as fast as one that followed the finger the whole way,
+which is why the criterion is the trace. The trace records only what the finger
+drove -- not the 220ms fall after release, which happens either way.
 
 **H3** A drag that stops short springs the sheet back and changes nothing.
 
@@ -338,6 +424,188 @@ behind it. It is deliberately not smuggled in here.
 → the pill's composited colour over a sheet is within 0.1 of its composited
 colour over the wallpaper, for the same theme
 
+## J. The app you are leaving
+
+A4 hides an app and E3 closes one, and until this section nothing on screen
+said which was about to happen: the app vanished behind a rising sheet either
+way. Android answers that by shrinking the app into the card it becomes, so
+the gesture shows you where the app went instead of just removing it. This
+section is that shrink.
+
+It is the one place the shell draws a picture of a window, and it is only
+possible for *one* window -- see the amended thumbnails constraint below.
+
+Measured on the device at 720x1440, 2026-09-05:
+
+| | |
+| --- | --- |
+| fresh capture, window already mapped | 107ms median (77-112) |
+| fresh capture from an unmapped window | 145ms median (137-173) |
+| full-screen capture blit | 60fps -> 43-47fps |
+| animating its scale as well | 44-46fps, i.e. free |
+
+**J1** During a strip up-drag with an app focused, a still image of that app
+follows the finger, shrinking as the drag travels, and comes to rest on the
+leading card's slot at the carousel's stop.
+→ `omarchy-shell recents preview` reports `scale` falling as `progress` rises
+
+**J2** The image is a still, captured once per gesture, never a live feed. A
+continuous full-screen capture costs a quarter of the frame budget for the
+whole drag on this GPU, and buys nothing: the app is not being interacted with
+while it is being put away.
+
+**J3** At the carousel's stop the image is over card 0's slot, and hands off to
+that card. Cards stay icon + title (E1) -- the preview is the thing that
+travels, not a new kind of card.
+→ `recents preview` reports `scale` and the card slot's height agreeing within
+2px at `progress` == 1
+
+**J4** The capture takes ~145ms and the preview does not pretend otherwise. It
+enters at scale 1.0, geometrically identical to the app already on screen, and
+shrinks from there. Its arrival part-way into the drag is a fade between two
+images of the same thing at the same size, not a jump to a smaller one.
+→ `recents preview` never reports `scale` > 0 before `hasContent`
+
+**J5** Released short of the carousel (A2), the image returns to full size and
+fades out. Nothing was hidden, so nothing may look like it was.
+
+**J6** A drag that carries on into the home band (A4) finds the preview
+already landed and faded out. The shrink finishes at the carousel's stop --
+that is where the card it hands to lives -- so the home band is the row's
+business, not the preview's. Going home still closes nothing (F2): this section
+is about what the gesture looks like and F2 is what it does.
+
+**J7** With the screen blanked, nothing is armed. `wlr-screencopy` on a
+DPMS-off output never delivers a frame and never reports one is not coming:
+no `stopped()`, no warning, `hasContent` simply stays false forever. (`grim`
+hangs on the same output -- measured, killed at a 15s cap.) Arming there would
+leave a gesture waiting on a frame that cannot arrive.
+
+**J8** If the capture has not arrived by the time the gesture ends, the gesture
+does exactly what it does today. The shrink is decoration on A1-A4 and never a
+precondition for them: no frame, no animation, same outcome.
+→ A2-A4 still pass with the capture forced off
+
+**J9** The scrim dims the app, not the preview. The preview is the thing being
+moved and stays at full brightness; what dims behind it is the workspace it is
+leaving. Ordering the two the other way round makes the preview appear to
+brighten the screen when it arrives mid-drag.
+
+**J10** Only the app you are leaving gets a picture. Every other card is icon
+and title, because sway does not render an unfocused workspace and there is
+nothing to capture -- see the constraint.
+
+## K. Settings is an app
+
+Settings is a screen you spend time in — ten pages deep in places, with a stack
+you navigate — and until this section the shell treated it as a sheet you
+summon and dismiss in one motion, like the shade. That produced a gesture that
+did two different things depending on what else happened to be running: with
+nothing else open the strip's up-swipe cleared it (A8), and with an app open
+the same swipe raised the carousel *over* it and left it there, so it was still
+on screen when the carousel went away. The two cases were disagreeing about
+whether Settings is an app. This section answers that it is.
+
+Only the card model changes. Everything in A, E and J applies to Settings
+unchanged once it has a card, which is why this section is short and mostly
+points at criteria that already exist.
+
+**K1** Settings has a card in the carousel for exactly as long as it is
+running: from the summon that opened it until it is closed (K6). Hiding it does
+not end that — a hidden app is still in the switcher, which is the whole
+purpose of the switcher.
+→ `omarchy-shell recents list` has a `mobileomarchy.settings` line while
+Settings is running and no such line when it is not
+
+**K2** The card is icon, name and title, the same three lines a window's card
+has (E1). The icon is the gear the shade opens it by, the name is "Settings",
+and the title is the page it is on — so a card parked three pages into
+Appearance says which page it will come back to. At the root page the title
+line is absent, the way it is for a window whose title is its own name.
+
+**K3** With Settings on screen, an up-swipe from the strip does what it does
+from an app: the carousel rises, following the finger, with the Settings card
+leading and marked (A1, E1). It is not A8's "clear whatever is covering the
+screen" any more — that criterion keeps the shade and the drawer.
+→ `recents state` == `open` and `recents list`'s first line is
+`mobileomarchy.settings`
+
+**K4** Carried on into the home band, that same drag hides Settings and lands
+on a home screen (A4). Hidden, not closed: the card is still in the carousel.
+→ `settings state` == `closed`, the focused workspace's `representation` is
+empty, and `recents list` still has its `mobileomarchy.settings` line
+
+**K4a** Reaching a home screen from Settings takes a workspace switch whenever
+*any* window is open, not only when one is on the workspace underneath.
+
+This is a concession and worth naming as one. Sway gives an exclusive-focus
+layer surface the keyboard and deactivates the window beneath it, so for the
+whole time Settings is on screen every toplevel reads unfocused and
+`focusedToplevel()` — the question F1's switch is gated on — cannot tell an app
+under the sheet from a bare home screen under it. The same fact is already
+recorded in the drawer's keyboard-focus note, where sway "handed focus back to
+a window" on the drawer's first close frame.
+
+Of the two ways to be wrong, this picks the harmless one. Switching when the
+workspace was already empty hops to another empty workspace and costs a
+workspace number, which F1 immediately makes contiguous again. Not switching
+when it was occupied leaves a *home* gesture looking at the app it was supposed
+to leave, which is the bug this whole section exists to fix.
+→ with Settings over a bare home screen and one app on another workspace, the
+home band still ends on an empty workspace
+
+**K5** Tapping the Settings card resumes the page it was hidden on, not the
+root. That is the difference between hidden and closed, and it is why
+`settings.md` A6 is amended rather than dropped: a *closed* Settings still
+reopens at the root.
+→ from `settings page` == `appearance.bar`, an up-swipe and a tap on the card
+leaves `settings page` == `appearance.bar`
+
+**K6** Two things close Settings, and both drop the card and reset the stack:
+flicking the card away (E3), and the back gesture on the root page (G, and
+`settings.md` B3). That pairing is not new — it is exactly what those two
+gestures already do to a window, where E3 closes a card and G4 closes the
+focused app.
+→ after either, `recents list` has no `mobileomarchy.settings` line and
+`settings stack` is one line
+
+**K7** Closing the Settings card when it is the only card leaves a home screen,
+the way E6 has it for a window. The carousel still has no empty state.
+
+**K8** Dismissing the carousel without picking anything puts you back on
+Settings (E5). Nothing has to restore it, because the carousel covered Settings
+rather than hiding it — hiding is what the home band does (K4) and what tapping
+another card does (K9).
+→ `settings state` == `open` after a dismiss tap
+
+**K9** Tapping a *window's* card hides Settings on the way to that window. A
+card that focuses an app must not hand it over with a full-screen sheet still
+drawn on top.
+→ `settings state` == `closed` and the tapped window is focused
+
+**K10** Settings gets the shrink (J) like any app: the still captured when the
+drag latches is of Settings, and it lands on the Settings card. J10's "only the
+app you are leaving gets a picture" is satisfied the same way — Settings is on
+screen and is being rendered, which is the whole of that constraint's
+reasoning.
+
+**K11** Settings, and nothing else. The shade and the drawer stay transient
+sheets with no card: they are summoned and dismissed in one motion, Android
+gives neither a recents entry, and A7/A8 already say the strip clears them. The
+theme picker stays out too — it is a page reached from Settings that returns to
+the page it was opened from (`settings.md` B7), not a screen of its own.
+
+Stated as a criterion because "shell app" is a mechanism, and a mechanism with
+one user looks like an oversight rather than a decision. Adding a second one is
+a decision to take deliberately, not by noticing that the machinery would allow
+it.
+
+**K12** A bridged launch still puts Settings away first (`settings.md` E6) and
+leaves it running, so the terminal it opened and the Settings page behind it
+are both cards and the row you came from is one tap away.
+
+---
+
 ---
 
 ## Constraints
@@ -357,9 +625,18 @@ Not acceptance criteria — the boundaries any implementation works inside.
   it has to sit above windows to work at all. It is bounded the same way the
   bottom strip is — a fixed width that never grows mid-gesture — so the worst a
   bug there can do is cost 16px down one side.
-- **No window thumbnails.** Quickshell 0.3.1 wires per-toplevel capture only to
-  a Hyprland-only protocol, and sway does not render an invisible workspace, so
-  there would be nothing to capture. Cards are icon + title.
+- **No window thumbnails, except the app you are leaving.** Quickshell 0.3.1
+  wires per-*toplevel* capture only to `hyprland-toplevel-export-v1`, so a card
+  for a window that is not on screen cannot have a picture -- and sway does not
+  render an invisible workspace, so there would be nothing to capture anyway.
+  Cards are icon + title (E1).
+  What that argument never covered is the *focused* window, which is on screen
+  and is being rendered. `ScreencopyView` takes a **monitor** through
+  `wlr-screencopy-unstable`, which sway has and `grim` already uses here, and
+  Arch's `quickshell` enables it. Measured on the device: a 720x1440 capture
+  arrives as a zero-copy dmabuf (`AR24`/`LINEAR`) imported straight into the
+  scene graph. That is one still of one window, held for the length of one
+  gesture (J), and it is the only picture of a window the shell ever draws.
 - **The left edge belongs to the shell, and that costs something real.**
   Everything else here avoided claiming a side edge because libadwaita's
   `AdwSwipeTracker` and Kirigami both implement back-swipe *inside* the app on

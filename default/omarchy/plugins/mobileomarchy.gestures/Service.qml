@@ -106,6 +106,31 @@ Item {
   readonly property real drawerCommit: 0.35
   readonly property real fling: 0.6
 
+  // D2a. What one pixel of finger is worth to the sheet being dragged.
+  //
+  // The strip keeps pullTravel: it is a fixed band that does not move under the
+  // thumb, so a shorter travel there only means the carousel arrives without a
+  // full-screen reach -- the pill is not the thing being dragged.
+  //
+  // The drawer is the opposite case, and it was getting the strip's number. Its
+  // *close* drag is already 1:1 against the sheet's own height, because the
+  // handle is the sheet -- so with pullTravel opening it the same finger travel
+  // moved the drawer 2.2x faster out than in, and a drag from mid-screen
+  // arrived fully open with half the screen still to go. Measured on the
+  // device: a 250px drag left the drawer at 77%.
+  //
+  // Read off the drawer rather than recomputed here, so the two directions
+  // cannot drift apart -- `closeTravel` is the property its own drag divides
+  // by. Falls back to pullTravel when the drawer is not the thing being
+  // dragged, or has not published one.
+  function targetTravel(): real {
+    if (root.dragMode === "drawer" && root.dragTarget) {
+      var travel = Number(root.dragTarget.closeTravel)
+      if (isFinite(travel) && travel > 1) return travel
+    }
+    return root.pullTravel
+  }
+
   // ---------------------------------------------------------- shared state
   property bool tracking: false
   property real startX: 0
@@ -183,6 +208,36 @@ Item {
     "mobileomarchy.settings"
   ]
 
+  // K11. The shell's own screens that are apps rather than sheets: they get a
+  // carousel card and the strip hides them instead of clearing them. One, and
+  // deliberately so -- adding a second is a decision, not a discovery.
+  function isShellApp(id: string): bool {
+    return id === "mobileomarchy.settings"
+  }
+
+  // A7, A8. The surfaces an up-swipe *clears* rather than switches away from.
+  //
+  // Derived from overlayIds rather than written out again: a second list of
+  // ids is exactly how Settings and Themes came to be missing from the back
+  // gesture. Minus the two kinds that are not sheets -- the carousel, which a
+  // second drag continues into the home band (A6), and a shell app, which the
+  // strip hides the way it hides a window (K3).
+  //
+  // Vendored popups are deliberately not consulted here, unlike in
+  // topmostOverlay(). That branch reads the host's openPanelIds, which carries
+  // every mounted `omarchy.` surface and not only the popups. A false positive
+  // costs nothing where it is used today -- by then we have already decided to
+  // clear something -- but as this gate it would stop the strip ever raising
+  // the carousel at all.
+  function coveringSheet(): bool {
+    for (var i = 0; i < root.overlayIds.length; i++) {
+      var id = root.overlayIds[i]
+      if (id === "mobileomarchy.recents" || root.isShellApp(id)) continue
+      if (root.isOpen(id)) return true
+    }
+    return false
+  }
+
   function panelItem(id: string): var {
     if (!root.shell || !root.shell.panelLoaders) return null
     var loader = root.shell.panelLoaders[id]
@@ -234,14 +289,38 @@ Item {
     if (!id || !root.shell) return false
     var item = root.panelItem(id)
     if (item && typeof item.goBack === "function" && item.goBack() === true) return true
+
+    // K6. A surface that draws a distinction between hidden and closed gets
+    // to close itself, because hide() is the wrong half for this gesture:
+    // back on the root page of Settings ends it, the way G4 ends an app,
+    // rather than parking it in the carousel with its stack intact. Anything
+    // without a quit() is a sheet where the two are the same act, and takes
+    // the hide below unchanged.
+    if (item && typeof item.quit === "function") { item.quit(); return true }
+
     root.shell.hide(id)
     return true
   }
 
-  // A9. Nothing open anywhere means the strip's up-swipe has nothing to show.
-  function hasApps(): bool {
+  // Windows only. Kept apart from hasApps() because home needs exactly this
+  // question and A9 needs the other one -- see K4a.
+  function hasWindows(): bool {
     var list = ToplevelManager.toplevels ? ToplevelManager.toplevels.values : []
     return list.length > 0
+  }
+
+  // A9. Nothing open anywhere means the strip's up-swipe has nothing to show.
+  //
+  // "Anywhere" now includes Settings, which is an app (K1) without being a
+  // window: a phone whose only running thing is Settings has one card, so the
+  // strip does have a carousel worth raising. The carousel is asked rather
+  // than told, so what counts as an app is decided in one place -- and it
+  // answers false when that plugin failed to load, which leaves the strip
+  // doing what it did before this section.
+  function hasApps(): bool {
+    if (root.hasWindows()) return true
+    var recents = root.panelItem("mobileomarchy.recents")
+    return !!(recents && recents.shellAppsRunning)
   }
 
   // The window a back gesture would close.
@@ -305,6 +384,35 @@ Item {
     root.dragStartPull = id === "mobileomarchy.recents"
       ? progress * root.recentsFull
       : progress
+  }
+
+  // ------------------------------------------------------------- J. preview
+  //
+  // The carousel paints a still of the app being put away (docs/gestures.md
+  // J). Armed at the latch rather than at the press: the capture needs the
+  // carousel's surface mapped, and that only happens once progress leaves 0.
+  //
+  // Only when there is actually an app on screen to picture. A6 -- a second
+  // drag with the carousel already up -- is a drag over the switcher, and the
+  // app it would capture is already behind it.
+  function armPreview(): void {
+    if (root.dragMode !== "recents" || !root.dragTarget) return
+    if (!root.dragTarget.armPreview) return
+    if (root.isOpen("mobileomarchy.recents")) return
+    // K10. Settings is an app and gets the shrink too. It is on screen and is
+    // being rendered, which is the whole of J10's reasoning -- but it holds
+    // the keyboard, so every window under it reads deactivated and
+    // focusedToplevel() alone would refuse to arm here.
+    if (!root.focusedToplevel() && !root.isOpen("mobileomarchy.settings")) return
+    root.dragTarget.armPreview()
+  }
+
+  // `restore` true means the gesture changed nothing and the app goes back to
+  // full size (J5); false means it was put away and the preview stays where
+  // the finger left it (J6).
+  function disarmPreview(restore): void {
+    if (!root.dragTarget || !root.dragTarget.disarmPreview) return
+    root.dragTarget.disarmPreview(restore)
   }
 
   function setTargetProgress(pull: real): void {
@@ -371,11 +479,52 @@ Item {
     if (action === "next") root.dispatch("workspace next_on_output")
     else if (action === "prev") root.dispatch("workspace prev_on_output")
     else if (action === "home") {
+      // F3. The keyboard goes with the app. It does not pop *up* on the way
+      // home -- it fails to go *down*, and lands on the wallpaper with nothing
+      // behind it, which is why it reads as having appeared. Sway sends the
+      // text-input leave when focus moves off the app, but a home screen is an
+      // empty workspace and there is no window there to take the input state
+      // over, so nothing lowers it. Measured: up after 3 of 5 homes, down in
+      // exactly the two that happened to land on a workspace that still had a
+      // window; with the keyboard already down, 6 of 6 homes left it down, so
+      // nothing here raises it.
+      //
+      // Unconditional. SetVisible false on a keyboard already down is a no-op,
+      // and hideKeyboard is execDetached -- reading `keyboardUp` first would
+      // mean waiting on the probe's round trip on the one gesture that has to
+      // feel instant, and acting on a stale answer is what G2's comment above
+      // already warns about.
+      root.hideKeyboard()
+
+      // K4. Settings goes where the app goes: off screen, still running, its
+      // card still in the carousel. Hidden through the host so openPanelIds
+      // cannot drift, and hidden *before* the switch, because a full-screen
+      // sheet left standing over a home screen is the exact state this
+      // gesture exists to get out of.
+      var settingsWasUp = root.isOpen("mobileomarchy.settings")
+      if (settingsWasUp && root.shell) root.shell.hide("mobileomarchy.settings")
+
       // Already on a home screen: no toplevel is activated when focus is on an
       // empty workspace, which makes this the one reliable "is this workspace
       // empty" question available here. Without it, home from home would hop
       // to a *different* empty workspace and churn the numbering for nothing.
-      if (root.focusedToplevel())
+      //
+      // K4a. That question is unanswerable while Settings is up, and this is
+      // the concession. Sway gives an exclusive-focus layer surface the
+      // keyboard and deactivates the window beneath it -- the same fact the
+      // drawer's keyboardFocus note records as sway "handing focus back to a
+      // window" -- so for that whole time every toplevel reads unfocused and
+      // an app under the sheet is indistinguishable from a bare home screen
+      // under it. Hiding Settings a line above does not fix it either: the
+      // surface unmaps and sway re-picks a focus on a later frame, long after
+      // this returns.
+      //
+      // So fall back to "is there a window at all", which is wrong only in the
+      // harmless direction. Switching when this workspace was already empty
+      // hops to another empty one and costs a workspace number, which F1 makes
+      // contiguous again on the next pass. Not switching when it was occupied
+      // would leave a *home* gesture looking at the app it was meant to leave.
+      if (settingsWasUp ? root.hasWindows() : !!root.focusedToplevel())
         root.dispatch("workspace number " + root.firstFreeWorkspace())
     }
     else if (action === "clear") root.hideTopmostOverlay()
@@ -497,7 +646,12 @@ Item {
     id: watchdog
     interval: 4000
     onTriggered: {
-      if (root.dragMode !== "none") root.releaseTarget(false)
+      if (root.dragMode !== "none") {
+        // A dropped touch changed nothing, so the app goes back (J5) -- and
+        // this is the path that catches a capture which never arrived.
+        root.disarmPreview(true)
+        root.releaseTarget(false)
+      }
       root.reset()
     }
   }
@@ -515,7 +669,7 @@ Item {
       if (direction === "up") {
         // The same choice a real strip swipe makes, so this exercises the
         // decision and not just one branch of it.
-        if (root.isOpen("mobileomarchy.shade") || root.isOpen("mobileomarchy.drawer")) {
+        if (root.coveringSheet()) {
           root.run("clear")
           return "ok: cleared"
         }
@@ -622,11 +776,19 @@ Item {
 
         // The whole decision, and it never mentions the drawer (A5).
         //
-        //   something covering the screen -> the release clears it (A7, A8)
-        //   the carousel already up       -> keep dragging it, on to home (A6)
-        //   apps open                     -> the carousel (A1-A4)
-        //   nothing open at all           -> nothing (A9)
-        if (root.isOpen("mobileomarchy.shade") || root.isOpen("mobileomarchy.drawer"))
+        //   a sheet covering the screen -> the release clears it (A7, A8)
+        //   the carousel already up     -> keep dragging it, on to home (A6)
+        //   apps open                   -> the carousel (A1-A4)
+        //   nothing open at all         -> nothing (A9)
+        //
+        // The first line used to name the shade and the drawer and nothing
+        // else, which left Settings to fall through to it -- and only when no
+        // window was open, because with one the third line claimed the gesture
+        // first and raised the carousel over the top of Settings, leaving it
+        // there. Settings is an app now (K3) and reaches the third line in
+        // both cases; the theme picker and any other sheet reach the first one
+        // in both cases, which they did not before.
+        if (root.coveringSheet())
           root.pendingMode = "none"
         else if (root.isOpen("mobileomarchy.recents") || root.hasApps())
           root.pendingMode = "recents"
@@ -654,8 +816,10 @@ Item {
         // a thumb that starts its arc sideways still latches once the upward
         // travel dominates, instead of falling through to a workspace switch.
         if (root.dragMode === "none" && root.dragTarget && root.pendingMode !== "none"
-            && root.dy < -root.slop && Math.abs(root.dy) > Math.abs(root.dx))
+            && root.dy < -root.slop && Math.abs(root.dy) > Math.abs(root.dx)) {
           root.dragMode = root.pendingMode
+          root.armPreview()
+        }
 
         if (root.dragMode !== "none") {
           var dt = Math.max(1, now - root.lastT)
@@ -680,11 +844,16 @@ Item {
           // stop the finger did not reach, or the destination stops being
           // predictable.
           if (root.pull >= root.homeCommit) {
+            root.disarmPreview(false)
             root.releaseTarget(false)
             root.run("home")
           } else if (root.pull >= root.recentsCommit || root.velocity >= root.fling) {
+            root.disarmPreview(false)
             root.releaseTarget(true)
           } else {
+            // A2: nothing happened, so the app comes back rather than
+            // appearing to have been put somewhere.
+            root.disarmPreview(true)
             root.releaseTarget(false)
           }
         } else {
@@ -694,7 +863,10 @@ Item {
       }
 
       onCanceled: pts => {
-        if (root.dragMode !== "none") root.releaseTarget(false)
+        if (root.dragMode !== "none") {
+          root.disarmPreview(true)
+          root.releaseTarget(false)
+        }
         root.reset()
       }
     }
@@ -767,7 +939,7 @@ Item {
         if (homeDragging) {
           var dt = Math.max(1, now - root.lastT)
           root.velocity = root.velocity * 0.6 + ((root.lastY - y) / dt) * 0.4
-          root.pull = root.dragStartPull - root.dy / root.pullTravel
+          root.pull = root.dragStartPull - root.dy / root.targetTravel()
           root.setTargetProgress(root.pull)
         }
         root.lastY = y
