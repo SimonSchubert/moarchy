@@ -103,6 +103,129 @@ else
   no "the plugin declares kinds=[${kinds:-?}]" "a service-kind plugin is mounted twice and draws two pills"
 fi
 
+# --- the phone shell plugins ------------------------------------------------
+head_ "phone shell"
+
+# The single most important check in this file. A bar plugin that fails to load
+# is nearly silent: the host logs one console.warn and falls back to
+# omarchy.bar, so the phone still boots with a working -- if wrong -- bar. The
+# only visible symptom is thirteen desktop widgets crammed into 360px, and the
+# only diagnosis is the shell log, which is why mobileomarchy-restart-shell now
+# keeps one. Asking "is a bar running" would pass in exactly that case, so ask
+# which bar.
+active_bar=$(timeout 5 omarchy-shell shell listPlugins 2>/dev/null | python3 -c '
+import json, sys
+try:
+    for p in json.load(sys.stdin):
+        if "bar" in (p.get("kinds") or []) and p.get("active"):
+            print(p["id"]); break
+except Exception:
+    pass
+' 2>/dev/null)
+if [[ $active_bar == "mobileomarchy.bar" ]]; then
+  ok "the phone bar is the active bar"
+else
+  no "the active bar is ${active_bar:-none}" \
+     "the shell fell back to omarchy.bar; grep 'failed to load' ~/.local/state/mobileomarchy/shell.log"
+fi
+
+# The two plugin kinds are enabled by different keys, and crossing them is a
+# silent no-op: a bar plugin answers to shell.json's bar.id and never looks at
+# plugins[], everything else is the other way round.
+bar_id=$(python3 -c '
+import json, os
+try:
+    print(json.load(open(os.path.expanduser("~/.config/omarchy/shell.json"))).get("bar", {}).get("id", ""))
+except Exception:
+    pass
+' 2>/dev/null)
+if [[ $bar_id == "mobileomarchy.bar" ]]; then
+  ok "shell.json names the phone bar"
+else
+  no "shell.json bar.id is '${bar_id:-unset}'" \
+     "omarchy-refresh-shell runs 'omarchy bar defaults', which drops bar.id entirely"
+fi
+
+# Same doubling trap as the gestures plugin, one level along: an overlay
+# declared as a service gets two surfaces, and for the shade that means two
+# grab strips fighting over the top edge.
+for plugin in mobileomarchy.drawer mobileomarchy.recents mobileomarchy.shade \
+              mobileomarchy.themes mobileomarchy.settings; do
+  k=$(python3 -c '
+import json, os, sys
+p = os.path.expanduser("~/.config/omarchy/plugins/%s/manifest.json" % sys.argv[1])
+try:
+    print(",".join(json.load(open(p)).get("kinds", [])))
+except Exception:
+    pass
+' "$plugin" 2>/dev/null)
+  if [[ $k == "overlay" ]]; then
+    ok "$plugin is declared as an overlay"
+  else
+    no "$plugin declares kinds=[${k:-?}]" "expected overlay; a service-kind plugin is mounted twice"
+  fi
+done
+
+for target in drawer recents shade themes settings; do
+  if st=$(timeout 5 omarchy-shell "$target" state 2>/dev/null) && [[ -n $st ]]; then
+    ok "$target IPC answers ($st)"
+  else
+    no "$target IPC does not answer" "the plugin is missing from shell.json plugins[], or it failed to load"
+  fi
+done
+
+# Two ways an icon silently becomes the wrong icon, both of which have happened
+# here:
+#
+#   - `\uXXXX` in QML takes exactly four hex digits, so a codepoint above the
+#     BMP written as an escape is truncated and the fifth digit is left behind
+#     as a literal character. Checking that *something* covers the truncated
+#     codepoint does not catch this -- Nerd Fonts cover the low private use
+#     area too, so U+F0249 truncated to U+F024 still resolves, and still draws
+#     the wrong glyph with a "9" after it. What does catch it is the invariant
+#     these strings actually have: an icon literal is exactly one character.
+#   - a font change, or a fresh install before fc-cache has run, drops the icon
+#     range entirely and every glyph becomes a blank box. That one is a
+#     coverage question, so ask fontconfig.
+#
+# Neither logs anything, hence both.
+glyph_problem=$(python3 - "$HOME/.config/omarchy/plugins" <<'PY' 2>/dev/null
+import glob, os, re, subprocess, sys
+
+# The private use areas Nerd Fonts pack their icons into.
+def is_icon(ch):
+    return 0xE000 <= ord(ch) <= 0xF8FF or 0xF0000 <= ord(ch) <= 0xFFFFD
+
+problems = []
+codepoints = set()
+
+for path in sorted(glob.glob(os.path.join(sys.argv[1], "mobileomarchy.*", "*.qml"))):
+    name = os.path.basename(path)
+    for n, line in enumerate(open(path, encoding="utf-8"), 1):
+        for literal in re.findall(r'"([^"\\]*)"', line):
+            icons = [c for c in literal if is_icon(c)]
+            if not icons:
+                continue
+            codepoints.update(ord(c) for c in icons)
+            if len(literal) != 1:
+                problems.append("%s:%d %r" % (name, n, literal))
+
+for cp in sorted(codepoints):
+    out = subprocess.run(["fc-match", ":charset=%X" % cp],
+                         capture_output=True, text=True).stdout
+    if "Nerd Font" not in out and "omarchy" not in out:
+        problems.append("no icon font covers U+%05X" % cp)
+
+print("; ".join(problems))
+PY
+)
+if [[ -z ${glyph_problem// /} ]]; then
+  ok "every icon literal is a single glyph in an installed icon font"
+else
+  no "icon literals: $glyph_problem" \
+     "a truncated \\uXXXX escape leaves the fifth hex digit in the string"
+fi
+
 # --- the drawer actually reserves its strip ---------------------------------
 head_ "drawer geometry"
 

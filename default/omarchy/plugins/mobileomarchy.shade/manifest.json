@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "mobileomarchy.shade",
+  "name": "Notification shade",
+  "version": "1.0.0",
+  "author": "mobileomarchy",
+  "description": "Pull down from the status bar for quick settings, brightness, volume, media and notifications.",
+  "kinds": [
+    "overlay"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "Shade.qml"
+  }
+}

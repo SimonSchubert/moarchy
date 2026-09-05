@@ -115,29 +115,59 @@ else
   echo "    on-screen keyboard gated on"
 fi
 
-# --- Touch gestures, as a shell plugin -------------------------------------
+# --- The phone shell, as plugins -------------------------------------------
 # 4.x's shell discovers third-party plugins in ~/.config/omarchy/plugins/<id>/
 # from their manifest.json, so the gesture layer needs no patching of the
 # vendored shell -- the same trick sway.conf.tpl uses for theming.
 #
-# Unlike first-party plugins, third-party ones are opt-in: PluginRegistry's
-# isEnabled() falls through to findEntryLocation(), which only looks for
-# `{"id": ...}` objects in shell.json's plugins[]. Without the entry the plugin
-# loads nothing and says nothing, so register it here.
+# Everything the phone UI adds to the desktop shell lives here: the bottom-edge
+# gestures, the status bar sized for 360px, the app drawer and the shade.
 mkdir -p ~/.config/omarchy/plugins
-rm -rf ~/.config/omarchy/plugins/mobileomarchy.gestures
-cp -r "$MOBILEOMARCHY_PATH/default/omarchy/plugins/mobileomarchy.gestures" ~/.config/omarchy/plugins/
+for plugin_dir in "$MOBILEOMARCHY_PATH"/default/omarchy/plugins/*/; do
+  plugin_id=$(basename "$plugin_dir")
+  rm -rf ~/.config/omarchy/plugins/"$plugin_id"
+  cp -r "$plugin_dir" ~/.config/omarchy/plugins/
+  echo "    plugin $plugin_id"
+done
 
+# The two kinds are enabled by different keys, and crossing them is a silent
+# no-op rather than an error.
+#
+#   kind "bar"    PluginRegistry.isEnabled() short-circuits on the bar branch
+#                 and answers purely from shell.json's `bar.id`. It never looks
+#                 at plugins[], so an entry there does nothing at all.
+#   everything    falls through to findEntryLocation(), which only finds
+#   else          `{"id": ...}` objects in plugins[].
+#
+# bar.layout is deliberately left alone even though mobileomarchy.bar ignores
+# it: it is what `omarchy bar use omarchy.bar` falls back to, and a phone with a
+# broken shell plugin should still come up with a bar that works.
 python3 - <<'PLUGIN_EOF'
 import json, os
+
 p = os.path.expanduser("~/.config/omarchy/shell.json")
 try:
     d = json.load(open(p))
 except Exception:
     raise SystemExit(0)
+
+dirty = False
+
+bar = d.setdefault("bar", {})
+if bar.get("id") != "mobileomarchy.bar":
+    bar["id"] = "mobileomarchy.bar"
+    dirty = True
+
 plugins = d.setdefault("plugins", [])
-if not any(isinstance(e, dict) and e.get("id") == "mobileomarchy.gestures" for e in plugins):
-    plugins.append({"id": "mobileomarchy.gestures"})
+for pid in ("mobileomarchy.gestures", "mobileomarchy.drawer", "mobileomarchy.shade",
+            "mobileomarchy.themes", "mobileomarchy.settings"):
+    if not os.path.isdir(os.path.expanduser("~/.config/omarchy/plugins/" + pid)):
+        continue
+    if not any(isinstance(e, dict) and e.get("id") == pid for e in plugins):
+        plugins.append({"id": pid})
+        dirty = True
+
+if dirty:
     json.dump(d, open(p, "w"), indent=2)
 PLUGIN_EOF
 

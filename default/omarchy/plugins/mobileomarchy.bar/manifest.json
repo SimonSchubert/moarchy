@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "mobileomarchy.bar",
+  "name": "Phone status bar",
+  "version": "1.0.0",
+  "author": "mobileomarchy",
+  "description": "Display-only phone status bar: clock, cellular, wifi, bluetooth, battery.",
+  "kinds": [
+    "bar"
+  ],
+  "entryPoints": {
+    "bar": "Bar.qml"
+  }
+}

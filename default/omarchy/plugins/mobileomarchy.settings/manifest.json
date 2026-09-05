@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "mobileomarchy.settings",
+  "name": "Settings",
+  "version": "1.0.0",
+  "author": "mobileomarchy",
+  "description": "The phone's settings list: themes, setup, packages, updates, system.",
+  "kinds": [
+    "overlay"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "Settings.qml"
+  }
+}

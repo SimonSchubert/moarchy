@@ -41,6 +41,15 @@ fi
 # and it is what sxmo and the other PinePhone environments do.
 sudo usermod -aG input "$USER_NAME"
 
+# The camera flash LED, which is also the torch. The shade has a tile for it,
+# but /sys/class/leds/white:flash/brightness is root:feedbackd 0664 (set by
+# 72-feedbackd.rules) and on a bare install the feedbackd group has no members
+# at all -- so without this the tile is a control that lights nothing. Group
+# membership only takes effect on the next login, same as `input` above, which
+# is why the shade probes the node for writability rather than assuming: a tile
+# drawn but dead is worse than a tile that is not drawn.
+sudo usermod -aG feedbackd "$USER_NAME"
+
 # The power button. The AXP803's PEK emits KEY_POWER on a short press, and
 # logind turns that into a shutdown by default -- a reasonable desktop default
 # and a bad phone one, because this is the single button on the device and the

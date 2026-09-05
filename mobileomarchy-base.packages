@@ -81,6 +81,12 @@ bluez-utils
 bat
 bluetui
 btop
+# btop will not draw below 60 columns and a tiled terminal here is 47. bottom
+# (btm) reflows, so it is the one that actually works beside the bar; htop and
+# s-tui are the other two docs/apps.md names as installed.
+bottom
+htop
+s-tui
 dust
 expac
 eza
@@ -120,6 +126,38 @@ gnome-calls
 chatty
 callaudiod
 mmsd-tng
+
+# --- Apps -------------------------------------------------------------------
+# The set docs/apps.md documents as working, and the reason it is in the *base*
+# list rather than the extras one: without it a fresh install has eight
+# launchable entries, six of which are terminals, and pulling the drawer up
+# gives you an app grid with nothing in it. A phone with no clock, no file
+# manager and no browser is not finished.
+#
+# These were hand-installed for the docs/apps.md screenshots and never recorded
+# in any list the installer reads, so the first unattended provision wiped them
+# and the launcher came up empty.
+#
+# Both families are chosen for the 360px screen: GNOME's libadwaita and KDE's
+# Kirigami apps reflow natively, and neither needs its own session -- they are
+# ordinary Wayland clients under Sway.
+gnome-clocks
+gnome-text-editor
+loupe
+papers
+foliate
+portfolio-file-manager
+kalk
+kclock
+kweather
+keysmith
+calindori
+qmlkonsole
+index-fm
+
+# WebKit, ~260 MB, and the URL bar is at the bottom where a thumb is. Firefox
+# and Chromium both run and both cost far more memory for no layout benefit.
+epiphany
 
 # --- Fonts ------------------------------------------------------------------
 noto-fonts

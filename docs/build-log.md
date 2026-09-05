@@ -180,6 +180,190 @@ Two things worth knowing about this hardware:
 - **No idle lock.** A layer-shell keyboard cannot draw over an `ext-session-lock`
   surface, so an idle lock leaves a touch-only device unrecoverable.
 
+## 6b. The phone shell: bar, drawer, shade, settings, themes
+
+Five Quickshell plugins in `default/omarchy/plugins/`, alongside the gesture
+strip that was already there, and no patches to the vendored shell. The plugin
+contract already covered every shape they needed.
+
+The shape the UI settled into: **the drawer launches things, the shade changes
+them.** Everything the Omarchy menu reaches that is not an app -- Setup,
+Install, Remove, Update, Keybindings, About, System -- lives in a settings list
+behind the shade's gear, and the drawer is a search field and a grid of apps
+and nothing else. An early version put four of those routes across the top of
+the drawer; on a screen that fits four icons across, a row of controls is a row
+of apps you cannot see, and it put `Remove` one mis-tap from launching
+something.
+
+**Bar replacement is a first-class operation.** `shell.qml` reads
+`shell.json`'s `bar.id`, loads that plugin's `bar` entry point, and deactivates
+`omarchy.bar`. On a load error it logs one `console.warn` and silently falls
+back. Measured: RSS drops from **414 MB to 361 MB** when the desktop bar's
+thirteen widgets — four of them large popup panels — stop being instantiated.
+
+**The two plugin kinds are enabled by different keys**, and crossing them is a
+silent no-op. `PluginRegistry.isEnabled()` short-circuits for a `kind: "bar"`
+plugin and answers purely from `bar.id`; everything else falls through to
+`findEntryLocation()`, which only finds `{"id": ...}` entries in `plugins[]`.
+A bar listed in `plugins[]` is inert; an overlay set as `bar.id` is invisible.
+
+**Layer arrangement, measured rather than assumed.** Sway places
+exclusive-zone surfaces first, top layer down, then arranges everything else
+into what is left. So:
+
+| Surface | Layer | Zone | Result |
+| --- | --- | --- | --- |
+| bar | Top | Auto (26px) | reserves the top |
+| gestures strip | Overlay | Auto (20px) | keeps the bottom edge above squeekboard |
+| drawer | Top | **Normal, 0** | arranged *into* the usable area — below the bar, above the home pill, and **above squeekboard when it rises**, with no geometry maths |
+| shade | Overlay | Ignore | covers everything, which is what a pull-down is |
+
+The drawer's zero exclusive zone is the whole reason its search field works:
+focus it and the grid re-flows above the keyboard instead of being buried by
+it. Confirmed with `swaymsg -t get_workspaces` — the focused workspace stays
+`y=29 h=668` whether the drawer or the shade is open, so neither reserves
+anything.
+
+**The shade grows its surface rather than being permanently full-screen.** The
+usual drag-to-reveal is an always-mapped full-screen surface masked down to a
+strip, which leaves a 720x1440 blend in every frame forever on a Mali-400.
+Instead the surface anchors top/left/right only, so `implicitHeight` owns its
+size: 26px until a finger moves, then one resize to full screen, then the drag
+is a child item's `y`. Wayland's implicit grab is per-surface, not
+per-geometry, so the in-flight touch survives the resize.
+
+**Why the phone bar has no tap targets.** The shade's grab strip is on Overlay
+and covers the bar's top 26px, so a button on that bar would never receive a
+touch and the cause would not be anywhere near it. This is forced by the
+layering, not a style choice.
+
+**Three traps, each of which fails silently:**
+
+- A host-injected property must not be `readonly` *or* `required`. Readonly
+  makes the assignment throw; required makes the component fail to instantiate,
+  because a plugin is created by a `Loader` and configured afterwards in
+  `onLoaded`. The first-party `omarchy.bar` can use `required` only because the
+  host constructs it inline.
+- `\uXXXX` in QML takes **exactly four** hex digits. Writing the wifi glyph
+  as `"8"` yields U+F092 followed by a literal `8`, and `"\U000F0928"`
+  -- a form JavaScript does not have -- yields a literal `U`. Every Nerd Font
+  MDI glyph is above the BMP, so they go into the source as literal
+  characters, the way the vendored shell's own `Model.js` does it. The
+  symptom is one wrong glyph on screen and nothing in the log.
+- **A property named `on<Uppercase>` is never readable.** QML reserves that
+  prefix for signal handlers, so `readonly property color onSurface: ...`
+  declares something that cannot be read back: the binding evaluates to
+  undefined, undefined assigned to a `color` is `#000000`, and **nothing is
+  logged**. Written the Material way -- `onSurface`, `onAccent` -- every glyph
+  and label bound to them painted pure black on a dark tile, while `container`
+  and `subdued` two lines above worked fine. Sampling the pixels is what found
+  it: the glyphs were `(0,0,0)` exactly, not the theme's near-black background,
+  and a colour that is *exactly* zero is a value nobody chose. They are
+  `textOnSurface` / `textOnAccent` now.
+- Closing a surface is not a text-input deactivate. Dismiss the drawer straight
+  from its search field and squeekboard stays up over whatever is underneath.
+  `focus = false` is not enough — that releases the focus *scope*. Handing
+  active focus to a plain sink `Item` is what makes Qt send the disable.
+
+**The theme picker was almost free.** `omarchy-theme-set` already ends by
+calling `omarchy-shell shell applyTheme` with the new palette, and the shell's
+`Color` singleton reloads in place — so the bar, drawer, shade and the picker
+itself recolour live, with the picker doing nothing about it. What it does have
+to handle is that regenerating every app's template takes **~7 s** on an A53:
+the tapped card stays lit while the rest of the grid dims, and a second tap is
+refused rather than queued behind `omarchy-theme-set`'s lock.
+
+Each card is painted in the theme it names, from that theme's `colors.toml`.
+Not from the `preview.png` every theme ships: those are 1800x1012 desktop
+screenshots at ~440 KB, and twenty-two of them decoded at once is more than
+this phone has spare — quite apart from being illegible at 166px wide. Two
+things about the current theme are easy to get wrong: `current/theme` is a
+staged **copy**, not a symlink, so its basename is always the literal string
+`theme`; the slug lives in `current/theme.name`. And `omarchy-theme-set` takes
+the **display** name, so the slug has to be title-cased exactly the way
+`omarchy-theme-list`'s sed does it or the lookup misses.
+
+**The drawer follows the finger, and getting there cost three mechanisms.**
+The bottom strip belongs to the gestures plugin -- an edge belongs to one layer
+surface -- so the drawer never sees the opening touch. The gestures plugin
+resolves the drawer's live instance once per gesture through
+`shell.panelLoaders[id].item` and writes its `progress` directly; a
+`shell.callIfLoaded` round-trip marshals a string per call and this runs at
+touch-event rate. Measured, an open drag leaves 25-45 samples: a ramp, not a
+jump.
+
+Closing needed a different mechanism, and two attempts failed for reasons worth
+recording:
+
+- **The gesture strip cannot host it.** It *is* the bottom edge of the screen,
+  so a downward drag has about twenty pixels before it runs off the panel --
+  the same reason the shade cannot be closed by dragging up from its handle.
+- **The grid cannot supply it.** The plan was to let the GridView be dragged
+  past its top and follow the overscroll. But with the apps this phone has,
+  `contentHeight` measures **516** against a **598** view: a Flickable whose
+  content fits does not drag at all, so `contentY` never leaves 0 and there is
+  nothing to follow. It worked once by accident and never again.
+- **A `DragHandler` over the sheet cannot either.** It delivers **one**
+  translation event for an entire gesture here, because the app delegates'
+  `MouseArea`s hold the exclusive grab and the handler only ever gets a passive
+  one. It also has to be spelled `onTranslationChanged`: `activeTranslation`
+  and `persistentTranslation` share a single NOTIFY signal, and QML names the
+  handler after the signal, so `onActiveTranslationChanged` silently never
+  runs -- the handler activates, the sheet does not move, nothing is logged.
+
+What works is the mechanism the rest of this UI already uses: a
+`MultiPointTouchArea` on a strip of its own -- a handle bar across the top of
+the sheet. The surface it covers is its input region, the implicit grab keeps
+the whole gesture on it, and it cannot compete with a tap on an app icon
+because it does not overlap one.
+
+**Changing `keyboard_interactivity` mid-gesture cancels the touch.** The
+drawer's `keyboardFocus` was gated on `opened`, which is
+`progress >= 1 && !dragging` -- so it went false on the *first frame* of the
+close drag. That drops the layer surface to `None`, sway hands keyboard focus
+back to a window, and the focus change cancels the touch the surface is still
+holding. The drag died after one frame.
+
+The tell was that it only failed **when a window was open for focus to return
+to**: by hand on an empty workspace it worked every time, and under the
+selftest -- which spawns two scratch windows first -- it failed every time.
+Two environments, opposite results, same code. What made it diagnosable was a
+`-1` pushed into the drag trace from `onCanceled`: a cancel and a drag that
+simply did not travel far enough both leave the drawer open, and they want
+opposite fixes. `trace=[99 -1]` said which in one reading.
+
+Gating on `progress > 0` instead holds Exclusive until the sheet is all the way
+down. Measured with a window present: 48-53 samples opening, 51-52 closing,
+three runs out of three.
+
+**That drag has to be 1:1, and that is not a preference.** The handle is *on*
+the sheet it moves. At a third of the sheet height it moved ~3.7x finger speed,
+the touch ended up above the strip it started on, and the gesture came back as
+a cancel often enough to leave the drawer open on a full drag. Matching the
+travel to the sheet height keeps the bar under the thumb. The opening drag can
+use a shorter travel precisely because it is driven from a strip that does not
+move.
+
+**A test that cannot fail is not a test.** The first version of the selftest's
+icon check asked fontconfig whether anything covered each glyph's codepoint.
+It passed against a deliberately truncated escape, because Nerd Fonts cover the
+low private use area too: `U+F0249` cut to `U+F024` still resolves, and still
+draws the wrong glyph with a `9` after it. The check that works tests the
+invariant these strings actually have -- **an icon literal is exactly one
+character** -- and it was only worth keeping once it had been watched to fail
+on an injected truncation and pass again when it was reverted.
+
+**Net memory, all five plugins loaded: 361 MB RSS against a 414 MB baseline**
+with the desktop bar, and 1037 MB available. The phone shell is cheaper than
+what it replaced, because thirteen desktop widgets — four of them large popup
+panels — stop being instantiated.
+
+**Two things needed outside the shell:** `usermod -aG feedbackd` for the torch
+(`/sys/class/leds/white:flash/brightness` is `root:feedbackd 0664` and the group
+is empty on a bare install), and a real log destination —
+`mobileomarchy-restart-shell` used to send the shell's stdout to `/dev/null`,
+which threw away the only diagnosis a failed bar plugin ever produces.
+
 ## 7. Hardware status
 
 | | |

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "mobileomarchy.themes",
+  "name": "Themes",
+  "version": "1.0.0",
+  "author": "mobileomarchy",
+  "description": "Pick an Omarchy theme from a grid of live colour swatches.",
+  "kinds": [
+    "overlay"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "Themes.qml"
+  }
+}

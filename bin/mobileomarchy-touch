@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+"""Synthesise touchscreen input, so gestures can be tested without a finger.
+
+Everything else about the gesture plugin can be checked from outside it -- the
+IPC proves the actions, a Wayland trace proves the surface, a screenshot proves
+the drawing. The one thing none of them touch is touch itself: whether
+MultiPointTouchArea really receives press/move/release through Wayland's
+implicit grab, and whether the thresholds are right in device pixels.
+
+This creates a virtual multitouch device through /dev/uinput. It is marked
+INPUT_PROP_DIRECT and carries ABS_MT_POSITION_*, so libinput classifies it as a
+touchscreen rather than a touchpad -- which matters, because a touchpad would
+produce the pointer gestures Sway's `bindgesture` wants and a touchscreen
+produces the raw touch the plugin actually listens for.
+
+Coordinates are PANEL pixels (720x1440), not Sway's 360x720 logical space, the
+same convention bin/mobileomarchy-gestures used for lisgd. So the home drawer
+sits at roughly y=1420, not y=710.
+
+Needs root, because /dev/uinput is root-only:
+
+    sudo mobileomarchy-touch swipe 500 1420 150 1420
+    sudo mobileomarchy-touch hold 360 1420 700
+    sudo mobileomarchy-touch tap 360 700
+"""
+
+import sys
+import time
+
+try:
+    from evdev import AbsInfo, UInput
+    from evdev import ecodes as e
+except ImportError:
+    sys.exit("python-evdev is not installed: pacman -S python-evdev")
+
+WIDTH, HEIGHT = 720, 1440
+
+CAPABILITIES = {
+    e.EV_ABS: [
+        (e.ABS_MT_SLOT, AbsInfo(0, 0, 9, 0, 0, 0)),
+        (e.ABS_MT_TRACKING_ID, AbsInfo(0, 0, 65535, 0, 0, 0)),
+        (e.ABS_MT_POSITION_X, AbsInfo(0, 0, WIDTH, 0, 0, 0)),
+        (e.ABS_MT_POSITION_Y, AbsInfo(0, 0, HEIGHT, 0, 0, 0)),
+        (e.ABS_X, AbsInfo(0, 0, WIDTH, 0, 0, 0)),
+        (e.ABS_Y, AbsInfo(0, 0, HEIGHT, 0, 0, 0)),
+    ],
+    e.EV_KEY: [e.BTN_TOUCH],
+}
+
+
+class Touch:
+    """One finger on a virtual panel."""
+
+    def __init__(self, settle=1.0):
+        self.ui = UInput(
+            CAPABILITIES,
+            name="mobileomarchy-virtual-touch",
+            input_props=[e.INPUT_PROP_DIRECT],
+        )
+        # libinput has to notice the hotplug and Sway has to map it to an output
+        # before anything sent here lands anywhere. Without this pause the first
+        # gesture of a run is silently dropped.
+        time.sleep(settle)
+
+    def _point(self, x, y):
+        x, y = int(max(0, min(WIDTH, x))), int(max(0, min(HEIGHT, y)))
+        self.ui.write(e.EV_ABS, e.ABS_MT_POSITION_X, x)
+        self.ui.write(e.EV_ABS, e.ABS_MT_POSITION_Y, y)
+        self.ui.write(e.EV_ABS, e.ABS_X, x)
+        self.ui.write(e.EV_ABS, e.ABS_Y, y)
+
+    def down(self, x, y):
+        self.ui.write(e.EV_ABS, e.ABS_MT_SLOT, 0)
+        self.ui.write(e.EV_ABS, e.ABS_MT_TRACKING_ID, 1)
+        self._point(x, y)
+        self.ui.write(e.EV_KEY, e.BTN_TOUCH, 1)
+        self.ui.syn()
+
+    def move(self, x, y):
+        self.ui.write(e.EV_ABS, e.ABS_MT_SLOT, 0)
+        self._point(x, y)
+        self.ui.syn()
+
+    def up(self):
+        self.ui.write(e.EV_ABS, e.ABS_MT_SLOT, 0)
+        self.ui.write(e.EV_ABS, e.ABS_MT_TRACKING_ID, -1)
+        self.ui.write(e.EV_KEY, e.BTN_TOUCH, 0)
+        self.ui.syn()
+
+    def close(self):
+        self.ui.close()
+
+
+def swipe(x1, y1, x2, y2, ms):
+    """Drag in steps, because a single jump is a teleport: the plugin tracks
+    motion, and one event gives it a start and an end with nothing between."""
+    steps = max(2, int(ms / 16))          # ~60Hz, near enough to a real panel
+    t = Touch()
+    t.down(x1, y1)
+    for i in range(1, steps + 1):
+        f = i / steps
+        t.move(x1 + (x2 - x1) * f, y1 + (y2 - y1) * f)
+        time.sleep(ms / 1000 / steps)
+    t.up()
+    t.close()
+
+
+def hold(x, y, ms):
+    """Press and wait, jittering by a pixel.
+
+    The jitter is not cosmetic. Re-sending byte-identical coordinates gets the
+    frames coalesced away somewhere below the client, and the touch sequence
+    then reads as stalled: the plugin arms, and is cancelled before the release
+    it was waiting for. Alternating one pixel makes it behave exactly like the
+    thumb it is standing in for, which never holds perfectly still either.
+    """
+    t = Touch()
+    t.down(x, y)
+    for i in range(max(1, int(ms / 100))):
+        t.move(x + (i % 2), y)
+        time.sleep(0.1)
+    t.up()
+    t.close()
+
+
+def tap(x, y):
+    t = Touch()
+    t.down(x, y)
+    time.sleep(0.05)
+    t.up()
+    t.close()
+
+
+def main(argv):
+    if len(argv) < 2:
+        sys.exit(__doc__.strip().splitlines()[-3].strip())
+    cmd, args = argv[1], argv[2:]
+    try:
+        if cmd == "swipe" and len(args) in (4, 5):
+            ms = int(args[4]) if len(args) == 5 else 250
+            swipe(*(int(a) for a in args[:4]), ms)
+        elif cmd == "hold" and len(args) == 3:
+            hold(int(args[0]), int(args[1]), int(args[2]))
+        elif cmd == "tap" and len(args) == 2:
+            tap(int(args[0]), int(args[1]))
+        else:
+            sys.exit("usage: swipe X1 Y1 X2 Y2 [MS] | hold X Y MS | tap X Y")
+    except PermissionError:
+        sys.exit("/dev/uinput needs root: rerun with sudo")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

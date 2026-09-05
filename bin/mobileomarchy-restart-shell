@@ -23,9 +23,19 @@ export PATH="$HOME/.local/bin:$(dirname "$(readlink -f "$0")"):$OMARCHY_PATH/bin
 export SWAYSOCK="${SWAYSOCK:-$(ls "$XDG_RUNTIME_DIR"/sway-ipc.* 2>/dev/null | head -1)}"
 [[ -n $SWAYSOCK ]] || echo "warning: no SWAYSOCK; the bar will not populate" >&2
 
+
 STATE="${XDG_STATE_HOME:-$HOME/.local/state}/mobileomarchy/shell-off"
 pkill -x quickshell 2>/dev/null
 [[ -f $STATE ]] && exit 0
 
+# Keep the shell's own output. Quickshell reports a plugin that failed to load
+# with a single console.warn and then carries on -- a broken bar plugin falls
+# back to omarchy.bar and a broken overlay simply never appears, both without a
+# word on screen. Sent to /dev/null that warning was the only diagnosis there is
+# and it was being thrown away, which is how you end up bisecting QML by
+# screenshot. Truncated per start, so the log is always this session's.
+LOG="${XDG_STATE_HOME:-$HOME/.local/state}/mobileomarchy/shell.log"
+mkdir -p "$(dirname "$LOG")"
+
 QS_DISABLE_FILE_WATCHER=1 QS_NO_RELOAD_POPUP=1 \
-  setsid quickshell -n -p "$OMARCHY_PATH/shell" >/dev/null 2>&1 &
+  setsid quickshell -n -p "$OMARCHY_PATH/shell" >"$LOG" 2>&1 &

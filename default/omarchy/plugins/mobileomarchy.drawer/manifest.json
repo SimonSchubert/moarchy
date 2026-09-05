@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "mobileomarchy.drawer",
+  "name": "App drawer",
+  "version": "1.0.0",
+  "author": "mobileomarchy",
+  "description": "Full-screen app grid with search, opened by the bottom-edge swipe up.",
+  "kinds": [
+    "overlay"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "Drawer.qml"
+  }
+}
