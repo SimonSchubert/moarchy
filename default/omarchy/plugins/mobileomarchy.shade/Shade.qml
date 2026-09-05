@@ -543,14 +543,26 @@ Item {
   // The service names each file <timestamp>-<originalId>.json (imageStem), so a
   // single row can be dropped without disturbing the rest -- which is what
   // makes per-notification dismissal possible at all from out here.
+  function rowStem(row) {
+    return String(row.timestamp || 0) + "-" + String(row.originalId || 0)
+  }
+
   function dismissRow(row) {
     if (!row) return
-    var stem = String(row.timestamp || 0) + "-" + String(row.originalId || 0)
+    var stem = root.rowStem(row)
     Quickshell.execDetached(["bash", "-c",
       "rm -f " + root.historyDir + "/" + stem + ".json"])
+
+    // Matched on the stem, not on object identity. This filtered with
+    // `historyRows[i] !== row`, and `row` is a delegate's modelData: with a JS
+    // array as the model, QML can hand out a fresh wrapper around the same
+    // underlying object on each access, so `!==` was true for the very row that
+    // had just been tapped and nothing was ever removed. The file was already
+    // gone by then, so the card sat there looking dead and the notification was
+    // simply absent the next time the shade opened.
     var next = []
     for (var i = 0; i < root.historyRows.length; i++)
-      if (root.historyRows[i] !== row) next.push(root.historyRows[i])
+      if (root.rowStem(root.historyRows[i]) !== stem) next.push(root.historyRows[i])
     root.historyRows = next
   }
 
@@ -1183,13 +1195,57 @@ Item {
           // read segfaults QQmlListModel::data.
           model: root.historyRows
 
-          delegate: Rectangle {
+          delegate: Item {
             id: card
             required property var modelData
             width: notificationList.width
             height: cardBody.implicitHeight + Style.space(20)
-            radius: root.radiusCard
-            color: root.container
+
+            readonly property real dismissAt: card.width * 0.35
+
+            Rectangle {
+              id: sheetCard
+              width: parent.width
+              height: parent.height
+              radius: root.radiusCard
+              color: root.container
+              // Fades as it travels, so a half-swipe reads as "not yet" rather
+              // than as a card that has come loose.
+              opacity: 1 - Math.min(0.75, Math.abs(sheetCard.x) / card.width)
+
+              // H7. The only way to dismiss a single notification: there was a
+              // close button here as well and it has been removed, because two
+              // controls for one action on a card this size is one of them in
+              // the way of the other. Android does the same.
+              //
+              // The cost, stated because it is real: a swipe is invisible where
+              // a glyph is self-evident, so per-card dismissal is now something
+              // you have to know about. Clear-all stays as the tap-reachable
+              // path, which is what keeps this from being the only way to empty
+              // the shade.
+              //
+              // Horizontal only, and preventStealing stays false, so the list
+              // still takes any drag that turns out to be a scroll (H5). That
+              // is the objection this file used to raise against a swipe here
+              // -- the answer is to claim one axis rather than the gesture.
+              MouseArea {
+                anchors.fill: parent
+                drag.target: sheetCard
+                drag.axis: Drag.XAxis
+                drag.minimumX: -card.width
+                drag.maximumX: card.width
+                onReleased: {
+                  if (Math.abs(sheetCard.x) >= card.dismissAt) root.dismissRow(card.modelData)
+                  else springBack.restart()
+                }
+                onCanceled: springBack.restart()
+              }
+
+              NumberAnimation {
+                id: springBack
+                target: sheetCard; property: "x"; to: 0
+                duration: 140; easing.type: Easing.OutCubic
+              }
 
             Column {
               id: cardBody
@@ -1197,7 +1253,8 @@ Item {
               anchors.right: parent.right
               anchors.verticalCenter: parent.verticalCenter
               anchors.leftMargin: Style.space(14)
-              anchors.rightMargin: Style.space(38)
+              // Was 44, to clear a close button that is no longer there.
+              anchors.rightMargin: Style.space(14)
               spacing: Style.space(3)
 
               Text {
@@ -1231,25 +1288,6 @@ Item {
               }
             }
 
-            // Per-card dismissal. A swipe would be the phone idiom, but this
-            // list already sits inside a surface whose top band is a drag
-            // handle, and adding a second horizontal gesture to the same
-            // stack is how you end up dismissing notifications while trying
-            // to scroll. A target is unambiguous.
-            Text {
-              anchors.right: parent.right
-              anchors.rightMargin: Style.space(12)
-              anchors.top: parent.top
-              anchors.topMargin: Style.space(12)
-              text: "󰅖"
-              font.family: Style.font.family
-              font.pixelSize: Style.font.iconSmall
-              color: root.subdued
-              MouseArea {
-                anchors.fill: parent
-                anchors.margins: -Style.space(10)
-                onClicked: root.dismissRow(card.modelData)
-              }
             }
           }
         }
