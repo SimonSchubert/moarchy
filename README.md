@@ -75,21 +75,29 @@ measurement, and every dead end, including the ones that cost the most time
 (RNDIS vs macOS, a write-protected SD adapter, Docker Desktop's missing Landlock,
 and an assumption about Omarchy 4.x that turned out to be wrong twice over).
 
-## Pinned to Omarchy v3.8.4 (deliberately)
+## Tracking Omarchy 4.x (this branch)
 
-Omarchy 4.x rebuilt its whole shell layer. At v4.0.0 upstream dropped
-`config/waybar`, `config/walker`, `config/elephant`, `config/swayosd` and
-`config/fastfetch`, deleted the `waybar.css` / `mako.ini` / `walker.css` /
-`swayosd.css` / `hyprland.conf` templates, and moved to **herdr** — a bespoke
-shell shipped only as an x86_64 binary in `pkgs.omarchy.org` — plus a Lua-based
-Hyprland config (`default/themed/hyprland.lua.tpl`).
+This branch runs **Omarchy v4.0.2** (`346e69e`), pinned in
+`install/vendor-omarchy.sh`. There is no waybar, walker, mako or swayosd in the
+package set: in 4.x the bar, launcher, notifications and OSD are one
+**quickshell/QML** shell, and the phone UI is a set of plugins on top of it
+rather than a patched copy of it.
 
-Neither is portable to this device: herdr has no aarch64 build, and a Lua
-*Hyprland* config is worthless on hardware that cannot run Hyprland.
+The v3.8.4 port — waybar + walker + mako + swayosd — still lives on `main`.
 
-**v3.8.4 (`8fcc9d6`) is the last release built on waybar + walker + mako +
-swayosd**, all of which either ship for aarch64 or are Go programs we can build.
-Tracking 4.x is a separate porting project, not a version bump.
+**Why that port exists.** At v4.0.0 upstream dropped `config/waybar`,
+`config/walker`, `config/elephant`, `config/swayosd` and `config/fastfetch`,
+deleted the matching templates, and moved to **herdr**, a bespoke shell shipped
+only as an x86_64 binary. That genuinely was not portable, and v3.8.4
+(`8fcc9d6`) was the last release built on parts that either ship for aarch64 or
+are Go programs we can build.
+
+**Why 4.x is portable after all.** By v4.0.2 the shell is quickshell/QML —
+architecture-neutral, and `quickshell` builds for aarch64. What is left is
+Hyprland coupling in five QML files, and `install/port-4x.sh` translates those
+mechanically: `Quickshell.Hyprland` becomes `Quickshell.I3`, which speaks Sway's
+IPC. The one genuine gap is `HyprlandFocusGrab`, which has no I3 counterpart, so
+vendored popups lose click-outside-to-dismiss.
 
 ## Touch gestures
 
