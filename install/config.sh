@@ -139,24 +139,39 @@ for plugin_dir in "$MOBILEOMARCHY_PATH"/default/omarchy/plugins/*/; do
   repo_plugins="$repo_plugins $(basename "$plugin_dir")"
 done
 
-for installed in ~/.config/omarchy/plugins/mobileomarchy.*/; do
-  [[ -d $installed ]] || continue
-  installed_id=$(basename "$installed")
-  [[ " $repo_plugins " == *" $installed_id "* ]] && continue
-  rm -rf "$installed"
-  echo "    removed stale plugin $installed_id"
-done
+# An empty list is not "every installed plugin is stale", it is "I could not
+# read the repo": MOBILEOMARCHY_PATH unset or wrong, the directory missing, or
+# a checkout or rebase in a worktree several sessions share catching it half
+# written. Acting on that reading deletes every plugin on the device -- bar,
+# drawer, shade, recents, gestures, settings -- and the copy loop below
+# iterates the same empty glob, so it restores none of them. The phone comes
+# up with no UI at all, recoverable only over ssh.
+#
+# So refuse. The sweep is a tidying pass; skipping it leaves a stale icon,
+# while running it on a half-read repo leaves no phone.
+if [[ -z ${repo_plugins// /} ]]; then
+  echo "    !! no plugins found in $MOBILEOMARCHY_PATH/default/omarchy/plugins" >&2
+  echo "    !! skipping the stale sweep rather than deleting every installed plugin" >&2
+else
+  for installed in ~/.config/omarchy/plugins/mobileomarchy.*/; do
+    [[ -d $installed ]] || continue
+    installed_id=$(basename "$installed")
+    [[ " $repo_plugins " == *" $installed_id "* ]] && continue
+    rm -rf "$installed"
+    echo "    removed stale plugin $installed_id"
+  done
 
-# Desktop entries are matched by their ownership marker rather than by filename,
-# so an entry named after something else still gets cleaned up.
-for entry in ~/.local/share/applications/*.desktop; do
-  [[ -e $entry ]] || continue
-  owner=$(sed -n 's/^X-MobileOmarchy-Plugin=//p' "$entry" | head -1)
-  [[ -n $owner ]] || continue
-  [[ " $repo_plugins " == *" $owner "* ]] && continue
-  rm -f "$entry"
-  echo "    removed stale desktop entry $(basename "$entry")"
-done
+  # Desktop entries are matched by their ownership marker rather than by
+  # filename, so an entry named after something else still gets cleaned up.
+  for entry in ~/.local/share/applications/*.desktop; do
+    [[ -e $entry ]] || continue
+    owner=$(sed -n 's/^X-MobileOmarchy-Plugin=//p' "$entry" | head -1)
+    [[ -n $owner ]] || continue
+    [[ " $repo_plugins " == *" $owner "* ]] && continue
+    rm -f "$entry"
+    echo "    removed stale desktop entry $(basename "$entry")"
+  done
+fi
 
 for plugin_dir in "$MOBILEOMARCHY_PATH"/default/omarchy/plugins/*/; do
   plugin_id=$(basename "$plugin_dir")
