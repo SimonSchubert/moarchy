@@ -63,8 +63,14 @@ wiremix
 # change, and GTK3 draws through cairo, which on this GPU means the CPU. wvkbd
 # was here before that and leaked a layer surface per activation.
 #
-# libbsd went with squeekboard: it was only ever here because squeekboard's Arch
-# Linux ARM package fails to declare it and dies at exec without it.
+# libbsd STAYS, despite arriving only because squeekboard's Arch Linux ARM
+# package fails to declare it. Removing it with squeekboard fails: sndio depends
+# on it, so pacman refuses. Left listed rather than left to sndio to pull in, so
+# that the dependency is visible rather than incidental.
+libbsd
+
+# layer-shell-qt is the one genuinely new runtime dependency: the keyboard is a
+# Qt client and needs it to make its panel a layer surface.
 layer-shell-qt
 
 # lisgd is no longer started (default/omarchy/plugins/mobileomarchy.gestures

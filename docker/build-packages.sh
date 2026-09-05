@@ -13,6 +13,25 @@ export PKGDEST="$OUT"
 PACKAGES=(yay elephant walker xdg-terminal-exec ttf-ia-writer)
 failed=()
 
+# moarchy-keyboard is not an AUR package -- it is its own repo with a PKGBUILD
+# in packaging/ -- so it needs its own clause rather than a name in the list
+# above. Built first, because it is the one whose absence leaves the phone with
+# no way to type at all.
+echo "==> moarchy-keyboard"
+rm -rf /home/builder/moarchy-keyboard
+if git clone --depth 1 https://github.com/SimonSchubert/moarchy-keyboard \
+     /home/builder/moarchy-keyboard; then
+  if ( cd /home/builder/moarchy-keyboard/packaging && makepkg -s --noconfirm --needed ); then
+    cp /home/builder/moarchy-keyboard/packaging/*.pkg.tar.* "$OUT/" 2>/dev/null || true
+  else
+    echo "!! build failed: moarchy-keyboard -- the phone will have no keyboard" >&2
+    failed+=(moarchy-keyboard)
+  fi
+else
+  echo "!! clone failed: moarchy-keyboard" >&2
+  failed+=(moarchy-keyboard)
+fi
+
 for pkg in "${PACKAGES[@]}"; do
   echo "==> $pkg"
   rm -rf "/home/builder/$pkg"
@@ -37,5 +56,7 @@ if (( ${#failed[@]} )); then
   echo
   echo "==> FAILED: ${failed[*]}" >&2
   echo "    install/build-src.sh falls back to fuzzel if walker is missing." >&2
+  echo "    There is no fallback for moarchy-keyboard: without it the phone" >&2
+  echo "    has no on-screen keyboard and no hardware one either." >&2
   exit 1
 fi
