@@ -47,14 +47,14 @@ and vanilla-Arch markers — none of which hold on a PinePhone.
 
 Omarchy 4.x generates its per-app theming from one small file per theme,
 `colors.toml`, expanded through `default/themed/*.tpl` by
-`omarchy-theme-set-templates`. The Hyprland template is **8 lines** — it sets a
-border colour and nothing else.
+`omarchy-theme-set-templates`. The Hyprland template (`hyprland.lua.tpl`) is
+**18 lines** — it sets window and group border colours and nothing else.
 
 So the entire theme system ports by adding **one file**:
-[`default/themed/sway.conf.tpl`](default/themed/sway.conf.tpl). All **19**
+[`default/themed/sway.conf.tpl`](default/themed/sway.conf.tpl). All **22**
 upstream themes then work on Sway with no per-theme effort, and
-`waybar.css.tpl`, `mako.ini.tpl`, `alacritty.toml.tpl`, `foot.ini.tpl`,
-`btop.theme.tpl`, `walker.css.tpl` and `swayosd.css.tpl` are reused untouched.
+`shell.toml.tpl` — which themes the whole quickshell shell — along with
+`alacritty.toml.tpl`, `foot.ini.tpl` and `btop.theme.tpl`, are reused untouched.
 
 Better still, that template engine already processes a *user* template directory
 (`~/.config/omarchy/themed`) ahead of its own built-ins — so mobileomarchy adds
@@ -75,24 +75,22 @@ measurement, and every dead end, including the ones that cost the most time
 (RNDIS vs macOS, a write-protected SD adapter, Docker Desktop's missing Landlock,
 and an assumption about Omarchy 4.x that turned out to be wrong twice over).
 
-## Tracking Omarchy 4.x (this branch)
+## Omarchy 4.x
 
-This branch runs **Omarchy v4.0.2** (`346e69e`), pinned in
+mobileomarchy runs **Omarchy v4.0.2** (`346e69e`), pinned in
 `install/vendor-omarchy.sh`. There is no waybar, walker, mako or swayosd in the
 package set: in 4.x the bar, launcher, notifications and OSD are one
 **quickshell/QML** shell, and the phone UI is a set of plugins on top of it
 rather than a patched copy of it.
 
-The v3.8.4 port — waybar + walker + mako + swayosd — still lives on `main`.
+An earlier port targeted v3.8.4 (`8fcc9d6`) — waybar, walker, mako and swayosd
+— on the reading that v4.0.0 had moved to **herdr**, a bespoke shell shipped
+only as an x86_64 binary. That reading was wrong twice over: herdr is neither
+the shell nor closed source.
+[`docs/omarchy-4x-feasibility.md`](docs/omarchy-4x-feasibility.md) is the
+correction. The 3.8.4 port is gone; it exists only in git history.
 
-**Why that port exists.** At v4.0.0 upstream dropped `config/waybar`,
-`config/walker`, `config/elephant`, `config/swayosd` and `config/fastfetch`,
-deleted the matching templates, and moved to **herdr**, a bespoke shell shipped
-only as an x86_64 binary. That genuinely was not portable, and v3.8.4
-(`8fcc9d6`) was the last release built on parts that either ship for aarch64 or
-are Go programs we can build.
-
-**Why 4.x is portable after all.** By v4.0.2 the shell is quickshell/QML —
+**Why 4.x is portable.** The shell is quickshell/QML —
 architecture-neutral, and `quickshell` builds for aarch64. What is left is
 Hyprland coupling in five QML files, and `install/port-4x.sh` translates those
 mechanically: `Quickshell.Hyprland` becomes `Quickshell.I3`, which speaks Sway's
@@ -146,7 +144,7 @@ mobileomarchy-selftest --gestures   # drives real synthetic touch via /dev/uinpu
 | `default/themed/sway.conf.tpl` | The one file that themes Sway from any Omarchy theme |
 | `bin/mobileomarchy-*` | Sway counterparts to Omarchy's Hyprland helpers |
 | `bin/omarchy-*` | Shims with upstream's names, so `omarchy-menu` keeps working |
-| `docker/` | aarch64 container that builds walker/elephant/yay natively on Apple Silicon |
+| `docker/` | aarch64 container that builds moarchy-keyboard/yay natively on Apple Silicon |
 | `scripts/flash-sd.sh` | Guarded SD-card flasher for macOS |
 
 ## Install
@@ -154,17 +152,26 @@ mobileomarchy-selftest --gestures   # drives real synthetic touch via /dev/uinpu
 **1. Flash the card** (on the Mac):
 
 ```bash
+# Optional: put wifi credentials in the image so it joins on first boot.
+WIFI_SSID='MyNetwork' WIFI_PSK='secret' \
+  ./scripts/patch-image.sh ~/Downloads/mobileomarchy/archlinux-pinephone-barebone-20251224.img.xz
+
 ./scripts/flash-sd.sh /dev/diskN     # run `diskutil list` first to find N
 ```
 
-**2. Boot and get a shell.** The DanctNIX barebone image exposes SSH over USB
-networking, so no OTG keyboard is needed:
+**2. Boot and get a shell.** Access is over wifi. If you preseeded it above the
+phone is already on the network — find its address from your router or with
+`arp -a`. Otherwise attach a USB keyboard once and run `sudo nmtui`.
 
 ```bash
-ssh alarm@10.15.19.82        # password 123456; root password root
+ssh alarm@<its address>      # password 123456; root password root
 ```
 
-Change both passwords, then `sudo nmtui` to join wifi.
+Change both passwords.
+
+> USB networking is not an option from macOS. DanctNIX's gadget presents RNDIS,
+> which macOS cannot drive, and switching it to CDC-ECM gets the interface bound
+> but never carrying. That path was tried and removed.
 
 **3. Build the missing packages** (optional but recommended — on the Mac, where
 an aarch64 container runs natively):
@@ -172,11 +179,12 @@ an aarch64 container runs natively):
 ```bash
 docker build --platform linux/arm64 -f docker/Dockerfile.builder -t mobileomarchy-builder .
 docker run --rm -v "$PWD/packages:/out" mobileomarchy-builder
-scp packages/*.pkg.tar.zst alarm@10.15.19.82:~/
+scp packages/*.pkg.tar.zst alarm@<its address>:~/
 ```
 
-Skip this and `install/build-src.sh` builds on the phone instead — slow, and it
-falls back to `fuzzel` if `walker` will not build, so `SUPER+SPACE` is never dead.
+Skip this and `install/build-src.sh` builds on the phone instead — slow, and
+`moarchy-keyboard` is a Qt6 C++ build, so budget tens of minutes on an A53.
+There is no fallback for it: without the keyboard the phone cannot type at all.
 
 **4. Install:**
 
@@ -187,9 +195,9 @@ git clone <this repo> ~/.local/share/mobileomarchy
 
 ## What you get, and what you don't
 
-Kept: Omarchy's keybindings, all 19 themes with live switching, waybar (trimmed
-to a phone-width module set), mako, walker, the `omarchy-menu` system, and the
-themed terminal/btop/fastfetch/starship stack.
+Kept: Omarchy's keybindings, all 22 themes with live switching, the whole
+quickshell shell — bar, launcher, notifications, OSD — the `omarchy-menu`
+system, and the themed terminal/btop/fastfetch/starship stack.
 
 Gone, because they are Hyprland renderer features that a GLES 2.0 device could
 never have driven: blur, shadows, rounded corners, animations, gradient borders,
@@ -218,6 +226,9 @@ refuses to draw on this screen.
 
 ## Out of scope for now
 
-Telephony (calls, SMS, ModemManager), auto-rotation, suspend/power tuning, and
-the camera. The on-screen keyboard (`squeekboard`) is in
-`mobileomarchy-extras.packages` and is the least proven piece under bare Sway.
+The camera: `VIDIOC_STREAMON` fails on both sensors. Power tuning beyond the
+idle/blank path is untouched, and there is no rotation *sensor* handling — the
+shade's Rotate tile is manual.
+
+Telephony (`install/telephony.sh`), suspend and the on-screen keyboard
+(`moarchy-keyboard`, its own repo) were on this list and are not any more.
