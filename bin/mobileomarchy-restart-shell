@@ -44,6 +44,25 @@ STATE="${XDG_STATE_HOME:-$HOME/.local/state}/mobileomarchy/shell-off"
 pkill -x quickshell 2>/dev/null
 [[ -f $STATE ]] && exit 0
 
+# Wait for it to actually be gone, and this is not belt and braces: quickshell
+# refuses to start while another instance holds the same config --
+#
+#   An instance of this configuration is already running.
+#
+# -- and on this SoC the old process does not exit inside the time it takes to
+# fork the new one. Losing that race is worse than either outcome sounds: the
+# new shell exits immediately, the old one then finishes dying, and the phone is
+# left with NO shell at all -- no bar, no gestures, no drawer -- with that one
+# line in the log as the only sign. Seen for real, after a restart that looked
+# like it worked.
+#
+# 10s of budget, then start anyway: a quickshell that will not die is a
+# different problem, and refusing to start on top of it helps nobody.
+for _ in $(seq 40); do
+  pgrep -x quickshell >/dev/null 2>&1 || break
+  sleep 0.25
+done
+
 # Keep the shell's own output. Quickshell reports a plugin that failed to load
 # with a single console.warn and then carries on -- a broken bar plugin falls
 # back to omarchy.bar and a broken overlay simply never appears, both without a

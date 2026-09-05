@@ -28,6 +28,39 @@ if [[ -f $OMARCHY_PATH/default/fonts/omarchy/omarchy.ttf ]]; then
   fc-cache -f >/dev/null 2>&1
 fi
 
+# --- Mobile tweak: a heavier default UI weight -------------------------------
+# Lift Regular to SemiBold for the UI font, system-wide, via fontconfig. The
+# file itself carries the reasoning and the measurements; the short version is
+# that the shell has 336 Text sites across upstream and our plugins, none of
+# which inherit a weight, so there is no one place in QML to set this -- and
+# doing it in fontconfig brings every GTK and Qt app along, which is the point.
+mkdir -p ~/.config/fontconfig/conf.d
+cp "$MOBILEOMARCHY_PATH/default/fontconfig/50-mobileomarchy-weight.conf" \
+   ~/.config/fontconfig/conf.d/
+fc-cache -f >/dev/null 2>&1
+
+# And the terminal keeps its Regular, which pages of semibold `ls` output are
+# not an improvement on.
+#
+# Belt and braces, and worth being honest about which: foot's config names a
+# family and a size and no weight, so its pattern never matches the rule above
+# in the first place -- rendering the same foot window with and without this
+# line produced identical ink. This makes that accident deliberate, against the
+# day foot starts putting a weight in its pattern.
+#
+# `style=Regular` rather than `weight=regular`, and the difference matters: the
+# rule tests `weight eq regular`, so asking for weight=regular is asking to be
+# rewritten, while style=Regular sidesteps it. fc-match agrees --
+# `:style=Regular` answers Regular, `:weight=regular` answers SemiBold.
+#
+# Applied here rather than shipped as a config, because the loop above copies
+# upstream's foot config verbatim over ~/.config/foot on every run. Alacritty
+# already names `style = "Regular"` upstream and needs nothing.
+if [[ -f ~/.config/foot/foot.ini ]] && ! grep -q "style=Regular" ~/.config/foot/foot.ini; then
+  sed -i "s/^font=JetBrainsMono Nerd Font:/font=JetBrainsMono Nerd Font:style=Regular:/" \
+    ~/.config/foot/foot.ini
+fi
+
 # --- Mobile tweak: bar clock -----------------------------------------------
 # The bar is centre-anchored on the clock, so its width sets where every other
 # module sits. Upstream's "dddd HH:mm" changes width with the day name

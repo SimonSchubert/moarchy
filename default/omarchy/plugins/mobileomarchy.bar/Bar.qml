@@ -38,6 +38,7 @@ import Quickshell.Bluetooth
 import Quickshell.Networking
 import Quickshell.Services.UPower
 import qs.Commons
+import qs.Ui as Ui
 
 Item {
   id: root
@@ -137,7 +138,50 @@ Item {
   readonly property color foreground: Color.bar.text
   readonly property color dim: Util.alpha(Color.bar.text, 0.55)
   readonly property int edgePad: Style.space(8)
-  readonly property int glyphGap: Style.space(7)
+
+  // DemiBold, not Regular. Light text on a dark bar reads thinner than it
+  // measures, and at 12px on the one surface that is always on screen that
+  // showed as a clock you had to look at twice.
+  //
+  // Measured on the device rather than guessed, against the same string at the
+  // same minute: Medium puts 15% more ink on the panel than Regular and
+  // DemiBold 47%, and at this size 15% is not a change anyone notices -- the
+  // two captures were indistinguishable side by side. DemiBold is where "a bit
+  // thicker" actually lands.
+  //
+  // Both are real faces (`JetBrainsMono NF Medium`, `SemiBold`), installed
+  // alongside Regular, so this picks a different font file rather than
+  // synthesising an embolden -- which at 12px only thickens the antialiasing.
+  readonly property int textWeight: Font.DemiBold
+
+  // Glyphs match the clock's size rather than sitting a point under it. At
+  // iconSmall the right-hand side read as a footnote to the left-hand side;
+  // the two ends of a status bar should carry the same weight.
+  readonly property int iconSize: Style.font.body
+
+  // Each glyph gets a fixed square slot, and the gap is what is left between
+  // slots. Two things that fixes, neither of which a constant `spacing` could:
+  //
+  //   Advance widths differ per glyph in a Nerd Font -- the wifi fan is wider
+  //   than the bluetooth rune -- so one spacing value produced visibly uneven
+  //   gaps. Equal slots make equal gaps.
+  //
+  //   The painted glyph is rarely centred inside its own advance, so even equal
+  //   slots would have looked ragged. Ui.OpticalGlyph re-centres on the painted
+  //   bounds -- horizontally only, and that restraint is the point: correcting
+  //   vertically too drifts each glyph off the shared baseline, and a shared
+  //   baseline is what actually makes a row of icons look level.
+  readonly property int glyphSlot: Math.round(root.iconSize * 1.35)
+  readonly property int glyphGap: Style.space(4)
+
+  component StatusGlyph: Ui.OpticalGlyph {
+    width: root.glyphSlot
+    height: root.glyphSlot
+    fontFamily: Style.font.family
+    fontSize: root.iconSize
+    color: root.foreground
+    visible: text !== ""
+  }
 
   // ------------------------------------------------------------- battery
   //
@@ -291,6 +335,27 @@ Item {
     precision: SystemClock.Minutes
   }
 
+  // Proof that this file loaded, which nothing else on the phone can give.
+  // shell.json's `bar.id` still names this plugin when its QML fails to
+  // compile, so `omarchy-shell shell listPlugins` goes on reporting it active
+  // while the host has quietly fallen back to omarchy.bar and the surface draws
+  // nothing. An answer here comes from an instantiated component or not at all.
+  //
+  // The metrics are the ones that decide how the bar looks, so a regression in
+  // any of them is a failing check rather than a screenshot nobody takes.
+  IpcHandler {
+    target: "bar"
+
+    function metrics(): string {
+      return "height=" + root.barSize
+           + " icon=" + root.iconSize
+           + " slot=" + root.glyphSlot
+           + " gap=" + root.glyphGap
+           + " weight=" + root.textWeight
+           + " hidden=" + (root.barHidden ? "yes" : "no")
+    }
+  }
+
   Variants {
     model: Quickshell.screens
 
@@ -321,7 +386,7 @@ Item {
           anchors.left: parent.left
           anchors.leftMargin: root.edgePad
           anchors.verticalCenter: parent.verticalCenter
-          spacing: Style.space(6)
+          spacing: root.glyphGap
 
           Text {
             anchors.verticalCenter: parent.verticalCenter
@@ -332,18 +397,17 @@ Item {
             text: Qt.formatDateTime(clock.date, "H:mm")
             font.family: Style.font.family
             font.pixelSize: Style.font.body
+            font.weight: root.textWeight
             color: root.foreground
           }
 
           // Silenced is worth a glyph; a pending count is worth a dot. Drawing
           // the count itself would need a second font metric on a bar that has
           // room for one.
-          Text {
+          StatusGlyph {
             anchors.verticalCenter: parent.verticalCenter
             visible: root.dnd
             text: "󰂛"
-            font.family: Style.font.family
-            font.pixelSize: Style.font.iconSmall
             color: root.dim
           }
 
@@ -364,43 +428,34 @@ Item {
           anchors.verticalCenter: parent.verticalCenter
           spacing: root.glyphGap
 
-          Text {
+          StatusGlyph {
             anchors.verticalCenter: parent.verticalCenter
-            visible: text !== ""
             text: root.cellGlyph
-            font.family: Style.font.family
-            font.pixelSize: Style.font.iconSmall
             color: root.simMissing ? root.dim : root.foreground
           }
 
-          Text {
+          StatusGlyph {
             anchors.verticalCenter: parent.verticalCenter
-            visible: text !== ""
             text: root.wifiGlyph
-            font.family: Style.font.family
-            font.pixelSize: Style.font.iconSmall
-            color: root.foreground
           }
 
-          Text {
+          StatusGlyph {
             anchors.verticalCenter: parent.verticalCenter
-            visible: text !== ""
             text: root.btGlyph
-            font.family: Style.font.family
-            font.pixelSize: Style.font.iconSmall
-            color: root.foreground
           }
 
           Row {
             anchors.verticalCenter: parent.verticalCenter
             visible: root.batteryPresent
-            spacing: Style.space(3)
+            // No spacing: the glyph's slot already carries its own padding, and
+            // adding more here detached the percentage from the battery it
+            // belongs to -- the pair should read as one item against the
+            // glyphGap that separates it from bluetooth.
+            spacing: 0
 
-            Text {
+            StatusGlyph {
               anchors.verticalCenter: parent.verticalCenter
               text: root.batteryGlyph
-              font.family: Style.font.family
-              font.pixelSize: Style.font.iconSmall
               color: root.batteryLow ? Color.bar.active : root.foreground
             }
 
@@ -415,7 +470,10 @@ Item {
               visible: root.batteryPercentShown
               text: root.batteryPercent + "%"
               font.family: Style.font.family
-              font.pixelSize: Style.font.caption
+              // bodySmall, not caption: next to a Medium clock at body size, a
+              // 10px percentage read as a different bar's worth of text.
+              font.pixelSize: Style.font.bodySmall
+              font.weight: root.textWeight
               color: root.batteryLow ? Color.bar.active : root.foreground
             }
           }

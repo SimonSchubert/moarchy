@@ -152,6 +152,21 @@ except Exception:
 ' 2>/dev/null)
 if [[ $active_bar == "mobileomarchy.bar" ]]; then
   ok "the phone bar is the active bar"
+  # ...but "active" is the host's answer from shell.json, not proof the QML
+  # compiled. A broken Bar.qml leaves that check green with the bar drawing
+  # nothing, so ask the bar itself: an IPC answer can only come from an
+  # instantiated component.
+  bar_metrics=$(timeout 5 omarchy-shell bar metrics 2>/dev/null)
+  bar_weight=$(sed -n 's/.*weight=\([0-9]*\).*/\1/p' <<<"$bar_metrics")
+  if [[ -z $bar_metrics || $bar_metrics == *"not found"* ]]; then
+    no "the bar plugin does not answer IPC" \
+       "Bar.qml failed to load; the host has fallen back and the bar is drawing nothing"
+  elif [[ -n $bar_weight ]] && (( bar_weight >= 500 )); then
+    ok "the bar is loaded and drawing ($bar_metrics)"
+  else
+    no "the bar answers but its text weight is ${bar_weight:-?}" \
+       "under 500 is the thin clock the DemiBold change was for"
+  fi
 else
   no "the active bar is ${active_bar:-none}" \
      "the shell fell back to omarchy.bar; grep 'failed to load' ~/.local/state/mobileomarchy/shell.log"
