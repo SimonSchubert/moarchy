@@ -183,14 +183,18 @@ Item {
     return false
   }
 
-  // `detail` is prose written in the model; `detailCmd` is a shell expression
-  // the guard batch answers. Two fields rather than one guessed apart at
-  // runtime -- "Keep the screen on" and "basename \"$(omarchy-theme-bg-current)\""
-  // are not distinguishable by inspection, and guessing got it wrong both ways.
+  // `detail` is prose carried by the row; `read` and `detailCmd` are shell
+  // expressions the guard batch answers. Two kinds of field rather than one
+  // guessed apart at runtime -- "Keep the screen on" and
+  // "basename \"$(omarchy-theme-bg-current)\"" are not distinguishable by
+  // inspection, and guessing got it wrong in both directions.
+  //
+  // Keyed off the command fields, not off the row type: the keybindings page
+  // builds info rows that carry their second column inline and ask nothing, and
+  // treating every info row as guard-answered blanked all of them.
   function rowDetail(row) {
     if (!row) return ""
-    if (row.detailCmd || row.type === "info")
-      return String(root.valueMap[row.id] || "")
+    if (row.read || row.detailCmd) return String(root.valueMap[row.id] || "")
     return String(row.detail || "")
   }
 
@@ -651,7 +655,6 @@ Item {
             label: modelData.label || ""
             detail: root.rowDetail(modelData)
             checked: root.rowChecked(modelData)
-            rowEnabled: modelData.type !== "info"
             textColor: root.textOnSurface
             subduedColor: root.subdued
             accentColor: root.accent

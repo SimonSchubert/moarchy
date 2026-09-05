@@ -779,8 +779,22 @@ if [[ ${1:-} == "--settings" ]]; then
   # --- G. coverage parity ---------------------------------------------------
   cov=$(s coverage)
   menu="$OMARCHY_PATH/default/omarchy/omarchy-menu.jsonc"
-  upstream=$(sed -E 's#^[[:space:]]*//.*##' "$menu" | sed -E 's/,([[:space:]]*[}\]])/\1/' \
-             | jq -r 'keys[]' 2>/dev/null | sort)
+
+  # python3, not sed+jq. The trailing comma this file is allowed to carry sits
+  # on the line *before* its closing brace, so a line-based strip leaves it and
+  # jq refuses the whole document -- which would have read as "upstream has no
+  # entries" and quietly passed every comparison below.
+  upstream=$(python3 - "$menu" <<'JSONC'
+import json, re, sys
+raw = open(sys.argv[1]).read()
+raw = re.sub(r'^\s*//[^\n]*$', '', raw, flags=re.M)
+raw = re.sub(r',(\s*[}\]])', r'\1', raw)
+print("\n".join(sorted(json.loads(raw).keys())))
+JSONC
+)
+  if [[ -z $upstream ]]; then
+    no "the upstream menu file could not be parsed" "expected at $menu"
+  fi
   covered=$(cut -f1 <<<"$cov" | sort)
 
   n_dup=$(cut -f1 <<<"$cov" | sort | uniq -d | wc -l)
@@ -804,7 +818,16 @@ if [[ ${1:-} == "--settings" ]]; then
   # and it is not exported by the session -- only PATH carries it.
   doc="${MOBILEOMARCHY_PATH:-$HOME/.local/share/mobileomarchy}/docs/menu-coverage.md"
   if [[ -f $doc ]]; then
-    doc_nb=$(sed -n 's/^| `\([a-z0-9.\-]*\)` | [^|]* | \(Native\|Bridged\|Shade\) |.*/\1\t\2/p' "$doc" | sort)
+    doc_nb=$(python3 - "$doc" <<'DOCTBL'
+import re, sys
+out = []
+for line in open(sys.argv[1]):
+    m = re.match(r'^\| `([^`]+)` \| [^|]* \| (Native|Bridged|Shade) \|', line)
+    if m:
+        out.append(m.group(1) + "\t" + m.group(2))
+print("\n".join(sorted(out)))
+DOCTBL
+)
     code_nb=$(cut -f1,2 <<<"$cov" | sort)
     if diff -q <(echo "$doc_nb") <(echo "$code_nb") >/dev/null; then
       ok "G6 docs/menu-coverage.md and Pages.js agree ($(wc -l <<<"$code_nb") ids)"
@@ -820,7 +843,9 @@ if [[ ${1:-} == "--settings" ]]; then
   # a shade control, or classified Unsupported in the doc and therefore absent.
   n_up=$(wc -l <<<"$upstream")
   n_cov=$(wc -l <<<"$covered")
-  n_unsup=$(grep -c '| Unsupported |' "$doc" 2>/dev/null || echo 0)
+  # Anchored to an entry row -- a bare '| Unsupported |' also matches the
+  # totals table at the top of the doc, which counted 179 of 178.
+  n_unsup=$(grep -cE '^\| `[^`]+` \|.*\| Unsupported \|' "$doc" 2>/dev/null || echo 0)
   (( n_cov + n_unsup == n_up )) \
     && ok "G5 all $n_up upstream entries are accounted for ($n_cov live, $n_unsup dropped)" \
     || no "G5 $n_cov live + $n_unsup dropped != $n_up upstream" "something is unclassified"

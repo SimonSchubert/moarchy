@@ -21,6 +21,11 @@ Rectangle {
   property string label: ""
   property string detail: ""
   property bool checked: false
+
+  // Dimming is for a row that exists but cannot act. It is deliberately NOT
+  // wired to "is this tappable": an info row is not tappable and must still
+  // look like ordinary text, or the About screen and the whole keybindings list
+  // render as though they were disabled.
   property bool rowEnabled: true
 
   property color textColor: "white"
@@ -55,7 +60,7 @@ Rectangle {
       // a label that runs under the switch reads as a layout bug even when the
       // elide is doing its job.
       width: parent.width - (card.glyph !== "" ? Style.space(64) : Style.space(20))
-             - (trailing.width > 0 ? trailing.width : 0)
+             - trailing.width
       spacing: 0
 
       Text {
@@ -84,7 +89,13 @@ Rectangle {
     anchors.right: parent.right
     anchors.rightMargin: Style.space(14)
     anchors.verticalCenter: parent.verticalCenter
-    width: childrenRect.width
+    // Explicit per type rather than childrenRect, which counts invisible
+    // children too -- so every row would reserve the width of the widest
+    // trailing element, which is the switch, and every label would be short by
+    // 44px for no reason.
+    width: card.rowType === "switch" ? Style.space(44)
+           : (card.rowType === "info" || card.rowType === "action") ? 0
+           : Style.space(20)
     height: parent.height
 
     // nav, plugin
