@@ -55,6 +55,10 @@ Item {
   property var manifest: null
   property var barWidgetRegistry: null
   property var pluginRegistry: null
+  // Declared but read by nothing, on purpose: `configureBar` assigns it under an
+  // `in` test, so dropping it would be silently accepted -- and the property is
+  // the record that this bar is handed the same config upstream's is, and reads
+  // nothing out of it. The one key it used to read was `transparent`.
   property var barConfig: ({})
 
   // ------------------------------------------------- the shell.bar contract
@@ -67,9 +71,11 @@ Item {
   // Called behind a typeof guard, so a missing one is survivable but leaves the
   // caller returning "no-bar" forever:
   //   summonBarWidget / hideBarWidget / isBarWidgetOpen   shell.summon routing
-  //   toggleTransparency                                  omarchy-shell IPC
   //   panelWidgetIdAt                                     togglePanelAt IPC
   //   debugBarGeometry                                    debug IPC
+  // Deliberately absent, so `omarchy-shell shell toggleBarTransparency` answers
+  // "no-bar" and stops there:
+  //   toggleTransparency                                  omarchy-shell IPC
   // Ours, not upstream's, called by bin/moarchy-toggle-bar and by the
   // Settings battery-percentage switch:
   //   syncHidden                                          re-read the toggle flags
@@ -77,12 +83,6 @@ Item {
   property bool barHidden: false
   readonly property string position: "top"
   readonly property string fontFamily: Style.font.family
-  // Bound, not assigned. `omarchy-bar transparent` commits to shell.json and the
-  // host re-assigns barConfig, so the config is the single source of truth.
-  // This was a plain `property bool transparent: false`, which meant the write
-  // landed in the file and the bar never changed -- and a settings switch
-  // reading the file then disagreed with one reading the bar.
-  property bool transparent: root.barConfig && root.barConfig.transparent === true
 
   // This bar hosts no widgets at all, so every widget-routing call has exactly
   // one honest answer. Returning false (rather than omitting the function) is
@@ -92,13 +92,6 @@ Item {
   function isBarWidgetOpen(id: string): bool { return false }
   function panelWidgetIdAt(section: string, index: string): string { return "" }
   function debugBarGeometry(): var { return [] }
-  // Writes through to the config instead of assigning `transparent`, which would
-  // break the binding above and strand the bar on whatever it happened to be.
-  // omarchy-bar only mutates shell.json -- it never calls back into the shell --
-  // so there is no loop here.
-  function toggleTransparency(): void {
-    Quickshell.execDetached(["omarchy-bar", "transparent", "toggle"])
-  }
 
   // barHidden is what the shell.bar contract exposes and what the exclusive zone
   // and top margin read, and until now nothing ever set it. `omarchy-toggle
@@ -368,7 +361,12 @@ Item {
 
         anchors { top: true; left: true; right: true }
         implicitHeight: root.barSize
-        color: root.transparent ? "transparent" : root.background
+        // Opaque, and `bar.transparent` in shell.json is ignored on purpose:
+        // the only thing that writes that flag is `omarchy-bar transparent`,
+        // whose config reload takes this bar down and leaves upstream's in its
+        // place. Honouring a flag we refuse to let anything set would only
+        // strand a phone whose shell.json still carries it from before.
+        color: root.background
         surfaceFormat.opaque: false
 
         WlrLayershell.namespace: "moarchy-bar"

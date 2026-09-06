@@ -8,6 +8,11 @@ ConditionPathExists=!%h/.local/state/moarchy/user-setup-done
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+# A systemd user unit gets neither /etc/profile.d nor the sway session's
+# environment, so the paths are named here as well as in the script.
+Environment=OMARCHY_PATH=/usr/share/omarchy
+Environment=MOARCHY_PATH=/usr/share/moarchy
+Environment=PATH=/usr/lib/moarchy/bin:/usr/local/bin:/usr/bin
 ExecStart=/usr/lib/moarchy/bin/moarchy-user-setup
 
 [Install]

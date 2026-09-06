@@ -1,0 +1,9 @@
+# Both Dockerfiles do `COPY . /repo`, and without this the build context is the
+# 6 GB image plus every built package -- neither of which any build step reads
+# from the context (packages come in on a bind mount, images go out on one).
+.git
+images/
+packages/
+.cache/
+*.img
+*.img.xz

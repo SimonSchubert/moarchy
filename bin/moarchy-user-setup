@@ -14,7 +14,18 @@
 set -uo pipefail
 
 STAMP="$HOME/.local/state/moarchy/user-setup-done"
-OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"
+
+# Exported, not just set. omarchy-theme-set is a child process and reads
+# OMARCHY_PATH from the environment; without the export it looked for themes
+# under an unset path and answered "Theme 'tokyo-night' does not exist" while
+# /usr/share/omarchy/themes/tokyo-night sat right there.
+#
+# And it has to be set at all, because nothing else sets it here. This runs
+# from a systemd user unit, which inherits neither /etc/profile.d (that is
+# login shells) nor the sway session's environment (that starts later).
+export OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"
+export PATH="/usr/lib/moarchy/bin:/usr/bin:$PATH"
+
 say() { printf '==> %s\n' "$*"; }
 
 # omarchy-theme-set-templates globs "$HOME/.config/omarchy/themed"/*.tpl ahead
@@ -65,9 +76,16 @@ fi
 # The starting theme, which also generates
 # ~/.local/state/omarchy/current/theme/sway.conf -- the file /etc/sway/config
 # includes. Without it sway starts with no theme colours at all.
-if ! omarchy-theme-set tokyo-night 2>/dev/null; then
-  echo "!! theme apply failed; run 'omarchy-theme-set tokyo-night' by hand" >&2
+# Not `2>/dev/null`: if this fails the reason is the only thing that will say
+# why the phone has no colours.
+if ! omarchy-theme-set tokyo-night; then
+  echo "!! theme apply failed -- not stamping, so this runs again next login" >&2
+  echo "   fix it by hand with: omarchy-theme-set tokyo-night" >&2
+  exit 1
 fi
 
+# Stamped only on success. Stamping a failed run is how a phone ends up with no
+# theme for good: sway includes the generated sway.conf and moarchy-keyboard
+# reads the generated colors.toml, and neither is retried once the stamp exists.
 date -Iseconds >"$STAMP"
 say "done"

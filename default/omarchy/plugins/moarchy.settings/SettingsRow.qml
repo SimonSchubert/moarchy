@@ -12,6 +12,7 @@
 // from Color.menu, and a component that picks for itself cannot serve both.
 import QtQuick
 import qs.Commons
+import qs.Ui as Ui
 
 Rectangle {
   id: card
@@ -32,6 +33,19 @@ Rectangle {
   property color subduedColor: "grey"
   property color accentColor: "white"
 
+  // Matches the bar. Light text on a dark surface reads thinner than it
+  // measures, and a settings list next to a DemiBold status bar looked like
+  // two different phones. moarchy.bar's textWeight carries the ink
+  // measurements behind the choice.
+  property int textWeight: Font.DemiBold
+
+  // A fixed square slot for the leading glyph, rather than letting each one
+  // take its own advance width. Nerd Font advances differ per glyph -- the
+  // speaker is 7px wider than the key -- so with an intrinsic width every
+  // label started at a different x and the list read as ragged down its left
+  // edge. Equal slots make one left edge. 1.35x is the bar's ratio.
+  readonly property int glyphSlot: Math.round(Style.font.iconLarge * 1.35)
+
   signal activated()
 
   height: Style.space(58)
@@ -44,22 +58,24 @@ Rectangle {
     anchors.rightMargin: Style.space(14)
     spacing: Style.space(14)
 
-    Text {
+    Ui.OpticalGlyph {
       anchors.verticalCenter: parent.verticalCenter
       visible: card.glyph !== ""
-      width: visible ? implicitWidth : 0
+      width: card.glyphSlot
+      height: card.glyphSlot
       text: card.glyph
-      font.family: Style.font.family
-      font.pixelSize: Style.font.iconLarge
+      fontFamily: Style.font.family
+      fontSize: Style.font.iconLarge
       color: card.textColor
     }
 
     Column {
       anchors.verticalCenter: parent.verticalCenter
-      // The trailing control and the two gaps. Measured rather than guessed:
-      // a label that runs under the switch reads as a layout bug even when the
-      // elide is doing its job.
-      width: parent.width - (card.glyph !== "" ? Style.space(64) : Style.space(20))
+      // The trailing control and the two gaps. Exact rather than estimated now
+      // that the glyph has a known width: a label that runs under the switch
+      // reads as a layout bug even when the elide is doing its job, and one
+      // that stops short of it wastes the only line it has.
+      width: parent.width - (card.glyph !== "" ? card.glyphSlot + Style.space(14) : 0)
              - trailing.width
       spacing: 0
 
@@ -68,6 +84,7 @@ Rectangle {
         text: card.label
         font.family: Style.font.family
         font.pixelSize: Style.font.body
+        font.weight: card.textWeight
         color: card.textColor
         elide: Text.ElideRight
       }
@@ -77,6 +94,7 @@ Rectangle {
         text: card.detail
         font.family: Style.font.family
         font.pixelSize: Style.font.caption
+        font.weight: card.textWeight
         color: card.subduedColor
         elide: Text.ElideRight
       }
@@ -99,32 +117,37 @@ Rectangle {
     height: parent.height
 
     // nav, plugin
-    Text {
-      anchors.verticalCenter: parent.verticalCenter
+    //
+    // fa-angle-right, not md-chevron-right. The Material chevron is drawn small
+    // and light inside its em box -- 5x9 of ink at icon size, against this
+    // one's 7x10 -- so at the end of a 58px row it read as a stray `>` in the
+    // text rather than as the affordance that says the row opens something.
+    Ui.OpticalGlyph {
+      anchors.fill: parent
       visible: card.rowType === "nav" || card.rowType === "plugin"
-      text: "󰅂"
-      font.family: Style.font.family
-      font.pixelSize: Style.font.iconSmall
+      text: ""
+      fontFamily: Style.font.family
+      fontSize: Style.font.icon
       color: card.subduedColor
     }
 
     // link
-    Text {
-      anchors.verticalCenter: parent.verticalCenter
+    Ui.OpticalGlyph {
+      anchors.fill: parent
       visible: card.rowType === "link"
       text: "󰏌"
-      font.family: Style.font.family
-      font.pixelSize: Style.font.iconSmall
+      fontFamily: Style.font.family
+      fontSize: Style.font.icon
       color: card.subduedColor
     }
 
     // choice
-    Text {
-      anchors.verticalCenter: parent.verticalCenter
+    Ui.OpticalGlyph {
+      anchors.fill: parent
       visible: card.rowType === "choice"
       text: card.checked ? "󰄬" : ""
-      font.family: Style.font.family
-      font.pixelSize: Style.font.icon
+      fontFamily: Style.font.family
+      fontSize: Style.font.icon
       color: card.accentColor
     }
 

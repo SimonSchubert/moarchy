@@ -32,6 +32,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
+import qs.Ui as Ui
 
 Item {
   id: root
@@ -93,6 +94,10 @@ Item {
   // and a relative path across them is the kind of thing that breaks silently.
   readonly property color subdued: root.readableOn(root.surface, Color.menu.text,
                                                    0.55, 4.5)
+
+  // Matches the bar and the Settings list. See moarchy.bar's textWeight
+  // for the ink measurements behind DemiBold.
+  readonly property int textWeight: Font.DemiBold
 
   function luminance(c) {
     function chan(v) { return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4) }
@@ -352,11 +357,13 @@ Item {
             radius: width / 2
             color: root.container
 
-            Text {
-              anchors.centerIn: parent
-              text: "󰅁"
-              font.family: Style.font.family
-              font.pixelSize: Style.font.icon
+            // fa-angle-left, optically centred -- the same treatment, and the
+            // same reasons, as the Settings header's back button.
+            Ui.OpticalGlyph {
+              anchors.fill: parent
+              text: ""
+              fontFamily: Style.font.family
+              fontSize: Style.font.icon
               color: root.textOnSurface
             }
             MouseArea { anchors.fill: parent; onClicked: root.dismiss() }
@@ -369,6 +376,7 @@ Item {
             text: "Themes"
             font.family: Style.font.family
             font.pixelSize: Style.font.heading
+            font.weight: root.textWeight
             color: root.textOnSurface
           }
 
@@ -378,6 +386,7 @@ Item {
             text: root.pendingSlug !== "" ? "Applying\u2026" : root.themes.length + " themes"
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
+            font.weight: root.textWeight
             color: root.subdued
           }
         }
@@ -455,6 +464,7 @@ Item {
                     text: cell.modelData.name
                     font.family: Style.font.family
                     font.pixelSize: Style.font.bodySmall
+                    font.weight: root.textWeight
                     color: cell.modelData.foreground
                     elide: Text.ElideRight
                   }
@@ -465,6 +475,7 @@ Item {
                     text: cell.isPending ? "\u2026" : "󰄬"
                     font.family: Style.font.family
                     font.pixelSize: Style.font.bodySmall
+                    font.weight: root.textWeight
                     color: cell.modelData.accent
                   }
                 }

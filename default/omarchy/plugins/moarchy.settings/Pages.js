@@ -195,11 +195,14 @@ var PAGES = {
     invert: true,
     on: "omarchy-toggle battery-percentage-off off && omarchy-shell -q omarchy.bar syncHidden",
     off: "omarchy-toggle battery-percentage-off on && omarchy-shell -q omarchy.bar syncHidden",
-    covers: { "trigger.toggle.battery-percentage": "N" } },
-  { id: "transparent", type: "switch", glyph: "󰂵", label: "Transparent",
-    read: "jq -r '.bar.transparent // false' \"$HOME/.config/omarchy/shell.json\"",
-    on: "omarchy-bar transparent true", off: "omarchy-bar transparent false",
-    covers: { "style.bar.transparency": "N" } }
+    covers: { "trigger.toggle.battery-percentage": "N" } }
+  // There is deliberately no transparency row. The flag can only be written
+  // through `omarchy-bar transparent`, which ends by asking the shell to reload
+  // its config -- and that reload lands on shell.qml's fallback: the phone bar
+  // goes away and upstream's omarchy.bar draws in its place until the shell is
+  // restarted. Losing the status bar is not a fair price for an appearance
+  // switch, so the row is gone rather than fixed. docs/menu-coverage.md records
+  // `style.bar.transparency` as Unsupported for the same reason.
 ]},
 
 "appearance.branding": { title: "Branding", rows: [

@@ -50,9 +50,19 @@ package() {
   # git checkout into $HOME, and it is one of the paths P1 forbids.
   install -d "$pkgdir/usr/share/omarchy"
 
-  # What the running shell needs, and nothing else: install/ is upstream's own
-  # x86_64 installer, and test/, docs/ and agents/ are development material.
-  for d in shell config default themes applications migrations; do
+  # What the running shell needs. test/, docs/ and agents/ are development
+  # material and stay out.
+  #
+  # install/ is IN, despite reading like upstream's x86_64 installer. A dozen
+  # runtime omarchy-* scripts source things out of it -- omarchy-install-browser
+  # and omarchy-theme-set-browser both need install/helpers/browser-policy.sh,
+  # and omarchy-apply-hardware and omarchy-apply-system export
+  # OMARCHY_INSTALL=$OMARCHY_PATH/install. Leaving it out made every
+  # omarchy-theme-set print
+  #   /usr/bin/omarchy-theme-set-browser: line 6:
+  #   /usr/share/omarchy/install/helpers/browser-policy.sh: No such file
+  # It is 348 KB, so the saving was never worth the breakage.
+  for d in shell config default themes applications migrations install; do
     [ -d "$d" ] && cp -a "$d" "$pkgdir/usr/share/omarchy/"
   done
   for f in version icon.png icon.txt logo.svg logo.txt LICENSE; do

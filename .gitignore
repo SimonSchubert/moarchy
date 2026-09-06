@@ -8,3 +8,9 @@ packages/*.pkg.tar.*
 
 # Python bytecode cache (bin/moarchy-one-app-per-workspace)
 __pycache__/
+
+# Built disk images
+images/
+
+# Image builder package cache
+.cache/

@@ -56,6 +56,7 @@ import Quickshell.Bluetooth
 import Quickshell.Networking
 import Quickshell.Services.Pipewire
 import qs.Commons
+import qs.Ui as Ui
 
 Item {
   id: root
@@ -105,6 +106,29 @@ Item {
   readonly property real sheetFraction: 0.9
   readonly property int sheetHeight:
     Math.max(1, Math.round((root.screenHeight - root.gestureStrip) * root.sheetFraction))
+
+  // -------------------------------------------------------------- type
+  //
+  // The same weight the bar runs at. Light text on a dark surface reads thinner
+  // than it measures, and a shade whose clock was Regular under a bar whose
+  // clock was DemiBold read as two different phones stacked on top of each
+  // other. moarchy.bar's textWeight carries the ink measurements.
+  readonly property int textWeight: Font.DemiBold
+
+  // Every glyph on this surface gets a fixed square slot and is centred on the
+  // ink it actually paints, not on the box the font reserves for it.
+  //
+  // Both halves are needed. Advance widths differ per glyph in a Nerd Font --
+  // the wifi fan is 7px wider than the bluetooth rune -- so intrinsic widths
+  // left the two wide tiles' labels starting at different x. And the painted
+  // glyph is rarely centred inside its own advance: measured on the gear in the
+  // header, the ink sat 4 device pixels right of the circle's centre on a 72px
+  // circle, which is small and, with nothing else in the circle to line up
+  // against, plainly visible. Ui.OpticalGlyph is the bar's answer to the same
+  // problem, and it corrects horizontally only -- rendered both ways here, the
+  // vertical correction moved the chevron and the tile glyphs off a line box
+  // they were already centred in.
+  readonly property int glyphSlot: Math.round(Style.font.iconLarge * 1.35)
 
   // ------------------------------------------------------------- shape
   readonly property int radiusSheet: Style.space(28)
@@ -233,6 +257,7 @@ Item {
   property real sheetLastT: 0
 
   function sheetPress(item, mouse): void {
+    root.dragTrace = []
     root.sheetPressY = item.mapToItem(null, mouse.x, mouse.y).y
     root.sheetStartProgress = root.progress
     root.sheetDragging = false
@@ -329,7 +354,27 @@ Item {
     // snap-back would silently eat the next tap on the app underneath.
     if (root.progress <= 0 && !root.dragging) root.expanded = false
     if (root.progress > 0 && !root.expanded) root.expanded = true
+
+    // One integer per frame while a drag is in flight, cleared on the next
+    // press. The same diagnostic the drawer carries, and for the same reason:
+    // "does it follow the finger" is a question about the *number of samples*,
+    // and polling `state` over IPC answers it at a tenth of the frame rate --
+    // which is how a gesture that followed nothing reads as one that tracked.
+    //
+    // Two details it would be easy to get wrong, and either one makes H2 pass
+    // on the bug it exists to catch. Cleared on *press*, not on the drag
+    // latching, so a gesture that never latched shows as empty rather than as
+    // the previous gesture's trace. And gated on `dragging`, so the 220ms fall
+    // after release is not recorded -- that animation runs whether or not the
+    // finger ever drove anything, and counting it reports ~14 samples for a
+    // shade that jumped shut.
+    if (!root.dragging) return
+    var next = root.dragTrace.slice()
+    if (next.length < 200) next.push(Math.round(root.progress * 100))
+    root.dragTrace = next
   }
+
+  property var dragTrace: []
 
   Behavior on progress {
     enabled: !root.dragging
@@ -354,6 +399,10 @@ Item {
       if (root.dragging) return "dragging " + Math.round(root.progress * 100) + "%"
       return root.opened ? "open" : "closed"
     }
+
+    // The samples the last drag actually produced, as the drawer reports them.
+    function dragTrace(): string { return root.dragTrace.join(" ") }
+
     function open(): string {
       if (root.shell) root.shell.summon(root.pluginId, "{}")
       return "ok"
@@ -737,17 +786,21 @@ Item {
       anchors.rightMargin: Style.space(10)
       spacing: Style.space(10)
 
-      Text {
+      Ui.OpticalGlyph {
         anchors.verticalCenter: parent.verticalCenter
+        width: root.glyphSlot
+        height: root.glyphSlot
         text: tile.glyph
-        font.family: Style.font.family
-        font.pixelSize: Style.font.iconLarge
+        fontFamily: Style.font.family
+        fontSize: Style.font.iconLarge
         color: tile.on ? root.textOnAccent : root.textOnSurface
       }
 
       Column {
         anchors.verticalCenter: parent.verticalCenter
-        width: parent.width - Style.space(34)
+        // Exact rather than estimated, now the glyph has a width of its own
+        // instead of whatever the font gave it.
+        width: parent.width - root.glyphSlot - Style.space(10)
         spacing: 0
 
         Text {
@@ -755,6 +808,7 @@ Item {
           text: tile.label
           font.family: Style.font.family
           font.pixelSize: Style.font.bodySmall
+          font.weight: root.textWeight
           color: tile.on ? root.textOnAccent : root.textOnSurface
           elide: Text.ElideRight
         }
@@ -764,6 +818,7 @@ Item {
           text: tile.detail
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
+          font.weight: root.textWeight
           color: tile.on ? Util.alpha(root.textOnAccent, 0.75) : root.subdued
           elide: Text.ElideRight
         }
@@ -813,11 +868,13 @@ Item {
       anchors.centerIn: parent
       spacing: Style.space(3)
 
-      Text {
+      Ui.OpticalGlyph {
         anchors.horizontalCenter: parent.horizontalCenter
+        width: root.glyphSlot
+        height: root.glyphSlot
         text: small.glyph
-        font.family: Style.font.family
-        font.pixelSize: Style.font.iconLarge
+        fontFamily: Style.font.family
+        fontSize: Style.font.iconLarge
         color: small.on ? root.textOnAccent : root.textOnSurface
       }
       Text {
@@ -825,6 +882,7 @@ Item {
         text: small.label
         font.family: Style.font.family
         font.pixelSize: Style.font.caption
+        font.weight: root.textWeight
         color: small.on ? Util.alpha(root.textOnAccent, 0.75) : root.subdued
       }
     }
@@ -877,13 +935,19 @@ Item {
         }
       }
 
-      Text {
+      // Positioned by where the glyph's centre should land, not by where its
+      // box starts: the brightness sun is 3px wider than the speaker, so two
+      // sliders given the same left margin had their glyphs on different
+      // vertical lines.
+      Ui.OpticalGlyph {
         anchors.left: parent.left
-        anchors.leftMargin: Style.space(14)
+        anchors.leftMargin: Style.space(20) - Math.round(root.glyphSlot / 2)
         anchors.verticalCenter: parent.verticalCenter
+        width: root.glyphSlot
+        height: root.glyphSlot
         text: slider.glyph
-        font.family: Style.font.family
-        font.pixelSize: Style.font.icon
+        fontFamily: Style.font.family
+        fontSize: Style.font.icon
         color: root.textOnAccent
       }
     }
@@ -954,27 +1018,25 @@ Item {
     radius: width / 2
     color: root.container
 
-    // Filled and aligned, not centred as a shrink-wrapped item.
+    // Centred on the ink, because neither of the two obvious ways gets there.
     //
-    // `anchors.centerIn` sizes the Text to the glyph and then centres that
-    // item, which puts its origin at a fractional position -- (36 - 13.39) / 2
-    // -- and the glyph lands a pixel or so off. Measured on the gear and the
-    // power icon, the ink sat 1.5 device pixels left of the circle's centre in
-    // both: small, and on a 72px circle with nothing else to line up against,
-    // plainly visible.
+    // This used to be a filled Text with AlignHCenter, on the reasoning that it
+    // keeps the item on integer coordinates. Rendered on the device and
+    // measured against the circle it sits in, that put the gear 3.9 device
+    // pixels right of centre -- `Text` aligned the line using the advance of
+    // the *primary* family (8.4px of monospace) while painting a fallback glyph
+    // 13.4px wide, so the two disagree by half their difference. Plain
+    // `anchors.centerIn` does centre the advance, and lands 1.7px the other
+    // way, because the ink is not centred inside the advance either.
     //
-    // Filling the button and letting Text align inside it keeps the item on
-    // integer coordinates and hands the centring to the font's own metrics.
-    // (TextMetrics was tried first and reported the ink as already centred
-    // *within the item* -- which is what pointed at the item's placement
-    // rather than the glyph's bearings.)
-    Text {
+    // Ui.OpticalGlyph measures the painted bounds and shifts by the difference:
+    // 0.3px, on the same capture. It is the bar's component, doing here what it
+    // does to the status glyphs there.
+    Ui.OpticalGlyph {
       anchors.fill: parent
-      horizontalAlignment: Text.AlignHCenter
-      verticalAlignment: Text.AlignVCenter
       text: rb.glyph
-      font.family: Style.font.family
-      font.pixelSize: Style.font.icon
+      fontFamily: Style.font.family
+      fontSize: Style.font.icon
       color: root.textOnSurface
     }
 
@@ -1041,13 +1103,29 @@ Item {
       color: Util.alpha(Color.background, 0.72 * root.progress)
       visible: root.progress > 0
 
-      // Only live once the shade is all the way open. During the drag the
-      // finger already owns the surface, and a MouseArea competing for it would
-      // fire a dismiss the moment the drag ended anywhere over the scrim.
+      // Tap-to-dismiss *and* the close drag (H2), because the band of scrim
+      // left below the sheet is the bottom ~70px of the screen -- which is
+      // where a thumb starts an up-swipe. Wired to the same trio as the sheet
+      // rather than to `clicked` alone: a MouseArea that only answers `clicked`
+      // still consumes the whole gesture, so an up-drag begun here moved
+      // nothing at all and then dismissed the shade outright on release. The
+      // shade appeared to have no close animation, and it had none -- it was
+      // being closed by a tap that happened to have travelled 250px.
+      //
+      // Gated on `progress`, NOT on `opened`, and that is the same trap the
+      // drawer's keyboardFocus documents. `opened` goes false on the first
+      // frame of the drag; an area that disables mid-gesture delivers
+      // `canceled`, which snapped the sheet back to fully open and then dropped
+      // it on a canned 220ms ramp. Holding it live until the sheet is all the
+      // way down keeps the gesture intact.
       MouseArea {
         anchors.fill: parent
-        enabled: root.opened
-        onClicked: root.dismiss()
+        enabled: root.progress > 0
+        onPressed: mouse => root.sheetPress(this, mouse)
+        onPositionChanged: mouse => root.sheetMove(this, mouse)
+        onReleased: root.sheetRelease()
+        onCanceled: root.sheetCancel()
+        onClicked: if (!root.sheetWasDrag) root.dismiss()
       }
     }
 
@@ -1110,12 +1188,14 @@ Item {
               text: Qt.formatDateTime(shadeClock.date, "H:mm")
               font.family: Style.font.family
               font.pixelSize: Style.font.heading
+              font.weight: root.textWeight
               color: root.textOnSurface
             }
             Text {
               text: Qt.formatDateTime(shadeClock.date, "dddd d MMMM")
               font.family: Style.font.family
               font.pixelSize: Style.font.caption
+              font.weight: root.textWeight
               color: root.subdued
             }
           }
@@ -1239,13 +1319,15 @@ Item {
             spacing: Style.space(10)
 
             Column {
-              width: parent.width - Style.space(108)
+              // Whatever the three transport slots and the four gaps leave.
+              width: parent.width - root.glyphSlot * 3 - Style.space(10) * 3
               anchors.verticalCenter: parent.verticalCenter
               Text {
                 width: parent.width
                 text: root.media ? root.media.title : ""
                 font.family: Style.font.family
                 font.pixelSize: Style.font.bodySmall
+                font.weight: root.textWeight
                 color: root.textOnSurface
                 elide: Text.ElideRight
               }
@@ -1254,6 +1336,7 @@ Item {
                 text: root.media ? root.media.artist : ""
                 font.family: Style.font.family
                 font.pixelSize: Style.font.caption
+                font.weight: root.textWeight
                 color: root.subdued
                 elide: Text.ElideRight
               }
@@ -1265,12 +1348,14 @@ Item {
                 { glyph: "󰒧", action: "playPause" },
                 { glyph: "󰒜", action: "next" }
               ]
-              delegate: Text {
+              delegate: Ui.OpticalGlyph {
                 required property var modelData
                 anchors.verticalCenter: parent.verticalCenter
+                width: root.glyphSlot
+                height: root.glyphSlot
                 text: modelData.glyph
-                font.family: Style.font.family
-                font.pixelSize: Style.font.iconLarge
+                fontFamily: Style.font.family
+                fontSize: Style.font.iconLarge
                 color: root.textOnSurface
                 MouseArea {
                   anchors.fill: parent
@@ -1301,6 +1386,7 @@ Item {
             text: "Notifications"
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
+            font.weight: root.textWeight
             color: root.subdued
           }
 
@@ -1311,6 +1397,7 @@ Item {
             text: "Clear all"
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
+            font.weight: root.textWeight
             color: root.accent
             MouseArea {
               anchors.fill: parent
@@ -1416,6 +1503,7 @@ Item {
                 text: card.modelData.app || ""
                 font.family: Style.font.family
                 font.pixelSize: Style.font.caption
+                font.weight: root.textWeight
                 color: root.subdued
                 elide: Text.ElideRight
               }
@@ -1425,7 +1513,10 @@ Item {
                 text: card.modelData.summary || ""
                 font.family: Style.font.family
                 font.pixelSize: Style.font.bodySmall
-                font.bold: true
+                // A step above the rest of the shade rather than a step above
+                // Regular: with everything else at DemiBold, `font.bold` is
+                // what still separates the summary from its own body text.
+                font.weight: Font.Bold
                 color: root.textOnSurface
                 elide: Text.ElideRight
               }
@@ -1435,6 +1526,7 @@ Item {
                 text: card.modelData.body || ""
                 font.family: Style.font.family
                 font.pixelSize: Style.font.bodySmall
+                font.weight: root.textWeight
                 color: Util.alpha(root.textOnSurface, 0.85)
                 wrapMode: Text.Wrap
                 maximumLineCount: 3
@@ -1463,6 +1555,7 @@ Item {
 
       onPressed: pts => {
         if (pts.length === 0) return
+        root.dragTrace = []
         root.startY = pts[0].sceneY
         root.lastY = pts[0].sceneY
         root.lastT = Date.now()

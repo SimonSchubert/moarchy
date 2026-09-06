@@ -56,10 +56,11 @@ fi
 mkdir -p "$CACHE"
 cd "$CACHE"
 
-# IMAGE_FILE lets you flash a locally modified image -- one with wifi preseeded
-# by scripts/patch-image.sh, or eventually one this project builds itself.
-# Checksum verification is skipped for it by definition: it no longer matches
-# upstream.
+# IMAGE_FILE flashes a local image rather than downloading DanctNIX's -- which
+# is how you flash the one ./scripts/build-image.sh produces. Checksum
+# verification is skipped for it by definition: it is not upstream's image and
+# has no entry in upstream's manifest. build-image.sh writes its own .sha256
+# next to the file.
 if [[ -n ${IMAGE_FILE:-} ]]; then
   [[ -f $IMAGE_FILE ]] || { echo "No such image: $IMAGE_FILE" >&2; exit 1; }
   IMAGE="$IMAGE_FILE"
@@ -136,22 +137,33 @@ sync
 echo "==> ejecting"
 diskutil eject "$DISK" || true
 
-cat <<'NEXT'
+# The closing instructions depend on which image was written. A moarchy image
+# creates its own user with a locked password and comes up in the session on
+# its own; DanctNIX's barebone image needs the whole provisioning path.
+if [[ $IMAGE == *moarchy-pinephone-* ]]; then
+  cat <<'NEXT'
+
+Done. Put the card in the PinePhone and power it on.
+
+That is the whole procedure. The image has no default password to change --
+the account's password is locked and tty1 autologin brings the session up
+without one. The rootfs grows to fill the card on first boot.
+
+To get a shell, open the terminal on the phone. To set a password so you can
+log in over SSH, run `passwd` there.
+NEXT
+else
+  cat <<'NEXT'
 
 Done. Next:
   1. Put the card in the PinePhone and power it on.
-  2. Get it on wifi. If the image was preseeded by scripts/patch-image.sh it is
-     already there; otherwise attach a USB keyboard once and run `sudo nmtui`.
+  2. Get it on wifi -- attach a USB keyboard once and run `sudo nmtui`.
   3. ssh alarm@<its address>      (password: 123456; root password: root)
      Find the address from your router, or with `arp -a`.
-  4. Change both passwords, then:
-
-       sudo pacman-key --init && sudo pacman-key --populate archlinuxarm
-       sudo pacman -Syu
-
-  5. From the Mac, build the packages and install them:
+  4. Change both passwords, then, from the Mac:
 
        ./scripts/provision.sh build
        ./scripts/provision.sh deploy
        ./scripts/provision.sh install
 NEXT
+fi

@@ -4,7 +4,8 @@ How the three repos, the packages, the package repository and the image builder
 fit together, and what has to be true before a PinePhone image can be built at
 all.
 
-Status: **M1 and M2 done (2026-09-06); M3–M4 proposed, not agreed.** The
+Status: **M1, M2 and M4 built (2026-09-06); M3 not started. I4 — booting
+on real hardware — is the one acceptance criterion still unmet.** The
 acceptance criteria are the contract to argue with before any of them is; where
 one is my reading rather than your decision it is marked **?**. Each AC below
 carries its state, and §11 has the per-milestone summary.
@@ -242,23 +243,76 @@ phone.
 ## 7. The image
 
 **I1** `image/` produces `moarchy-pinephone-<date>.img.xz` and a `.sha256`,
-from a single command, with no phone attached.
+from a single command, with no phone attached. **Met 2026-09-06:**
+`./scripts/build-image.sh` → **1.2 GB compressed**, 747 packages, and a
+`.packages` manifest beside it (V4).
 
 **I2** The rootfs is built by `pacstrap`-ing into a directory: DanctNIX's base
 plus `moarchy-meta` from the `moarchy` repo. It is never produced by
 booting a phone and imaging the card back.
 
+> The base set is DanctNIX's own explicitly-installed list, read out of
+> `/var/lib/pacman/local` in their release image, rather than a reading of what
+> the device needs. Hand-picking it was tried and was wrong: `linux-megi
+> uboot-pinephone danctnix-tweaks` looks like the device stack and leaves out
+> `linux-firmware-realtek`, which is the wifi. `device-pine64-pinephone` is
+> their meta package and pulls all of it, so a device fix from them arrives
+> without an edit here.
+>
+> The repo is a local `file://` one built with `repo-add`, not a published
+> HTTP one — which is the only reason §7 could be done before §6. `pacstrap`
+> does not care which it is.
+
 **I3** The boot chain — u-boot SPL at 128 KiB, the FAT `boot` partition, the
-kernel and DTB — is reused from DanctNIX's packages, not rebuilt. **?** The
-mechanism by which their images assemble it is unverified; this AC may become
-"copy the boot partition and pre-GPT region out of their release image
-verbatim", which is honest and works.
+kernel and DTB — is reused from DanctNIX's packages, not rebuilt. **Resolved
+2026-09-06: assemblable from packages; nothing has to be copied verbatim.**
+
+> Measured against the cached `archlinux-pinephone-barebone-20251224.img`:
+>
+> | | |
+> | --- | --- |
+> | `uboot-pinephone` 2024.01-1 | `/boot/u-boot-sunxi-with-spl-pinephone-{492,528,552,624}.bin`, `boot.txt`, `mkscr`, and `/usr/bin/update-u-boot` |
+> | `linux-megi` 6.15.6-2 | `/boot/Image.gz` and the DTBs |
+> | `uboot-tools` | `mkimage`, which `mkscr` turns `boot.txt` into `boot.scr` with |
+> | mkinitcpio | `initramfs-linux.img`, from the preset `linux-megi` ships |
+>
+> The SPL on the shipped image is a **byte-exact match** for the `528` variant —
+> `update-u-boot`'s `default_freq` — written at byte 131072, which is its
+> `bs=128k seek=1` for a GPT disk (`bs=8k seek=1` is the DOS-label path, and is
+> why the magic is not at 8 KiB).
+>
+> `boot.txt` also settles a question §7 would otherwise have had to: it selects
+> the root device at boot with `root=/dev/mmcblk${linux_mmcdev}p${rootpart}`
+> and `rootwait`, choosing partition 2 when one exists, and handles SD vs eMMC
+> itself. So the image needs no UUID rewriting and no per-device boot script.
 
 **I4** The image boots to a Sway session on a real PinePhone with no SSH step in
-between. This is the acceptance test for the whole document.
+between. This is the acceptance test for the whole document. **NOT MET — it
+needs the phone, and nothing below substitutes for it.**
+
+> What has been verified without hardware, by `./scripts/verify-image.sh`: the
+> SPL magic at byte 131076, the GPT partition starts, `Image.gz` / `boot.scr`
+> (u-boot magic checked) / the 1.2 DTB / the initramfs in the boot partition,
+> every packaged path the shell and sway read, 9 plugins, 5 QML files on
+> `Quickshell.I3` and 0 on `Quickshell.Hyprland`, all three units enabled, both
+> accounts locked, no credentials — and then both first-boot scripts actually
+> **run** in a chroot, with the theme proven to generate the `sway.conf` that
+> `/usr/share/moarchy/config/sway/config` includes and the `colors.toml` that
+> `moarchy-keyboard` reads.
+>
+> What it cannot prove: that the A64 BROM accepts this SPL, that megi's kernel
+> brings up this panel, or that sway starts on a Mali-400.
+>
+> `image/negative-test.sh` is why the green run means anything. It plants six
+> defects in a copy — a corrupted SPL, a leaked wifi profile, the debug marker,
+> a real password hash, a deleted plugin, a disabled unit — and asserts the
+> verifier reports each and exits non-zero. Written because four checks in the
+> first version of the suite were wrong in both directions: two passed
+> vacuously, and two reported a correctly enabled unit as missing because `-e`
+> follows an absolute symlink out of the mounted image.
 
 **I5** The USB gadget is left as DanctNIX ships it. Access to a running phone is
-over wifi.
+over wifi. **Met:** `danctnix-usb-tethering` is installed unmodified.
 
 > The RNDIS→CDC-ECM switch was tried and abandoned: the patch applied cleanly
 > and `usb_f_ecm` really is built into the kernel, but macOS binds the interface
@@ -273,14 +327,34 @@ keyboard. The PSK comes from the environment, never a flag or a checked-in file.
 default password. Debug images are never published.
 
 **I7** The rootfs partition is sized to its contents plus slack, and grows to
-fill the card on first boot.
+fill the card on first boot. **Met:** `moarchy-grow-rootfs.service` runs before
+`systemd-user-sessions`, grows the last partition with `sfdisk` and follows it
+with `resize2fs`, then stamps `/var/lib/moarchy/grown`.
+
+> The size is sensitive to one thing that is easy to miss: `pacstrap` leaves
+> every downloaded package in `/var/cache/pacman/pkg`, 1.26 GiB of it, and
+> sizing the partition before clearing it puts that straight into the download.
 
 **I8** First boot creates the user, and does not ship the default `123456`
-password of the DanctNIX image.
+password of the DanctNIX image. **Met, by there being no password at all:** the
+account is created at build time with a *locked* password, and root is locked
+too.
+
+> tty1 autologin does not consult a password, so the phone comes up usable with
+> no secret to leak or change; `sshd` is disabled and password authentication
+> is off if it is enabled, so a locked password cannot be attacked remotely.
+> `sudo` is passwordless for the account, which concedes nothing on a device
+> with no disk encryption — anyone holding the phone can read the card. `passwd`
+> from the phone's own terminal is how a user opts into SSH.
 
 **I9** `scripts/patch-image.sh` is deleted once I6 holds. Preseeding belongs in
 the builder; editing someone else's ext4 with `debugfs` is only worth doing
-while the image is not ours.
+while the image is not ours. **Met 2026-09-06.**
+
+> `debugfs` earned its keep on the way out, though: reading `/etc/pacman.conf`
+> and `/var/lib/pacman/local` straight out of the cached release image is what
+> identified the `[danctnix]` repo and the device package set, after three
+> guesses at repo URLs returned nothing.
 
 ---
 
@@ -471,7 +545,21 @@ is then mostly partition arithmetic.
 
 **M3 — The repo.** R1–R7. Publishes what M2 defined.
 
-**M4 — The image.** I1–I9. Consumes what M3 published.
+**M4 — The image. Built 2026-09-06, ahead of M3.** I1–I9, except I4.
+
+> The sequencing said M3 first because "M4 consumes what M3 published". A
+> *local* `file://` repo built with `repo-add` satisfies that just as well —
+> `pacstrap` does not care — so the image did not have to wait for publishing.
+> What M3 is still needed for is the other consumer in §3: `pacman -Syu` on a
+> phone already in the field.
+>
+> Four defects were found by building it, each of which would have shipped:
+> a hand-picked device package set that omitted `linux-firmware-realtek` and so
+> had **no wifi**; `jack2` silently chosen over `pipewire-jack` by a provider
+> prompt with no tty; `OMARCHY_PATH` set but not exported, so the theme never
+> generated and the phone would have come up with no colours and no keyboard
+> palette; and upstream's `install/` excluded from `omarchy-config` while a
+> dozen runtime `omarchy-*` scripts source out of it.
 
 Naming (§10) was not a milestone. It happened before M3 — 2026-09-05, ahead of
 M1 — which is the only reason it cost 80 files rather than every phone.

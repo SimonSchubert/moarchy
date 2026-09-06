@@ -151,54 +151,46 @@ moarchy-selftest --gestures   # drives real synthetic touch via /dev/uinput
 
 ## Install
 
-**1. Flash the card** (on the Mac):
+Write the image to an SD card and put it in the phone. That is the whole
+procedure -- there is no installer to run on the device.
 
 ```bash
-# Optional: put wifi credentials in the image so it joins on first boot.
-WIFI_SSID='MyNetwork' WIFI_PSK='secret' \
-  ./scripts/patch-image.sh ~/Downloads/moarchy/archlinux-pinephone-barebone-20251224.img.xz
-
 ./scripts/flash-sd.sh /dev/diskN     # run `diskutil list` first to find N
 ```
 
-**2. Boot and get a shell.** Access is over wifi. If you preseeded it above the
-phone is already on the network — find its address from your router or with
-`arp -a`. Otherwise attach a USB keyboard once and run `sudo nmtui`.
+The image carries no password. The account's password is locked and tty1
+autologin brings the session up without one, so there is nothing to change on
+first boot; the rootfs grows to fill the card while it comes up. Set a password
+with `passwd` from the terminal on the phone if you want to log in over SSH.
+
+### Building the image yourself
 
 ```bash
-ssh alarm@<its address>      # password 123456; root password root
+./scripts/provision.sh build      # the packages, in an aarch64 container
+./scripts/build-image.sh          # -> images/moarchy-pinephone-<date>.img.xz
 ```
 
-Change both passwords.
+Everything comes from the commits pinned in `manifest.toml`, so two runs a
+month apart produce the same image. The package build produces nine:
+`moarchy-keyboard` and `moarchy-store-git` from their own repos, `yay`,
+`xdg-terminal-exec`, `ttf-ia-writer` and `cbonsai` from the AUR, and `moarchy`,
+`omarchy-config` and `moarchy-meta` from `pkgbuilds/`.
 
-> USB networking is not an option from macOS. DanctNIX's gadget presents RNDIS,
-> which macOS cannot drive, and switching it to CDC-ECM gets the interface bound
-> but never carrying. That path was tried and removed.
+For a debug image that joins your wifi on first boot and enables sshd:
 
-**3. Build the packages** (on the Mac, where an aarch64 container runs
-natively). Everything comes from the commits named in `manifest.toml`, so two
-runs a month apart produce the same packages:
+```bash
+WIFI_SSID='MyNetwork' WIFI_PSK='secret' ./scripts/build-image.sh
+```
+
+That one carries your PSK. Do not publish it.
+
+### Developing against a phone you already have
 
 ```bash
 ./scripts/provision.sh build
-```
-
-That builds nine: `moarchy-keyboard` and `moarchy-store-git` from their own
-repos, `yay`, `xdg-terminal-exec`, `ttf-ia-writer` and `cbonsai` from the AUR,
-and `moarchy`, `omarchy-config` and `moarchy-meta` from `pkgbuilds/`.
-
-**4. Install:**
-
-```bash
 ./scripts/provision.sh deploy     # scp the packages over
 ./scripts/provision.sh install    # one pacman transaction
 ```
-
-There is no installer to run on the phone any more. `pacman` places every file,
-and two systemd units do the rest: `moarchy-firstboot` (group membership and
-tty1 autologin) and `moarchy-user-setup` (the three app configs that only ever
-read `~/.config`, and the initial theme). Everything else is read from a system
-path, which is what makes upgrading the package upgrade the phone.
 
 ## What you get, and what you don't
 

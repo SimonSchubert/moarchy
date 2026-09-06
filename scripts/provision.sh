@@ -12,7 +12,7 @@
 # Configuration (environment):
 #   PHONE       ssh target                (default alarm@192.168.0.18, over wifi)
 #   DISK        SD card device            (e.g. /dev/disk28) -- required for `flash`
-#   WIFI_SSID   preseed this wifi network into the image (optional)
+#   WIFI_SSID   preseed this wifi network into the image we build (optional)
 #   WIFI_PSK    its password (pass via env, never as an argument)
 #
 # Wifi is the only way in. USB networking to a Mac does not work: DanctNIX's
@@ -59,15 +59,18 @@ step_prereqs() {
 }
 
 step_image() {
-  say "preseed wifi into the image"
-  if [[ -z ${WIFI_SSID:-} || -z ${WIFI_PSK:-} ]]; then
-    info "WIFI_SSID/WIFI_PSK not set -- skipping."
-    info "  The image is flashed as downloaded; join the network with nmtui on"
-    info "  the phone, which needs a USB keyboard once."
-    return 0
+  say "build the moarchy image"
+  # This used to run scripts/patch-image.sh, which edited DanctNIX's ext4 with
+  # debugfs to drop a wifi profile in. That was surgery on someone else's image
+  # and only worth doing while the image was not ours (docs/structure.md I9).
+  # Preseeding is a build input now.
+  if [[ -n ${WIFI_SSID:-} && -n ${WIFI_PSK:-} ]]; then
+    info "debug image: wifi '$WIFI_SSID' will be preseeded and sshd enabled"
+    info "  do not publish the result"
+  else
+    info "publishable image: no credentials, no preseeded network"
   fi
-  info "wifi preseed: $WIFI_SSID"
-  ./scripts/patch-image.sh "$CACHE/archlinux-pinephone-barebone-${RELEASE}.img.xz"
+  ./scripts/build-image.sh
 }
 
 step_flash() {
