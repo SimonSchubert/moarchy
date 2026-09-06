@@ -190,37 +190,61 @@ else
   fi
 fi
 
-# shade S6/S6b. The Wi-Fi picker, from both ends: the shade's long press and
-# the Settings `net.wifi` row have to name one command, and it has to be one
-# that can talk to the network stack this phone actually runs.
+# shade S6/S6b/S6c. The two pickers, from both ends: the shade's long press and
+# the matching Settings row have to name one thing, and the two pairs no longer
+# name the same *kind* of thing.
 #
 # The parity half is not pedantry -- the two were written apart and drifted
 # apart, and neither fails loudly when it is wrong: an action row opens a
 # terminal that closes again, which reads as the TUI having quit.
+#
+# This check used to read one command out of each side, and stopped being true
+# when S6b turned the Wi-Fi picker into a screen. Both sides now name the plugin
+# `moarchy.wifi` and differ only in returnTo, and neither is a command: the
+# shade's `wifiPicker` is deliberately the empty string, so a sed for
+# `floating-terminal-with-presentation` fell through to the *Bluetooth* tile and
+# compared bluetui against a row that names no command at all. So: Wi-Fi is
+# checked as a plugin id, and the command-parity it used to do moves to
+# Bluetooth, which is still one TUI on both sides (S6c).
 shade_qml="$(plugin_dir moarchy.shade)/Shade.qml"
 pages_js="$(plugin_dir moarchy.settings)/Pages.js"
-shade_picker=$(sed -n 's/.*floating-terminal-with-presentation \([a-z0-9-]*\)".*/\1/p' "$shade_qml" | head -1)
-row_picker=$(sed -n '/label: "Wi-Fi networks"/,/}/s/.*run: "\([a-z0-9-]*\)".*/\1/p' "$pages_js" | head -1)
-# An absent file and a renamed command both leave the sed empty, and they want
-# opposite things done about them. Separated, so the message does not send
-# someone hunting for a rename that has not happened.
 if [[ ! -f $shade_qml || ! -f $pages_js ]]; then
-  no "no plugin to read the Wi-Fi picker out of ($shade_qml, $pages_js)" \
-     "neither the package nor an override has these; S6b proves nothing"
-elif [[ -z $shade_picker || -z $row_picker ]]; then
-  no "cannot read the Wi-Fi picker out of the shade (${shade_picker:-none}) or Settings (${row_picker:-none})" \
-     "one of the two stopped naming a command the way this check reads it"
-elif [[ $shade_picker != "$row_picker" ]]; then
-  no "the shade opens '$shade_picker' and Settings opens '$row_picker'" \
-     "S6b: one picker behind both entry points"
-elif ! command -v "$shade_picker" >/dev/null 2>&1; then
-  no "the Wi-Fi picker '$shade_picker' is not on PATH" \
-     "the long press would open a terminal that closes again"
-elif [[ $shade_picker == impala* ]] && ! systemctl is-active --quiet iwd; then
-  no "the Wi-Fi picker is impala and iwd is not running" \
-     "impala is an iwd client; D-Bus would start iwd to fight NetworkManager for wlan0"
+  no "no plugin to read the pickers out of ($shade_qml, $pages_js)" \
+     "neither the package nor an override has these; S6b and S6c prove nothing"
 else
-  ok "the Wi-Fi picker is '$shade_picker' from both the shade and Settings"
+  # S6b. Both ends summon moarchy.wifi. Read as an id, because a dotted plugin
+  # id is exactly what the old `[a-z0-9-]*` could not match.
+  shade_wifi=$(sed -n 's/.*summon("\(moarchy\.[a-z]*\)".*/\1/p' "$shade_qml" | head -1)
+  row_wifi=$(sed -n '/label: "Wi-Fi networks"/,/}/s/.*summon \(moarchy\.[a-z]*\).*/\1/p' "$pages_js" | head -1)
+  if [[ -z $shade_wifi || -z $row_wifi ]]; then
+    no "cannot read the Wi-Fi picker out of the shade (${shade_wifi:-none}) or Settings (${row_wifi:-none})" \
+       "one of the two stopped naming a plugin the way this check reads it"
+  elif [[ $shade_wifi != "$row_wifi" ]]; then
+    no "the shade summons '$shade_wifi' and Settings summons '$row_wifi'" \
+       "S6b: one picker behind both entry points"
+  elif [[ $shade_wifi != "moarchy.wifi" ]]; then
+    no "the Wi-Fi picker is '$shade_wifi', not moarchy.wifi" \
+       "S6b: the picker is a screen with tap targets, not a terminal"
+  else
+    ok "the Wi-Fi picker is moarchy.wifi from both the shade and Settings"
+  fi
+
+  # S6c. Bluetooth is the pair that is still a TUI, so it keeps the command
+  # parity and the "is it actually on PATH" half that goes with it.
+  shade_bt=$(sed -n 's/.*floating-terminal-with-presentation \([a-z0-9-]*\)".*/\1/p' "$shade_qml" | head -1)
+  row_bt=$(sed -n '/label: "Bluetooth devices"/,/}/s/.*run: "\([a-z0-9-]*\)".*/\1/p' "$pages_js" | head -1)
+  if [[ -z $shade_bt || -z $row_bt ]]; then
+    no "cannot read the Bluetooth picker out of the shade (${shade_bt:-none}) or Settings (${row_bt:-none})" \
+       "one of the two stopped naming a command the way this check reads it"
+  elif [[ $shade_bt != "$row_bt" ]]; then
+    no "the shade opens '$shade_bt' and Settings opens '$row_bt'" \
+       "S6c: one picker behind both entry points"
+  elif ! command -v "$shade_bt" >/dev/null 2>&1; then
+    no "the Bluetooth picker '$shade_bt' is not on PATH" \
+       "the long press would open a terminal that closes again"
+  else
+    ok "the Bluetooth picker is '$shade_bt' from both the shade and Settings"
+  fi
 fi
 
 # --- the gesture plugin -----------------------------------------------------
@@ -310,7 +334,7 @@ fi
 # declared as a service gets two surfaces, and for the shade that means two
 # grab strips fighting over the top edge.
 for plugin in moarchy.drawer moarchy.recents moarchy.shade \
-              moarchy.themes moarchy.settings moarchy.device; do
+              moarchy.themes moarchy.settings moarchy.device moarchy.wifi; do
   k=$(python3 -c '
 import json, os, sys
 p = os.path.join(sys.argv[1], "manifest.json")
@@ -1480,12 +1504,24 @@ if [[ ${1:-} == "--settings" ]]; then
   # --- E. bridged launches --------------------------------------------------
   plug_pages="$(plugin_dir moarchy.settings)/Pages.js"
 
+  # `emoji`, not `screensaver`: that row was dropped on 2026-09-07 because
+  # omarchy-launch-screensaver opens with `omarchy-cmd-missing ttfx && exit 1`
+  # and ttfx has no aarch64 build. `activate` on a row that is not there does
+  # nothing at all, so lastLaunch kept whatever block C left in it and E1 failed
+  # reading `moarchy-toggle-bar on` -- a deleted row and a broken activate with
+  # the same symptom. Hence the existence test first: it separates the two, and
+  # without it this check reports on the wrong one.
   s dryRun 1 >/dev/null
   s openAt tools >/dev/null; sleep 2
-  s activate screensaver >/dev/null; sleep 1
-  [[ $(s lastLaunch) == "omarchy-launch-screensaver force" ]] \
-    && ok "E1 a bridged row records its command and runs nothing" \
-    || no "E1 lastLaunch was '$(s lastLaunch)'" "expected: omarchy-launch-screensaver force"
+  if ! s rows | awk -F'\t' '$1=="emoji"' | grep -q .; then
+    no "E1 there is no 'emoji' row on the tools page" \
+       "the row moved or was dropped; activate would record nothing and E1 would blame the bridge"
+  else
+    s activate emoji >/dev/null; sleep 1
+    [[ $(s lastLaunch) == "omarchy-menu-emoji" ]] \
+      && ok "E1 a bridged row records its command and runs nothing" \
+      || no "E1 lastLaunch was '$(s lastLaunch)'" "expected: omarchy-menu-emoji"
+  fi
   s dryRun 0 >/dev/null
 
   missing=""
