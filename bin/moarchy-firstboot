@@ -47,6 +47,13 @@ ExecStart=
 ExecStart=-/sbin/agetty -o '-p -f -- \\u' --noclear --autologin $USER_NAME %I \$TERM
 EOF
 
+# sshd is not enabled here, but generate its host keys anyway: without them the
+# unit starts, logs "sshd: no hostkeys available -- exiting" and stops, while
+# `systemctl enable --now` still reports success. Anyone turning ssh on later
+# then has an enabled service that never listens, which is a confusing way to
+# lose an afternoon.
+ssh-keygen -A 2>/dev/null || echo "!! could not generate ssh host keys" >&2
+
 systemctl daemon-reload
 systemctl enable NetworkManager bluetooth 2>/dev/null ||
   echo "!! could not enable NetworkManager/bluetooth" >&2

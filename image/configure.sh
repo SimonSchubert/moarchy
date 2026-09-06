@@ -63,6 +63,20 @@ sed -i 's/^#\(en_US.UTF-8 UTF-8\)/\1/' "$ROOTDIR/etc/locale.gen"
 arch-chroot "$ROOTDIR" locale-gen >/dev/null 2>&1 || true
 echo 'LANG=en_US.UTF-8' > "$ROOTDIR/etc/locale.conf"
 
+# --- DNS -------------------------------------------------------------------
+# systemd ships /etc/resolv.conf as a symlink to systemd-resolved's stub, and
+# nsswitch.conf already lists `resolve` first. With resolved disabled that
+# symlink dangles, so NetworkManager knows the nameserver and has nowhere to
+# publish it: raw IPs route, names do not resolve, and `pacman -Syu` fails with
+# "Could not resolve host". A phone that cannot update itself is not finished.
+#
+# Enabling resolved is the coherent fix rather than pointing resolv.conf
+# somewhere else, because the nsswitch line the base image ships already
+# expects it.
+arch-chroot "$ROOTDIR" systemctl enable systemd-resolved >/dev/null 2>&1 ||
+  say "!! could not enable systemd-resolved -- the image will have no DNS"
+say "systemd-resolved enabled (without it the image resolves no names)"
+
 # --- keep the journal across reboots ---------------------------------------
 # journald's default Storage=auto writes to /run (volatile) unless
 # /var/log/journal exists, so a phone that fails to bring its session up loses

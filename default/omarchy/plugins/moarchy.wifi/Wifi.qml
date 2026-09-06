@@ -136,7 +136,11 @@ Item {
   }
 
   function signalGlyph(strength) {
-    var icons = ["󱄯", "󱄟", "󱄢", "󱄥", "󱄨"]
+    // Codepoints U+F092F, U+F091F, U+F0922, U+F0925, U+F0928 -- upstream's
+    // exact array. Typed by hand the first time as U+F11xx, which is a real
+    // glyph range in this font, so the rows rendered a calendar and a bicycle
+    // instead of signal bars rather than showing tofu.
+    var icons = ["󰤯", "󰤟", "󰤢", "󰤥", "󰤨"]
     return icons[Math.max(0, Math.min(4, Math.ceil(strength / 20) - 1))]
   }
 
@@ -150,8 +154,21 @@ Item {
   // The join in flight. Held by ssid rather than by object for the same reason
   // the rows are primitives.
   property string busySsid: ""
+
+  // Whether the passphrase field currently holds focus, tracked here rather
+  // than read off the field.
+  //
+  // The field lives inside a ListView delegate, so it does not exist at the
+  // window's scope -- and there is not one of it, there is one per row. The
+  // drawer can write `searchField.activeFocus` because its search field is a
+  // sibling in the same Column; copying that shape here produced
+  //   ReferenceError: passField is not defined
+  // at load, which cost the surface its bottom margin binding.
+  property bool passphraseFocused: false
   property string errorSsid: ""
   property string errorText: ""
+
+  onExpandedSsidChanged: if (root.expandedSsid === "") root.passphraseFocused = false
 
   function rowTapped(row) {
     if (root.busySsid !== "") return          // one join at a time
@@ -320,7 +337,7 @@ Item {
     // go, or the field ends up behind it. Keyed on activeFocus rather than on
     // the keyboard's visibility, because focus is the signal that arrives
     // first. Same arrangement as the drawer's search field.
-    margins.bottom: passField.activeFocus ? 0 : -root.gestureStrip
+    margins.bottom: root.passphraseFocused ? 0 : -root.gestureStrip
 
     // Exclusive, not OnDemand: the passphrase field needs the surface to hold
     // keyboard focus for Qt to activate text-input-v3, and moarchy-keyboard
@@ -569,6 +586,10 @@ Item {
                   text: root.passphrase
                   onTextChanged: root.passphrase = text
                   onAccepted: root.join(rowItem.modelData.ssid, root.passphrase)
+                  onActiveFocusChanged: root.passphraseFocused = activeFocus
+                  // A delegate destroyed while focused never reports losing it,
+                  // which would strand the surface with no bottom inset.
+                  Component.onDestruction: if (activeFocus) root.passphraseFocused = false
                 }
               }
 

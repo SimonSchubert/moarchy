@@ -132,11 +132,37 @@ say "writing"
 # -w is what makes it read-write; without it every command above is a no-op
 # that still prints as though it worked.
 "$DEBUGFS" -w -f "$CMDS" "$PART" > "$WORK/log" 2>&1 || true
-# `rm` on a missing file and `mkdir` on an existing one are both expected here.
-if grep -vE "File not found|File exists|^debugfs|^$|^rm |^write |^sif |^mkdir |^symlink " "$WORK/log" | grep -q .; then
-  info "debugfs said:"
-  grep -vE "File not found|File exists|^debugfs|^$" "$WORK/log" | sed 's/^/      /' | head -20
+
+# Show everything debugfs said except the two expected complaints. An earlier
+# version filtered so aggressively that a run which created ~/.ssh and ~/pkgs as
+# FILES rather than directories -- so every write beneath them failed -- printed
+# nothing at all and reported success. Whatever went wrong must be visible.
+grep -vE "File not found while trying to resolve|File exists|^debugfs [0-9]|^debugfs: (rm|write|sif|mkdir|symlink) |^$" \
+  "$WORK/log" | sed 's/^/      /' | head -30
+
+# And then prove it, rather than trusting the command file. Each destination is
+# stat'd back out of the filesystem and its TYPE checked: the failure that cost
+# an afternoon was a directory that turned out to be a regular file, which no
+# amount of reading debugfs's output would have shown.
+say "verifying what actually landed"
+verify_type() {  # verify_type <path> <directory|regular>
+  got=$("$DEBUGFS" -R "stat $1" "$PART" 2>/dev/null | sed -n 's/.*Type: *\([a-z]*\).*/\1/p' | head -1)
+  if [ "$got" = "$2" ]; then info "ok   $1 ($got)"
+  else info "FAIL $1 is '${got:-missing}', expected $2"; VERIFY_FAILED=1; fi
+}
+VERIFY_FAILED=0
+[ -n "${WIFI_SSID:-}" ] && verify_type "/etc/NetworkManager/system-connections/$WIFI_SSID.nmconnection" regular
+if [ -f "$SSH_KEY" ]; then
+  verify_type "/home/$PHONE_USER/.ssh" directory
+  verify_type "/home/$PHONE_USER/.ssh/authorized_keys" regular
 fi
+if (( ${#PACKAGES[@]} )); then
+  verify_type "/home/$PHONE_USER/pkgs" directory
+  for p in "${PACKAGES[@]}"; do
+    verify_type "/home/$PHONE_USER/pkgs/$(basename "$p")" regular
+  done
+fi
+[ "$VERIFY_FAILED" = 0 ] || die "some writes did not land -- see above; nothing here is safe to rely on"
 
 # --- reconcile and verify --------------------------------------------------
 # debugfs updates inodes and directory entries but does NOT reconcile the block

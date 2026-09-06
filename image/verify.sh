@@ -105,6 +105,16 @@ have /usr/share/omarchy/install/helpers/browser-policy.sh
 have /usr/share/omarchy/shell/shell.qml
 # Without /var/log/journal, a boot that fails leaves nothing to read next time.
 have /var/log/journal
+# The image shipped once with a dangling /etc/resolv.conf and resolved disabled:
+# raw IPs routed, no name resolved, and pacman could not reach a mirror. Check
+# both halves, because either alone looks fine.
+if [ -e "$R/etc/systemd/system/dbus-org.freedesktop.resolve1.service" ] ||
+   [ -L "$R/etc/systemd/system/multi-user.target.wants/systemd-resolved.service" ] ||
+   [ -e "$R/etc/systemd/system/multi-user.target.wants/systemd-resolved.service" ]; then
+  ok "systemd-resolved enabled (so /etc/resolv.conf resolves)"
+else
+  no "systemd-resolved NOT enabled -- /etc/resolv.conf will dangle and no name will resolve"
+fi
 have /etc/systemd/journald.conf.d/10-moarchy.conf
 
 # Checked here, in the image AS SHIPPED, not only after the behaviour section
