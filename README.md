@@ -154,21 +154,73 @@ moarchy-selftest --gestures   # drives real synthetic touch via /dev/uinput
 
 ## Install
 
-Write the image to an SD card and put it in the phone. That is the whole
-procedure -- there is no installer to run on the device.
+Download the image, write it to an SD card, put the card in the phone and power
+it on. There is no installer to run on the device.
 
-Verified end to end on an original PinePhone on 2026-09-06: flash, insert,
-power on, and it comes up in the Sway session with the bar, the gesture strip
-and the on-screen keyboard.
+**1. Download** the latest release from
+[Releases](https://github.com/SimonSchubert/moarchy/releases), or:
 
 ```bash
-./scripts/flash-sd.sh /dev/diskN     # run `diskutil list` first to find N
+V=0.1.0-20260906
+curl -fLO https://github.com/SimonSchubert/moarchy/releases/download/v0.1.0/moarchy-pinephone-$V.img.xz
+curl -fLO https://github.com/SimonSchubert/moarchy/releases/download/v0.1.0/moarchy-pinephone-$V.img.xz.sha256
 ```
 
-The image carries no password. The account's password is locked and tty1
-autologin brings the session up without one, so there is nothing to change on
-first boot; the rootfs grows to fill the card while it comes up. Set a password
-with `passwd` from the terminal on the phone if you want to log in over SSH.
+**2. Check it arrived intact.** A truncated download flashes without complaint
+and then fails to boot, which is a slow way to find out:
+
+```bash
+shasum -a 256 -c moarchy-pinephone-$V.img.xz.sha256   # macOS
+sha256sum   -c moarchy-pinephone-$V.img.xz.sha256     # Linux
+```
+
+**3. Find the card.** Get this wrong and you overwrite the wrong disk, so check
+the size matches the card you just inserted:
+
+```bash
+diskutil list external physical    # macOS -- but a BUILT-IN reader shows as
+                                   # `internal`; if nothing is listed, use:
+                                   #   system_profiler SPCardReaderDataType | grep 'BSD Name'
+lsblk -o NAME,SIZE,TRAN,MODEL      # Linux
+```
+
+**4. Write it.** The image is decompressed on the fly, so there is no need to
+unpack it first. It needs an **8 GB card or larger**: 1.2 GB compressed expands
+to about 6 GB, and the rootfs grows to fill the card on first boot.
+
+```bash
+# macOS -- /dev/rdiskN (raw) is far faster than /dev/diskN
+diskutil unmountDisk /dev/diskN
+xz -dc moarchy-pinephone-$V.img.xz | sudo dd of=/dev/rdiskN bs=4m
+sync && diskutil eject /dev/diskN
+
+# Linux
+xz -dc moarchy-pinephone-$V.img.xz | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync
+```
+
+If you have this repo checked out, `./scripts/flash-sd.sh` does the same with
+guards — it refuses `/dev/disk0`, detects a write-protected adapter, prints the
+partition table and makes you type the disk identifier back before it writes:
+
+```bash
+IMAGE_FILE=moarchy-pinephone-$V.img.xz ./scripts/flash-sd.sh /dev/diskN
+```
+
+**5. Boot it.** Put the card in the phone and power on. First boot creates the
+user, grows the rootfs and comes up in the Sway session.
+
+There is **no default password to change**: the account's password is locked
+rather than set to something like `123456`, and tty1 autologin brings the
+session up without one. `sshd` ships disabled. To use SSH later, run this from
+the terminal on the phone:
+
+```bash
+passwd
+sudo systemctl enable --now sshd
+```
+
+Verified end to end on an original PinePhone on 2026-09-06: flash, insert, power
+on, and it comes up with the bar, the gesture strip and the on-screen keyboard.
 
 ### Building the image yourself
 
@@ -229,6 +281,19 @@ Numbers from a real PinePhone (Allwinner A64, 2 GB), not estimates:
 That last pair is why `moarchy-launch-tui` drops TUIs to font size 7 (~60
 columns) and opens them fullscreen: at Omarchy's desktop font size, btop simply
 refuses to draw on this screen.
+
+## Known limitations
+
+- **The camera reboots the phone on first launch.** It works on the second
+  attempt and afterwards. Undiagnosed: the candidates are OOM under a
+  software-rendered 2592x1944 preview on 2 GB, a power brownout from the flash
+  LED, or a `sun6i-csi` fault on first pipeline setup.
+- **The microphone records digital silence** — RMS 0 at PipeWire *and* raw ALSA,
+  with `Mic1` on and boost at 7. Calls and voice recording do not work.
+- **`pacman -Syu` does not update moarchy's own packages yet.** There is no
+  published package repository, so upgrading the phone UI means reflashing.
+  That is the next milestone ([docs/structure.md](docs/structure.md) M3).
+- Whether the camera flash physically fires is unverified.
 
 ## Out of scope for now
 
