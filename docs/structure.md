@@ -252,6 +252,19 @@ each package**, and a build that finds two refuses rather than choosing.
 > `moarchy-0.1.0-2` from another session's work in progress was one glob away
 > from being released.
 
+**R9** A published image's own pacman keyring **trusts** the signing key, rather
+than merely carrying the file. **Met 2026-09-07:** `image/verify.sh` asks
+`pacman-key --gpgdir` and tells apart trusted, present-but-untrusted, and
+absent.
+
+> `moarchy-keyring`'s `post_install` runs `pacman-key --populate` and swallows
+> its own failure into a stderr line that `pacstrap`'s output buries. If that
+> ever silently fails, `SigLevel = Required` refuses every package in R1's repo
+> and the phone's only symptom is that `pacman -Syu` stops — which is the exact
+> thing R4 exists to make possible. Checking that the *file* is in
+> `/usr/share/pacman/keyrings` cannot see it: pacman validates against
+> `/etc/pacman.d/gnupg`, and nothing imports into that on its own.
+
 ---
 
 ## 7. The image

@@ -115,6 +115,28 @@ else
   no "no build-info in the image -- it cannot say what commit it is"
 fi
 have /usr/share/pacman/keyrings/moarchy.gpg
+# The file being there is not the check. pacman validates against its own
+# keyring in /etc/pacman.d/gnupg, and nothing imports into that automatically --
+# moarchy-keyring's post_install runs `pacman-key --populate`, and it swallows
+# its own failure with a warning to stderr that pacstrap's output buries. If
+# that ran and did not work, SigLevel = Required refuses every package in the
+# repo and the phone's only symptom is that `pacman -Syu` stops, which is
+# precisely the thing the repo exists to make possible.
+#
+# Three outcomes, told apart: trusted, present but not trusted (imported without
+# the -trusted file, so gpg has no ownertrust and validates nothing), absent.
+kt="$R/usr/share/pacman/keyrings/moarchy-trusted"
+kf=$(sed 's/:.*//' "$kt" 2>/dev/null | head -1)
+if [ -z "$kf" ]; then
+  no "no moarchy-trusted beside the key -- pacman-key had no fingerprint to trust"
+elif pacman-key --gpgdir "$R/etc/pacman.d/gnupg" --list-keys "$kf" 2>/dev/null |
+     grep -qE '\[ *(full|ultimate) *\]'; then
+  ok "the moarchy signing key is trusted in the image's own keyring ($kf)"
+elif pacman-key --gpgdir "$R/etc/pacman.d/gnupg" --list-keys "$kf" >/dev/null 2>&1; then
+  no "the moarchy key is in the keyring but NOT trusted -- SigLevel = Required will refuse every update"
+else
+  no "the moarchy key is not in /etc/pacman.d/gnupg -- pacman-key --populate did not run, and pacman -Syu will refuse the repo"
+fi
 have /usr/share/libalpm/hooks/50-moarchy-shell-reload.hook
 # The update path in one check: without the stanza a phone can only be upgraded
 # by reflashing, which is the thing the repo exists to stop.

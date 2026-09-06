@@ -235,7 +235,7 @@ first boot, or to the u-boot SPL — that lives outside any partition, at byte
 ```bash
 ./scripts/provision.sh build      # the packages, in an aarch64 container
 ./scripts/build-image.sh          # -> images/moarchy-pinephone-<version>-<date>.img.xz
-./scripts/verify-image.sh         # 75 checks against the image just built
+./scripts/verify-image.sh         # 76 checks against the image just built
 ```
 
 Everything comes from the commits pinned in `manifest.toml`, so two runs a
