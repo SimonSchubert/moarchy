@@ -69,7 +69,7 @@ pkgbuilddir = "packaging"
 # around by editing someone else's PKGBUILD from this side.
 [moarchy-store]
 url     = "https://github.com/SimonSchubert/moarchy-store"
-ref     = "63e3793efdfdfc6b7d6e42657dca1866a138fa0b"
+ref     = "c08a07379171bb0a4998cb94f07f4bfb2370c78f"
 pkgname = "moarchy-store-git"
 version = "0.1.0"
 # Its PKGBUILD is at the repo root, unlike the keyboard's.
