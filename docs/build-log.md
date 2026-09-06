@@ -1267,7 +1267,7 @@ between things that are each individually right, which it cannot.
 
 ### The suite had to be made able to fail
 
-`image/verify.sh` grew to 75 checks and `image/negative-test.sh` exists because
+`image/verify.sh` grew to 75 checks (81 as of 0.1.1) and `image/negative-test.sh` exists because
 of what happened when it did not. Four checks in the first version were wrong in
 both directions — two passed vacuously, and two reported a correctly enabled
 unit as missing, because `-e` follows an absolute symlink out of the mounted
