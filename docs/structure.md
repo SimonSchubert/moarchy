@@ -252,6 +252,26 @@ each package**, and a build that finds two refuses rather than choosing.
 > `moarchy-0.1.0-2` from another session's work in progress was one glob away
 > from being released.
 
+**R8a** *Open.* The image's `/etc/pacman.conf` carries `[moarchy]` and nothing
+else beyond what the `pacman` package ships. Stock Arch Linux ARM's copy is
+`core`/`extra`/`alarm`/`aur`; `[danctnix]` is added by DanctNIX's own image
+build and by `image/Dockerfile` for the *builder*, not by any package, so a
+flashed phone never gets it.
+
+> Nothing breaks. `pacman -Syu` works and updates the phone UI, which is what
+> R4 promised. What it cannot do is move the device stack: `linux-megi`,
+> `uboot-pinephone`, `eg25-manager`, `megapixels`, `lisgd`, `mmsd-tng` and
+> `portfolio-file-manager` are installed from a repo the phone is not
+> configured for, so they are frozen at flash time and `pacman -Qm` lists them
+> as foreign.
+>
+> Six lines in `image/configure.sh` beside the `[moarchy]` block would fix it,
+> and `danctnix-keyring` is already pacstrapped so `SigLevel = Required` would
+> work. Deliberately not done for 0.1.x: nobody has watched a DanctNIX kernel
+> or u-boot upgrade land on a moarchy image, and the failure mode of getting
+> that wrong is a reflash on a device whose only other way in is the card.
+> Decided 2026-09-07.
+
 **R9** A published image's own pacman keyring **trusts** the signing key, rather
 than merely carrying the file. **Met 2026-09-07:** `image/verify.sh` asks
 `pacman-key --gpgdir` and tells apart trusted, present-but-untrusted, and
