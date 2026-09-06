@@ -408,6 +408,14 @@ Item {
     // the sheet. It exists because docs/windows.md L1-L7 cannot be asserted any
     // other way -- the splash is feedback for a tap, and a check has no finger.
     //
+    // It is no longer only a check's finger. moarchy-store's Open button calls
+    // this rather than launching the entry itself, so that installing something
+    // and opening it puts its icon on the wallpaper like every other launch
+    // (L9). That makes this a contract with a consumer outside this repo:
+    // renaming it, or moving it off the drawer, breaks Open in the store.
+    // Callers pass the bare id -- no .desktop suffix -- or the lookup below
+    // misses and the splash falls back to a generic icon.
+    //
     // An id with no entry behind it still launches, straight through
     // appLibrary, and says so in the answer. That is not a convenience: L6 is
     // "what happens when nothing ever appears", and an id that resolves to no

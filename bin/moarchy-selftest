@@ -1978,12 +1978,25 @@ print(" ".join(out))'; }
     w_skip L4 "L1/L4 skipped: none of the expected apps is in the drawer's list"
   else
     before_ids=$(con_ids)
-    saw_open=""; saw_icon=""
+    saw_open=""; saw_icon=""; saw_drawn=""
     timeout 8 omarchy-shell drawer launch "$target" >/dev/null 2>&1
     for _ in $(seq 30); do
-      if [[ -z $saw_open && $(splash_state) == "open" ]]; then
-        saw_open=1
-        saw_icon=$(timeout 8 omarchy-shell splash icon 2>/dev/null)
+      # `drawn` is the sampler rather than `state`, and it is one call rather
+      # than two on purpose. It answers the stronger question -- which pixels,
+      # not merely whether -- and `state` followed by `drawn` cannot answer it
+      # at all: each IPC call is a process spawn, ~0.4s on an A53, and foot
+      # maps inside that gap. The second call then reads "down" about a splash
+      # the first one had just seen, which is how L9a first failed against a
+      # launch that was working.
+      if [[ -z $saw_open ]]; then
+        d=$(timeout 8 omarchy-shell splash drawn 2>/dev/null)
+        if [[ -n $d && $d != "down" ]]; then
+          saw_open=1
+          saw_drawn=$d
+          # Safe to read late: iconSource is a property, and it survives the
+          # splash coming down. `drawn` is the one that does not.
+          saw_icon=$(timeout 8 omarchy-shell splash icon 2>/dev/null)
+        fi
       fi
       [[ $(con_ids) != "$before_ids" ]] && break
       sleep 1
@@ -2034,6 +2047,38 @@ print(" ".join(out))'; }
               "no window will ever appear for it, so it stays for the full 15s"
     fi
     timeout 8 omarchy-shell device close >/dev/null 2>&1
+  fi
+
+  # --- L9: the store's Open goes through the shell ---------------------------
+  #
+  # Two halves, because either alone is green for the wrong reason. That the
+  # store calls the IPC says nothing about what the IPC then draws, and a
+  # splash that draws correctly for the drawer says nothing about the store --
+  # which is a different repo, upgraded on its own, and the one place this can
+  # regress without a line of this repo changing.
+  store_launcher=$(pacman -Qlq moarchy-store-git 2>/dev/null | grep -m1 '/launcher\.py$')
+  if [[ -z $store_launcher || ! -r $store_launcher ]]; then
+    w_skip L9 "L9 skipped: moarchy-store is not installed"
+  elif grep -q '"drawer", *"launch"' "$store_launcher"; then
+    w_ok L9 "the store hands Open to the shell rather than starting the app itself"
+  else
+    w_no L9 "$store_launcher never calls 'omarchy-shell drawer launch'" \
+            "Open starts the entry through Gio again, and nothing answers the tap"
+  fi
+
+  # The half of L9 the store depends on: a bare id resolves to the app's own
+  # icon. `.desktop`-suffixed it still launches and still shows a splash -- it
+  # just shows L7's outline, which is why the store strips the suffix and why
+  # L7's "never nothing" is too weak to catch it.
+  if [[ -z $target ]]; then
+    w_skip L9a "L9a skipped: L1/L4 found no app to launch"
+  elif [[ -z $saw_drawn ]]; then
+    w_skip L9a "L9a unproven for $target: the splash was never sampled while up"
+  elif [[ $saw_drawn == icon\ * ]]; then
+    w_ok L9a "a bare id draws $target's own icon (${saw_drawn##*/})"
+  else
+    w_no L9a "$target's splash drew '$saw_drawn', not its icon" \
+            "the store's Open would announce a generic square for every app"
   fi
 
   printf '  \033[90m%-4s\033[0m   \033[90mnot covered: W3 L3 L8\033[0m\n' ""

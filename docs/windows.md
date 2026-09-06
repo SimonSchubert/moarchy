@@ -51,7 +51,7 @@ mid-check reads as a gaps failure.
 
 ---
 
-## L1–L8. The launch splash
+## L1–L9. The launch splash
 
 Replaces upstream's launch OSD — a rounded panel reading "Launching Files…"
 with a rocket glyph, shown two seconds after the tap. Two things were wrong
@@ -110,6 +110,30 @@ wallpaper reads as a stuck frame on hardware this slow; the pulse is what says
 the launch is still running. It is one transform on one textured quad, which is
 what the Mali-400 can afford.
 
+**L9** The store's **Open** is a launch like any other, so it gets the splash
+too. Installing something and opening it is the one moment a phone owner is
+*least* willing to believe the tap registered, and it was the one launch with
+no feedback at all: `moarchy-store` started the entry itself, through
+`Gio.DesktopAppInfo.launch()`, which starts the app and tells the shell
+nothing. You tapped Open and the store sat there — on this hardware for
+seconds — until the window mapped and the workspace switched under you.
+
+So the store asks the shell instead: `omarchy-shell drawer launch <id>`, the
+same entry point a tap in the drawer goes through, with its own `Gio` call kept
+as the fallback for a machine that has no shell to ask. That makes the drawer's
+`launch` IPC a contract with a consumer outside this repo, not the test hook
+its comment used to call it.
+→ the installed `moarchy-store`'s `launcher.py` calls
+`omarchy-shell drawer launch`, rather than reaching Open through `Gio` alone
+
+**L9a** The id goes **without** its `.desktop` suffix. AppLibrary keys entries
+by the bare id, so the suffixed form launches the app and matches no entry —
+the splash then draws L7's fallback outline rather than the icon of the thing
+you just installed, which is worse than a plain miss because it looks
+deliberate. L7 cannot catch it: `fallback` is a pass there, by design.
+→ `omarchy-shell drawer launch <bare id>` for a real app leaves
+`omarchy-shell splash drawn` reading `icon <path>`, not `fallback`
+
 <p align="center">
   <img src="screenshots/splash.png" width="40%" alt="the Calculator icon on the wallpaper while it launches">
 </p>
@@ -118,5 +142,10 @@ what the Mali-400 can afford.
 
 Apps started from a terminal, from a keybinding, or by
 `moarchy-launch-terminal` and friends. The splash hangs off
-`AppLibrary.launch()`, which is the drawer's and the Omarchy menu's path and
-nothing else's.
+`AppLibrary.launch()`, which is the drawer's, the Omarchy menu's and — since L9
+— the store's path, and nothing else's.
+
+The store's other two Open paths are also outside it, and correctly so. A
+plugin (`omarchy-shell shell toggle`) has a surface that maps at once, which is
+the completion L5 is about rather than something to announce; a terminal app
+goes to `moarchy-launch-tui`, which is one of the "and friends" above.
