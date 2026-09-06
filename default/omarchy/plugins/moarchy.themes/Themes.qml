@@ -366,7 +366,13 @@ Item {
               fontSize: Style.font.icon
               color: root.textOnSurface
             }
-            MouseArea { anchors.fill: parent; onClicked: root.dismiss() }
+            // 38 drawn, 44 answering -- the same 3px as the Settings header,
+            // and for the same reasons (docs/touch-targets.md C1).
+            MouseArea {
+              anchors.fill: parent
+              anchors.margins: -Style.space(3)
+              onClicked: root.dismiss()
+            }
           }
 
           Text {

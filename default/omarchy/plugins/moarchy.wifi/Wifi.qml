@@ -127,6 +127,15 @@ Item {
 
   onListFrozenChanged: if (root.listFrozen) root.frozenRows = root.liveRows
 
+  // The expanded row's passphrase pill and field, registered by the delegate
+  // that owns them (docs/touch-targets.md B3, B4). Ids declared inside a
+  // delegate are scoped to it, so the IpcHandler out here cannot reach them any
+  // other way -- and a rect published once on expansion would be read before
+  // the layout that produced it had settled. One row expands at a time, so
+  // there is only ever one pair to hold.
+  property var passPillItem: null
+  property var passFieldItem: null
+
   readonly property var liveRows: {
     var objs = root.wifiDevice && root.wifiDevice.networks
              ? root.wifiDevice.networks.values : []
@@ -392,6 +401,25 @@ Item {
       }
       return out.join("\n")
     }
+
+    // docs/touch-targets.md B3, B4. Same job as the drawer's searchTarget():
+    // the pill and the field draw identically whether or not they are the same
+    // rectangle, so the rects have to be read rather than photographed.
+    // Surface coordinates; bin/moarchy-touch takes these doubled.
+    //
+    // Empty until a secured row is expanded -- there is no field before that.
+    function passTarget(): string {
+      if (!root.passPillItem || !root.passFieldItem) return ""
+      var box = it => {
+        var p = it.mapToItem(null, 0, 0)
+        return Math.round(p.x) + "," + Math.round(p.y)
+             + " " + Math.round(it.width) + "x" + Math.round(it.height)
+      }
+      return "pill=" + box(root.passPillItem)
+           + " field=" + box(root.passFieldItem)
+           + " focused=" + root.passphraseFocused
+           + " revealed=" + root.showPassphrase
+    }
   }
 
   // ----------------------------------------------------------------- chrome
@@ -459,7 +487,13 @@ Item {
               fontSize: Style.font.icon
               color: root.textOnSurface
             }
-            MouseArea { anchors.fill: parent; onClicked: root.dismiss() }
+            // 38 drawn, 44 answering -- the same 3px as the Settings header,
+            // and for the same reasons (docs/touch-targets.md C1).
+            MouseArea {
+              anchors.fill: parent
+              anchors.margins: -Style.space(3)
+              onClicked: root.dismiss()
+            }
           }
 
           Text {
@@ -495,8 +529,13 @@ Item {
               color: Networking.wifiEnabled ? root.textOnAccent : root.textOnSurface
               Behavior on x { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
             }
+            // A switch is 30 tall because that is what a switch looks like,
+            // and 30 is not a target (docs/touch-targets.md C5). The 7px fills
+            // the 44px header it sits in and reaches past both ends of the
+            // track; the only thing to its left is the title, which is text.
             MouseArea {
               anchors.fill: parent
+              anchors.margins: -Style.space(7)
               onClicked: Networking.wifiEnabled = !Networking.wifiEnabled
             }
           }
@@ -645,23 +684,53 @@ Item {
 
               // --- passphrase, for any secured network not connected --------
               Rectangle {
+                id: passPill
                 visible: root.offersPassphrase(rowItem.modelData)
                 width: parent.width
                 height: Style.space(44)
                 radius: height / 2
                 color: root.surface
 
+                // Visible, not completed: every row builds one of these and
+                // only the expanded row shows it, so registering on completion
+                // would leave the last delegate built holding the slot.
+                onVisibleChanged: {
+                  if (visible) {
+                    root.passPillItem = passPill
+                    root.passFieldItem = passField
+                  } else if (root.passPillItem === passPill) {
+                    root.passPillItem = null
+                    root.passFieldItem = null
+                  }
+                }
+                Component.onDestruction: if (root.passPillItem === passPill) {
+                  root.passPillItem = null
+                  root.passFieldItem = null
+                }
+
+                // Fills its half of the pill, with the lead-in as padding
+                // rather than an anchor margin (docs/touch-targets.md B1-B3).
+                // Anchored by verticalCenter with verticalPadding 0 and no
+                // background, this control was one line of text tall -- about
+                // 20px of a 44px pill -- and the 16px lead-in was outside it as
+                // well, so most of the drawn field did not take a tap. Padding
+                // draws the same and is inside the hit area, and pinning it
+                // stops the text shifting sideways on focus, which the base
+                // type's border-width-dependent padding caused (B5).
+                //
+                // Left/right, not fill: the eye keeps its own 44px square (B4).
                 Ui.TextField {
                   id: passField
                   anchors.left: parent.left
                   anchors.right: revealButton.left
-                  anchors.verticalCenter: parent.verticalCenter
-                  anchors.leftMargin: Style.space(16)
-                  anchors.rightMargin: Style.space(4)
+                  anchors.top: parent.top
+                  anchors.bottom: parent.bottom
+                  leftPadding: Style.space(16)
+                  rightPadding: Style.space(4)
+                  verticalAlignment: TextInput.AlignVCenter
                   password: !root.showPassphrase
                   placeholderText: rowItem.modelData.known ? "New passphrase" : "Passphrase"
                   background: null
-                  horizontalPadding: 0
                   verticalPadding: 0
                   text: root.passphrase
                   onTextChanged: root.passphrase = text

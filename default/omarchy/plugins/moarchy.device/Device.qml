@@ -24,6 +24,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
+import qs.Ui as Ui
 
 Item {
   id: root
@@ -49,6 +50,11 @@ Item {
   readonly property color textOnSurface: (typeof Color !== "undefined" && Color.onSurface) ? Color.onSurface : "#c0caf5"
   readonly property color subdued: (typeof Color !== "undefined" && Color.onSurfaceVariant) ? Color.onSurfaceVariant : "#787c99"
   readonly property color accent: (typeof Color !== "undefined" && Color.primary) ? Color.primary : "#7aa2f7"
+
+  // The weight the bar and every other screen in this shell run at. This file
+  // used to say `font.bold` on two lines and nothing on the rest, which is how
+  // it came to be the one screen that did not match (docs/touch-targets.md C6).
+  readonly property int textWeight: Font.DemiBold
 
   property var facts: ({})
 
@@ -213,27 +219,41 @@ Item {
 
       ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 16
-        spacing: 14
+        anchors.margins: Style.space(16)
+        spacing: Style.space(14)
 
         // Header: back chevron, title. Mirrors every other screen in this shell
-        // so the plugin does not announce itself as something different.
+        // so the plugin does not announce itself as something different -- a
+        // claim this header made in a comment long before it was true. It was
+        // drawn in raw pixels at a font the theme does not set, with a
+        // typographic ‹ where the other three headers use the Nerd Font
+        // chevron through Ui.OpticalGlyph (docs/touch-targets.md C6).
         RowLayout {
           Layout.fillWidth: true
-          spacing: 10
+          spacing: Style.space(10)
 
           Rectangle {
-            width: 40; height: 40; radius: 20
+            width: Style.space(40); height: width; radius: width / 2
             color: backArea.pressed ? root.container : "transparent"
-            Text {
-              anchors.centerIn: parent
-              text: "‹"
-              font.pixelSize: 30
+
+            // Centred on the ink rather than on the advance, for the reason
+            // the Settings header's own back button spells out: a Nerd Font
+            // glyph is rarely centred inside the box the font reserves for it.
+            Ui.OpticalGlyph {
+              anchors.fill: parent
+              text: ""
+              fontFamily: Style.font.family
+              fontSize: Style.font.icon
               color: root.textOnSurface
             }
+
+            // 40 drawn, 44 answering (docs/touch-targets.md C1, A2). Nothing
+            // sits within 2px of this circle: the title is 10px to its right
+            // and the surface margin is 16px to its left.
             MouseArea {
               id: backArea
               anchors.fill: parent
+              anchors.margins: -Style.space(2)
               onClicked: root.dismiss()
             }
           }
@@ -241,8 +261,9 @@ Item {
           Text {
             Layout.fillWidth: true
             text: "Device"
-            font.pixelSize: 22
-            font.bold: true
+            font.family: Style.font.family
+            font.pixelSize: Style.font.heading
+            font.weight: root.textWeight
             color: root.textOnSurface
           }
         }
@@ -250,7 +271,9 @@ Item {
         Text {
           Layout.fillWidth: true
           text: root.facts.model || "…"
-          font.pixelSize: 13
+          font.family: Style.font.family
+          font.pixelSize: Style.font.subtitle
+          font.weight: root.textWeight
           color: root.subdued
           wrapMode: Text.WordWrap
         }
@@ -259,7 +282,7 @@ Item {
         // open this for, and the only two that change on their own.
         RowLayout {
           Layout.fillWidth: true
-          spacing: 12
+          spacing: Style.space(12)
 
           Repeater {
             model: [
@@ -272,23 +295,26 @@ Item {
             Rectangle {
               required property var modelData
               Layout.fillWidth: true
-              Layout.preferredHeight: 84
-              radius: 14
+              Layout.preferredHeight: Style.space(84)
+              radius: Style.space(14)
               color: root.container
               ColumnLayout {
                 anchors.centerIn: parent
-                spacing: 2
+                spacing: Style.space(2)
                 Text {
                   Layout.alignment: Qt.AlignHCenter
                   text: modelData.value
-                  font.pixelSize: 26
-                  font.bold: true
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.display
+                  font.weight: root.textWeight
                   color: root.accent
                 }
                 Text {
                   Layout.alignment: Qt.AlignHCenter
                   text: modelData.label
-                  font.pixelSize: 11
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.bodySmall
+                  font.weight: root.textWeight
                   color: root.subdued
                 }
               }
@@ -299,12 +325,12 @@ Item {
         Rectangle {
           Layout.fillWidth: true
           Layout.fillHeight: true
-          radius: 14
+          radius: Style.space(14)
           color: root.container
 
           ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 14
+            anchors.margins: Style.space(14)
             spacing: 0
 
             Repeater {
@@ -318,20 +344,24 @@ Item {
               RowLayout {
                 required property var modelData
                 Layout.fillWidth: true
-                Layout.preferredHeight: 44
-                spacing: 8
+                Layout.preferredHeight: Style.space(44)
+                spacing: Style.space(8)
                 Text {
                   text: modelData.k
-                  font.pixelSize: 14
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.title
+                  font.weight: root.textWeight
                   color: root.subdued
                 }
                 Item { Layout.fillWidth: true }
                 Text {
                   text: modelData.v
-                  font.pixelSize: 14
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.title
+                  font.weight: root.textWeight
                   color: root.textOnSurface
                   elide: Text.ElideLeft
-                  Layout.maximumWidth: 210
+                  Layout.maximumWidth: Style.space(210)
                   horizontalAlignment: Text.AlignRight
                 }
               }
@@ -345,7 +375,9 @@ Item {
           Layout.fillWidth: true
           horizontalAlignment: Text.AlignHCenter
           text: "updates every 3s"
-          font.pixelSize: 10
+          font.family: Style.font.family
+          font.pixelSize: Style.font.caption
+          font.weight: root.textWeight
           color: root.subdued
         }
       }

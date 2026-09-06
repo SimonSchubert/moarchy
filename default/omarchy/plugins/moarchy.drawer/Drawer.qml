@@ -340,6 +340,26 @@ Item {
     // sampled. Recording in-process and reading the trace afterwards can.
     function dragTrace(): string { return root.dragTrace.join(" ") }
 
+    // docs/touch-targets.md B1, B3. Neither is answerable by a screenshot: the
+    // pill and the field draw the same picture whether or not they are the same
+    // rectangle, which is exactly how the dead band survived this long. So the
+    // two rects are reported side by side, in surface coordinates -- the panel
+    // pixels bin/moarchy-touch takes are these doubled. `focused` closes the
+    // loop: tap a corner, read it back.
+    //
+    // Meaningless while the drawer is closed or mid-slide, the same as
+    // geometry(): open it first.
+    function searchTarget(): string {
+      var box = it => {
+        var p = it.mapToItem(null, 0, 0)
+        return Math.round(p.x) + "," + Math.round(p.y)
+             + " " + Math.round(it.width) + "x" + Math.round(it.height)
+      }
+      return "pill=" + box(searchPill)
+           + " field=" + box(searchField)
+           + " focused=" + searchField.activeFocus
+    }
+
     // What the compositor actually granted this surface. Nothing else can
     // answer it: sway's IPC does not list layer surfaces, so `swaymsg -t
     // get_tree` is silent about every one of them.
@@ -634,6 +654,7 @@ Item {
         // and IME behaviour -- only its chrome is replaced, by turning its own
         // background off and drawing this one behind it.
         Rectangle {
+          id: searchPill
           width: parent.width
           height: Style.space(46)
           radius: height / 2
@@ -650,16 +671,35 @@ Item {
             color: root.subdued
           }
 
+          // Fills the pill, and the insets are padding rather than anchor
+          // margins (docs/touch-targets.md B1-B3). Both halves of that matter.
+          //
+          // A Ui.TextField with verticalPadding 0 and no background is exactly
+          // one line of Style.font.body tall -- 16-22px of a 46px pill -- and
+          // anchoring it by verticalCenter left that as its whole height. The
+          // anchor margins then put the rest of the pill outside the control
+          // too, so the magnifier and both lead-ins were chrome with nothing
+          // under them. Roughly a third of what is drawn here answered a tap.
+          //
+          // Padding draws identically to the margins it replaces and is
+          // *inside* the hit area, so nothing moves on screen (B2).
+          //
+          // Pinned rather than left to `horizontalPadding`, which the base type
+          // adds to `Border.left(spec)` -- and that spec is `focus` or `normal`,
+          // so on a theme whose two border widths differ the text used to jump
+          // sideways the instant the field was tapped (B5). Vertical is safe as
+          // it stands: top and bottom move together, so the centre holds.
           Ui.TextField {
             id: searchField
-            anchors.left: searchGlyph.right
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.leftMargin: Style.space(10)
-            anchors.rightMargin: Style.space(16)
+            anchors.fill: parent
+            leftPadding: searchGlyph.x + searchGlyph.width + Style.space(10)
+            rightPadding: Style.space(16)
+            // The control is taller than its line now, so it has to be told
+            // where that line goes. Left at the default the text renders
+            // against the top of the pill.
+            verticalAlignment: TextInput.AlignVCenter
             placeholderText: "Search apps"
             background: null
-            horizontalPadding: 0
             verticalPadding: 0
             onTextChanged: queryDebounce.restart()
           }

@@ -130,6 +130,13 @@ Item {
   // they were already centred in.
   readonly property int glyphSlot: Math.round(Style.font.iconLarge * 1.35)
 
+  // The square a bare glyph gets to answer in, as opposed to the square it is
+  // drawn in (docs/touch-targets.md A1, A2). Derived from glyphSlot rather than
+  // fixed at 44, because glyphSlot follows the theme's font size: on a theme
+  // with a larger base-size the glyph is already over the floor, and a fixed 44
+  // would shrink its target back down to meet it.
+  readonly property int tapSlot: Math.max(Style.space(44), root.glyphSlot)
+
   // ------------------------------------------------------------- shape
   readonly property int radiusSheet: Style.space(28)
   readonly property int radiusTile: Style.space(20)
@@ -1054,8 +1061,13 @@ Item {
       color: root.textOnSurface
     }
 
+    // 36 drawn, 44 answering (docs/touch-targets.md C2, A2). The two buttons
+    // sit 8px apart, so 4 each is the most either may take without the later
+    // one eating the earlier one's edge (A3) -- and 4 is exactly what 36 needs.
+    // Vertically it fills the 44px header the pair is centred in.
     MouseArea {
       anchors.fill: parent
+      anchors.margins: -Style.space(4)
       onPressed: mouse => root.sheetPress(this, mouse)
       onPositionChanged: mouse => root.sheetMove(this, mouse)
       onReleased: root.sheetRelease()
@@ -1333,8 +1345,8 @@ Item {
             spacing: Style.space(10)
 
             Column {
-              // Whatever the three transport slots and the four gaps leave.
-              width: parent.width - root.glyphSlot * 3 - Style.space(10) * 3
+              // Whatever the transport block and the one gap before it leave.
+              width: parent.width - root.tapSlot * 3 - Style.space(10)
               anchors.verticalCenter: parent.verticalCenter
               Text {
                 width: parent.width
@@ -1356,31 +1368,53 @@ Item {
               }
             }
 
-            Repeater {
-              model: [
-                { glyph: "󰒮", action: "previous" },
-                { glyph: "󰒧", action: "playPause" },
-                { glyph: "󰒜", action: "next" }
-              ]
-              delegate: Ui.OpticalGlyph {
-                required property var modelData
-                anchors.verticalCenter: parent.verticalCenter
-                width: root.glyphSlot
-                height: root.glyphSlot
-                text: modelData.glyph
-                fontFamily: Style.font.family
-                fontSize: Style.font.iconLarge
-                color: root.textOnSurface
-                MouseArea {
-                  anchors.fill: parent
-                  anchors.margins: -Style.space(6)
-                  onPressed: mouse => root.sheetPress(this, mouse)
-                  onPositionChanged: mouse => root.sheetMove(this, mouse)
-                  onReleased: root.sheetRelease()
-                  onCanceled: root.sheetCancel()
-                  onClicked: if (!root.sheetWasDrag
-                                 && root.media && typeof root.media.runAction === "function")
-                    root.media.runAction(modelData.action)
+            // Three tapSlot squares butted together with the glyph centred in
+            // each, rather than three glyphs on a shared 10px spacing with the
+            // hit areas grown outward (docs/touch-targets.md C3).
+            //
+            // Grown outward they could not get there. On 34px centres -- a 24px
+            // glyph plus the Row's 10px gap -- the middle button can claim 5 on
+            // each side before it starts eating its neighbours (A3), which tops
+            // out at 34 and leaves play the smallest target on the sheet.
+            // Carrying the gap *inside* the slot is what buys the floor, and it
+            // costs the title 40px of width: the one place where 44 was not
+            // free. Nested in its own Row so the outer 10px spacing applies
+            // once, between the title and the block, and not between buttons.
+            Row {
+              anchors.verticalCenter: parent.verticalCenter
+              spacing: 0
+
+              Repeater {
+                model: [
+                  { glyph: "󰒮", action: "previous" },
+                  { glyph: "󰒧", action: "playPause" },
+                  { glyph: "󰒜", action: "next" }
+                ]
+                delegate: Item {
+                  required property var modelData
+                  width: root.tapSlot
+                  height: root.tapSlot
+
+                  Ui.OpticalGlyph {
+                    anchors.centerIn: parent
+                    width: root.glyphSlot
+                    height: root.glyphSlot
+                    text: modelData.glyph
+                    fontFamily: Style.font.family
+                    fontSize: Style.font.iconLarge
+                    color: root.textOnSurface
+                  }
+
+                  MouseArea {
+                    anchors.fill: parent
+                    onPressed: mouse => root.sheetPress(this, mouse)
+                    onPositionChanged: mouse => root.sheetMove(this, mouse)
+                    onReleased: root.sheetRelease()
+                    onCanceled: root.sheetCancel()
+                    onClicked: if (!root.sheetWasDrag
+                                   && root.media && typeof root.media.runAction === "function")
+                      root.media.runAction(modelData.action)
+                  }
                 }
               }
             }
@@ -1389,8 +1423,13 @@ Item {
 
         // ------------------------------------------------ notifications
         Item {
+          // 24, not 20: Clear-all needs 44 of height, and the Column leaves a
+          // 10px gap on each side of this row -- so 24 + 10 + 10 is the floor
+          // reached without either overhang running into a neighbour (A3). The
+          // label is the size it always was; the row around it is 4px taller
+          // (docs/touch-targets.md C4).
           width: parent.width
-          height: Style.space(20)
+          height: Style.space(24)
           visible: notificationList.count > 0
 
           Text {
@@ -1415,7 +1454,7 @@ Item {
             color: root.accent
             MouseArea {
               anchors.fill: parent
-              anchors.margins: -Style.space(8)
+              anchors.margins: -Style.space(10)
               onPressed: mouse => root.sheetPress(this, mouse)
               onPositionChanged: mouse => root.sheetMove(this, mouse)
               onReleased: root.sheetRelease()

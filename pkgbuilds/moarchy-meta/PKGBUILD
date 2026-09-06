@@ -205,6 +205,54 @@ depends=(
   # GNOME set.
   'gnome-maps'
 
+  # Added 2026-09-06 to close five gaps the set above left open. Unlike the
+  # names before them these are NOT yet in docs/apps.md, because that file's
+  # bar is "installed and launched on the device, screenshot uncropped" and
+  # none of these have been. They are here on availability and fit, and
+  # docs/apps.md gets them once they have been seen running.
+  #
+  # None of the five needs building. Arch Linux ARM has all of extra for
+  # aarch64, so the whole GNOME adaptive set and the whole Plasma Mobile set
+  # are already binaries -- the AUR is not the constraint for app choice, the
+  # 360px screen is. Every dependency of all five resolves inside the repos
+  # the image already enables; nothing new is turned on for them.
+
+  # Contacts, and the one that changes the most. gnome-calls and chatty are
+  # both installed and both resolve numbers to names through
+  # evolution-data-server -- with no app that can WRITE that store there is no
+  # way to enter a name, so the dialer and the SMS app show bare numbers
+  # forever. 2.3 MB fixes it.
+  'gnome-contacts'
+
+  # Email. The obvious-looking pick from [danctnix] is geary-mobile, and it is
+  # a trap: its description is "This is a dummy package. It is no longer
+  # needed." The narrow-screen patches were upstreamed years ago, so the plain
+  # Arch Linux ARM build is the mobile one. Same for gnome-contacts-mobile and
+  # gnome-calendar-mobile, which are dummies too.
+  #
+  # It wants org.freedesktop.secrets, which gnome-keyring under Support
+  # already provides -- so it needs nothing added for it.
+  'geary'
+
+  # RSS. Kirigami, built for Plasma Mobile, and 0.9 MB. newsflash is the GTK4
+  # alternative and is a Rust binary many times the size for the same job on a
+  # screen this small.
+  'alligator'
+
+  # Music. Chosen over gnome-music specifically for what it does NOT drag in:
+  # gnome-music depends on localsearch and tinysparql, which is a filesystem
+  # indexer daemon crawling storage on a 1.15 GHz A53. Amberol has no library
+  # and no daemon -- it opens a folder and plays it, on GTK4 and GStreamer
+  # alone. decibels is smaller still but plays one file at a time with no
+  # queue, which is a file preview rather than a music player.
+  'amberol'
+
+  # Passwords, which keysmith is not: keysmith holds TOTP codes only. Secrets
+  # reads and writes KeePass v4 .kdbx, so the database is one the user already
+  # has and can sync. keepassxc is the alternative and is a Qt Widgets desktop
+  # app that does not reflow to 360px.
+  'secrets'
+
   # --- Camera -----------------------------------------------------------
   # Megapixels, from [danctnix]. It is the only camera app that works on this
   # device, and the reason is libmegapixels: it ships a pine64,pinephone.conf
