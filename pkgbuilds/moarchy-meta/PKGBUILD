@@ -253,6 +253,23 @@ depends=(
   # app that does not reflow to 360px.
   'secrets'
 
+  # Shazam, open and offline-capable: it fingerprints audio locally and only
+  # sends the fingerprint. GTK4/libadwaita, so it reflows, and it is one of the
+  # very few Android staples that has a real Linux client already built for
+  # aarch64.
+  #
+  # READ THIS BEFORE FILING A BUG. Its headline feature does not work on this
+  # device and cannot: "listen to what is playing" needs a microphone, and this
+  # PinePhone's microphone records digital silence -- RMS 0 at PipeWire and at
+  # raw ALSA alike, with Mic1 on, boost 7 and the ADC enabled (docs/apps.md,
+  # "Not working"). SongRec will open, listen, and match nothing, forever.
+  #
+  # It is here because its other two paths do not touch the microphone:
+  # recognition from an audio file, and recognition from a chosen PipeWire
+  # source -- so it identifies what the phone itself is playing. If the
+  # microphone is ever fixed, this app starts working with no change here.
+  'songrec'
+
   # --- Camera -----------------------------------------------------------
   # Megapixels, from [danctnix]. It is the only camera app that works on this
   # device, and the reason is libmegapixels: it ships a pine64,pinephone.conf
@@ -305,6 +322,24 @@ depends=(
   #
   # tesseract / tesseract-data-eng
   #   -> Not available for aarch64. OCR capture is dropped.
+
+  # waydroid
+  #   -> Runs Android in an LXC container, and it is the only route to the apps
+  #      that have no Linux client at all. Removed 2026-09-06, the same day it
+  #      was added, and NOT for the usual reason: the kernel prerequisite is
+  #      actually met. linux-megi 6.18.39 enables ANDROID_BINDER_IPC,
+  #      ANDROID_BINDERFS and ANDROID_BINDER_DEVICES and ships zero binder .ko
+  #      among its 1536 modules, so binder is built in -- nothing to modprobe,
+  #      no binder_linux-dkms, which is the usual reason Waydroid will not
+  #      start on Arch. Verified from danctnix.files, so nobody has to redo it.
+  #
+  #      It is out because of what it costs, not what it lacks: `waydroid init`
+  #      pulls a ~1 GB LineageOS arm64 image on first run, it wants a
+  #      waydroid-container.service that must not be enabled until after that,
+  #      and the container shares 2 GB of RAM and a GLES 2.0 Mali-400. A
+  #      dependency should not commit a fresh phone to any of that.
+  #
+  #      `sudo pacman -S waydroid` installs it whenever someone wants to try.
   #
   # walker, elephant
   #   -> Not used in 4.x at all; the quickshell shell replaces them.
