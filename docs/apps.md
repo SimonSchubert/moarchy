@@ -98,7 +98,7 @@ sudo pacman -S kclock index-fm
 | --- | --- | --- |
 | Linux Command Library | `lcl-gui-bin 4.7.1-2` | Qt6 command reference and cheat sheets |
 
-Useful on a device whose fullscreen terminal is 47 columns: looking a flag up in
+Useful on a device whose terminal is 47 columns: looking a flag up in
 a GUI beats scrolling a man page at that width. Not in Arch Linux ARM — built
 from the pin in `manifest.toml`, from an AUR PKGBUILD that declares `aarch64`
 and ships a matching prebuilt tarball.
@@ -112,12 +112,15 @@ sudo pacman -S lcl-gui-bin
 This is where the hardware is genuinely comfortable, and it is the Omarchy idiom
 anyway. Two measured constraints shape it:
 
-- A **fullscreen terminal is 47×41 characters** at font size 9.
+- A **terminal is 47×41 characters** at font size 9.
 - **btop refuses to draw below 60 columns**, whatever `shown_boxes` says.
 
-So `moarchy-launch-tui` opens TUIs fullscreen at font size 7. For something
-that fits a *tiled* terminal with the bar still visible, use **`btm`** (bottom) —
-it adapts, and shows CPU, memory, all three thermal zones, disks and network.
+So `moarchy-launch-tui` opens TUIs at font size 7, which is ~60 columns. The
+window is an ordinary tiled one: the bar anchors top and the keyboard anchors
+bottom, so neither costs a column, and a fullscreened terminal only bought a few
+rows in exchange for hiding both. For something that fits at the *default* font
+size, use **`btm`** (bottom) — it adapts, and shows CPU, memory, all three
+thermal zones, disks and network.
 
 Also installed and worth knowing: `htop`, `lazygit`, `bluetui`, `wiremix`
 (audio), `s-tui` (CPU frequency/temperature graphs).

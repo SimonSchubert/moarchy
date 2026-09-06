@@ -1969,8 +1969,11 @@ print(" ".join(out))'; }
     fi
 
     # Read off the window, not restated here: sway draws a fullscreen view
-    # above the top layer, so on Top the splash is invisible behind exactly the
-    # apps pinephone.conf fullscreens.
+    # above the top layer, so on Top the splash is invisible behind any window
+    # the user fullscreens ($mod+Shift+f, or an app that asks). pinephone.conf
+    # no longer fullscreens TUIs -- that rule is gone, because it hid the
+    # keyboard the same way -- but the layer is still the only thing that
+    # decides this.
     layer=$(echo "$geom" | sed -n 's/.*layer=\([a-z?]*\).*/\1/p')
     if [[ $layer == "overlay" ]]; then
       w_ok L2a "the surface is on the overlay layer, in front of fullscreen apps"

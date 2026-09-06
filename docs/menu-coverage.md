@@ -13,7 +13,7 @@ v4.0.2 (`346e69e1`). Every one of them appears below exactly once.
 | Class | Meaning |
 | --- | --- |
 | **Native** | Reimplemented as a phone control or screen. moarchy code, not Omarchy's. Container rows that become one of our screens are Native too -- nothing of upstream's runs. |
-| **Bridged** | Upstream's own script runs unchanged; only the way it is launched changes -- a fullscreen TUI instead of a floating terminal, epiphany instead of a Chromium web app. |
+| **Bridged** | Upstream's own script runs unchanged; only the way it is launched changes -- a tiled TUI-sized terminal instead of a floating one, epiphany instead of a Chromium web app. |
 | **Shade** | Already a control in the pull-down shade. Deliberately not repeated in Settings. |
 | **Unsupported** | Hidden from the UI. The reason names the missing binary, the x86_64 constraint, or the Hyprland dependency. |
 
@@ -30,11 +30,16 @@ Unsupported.
 `omarchy-launch-floating-terminal-with-presentation <script>`, and all 137
 `omarchy-*` scripts they name exist upstream. Because `bin/` here shadows
 `$OMARCHY_PATH/bin` by PATH order, one shim for that wrapper -- routing to
-`moarchy-launch-tui`, a fullscreen foot at font size 7 -- makes the whole
-class work without reimplementing any of it. 65 of the bridged rows run a command
+`moarchy-launch-tui`, a foot at font size 7 -- makes the whole class work
+without reimplementing any of it. 65 of the bridged rows run a command
 byte-identical to upstream's `action`; the selftest asserts it. The exceptions are
 the three package rows, where upstream's `xdg-terminal-exec --app-id=...` is
-replaced by the fullscreen terminal, which is the entire point of bridging.
+replaced by that terminal, which is the entire point of bridging.
+
+That terminal is a normal tiled window. It was fullscreened until 2026-09-06,
+which made every row that asks a question unanswerable: sway draws a fullscreen
+view above the Top layer, the keyboard is a Top-layer surface, so the prompt
+appeared and the keys did not.
 
 ## Totals
 
@@ -235,7 +240,7 @@ Native 25 · Bridged 15 · Unsupported 22
 | `setup.plugin` | Plugins | Native | Shell & plugins > Plugins |  |
 | `setup.plugin.enable` | Enable Plugin | Bridged | Shell & plugins > Plugins | `omarchy-menu-select` |
 | `setup.plugin.disable` | Disable Plugin | Bridged | Shell & plugins > Plugins | `omarchy-menu-select` |
-| `setup.plugin.add` | Add Plugin | Bridged | Shell & plugins > Plugins | fullscreen TUI |
+| `setup.plugin.add` | Add Plugin | Bridged | Shell & plugins > Plugins | TUI; prompts for a repo URL |
 | `setup.plugin.clone` | Clone Plugin | Bridged | Shell & plugins > Plugins | `omarchy-menu-select` |
 | `setup.plugin.remove` | Remove Plugin | Bridged | Shell & plugins > Plugins | guard is TRUE here (six moarchy.* manifests) -- this row can uninstall the phone UI; confirm sheet added |
 | `setup.security` | Security | Native | Security |  |
@@ -440,7 +445,7 @@ Native 6 · Bridged 8 · Unsupported 14
 | `update.hardware.bluetooth` | Bluetooth | Bridged | System > Restart hardware |  |
 | `update.hardware.trackpad` | Trackpad | Unsupported | -- | no touchpad; `omarchy-restart-trackpad` reloads Hyprland input |
 | `update.password.drive` | Drive Encryption | Unsupported | -- | the SD/eMMC root is not LUKS, so cryptsetup has no volume to re-key |
-| `update.password.user` | User | Bridged | Security > Change password | `passwd` in a fullscreen terminal |
+| `update.password.user` | User | Bridged | Security > Change password | `passwd` in a TUI. The account ships with a locked password, so this row is how you give it one |
 
 ---
 

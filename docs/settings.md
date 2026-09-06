@@ -18,7 +18,7 @@ visible.
 | **row** | A line on a page. One of `nav`, `plugin`, `switch`, `choice`, `action`, `link`, `info`. |
 | **guard** | A `when:` shell condition copied verbatim from `omarchy-menu.jsonc`. A row whose guard fails is not rendered. |
 | **reader** | The command a `switch` or `choice` page reads its state from. |
-| **bridged launch** | Running an upstream `omarchy-*` command unchanged, in a fullscreen TUI or the browser. |
+| **bridged launch** | Running an upstream `omarchy-*` command unchanged, in a TUI terminal or the browser. |
 | **the shade** | The pull-down (`moarchy.shade`), which owns the radios and sliders. |
 | **running** | Summoned and not yet closed. Settings stays running across any number of hides, and has a carousel card for exactly that span (`gestures.md` K1). |
 | **hidden** | Off screen but running. The strip's up-swipe hides; the page stack survives. |
@@ -228,7 +228,7 @@ and `value=zed`
 `omarchy-menu.jsonc` for the id it covers, with three declared exceptions.
 → a static diff of `Pages.js` against the upstream file: 65 of 68 match exactly.
 `install.package`, `install.aur` and `remove.package` differ only in dropping
-upstream's `xdg-terminal-exec --app-id=...` for the fullscreen terminal, which is
+upstream's `xdg-terminal-exec --app-id=...` for the TUI terminal, which is
 the point of bridging. Checked statically rather than through `lastLaunch`,
 because `lastLaunch` records the wrapped form that actually ran
 
@@ -241,9 +241,15 @@ because `lastLaunch` records the wrapped form that actually ran
 `omarchy-launch-config-editor` and `omarchy-launch-webapp` each starts with
 `$MOARCHY_PATH/bin`
 
-**E5** A bridged TUI opens fullscreen, identifiable, and typeable.
-→ `swaymsg -t get_tree` shows an `app_id == "moa-tui"` node filling the workspace;
-focusing its prompt raises `sm.puri.OSK0`
+**E5** A bridged TUI opens tiled, identifiable, and typeable. Tiled *because*
+typeable: a fullscreen view draws above the Top layer the keyboard is on, so the
+rule that used to fullscreen these (`windows.md` W5) is what made
+`install.aur` a prompt with no way to answer it.
+→ `swaymsg -t get_tree` shows an `app_id == "moa-tui"` node filling the workspace
+with `fullscreen_mode: 0`; focusing its prompt raises `sm.puri.OSK0` **and** a tap
+on one of its keys arrives in the terminal. The bus property alone is not the
+check — it read `Visible true` for the whole time the keyboard was drawn
+underneath the terminal and taking no touches
 
 **E6** Launching a bridged row puts Settings away first, so the terminal is not
 covered by a layer surface. It is put away *hidden*, so Settings and the

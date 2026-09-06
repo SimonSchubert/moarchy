@@ -11,8 +11,14 @@
 #
 # The presentation wrapper is upstream's, kept verbatim -- logo, then the
 # command, then the done prompt unless the user interrupted it (130). Only the
-# terminal changes: moarchy-launch-tui is a fullscreen foot at font size 7,
-# which is the ~60 columns btop and friends need.
+# terminal changes: moarchy-launch-tui is a foot at font size 7, which is the
+# ~60 columns btop and friends need.
+#
+# An ordinary tiled window, deliberately. It was fullscreened until the keyboard
+# turned out to be the price: a fullscreen view draws above the Top layer the
+# keyboard is on, so rows that ask a question -- `install.aur`, `passwd`, every
+# gum prompt -- put one on screen with no way to answer it. See
+# default/sway/pinephone.conf.
 
 # Theme the gum widgets to the current theme. Absent on a partial install, and a
 # missing prompt style is not worth refusing to run the command over.

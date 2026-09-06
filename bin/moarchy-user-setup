@@ -65,7 +65,7 @@ if [[ -f $HOME/.config/foot/foot.ini ]] && ! grep -q "style=Regular" "$HOME/.con
     "$HOME/.config/foot/foot.ini"
 fi
 
-# A fullscreen terminal here is 47x41 characters, and btop refuses to draw below
+# A terminal here is 47x41 characters at font size 9, and btop refuses to draw below
 # 60 columns whatever shown_boxes says. Trimming the boxes still helps in a
 # split; moarchy-launch-tui is what actually makes it fit, by dropping the font
 # size.

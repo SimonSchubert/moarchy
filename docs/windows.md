@@ -14,7 +14,7 @@ before any of this applies, and they belong to [gestures.md](gestures.md).
 
 ---
 
-## W1–W4. The window area
+## W1–W5. The window area
 
 **W1** A single app on a workspace fills its workspace exactly. No wallpaper
 shows around it, on any edge.
@@ -49,6 +49,28 @@ restores it to the full width at `x=0`. Width, not the window rect: the window
 rect carries every exclusive zone on the screen, so the keyboard coming up
 mid-check reads as a gaps failure.
 
+**W5** Nothing is fullscreened on the user's behalf. A window that fills its
+workspace (W1) is still a *tiled* window, and that is a different thing: sway
+draws a fullscreen view above the Top layer and routes touches to it alone, so
+a fullscreened window takes the bar, the launch splash and — the one that
+decides this — the on-screen keyboard off the screen with it. The keyboard is
+on Top by design and cannot simply move: on Overlay it maps before the home
+strip and claims the bottom exclusive zone the pill needs
+(`moarchy-keyboard/src/panel.cpp`). A fullscreen window also ignores exclusive
+zones, so even a keyboard that stayed visible would cover the prompt instead of
+pushing it up. Fullscreen stays available on `$mod+Shift+f`, as a thing the
+user asks for and can undo.
+→ no `fullscreen enable` rule in `default/sway/pinephone.conf`, and
+`swaymsg -t get_tree` reports `fullscreen_mode: 0` for a window opened by
+`moarchy-launch-tui`; with its prompt focused, a tap on a key of the raised
+keyboard reaches the terminal
+
+Until 2026-09-06 `pinephone.conf` fullscreened every `moa-tui` window, for ~46
+columns that were never at stake — the bar anchors top, the keyboard anchors
+bottom, and neither costs a character of width. What it cost was the keyboard:
+Settings ▸ Install from the AUR, `passwd`, and every other bridged row that
+asks a question drew a prompt over a keyboard whose keys took no touches.
+
 ---
 
 ## L1–L9. The launch splash
@@ -65,7 +87,10 @@ centred, as the drawer closes. Not two seconds later.
 
 **L2a** The splash is on the Overlay layer, not Top. Sway renders a fullscreen
 view above the top layer, so on Top the splash disappeared behind any
-fullscreen window — and `pinephone.conf` fullscreens every TUI.
+fullscreen window — and at the time `pinephone.conf` fullscreened every TUI.
+That rule is gone (it hid the keyboard for the same reason, see W5), which
+changes how often this bites and not whether it is one: `$mod+Shift+f` and any
+app that asks for fullscreen still draw above Top.
 → `omarchy-shell splash geometry` reports `layer=overlay`, read back off the
 window rather than restated
 
@@ -123,6 +148,7 @@ same entry point a tap in the drawer goes through, with its own `Gio` call kept
 as the fallback for a machine that has no shell to ask. That makes the drawer's
 `launch` IPC a contract with a consumer outside this repo, not the test hook
 its comment used to call it.
+
 → the installed `moarchy-store`'s `launcher.py` calls
 `omarchy-shell drawer launch`, rather than reaching Open through `Gio` alone
 

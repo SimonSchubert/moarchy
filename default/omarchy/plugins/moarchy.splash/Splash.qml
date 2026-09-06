@@ -206,9 +206,12 @@ Item {
     // a fullscreen view ABOVE the top layer -- only Overlay stays in front of
     // one -- so on Top this vanished behind the first fullscreen window it met.
     // A capture taken with `splash state` reporting `open` on both sides of it
-    // showed the app underneath and no icon at all. On a phone whose own
-    // pinephone.conf fullscreens every TUI, a splash that any fullscreen app
-    // can hide is not a splash.
+    // showed the app underneath and no icon at all. A splash that any
+    // fullscreen app can hide is not a splash -- and at the time pinephone.conf
+    // fullscreened every TUI, so that was most of them. That rule is gone now
+    // (it hid the keyboard for the same reason), which changes how often this
+    // bites and not whether it is one: $mod+Shift+f and any app that asks for
+    // fullscreen still put a view above the Top layer.
     //
     // The usual reason to prefer Top -- staying under the gesture strip and the
     // shade -- costs nothing here. Ordering within Overlay is map order and

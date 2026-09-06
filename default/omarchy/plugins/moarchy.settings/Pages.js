@@ -31,7 +31,7 @@
 //            is what to run. Those are separate fields because upstream has a
 //            case where they differ -- setup.default.editor.zed reads
 //            "zeditor" and writes "zed".
-//   action   runs `run`. `launch` picks how: "tui" fullscreen terminal,
+//   action   runs `run`. `launch` picks how: "tui" a terminal at TUI size,
 //            "menu" a vendored picker that needs Settings out of the way
 //            first, "none" straight to execDetached.
 //   link     a URL, through the omarchy-launch-webapp shim.

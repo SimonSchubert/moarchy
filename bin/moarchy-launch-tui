@@ -1,11 +1,18 @@
 #!/bin/bash
-# Launch a TUI in a fullscreen terminal sized so it actually renders.
+# Launch a TUI in a terminal sized so it actually renders.
 #
-# Measured on the PinePhone (720x1440, scale 2 -> 360x720 logical): a fullscreen
-# foot at Omarchy's font size 9 gives a 47x41 character grid. btop refuses to
-# draw below 60 columns -- and that floor is independent of shown_boxes, so
-# trimming boxes does not help. Dropping to size 7 yields ~60 columns, which is
-# still legible on a 5.95" panel.
+# Measured on the PinePhone (720x1440, scale 2 -> 360x720 logical): foot at
+# Omarchy's font size 9 gives a 47x41 character grid. btop refuses to draw below
+# 60 columns -- and that floor is independent of shown_boxes, so trimming boxes
+# does not help. Dropping to size 7 yields ~60 columns, which is still legible
+# on a 5.95" panel.
+#
+# The font is the whole fix, and it is worth being precise about why: the bar
+# anchors top and the keyboard anchors bottom, so neither costs a column. This
+# window used to be fullscreened by a rule in default/sway/pinephone.conf, which
+# bought a few rows and hid both -- the keyboard included, since sway draws a
+# fullscreen view above the Top layer it lives on. An ordinary tiled window is
+# the same ~60 columns and can be typed into. See that file for the long version.
 #
 # Override with MOARCHY_TUI_FONT_SIZE if you want a different trade-off.
 FONT_SIZE="${MOARCHY_TUI_FONT_SIZE:-7}"
