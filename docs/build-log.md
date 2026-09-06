@@ -1211,6 +1211,110 @@ come up, because a check that reports a stale session as a defect teaches you to
 ignore it (the same reasoning as the retry on every state read in 6c).
 
 
+## 6l. From installer to image, and the four bugs only hardware found
+
+2026-09-06. The project went from a config overlay with a 1147-line on-device
+installer to a flashable image, released as 0.1.0. The sequence was M1 pins →
+M2 one pacman transaction → M4 the image; M3, the published package repo, was
+skipped because a local `file://` repo satisfies `pacstrap` exactly as well as a
+published one, and only the *update* path needs publishing.
+
+`docs/structure.md` carries the decisions. What belongs here is what building it
+and then booting it actually found, because the split between those two is the
+interesting part.
+
+**Four were found by building.** A container caught all of them:
+
+1. A hand-picked device package set (`linux-megi uboot-pinephone
+   danctnix-tweaks`) that looked like the device stack and omitted
+   `linux-firmware-realtek` — **no wifi**. DanctNIX's own explicitly-installed
+   list, read out of `/var/lib/pacman/local` in their release image, uses one
+   meta package, `device-pine64-pinephone`, which pulls the firmware, the modem
+   and the brightness and proximity udev rules too.
+2. `jack2` chosen over `pipewire-jack` by a provider prompt with no tty.
+3. `OMARCHY_PATH` set but not exported, so `omarchy-theme-set` answered
+   "Theme 'tokyo-night' does not exist" with the theme sitting in
+   `/usr/share/omarchy/themes`.
+4. Upstream's `install/` excluded from `omarchy-config` while a dozen runtime
+   `omarchy-*` scripts source out of it.
+
+**Four needed the phone**, and every one was a *composition* bug — each
+individual file present, correct, and verified:
+
+5. `moarchy-firstboot` wrote the tty1 autologin drop-in but raced `getty@tty1`,
+   so the first boot stopped at a login prompt that a **locked password cannot
+   answer**. The image build knows the username, so the drop-in is written at
+   build time now.
+6. `/etc/profile` sources `profile.d` in sorted order, and
+   `zz-moarchy-session.sh` sorts *before* `zz-moarchy.sh` — `-` is 0x2D, `.` is
+   0x2E. The session `exec`'d sway before the file that puts
+   `/usr/lib/moarchy/bin` on `PATH` ran, so `swaybg` painted the wallpaper and
+   `moarchy-restart-shell` was simply not found: no bar, no gesture strip, and
+   **no log**, because the missing script is the one that writes the log. They
+   are one file now.
+7. `/etc/resolv.conf` is a symlink to systemd-resolved's stub and resolved was
+   not enabled, so it dangled: raw IPs routed, **no name resolved**, and pacman
+   could not reach a mirror.
+8. `systemctl enable` without `--now` in a script that runs *during* first boot,
+   so NetworkManager was enabled and not started — Wi-Fi could not be switched
+   on at all until the phone had been rebooted once.
+
+The lesson is not "test on hardware", which everyone already believes. It is
+that 4 and 5–8 are different *kinds* of defect: the first four are wrong
+contents, which a container can read, and the last four are wrong relationships
+between things that are each individually right, which it cannot.
+
+### The suite had to be made able to fail
+
+`image/verify.sh` grew to 75 checks and `image/negative-test.sh` exists because
+of what happened when it did not. Four checks in the first version were wrong in
+both directions — two passed vacuously, and two reported a correctly enabled
+unit as missing, because `-e` follows an absolute symlink out of the mounted
+image. The negative control plants six defects in a copy and requires the
+verifier to catch all six and exit non-zero.
+
+Two checks were written *after* a bug slipped through, and both had the same
+shape: they measured the fixed-up state rather than the shipped one. The
+autologin check ran `moarchy-firstboot` and *then* asserted the drop-in existed,
+so it passed while the image had none. The session check now simulates a tty1
+login with `sway` replaced by a stub that reports the environment it was handed;
+run against the image that failed, it reports exactly what the phone did.
+
+### Restarting the shell over ssh is not the same as restarting it
+
+Worth its own line because it wasted an hour and looked like a product bug.
+`moarchy-restart-shell` run from an ssh session starts quickshell as a child of
+*that* session, so it lands in a `tty` scope with **no seat** rather than sway's
+`session-1.scope` on `seat0`. polkit then cannot match `allow_active`, falls
+through to `allow_any` (`auth_admin` for NetworkManager), and raises an
+authentication dialog — for a password this image deliberately does not have, on
+a 360px screen where its buttons are off-frame. "System policy prevents Wi-Fi
+scans", and a modal you cannot dismiss.
+
+Restart it through the compositor instead, so it inherits the seated session:
+
+```bash
+swaymsg exec moarchy-restart-shell
+```
+
+`cat /proc/$(pgrep -x quickshell)/cgroup` must name the same scope as
+`pgrep -x sway`.
+
+### And the tooling lied twice, in the same way
+
+`scripts/card-push.sh` — the way into a phone with no network, since the image
+ships `sshd` disabled and a locked password — created `~/.ssh` and `~/pkgs` as
+regular **files**, so every write beneath them failed, and its output filter was
+wide enough to swallow the evidence: it printed nothing and reported success. It
+stats every destination back out of the filesystem now and checks its *type*.
+
+The same script then refused to declare a card clean because `debugfs` had left
+the block and inode bitmaps out of step with the superblock — which is what
+`debugfs` always does, and what `fsck` is for. Reporting the ordinary
+consequence of its own write as "do NOT boot it; re-flash instead" is the worst
+possible advice to give someone whose only route into the phone is the card they
+have just been told to erase.
+
 ## 7. Hardware status
 
 | | |
@@ -1232,6 +1336,19 @@ ignore it (the same reasoning as the retry on every state read in 6c).
   `openPanelIds` for `omarchy.` surfaces after its own, so a vendored popup can
   at least be dismissed. Tapping outside one still does nothing.
 - `I3.workspaces` shape differs from Hyprland's in ways not fully explored.
+- **The camera reboots the phone on first launch.** It works on the second
+  attempt and every time after. Undiagnosed: the candidates are OOM under a
+  software-rendered 2592x1944 preview on 2 GB, a power brownout from the
+  `sgm3140` flash LED, or a `sun6i-csi` fault on first pipeline setup. All three
+  fit "worked after a reboot" and have completely different fixes. The image
+  keeps `/var/log/journal` now, so `journalctl -b -1` will say which.
+
+- ~~**Browser-policy theming fails on every `omarchy-theme-set`.**~~ **Fixed
+  2026-09-06** by packaging: the error was that `omarchy-theme-set-browser`
+  sources `$OMARCHY_PATH/install/helpers/browser-policy.sh`, and we shipped a
+  checkout with `install/` excluded. `omarchy-config` ships it now.
+  Historical description follows.
+
 - **Browser-policy theming fails on every `omarchy-theme-set`.** Upstream's
   `omarchy-theme-set-browser-policy` runs its privileged half from
   `/usr/bin/...` because that is the path `/etc/sudoers.d/omarchy-theme-browser`
