@@ -140,12 +140,70 @@ Heavy SPAs are the real problem, not the browser. x.com loads but paints poorly
 and leaves large black regions — that is the workload against a 1.15 GHz A53 and
 a GLES 2.0 GPU, not something configuration fixes.
 
+## Camera
+
+**Megapixels 2.1.0** is the camera app. Verified on the device on 2026-09-06:
+both sensors stream, the camera switch works, the flash toggles, and a shutter
+press captures a three-frame burst at the rear sensor's full 2592×1944.
+
+The reason it works where nothing else does is `libmegapixels`, which ships a
+`pine64,pinephone.conf` describing this device's media graph and **configures the
+links itself** before streaming:
+
+```
+Pipeline: ({Type: "Link", From: "ov5640", FromPad: 0, To: "sun6i-csi-bridge", ToPad: 0},
+           {Type: "Mode", Entity: "ov5640"}, {Type: "Mode", Entity: "sun6i-csi-bridge"});
+```
+
+That is the whole of the old "`VIDIOC_STREAMON` fails — pipeline links
+unconfigured" entry. The links were unconfigured because no one was configuring
+them; `sun6i-csi` on 6.18 requires it and a generic app never does. This is also
+why **`snapshot` and `plasma-camera` cannot work here** — both assume a camera
+that just streams, and neither knows about the `sgm3140` flash.
+
+`megapixels-findconfig` auto-detects from the devicetree (`pine64,pinephone-1.1`):
+
+| | Sensor | Flash | Modes |
+| --- | --- | --- | --- |
+| Rear | `ov5640` | LED, `/sys/class/leds/white:flash/flash_strobe` | 2592×1944@15, 1280×720@30 (BGGR8 / YUYV) |
+| Front | `gc2145` | screen | 1280×720@60 BGGR8 |
+
+The camera switch was confirmed against the media graph rather than by eye —
+tapping it flips which sensor link to `sun6i-csi-bridge` is `[ENABLED]`, cycling
+`gc2145 → ov5640 → gc2145`.
+
+### Three things that bite
+
+1. **`xdg-user-dirs` is required, and nothing pulled it in.** Without it
+   `~/Pictures` never exists, and every photo is captured and then **silently
+   thrown away** at the last step:
+   `cp: cannot create regular file '/home/…/Pictures/IMG….dng': No such file or
+   directory`. The burst is written to `/tmp` first, so the failure appears only
+   after the shutter animation, and the app reports nothing.
+2. **The flash permission does not survive a reboot.** The shipped
+   `90-megapixels.rules` chmods `flash_strobe` to 666 on `ACTION=="add"` only,
+   and the LED is added at boot before the rule exists, so it stays root-owned.
+   `udevadm trigger --subsystem-match=leds` fixes it until the next boot.
+3. **The preview is software-rendered, by Megapixels' own choice.** It matches
+   the devicetree and forces `LIBGL_ALWAYS_SOFTWARE=1`, so the GLES preview runs
+   on the A53s, not the Mali — GTK4 then reports "OpenGL ES 3.2" because that is
+   llvmpipe. It is usable, but the log fills with `Dropping frame`.
+
+### Not yet verified
+
+Whether the flash physically fires, and video recording. Megapixels ships
+`movie.sh` → `mpegize.py`, which is GStreamer `x264enc speed-preset=ultrafast`
+into `~/Videos/VID*.mkv` — software H.264, since the A64's `cedrus` is
+decode-only. Audio would be silent regardless while the microphone records
+RMS 0. Video also needs `python-gobject`, `gst-plugins-good` and
+`gst-plugins-ugly`, none of which `megapixels` declares.
+
 ## Not working
 
 | | |
 | --- | --- |
 | **Microphone** | Records digital silence (RMS 0) at PipeWire *and* raw ALSA, despite `Mic1` on, boost 7, `ADC` 144/192 and `AIF1 Slot 0 Digital ADC` enabled |
-| **Camera** | `ov5640` (rear) and `gc2145` (front) both register in the media graph, but `VIDIOC_STREAMON` fails — pipeline links unconfigured. `megapixels` installs but did not produce a window |
+| ~~Camera~~ | **Works as of 2026-09-06** — see [Camera](#camera) below. The old entry here blamed `VIDIOC_STREAMON`; the links were never configured because nothing was configuring them |
 | Audio **output** | Works |
 | Hardware video decode | `cedrus` present at `/dev/video1`, unexplored |
 
