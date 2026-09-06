@@ -18,7 +18,14 @@ _ver=$(manifest_get moarchy version) || return 1
 
 pkgname=moarchy-meta
 pkgver=$_ver
-pkgrel=1
+# 2: the app set below moved after 0.1.0-1 was published -- gnome-contacts,
+# geary, alligator, amberol, secrets and songrec added, kclock and index-fm
+# removed -- and the version did not. pacman compares versions, not depends, so
+# a phone already holding 0.1.0-1 would never see any of it. Verified against
+# the published package rather than assumed: its .PKGINFO carries 95 depends
+# and none of the six new names. Same trap manifest.toml records for the
+# keyboard and pkgbuilds/moarchy records for its own pkgrel.
+pkgrel=2
 pkgdesc="The moarchy package set -- install this and you have the phone"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
@@ -155,7 +162,11 @@ depends=(
   # Wayland clients and already laid out for a 360px-wide screen, which is exactly
   # what this is. Together they cost ~115 MB resident.
   #
-  # See install/telephony.sh -- their systemd units need replacing, not enabling.
+  # Their systemd units need replacing, not enabling: both ship
+  # `Requisite=gnome-session-initialized.target`, which under sway never exists.
+  # pkgbuilds/moarchy installs same-named units into /etc/systemd/user, which
+  # wins over the /usr/lib copies their packages place. (This said "see
+  # install/telephony.sh" until that script went with the installer.)
   #   gnome-calls  dialer and in-call UI
   #   chatty       SMS/MMS
   #   callaudiod   earpiece/speaker/headset routing during a call
@@ -345,8 +356,10 @@ depends=(
   #   -> Not used in 4.x at all; the quickshell shell replaces them.
   #
   # yay, xdg-terminal-exec, ttf-ia-writer
-  #   -> Not in ALARM. Built from source; see install/build-src.sh and
-  #      docker/Dockerfile.builder.
+  #   -> Not in ALARM. Built from source; see docker/build-packages.sh and the
+  #      [aur.*] pins in manifest.toml. They are dependencies now, not a
+  #      separate step -- the paragraph below is the current version of this
+  #      one, which is kept because the reasoning above it still holds.
 
   # yay, xdg-terminal-exec, ttf-ia-writer and cbonsai were in that same
   # position: no aarch64 build anywhere, so the old installer built them on the
