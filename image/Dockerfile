@@ -20,7 +20,8 @@ RUN printf '\n[danctnix]\nSigLevel = Never\nServer = https://archmobile.mirror.d
 RUN pacman-key --init && pacman-key --populate archlinuxarm && \
     pacman -Syu --noconfirm \
       arch-install-scripts dosfstools e2fsprogs mtools util-linux \
-      uboot-tools xz git
+      uboot-tools xz git \
+      gptfdisk parted
 
 COPY image/build.sh /usr/local/bin/build-image
 

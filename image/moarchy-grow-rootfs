@@ -1,0 +1,19 @@
+#!/bin/bash
+# Expand the rootfs partition to fill the card, once.
+#
+#   moarchy-grow-rootfs [partition]
+#
+# The optional argument exists so this can be tested against a loop device
+# instead of only ever running for the first time on someone's phone. With no
+# argument it does what the unit does: grow whatever / is mounted from.
+set -euo pipefail
+root_src=${1:-$(findmnt -no SOURCE /)}    # e.g. /dev/mmcblk0p2
+disk=$(lsblk -no PKNAME "$root_src")      # e.g. mmcblk0
+[ -n "$disk" ] || exit 0
+part=${root_src##*p}
+
+# ",+" means "same start, grow to the end of the free space". --force because
+# sfdisk warns about rewriting a table it did not create.
+echo ", +" | sfdisk --no-reread --force -N "$part" "/dev/$disk" >/dev/null 2>&1 || true
+partprobe "/dev/$disk" >/dev/null 2>&1 || true
+resize2fs "$root_src" >/dev/null 2>&1 || true

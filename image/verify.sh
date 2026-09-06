@@ -105,6 +105,17 @@ have /usr/share/applications/moarchy.device.desktop
 have /usr/share/omarchy/install/helpers/browser-policy.sh
 have /usr/share/omarchy/shell/shell.qml
 
+# Checked here, in the image AS SHIPPED, not only after the behaviour section
+# has run moarchy-firstboot. That is exactly how this was missed: the suite ran
+# firstboot, then asserted the drop-in existed, and passed -- while the image
+# itself had no autologin, so the first boot on hardware stopped at a login
+# prompt that a locked password cannot answer.
+if grep -q -- '--autologin' "$R/etc/systemd/system/getty@tty1.service.d/autologin.conf" 2>/dev/null; then
+  ok "tty1 autologin is in the image itself (not deferred to first boot)"
+else
+  no "no autologin drop-in in the shipped image -- first boot stops at a login prompt"
+fi
+
 n=$(ls -1d "$R"/usr/share/moarchy/plugins/*/ 2>/dev/null | wc -l)
 [ "$n" = 9 ] && ok "9 shell plugins" || no "expected 9 plugins, found $n"
 
@@ -196,9 +207,12 @@ else
   no "moarchy-firstboot exited $?"; sed 's/^/       /' "$WORK/firstboot.log"
 fi
 
-grep -q "autologin --autologin moarchy\|--autologin moarchy" \
+# firstboot rewrites the same file; this checks it names the right user, not
+# that it is present -- the shipped-state check above owns that.
+grep -q -- "--autologin moarchy" \
   "$R/etc/systemd/system/getty@tty1.service.d/autologin.conf" 2>/dev/null \
-  && ok "tty1 autologin names the user" || no "autologin drop-in missing or wrong"
+  && ok "firstboot's autologin drop-in names the user" \
+  || no "firstboot wrote a wrong or missing autologin drop-in"
 
 for g in input feedbackd; do
   chroot "$R" id -nG moarchy 2>/dev/null | tr ' ' '\n' | grep -qx "$g" \
@@ -249,6 +263,61 @@ THEME="$R/home/moarchy/.local/state/omarchy/current/theme"
                             || no "no colors.toml -- moarchy-keyboard has no palette"
 [ -f "$R/home/moarchy/.local/state/moarchy/user-setup-done" ] \
   && ok "user-setup stamped itself" || no "no user-setup stamp -- it would run again"
+
+# ---------------------------------------------------------------------------
+# I7 has no other test. It runs exactly once, on a card, on first boot -- so
+# without this the first time it executes is on someone's phone.
+sec "behaviour: the rootfs grows onto a bigger card"
+
+# I7 runs exactly once, on a card, on first boot -- so without a test here the
+# first execution is on someone's phone.
+#
+# It cannot be tested the obvious way. moarchy-grow-rootfs takes a partition
+# device, and Docker Desktop's kernel has loop.max_part=0, so `losetup -P`
+# attaches the disk but /dev/loopNp2 is never created -- no partition nodes
+# exist to hand it, whatever the image contains. Reporting that as a failed
+# growth test would blame the image for the harness.
+#
+# So the two operations the script performs are exercised directly, on the real
+# image, with the same commands: sfdisk grows the last partition, resize2fs
+# follows it. What is left untested is only the script's device discovery
+# (findmnt / lsblk), which needs a booted system.
+GROW="$WORK/grow.img"
+cp --sparse=always "$IMG" "$GROW"
+truncate -s "+2G" "$GROW"          # what a bigger card looks like
+
+before_end=$(sfdisk -d "$GROW" | sed -n 's/.*start= *266240, size= *\([0-9]*\).*/\1/p')
+
+# The backup GPT header is stranded mid-disk after the file grows; sfdisk will
+# not extend a partition past it until it is moved to the new end.
+sgdisk -e "$GROW" >/dev/null 2>&1 || true
+# The same command moarchy-grow-rootfs runs, against partition 2.
+echo ", +" | sfdisk --no-reread --force -N 2 "$GROW" >/dev/null 2>&1 || true
+
+after_end=$(sfdisk -d "$GROW" | sed -n 's/.*start= *266240, size= *\([0-9]*\).*/\1/p')
+if [ "${after_end:-0}" -gt "${before_end:-0}" ]; then
+  ok "sfdisk grew the rootfs partition $(( before_end / 2048 ))M -> $(( after_end / 2048 ))M"
+else
+  no "sfdisk did not grow the partition (${before_end:-?} -> ${after_end:-?} sectors)"
+fi
+
+# And resize2fs follows it -- the half that actually gives you the space. The
+# rootfs is attached at its offset, with no sizelimit, so the filesystem sees
+# the grown partition.
+if LOOP=$(losetup -o $((266240*512)) --show -f "$GROW" 2>/dev/null); then
+  fs_before=$(dumpe2fs -h "$LOOP" 2>/dev/null | sed -n 's/^Block count: *//p')
+  e2fsck -fp "$LOOP" >/dev/null 2>&1 || true
+  resize2fs "$LOOP" >/dev/null 2>&1 || true
+  fs_after=$(dumpe2fs -h "$LOOP" 2>/dev/null | sed -n 's/^Block count: *//p')
+  losetup -d "$LOOP" 2>/dev/null
+  if [ "${fs_after:-0}" -gt "${fs_before:-0}" ]; then
+    ok "resize2fs grew the filesystem $(( fs_before * 4096 / 1048576 ))M -> $(( fs_after * 4096 / 1048576 ))M"
+  else
+    no "resize2fs did not grow the filesystem (${fs_before:-?} -> ${fs_after:-?} blocks)"
+  fi
+else
+  no "could not attach the rootfs to a loop device -- I7 filesystem half NOT tested"
+fi
 
 sec "result"
 if [ $FAIL = 0 ]; then

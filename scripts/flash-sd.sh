@@ -26,7 +26,21 @@ DISK="${1:-}"
 if [[ -z $DISK ]]; then
   echo "usage: $0 /dev/diskN" >&2
   echo >&2
-  diskutil list external physical >&2 || diskutil list >&2
+  # A Mac's BUILT-IN SD reader reports as `internal`, so `diskutil list
+  # external physical` prints nothing at all for the most common way of
+  # flashing a card -- which reads as "no card inserted" when the card is in.
+  # Ask the card reader directly first; it names the BSD device.
+  card=$(system_profiler SPCardReaderDataType 2>/dev/null |
+           sed -n 's/^ *BSD Name: *\(disk[0-9]*\)$/\1/p' | head -1)
+  if [[ -n $card ]]; then
+    echo "Card reader holds /dev/$card:" >&2
+    diskutil list "/dev/$card" >&2
+    echo >&2
+    echo "  $0 /dev/$card" >&2
+    echo >&2
+  fi
+  echo "Other removable disks:" >&2
+  diskutil list external physical >&2 2>/dev/null || true
   exit 1
 fi
 

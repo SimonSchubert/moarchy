@@ -55,6 +55,11 @@ cat >"$WORK/pacman.conf" <<EOF
 Architecture = aarch64
 SigLevel = Never
 DisableSandbox
+# pacman's default gives up on a stalled mirror with "Operation too slow. Less
+# than 1 bytes/sec", which failed a build 40 minutes in on webkitgtk. The retry
+# loop below covers a mirror that drops the connection outright; this covers one
+# that merely crawls.
+DisableDownloadTimeout
 HoldPkg = pacman glibc
 [moarchy]
 Server = file://$WORK/repo
@@ -97,7 +102,11 @@ mkdir -p "$ROOTDIR"
 # than downloading into the target root. Without it every build re-fetched
 # 1.26 GiB, and the downloads landed inside the rootfs where they then had to be
 # trimmed back out before sizing the partition.
-pacstrap -c -C "$WORK/pacman.conf" -M "$ROOTDIR" \
+# Retried, because a single slow mirror should not cost a 40-minute build.
+# Each attempt resumes from the package cache, so a retry fetches only what
+# is still missing rather than starting the 1.26 GiB over.
+attempt=1
+until pacstrap -c -C "$WORK/pacman.conf" -M "$ROOTDIR" \
   base \
   archlinuxarm-keyring danctnix-keyring \
   device-pine64-pinephone danctnix-usb-tethering \
@@ -106,11 +115,30 @@ pacstrap -c -C "$WORK/pacman.conf" -M "$ROOTDIR" \
   pipewire-audio pipewire-alsa pipewire-pulse pipewire-jack \
   dosfstools f2fs-tools v4l-utils zramswap sudo which \
   moarchy-meta
+do
+  if [ $attempt -ge 3 ]; then
+    die "pacstrap failed $attempt times -- see the mirror errors above"
+  fi
+  attempt=$(( attempt + 1 ))
+  info "pacstrap failed; retrying ($attempt/3)"
+  sleep 5
+done
 info "rootfs: $(du -sh "$ROOTDIR" | cut -f1)"
 
 # ---------------------------------------------------------------------------
 say "kernel, initramfs and boot script"
 cp /etc/resolv.conf "$ROOTDIR/etc/resolv.conf" 2>/dev/null || true
+
+# mkinitcpio prints "ERROR: failed to detect root filesystem" here, twice, and
+# it is benign -- but it looks exactly like a build that just produced an
+# unbootable image, so: the `fsck` hook is asking what filesystem / is, and in a
+# chroot there is no answer. The consequences are that boot-time fsck of root is
+# skipped, and that `autodetect` cannot narrow the module set, so it includes
+# more rather than less -- our initramfs is 23.1 MB against DanctNIX's 18.0 MB.
+#
+# Root still mounts: ext4 is built into megi's kernel rather than shipped as a
+# module (there is no ext4*.ko under /usr/lib/modules), and boot.txt passes
+# root=/dev/mmcblk${linux_mmcdev}p${rootpart} with rootwait on the cmdline.
 arch-chroot "$ROOTDIR" mkinitcpio -P
 ( cd "$ROOTDIR/boot" && ./mkscr >/dev/null ) || die "mkscr failed -- is uboot-tools in the rootfs?"
 [ -f "$ROOTDIR/boot/boot.scr" ] || die "boot.scr not generated"

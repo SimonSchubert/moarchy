@@ -27,6 +27,22 @@ say() { printf '    %s\n' "$*"; }
 arch-chroot "$ROOTDIR" useradd -m -G wheel,video,audio,input,feedbackd -s /bin/bash "$USER_NAME"
 arch-chroot "$ROOTDIR" passwd -l "$USER_NAME" >/dev/null
 arch-chroot "$ROOTDIR" passwd -l root >/dev/null
+# Autologin, written HERE rather than left to moarchy-firstboot.
+#
+# firstboot writes the same file, but it races getty@tty1: on the very first
+# boot getty had already started from the packaged default, so the phone came up
+# at a `moarchy login:` prompt -- with a locked password, and therefore no way
+# in at all until a reboot. Observed on hardware 2026-09-06.
+#
+# The image build knows the username, so there is no reason to defer it. What
+# firstboot does is now only what genuinely needs a running system.
+install -d "$ROOTDIR/etc/systemd/system/getty@tty1.service.d"
+cat >"$ROOTDIR/etc/systemd/system/getty@tty1.service.d/autologin.conf" <<EOF
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty -o '-p -f -- \\u' --noclear --autologin $USER_NAME %I \$TERM
+EOF
+
 printf '%s ALL=(ALL) NOPASSWD: ALL\n' "$USER_NAME" > "$ROOTDIR/etc/sudoers.d/10-moarchy"
 chmod 440 "$ROOTDIR/etc/sudoers.d/10-moarchy"
 say "user $USER_NAME (locked password, passwordless sudo, root locked)"
@@ -51,21 +67,8 @@ echo 'LANG=en_US.UTF-8' > "$ROOTDIR/etc/locale.conf"
 # The image is sized to its contents plus slack so the download stays small;
 # the card is whatever the user put in. sfdisk grows the last partition and
 # resize2fs follows it, both online.
-install -Dm755 /dev/stdin "$ROOTDIR/usr/lib/moarchy/bin/moarchy-grow-rootfs" <<'GROW'
-#!/bin/bash
-# Expand the rootfs partition to fill the card, once.
-set -euo pipefail
-root_src=$(findmnt -no SOURCE /)          # e.g. /dev/mmcblk0p2
-disk=$(lsblk -no PKNAME "$root_src")      # e.g. mmcblk0
-[ -n "$disk" ] || exit 0
-part=${root_src##*p}
-
-# ",+" means "same start, grow to the end of the free space". --force because
-# sfdisk warns about rewriting a table it did not create.
-echo ", +" | sfdisk --no-reread --force -N "$part" "/dev/$disk" >/dev/null 2>&1 || true
-partprobe "/dev/$disk" >/dev/null 2>&1 || true
-resize2fs "$root_src" >/dev/null 2>&1 || true
-GROW
+install -Dm755 "$(dirname "$0")/moarchy-grow-rootfs" \
+  "$ROOTDIR/usr/lib/moarchy/bin/moarchy-grow-rootfs"
 
 cat >"$ROOTDIR/usr/lib/systemd/system/moarchy-grow-rootfs.service" <<'EOF'
 [Unit]

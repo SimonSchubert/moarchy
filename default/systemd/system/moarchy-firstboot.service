@@ -2,6 +2,11 @@
 Description=moarchy first-boot setup (groups, autologin)
 # Nothing here is useful before the system has a user database and a filesystem.
 After=systemd-user-sessions.service
+# Before getty, not merely "at some point during multi-user". Without this the
+# autologin drop-in lands after getty@tty1 has already started from the
+# packaged default, and the first boot stops at a login prompt that a locked
+# password cannot answer.
+Before=getty@tty1.service
 # The stamp is what makes this run once. The unit disables itself as well, but
 # a ConditionPathExists is what survives someone re-enabling it by hand.
 ConditionPathExists=!/var/lib/moarchy/firstboot-done
