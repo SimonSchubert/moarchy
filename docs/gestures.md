@@ -418,6 +418,26 @@ quietly under-reserves by exactly that much.
 → with the keyboard up, `drawer geometry` `h` is `screen - bar - panelHeight`;
 at 176 rather than 200 the drawer settles over the top key row
 
+**I5c** The gate cannot get stuck. `activeFocus` only stands in for "the
+keyboard is up" (I5a) while the two actually move together, so anything that
+leaves the search field focused with the keyboard down drops the inset for the
+rest of the session: the surface maps with the field not yet focused and draws
+its one correct frame under the strip, then sway activates it, Qt hands the
+focus back, and the band under the pill goes to wallpaper for as long as the
+drawer is up.
+
+Closing the drawer therefore has to *release* the field's focus rather than
+merely deactivate the window, which means handing active focus to an item
+inside the same surface -- an item that belongs to no window holds nothing, so
+the field keeps its `focus` flag across the unmap and takes activeFocus back on
+the next map. The second symptom is the tell, and it is the one that was seen
+first: a tap on a field that is already focused changes no focus and re-enables
+no text input, so a session that has had the drawer open for a while stops
+raising the keyboard at all.
+→ tap the search field, close the drawer, open it again: `drawer searchTarget`
+reports `focused=false` and `drawer geometry` reports `margin` equal to
+`-<strip>`
+
 **I6** The pill still works over all four. The three sheets need no mask for
 this: they are on Top, the strip is on Overlay, and every Overlay surface sits
 above every Top one. **The keyboard is the exception and needs one** -- it is on

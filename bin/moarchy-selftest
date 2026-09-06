@@ -1683,14 +1683,32 @@ print(r["x"], r["y"], r["width"], r["height"])'
       # opening and closing overlays for a while stops re-activating the search
       # field's text input entirely -- the tap lands, the injector is fine (the
       # same one still drives every gesture check), and the keyboard simply
-      # never rises. `moarchy-restart-shell` clears it every time. So a
-      # skip here usually means the session is stale, not that I5 is broken.
+      # never rises. `moarchy-restart-shell` clears it every time. That was the
+      # field holding focus across the close and taking it back on the next map
+      # (I5c), so a skip here now means I5c below should be read first: it is
+      # the same fault, seen from the side that does not need the keyboard.
       printf '  \033[90m%-4s\033[0m   \033[90mI5 skipped: the keyboard would not come up\033[0m\n' ""
     elif [[ -n $h_up && -n $h_down ]] && (( h_up < h_down )) && [[ $gap_up == "$gap_down" ]]; then
       ok "I5 the drawer reflows above the keyboard ($h_down -> $h_up, gap $gap_up held)"
     else
       no "I5 the drawer did not reflow (h $h_down -> ${h_up:-?}, gap $gap_down -> ${gap_up:-?})" \
          "an unchanged height means the keyboard is now covering the grid"
+    fi
+
+    # I5c. Deliberately outside the osk_up branch above: a field that will not
+    # let go is exactly why the keyboard stops rising, so gating this on the
+    # keyboard having risen would skip the check precisely when it fails. The
+    # tap is what this needs, and the tap has already happened.
+    close_ drawer
+    open_ drawer
+    focused=$(omarchy-shell drawer searchTarget 2>/dev/null \
+                | tr ' ' '\n' | sed -n 's/^focused=//p')
+    margin=$(g drawer margin); strip=$(g drawer strip)
+    if [[ $focused == false && -n $strip && $margin == "-$strip" ]]; then
+      ok "I5c the search field lets go on close (margin $margin)"
+    else
+      no "I5c the drawer re-opened with the field still focused (focused=${focused:-?} margin=${margin:-?}, wanted -${strip:-?})" \
+         "the inset stays dropped for the rest of the session and the keyboard stops rising"
     fi
     close_ drawer
   else
