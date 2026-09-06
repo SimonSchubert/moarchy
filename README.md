@@ -177,6 +177,45 @@ moarchy-selftest --gestures   # drives real synthetic touch via /dev/uinput
 | `docker/` | aarch64 container that builds every package natively on Apple Silicon |
 | `scripts/flash-sd.sh` | Guarded SD-card flasher for macOS |
 
+## Updating
+
+The image ships the `[moarchy]` repository, so everything updates with one
+command — kernel, firmware and modem stack from Arch Linux ARM and DanctNIX,
+and the phone UI from moarchy:
+
+```bash
+sudo pacman -Syu
+```
+
+The database and every package are signed, and `pacman.conf` says
+`SigLevel = Required`, so an unsigned or altered package is refused rather than
+installed as root.
+
+Shell files land immediately but the running shell keeps the old code until it
+restarts — a pacman hook says so after an upgrade:
+
+```bash
+moarchy-restart-shell     # or reboot
+```
+
+<sub>Adding the repo to a phone that predates it, or to a stock DanctNIX
+install, needs the key first — `moarchy-keyring` is itself signed, so pacman
+will not install it without already trusting the key:</sub>
+
+```bash
+S=https://github.com/SimonSchubert/moarchy/releases/download/repo
+curl -fsSLO $S/moarchy.asc
+sudo pacman-key --init
+sudo pacman-key --add moarchy.asc
+sudo pacman-key --lsign-key 3CA83612E7F3108F442006B418305B893569BAD3
+printf '\n[moarchy]\nSigLevel = Required\nServer = %s\n' "$S" | sudo tee -a /etc/pacman.conf
+sudo pacman -Syu moarchy-meta
+```
+
+Reflashing is still needed for changes to the partition layout, to what runs on
+first boot, or to the u-boot SPL — that lives outside any partition, at byte
+131072.
+
 ## Building it yourself
 
 ```bash

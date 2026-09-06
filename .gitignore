@@ -14,3 +14,8 @@ images/
 
 # Image builder package cache
 .cache/
+
+# Built repository, uploaded to the `repo` release rather than committed.
+# The whole reason for choosing Releases over Pages was to keep ~120 MB of
+# binaries out of git history.
+repo/dist/

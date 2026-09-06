@@ -1,0 +1,22 @@
+# Teach pacman's own keyring about the key, on install and on upgrade.
+#
+# Shipping the file under /usr/share/pacman/keyrings is not enough by itself:
+# pacman validates against its keyring in /etc/pacman.d/gnupg, and nothing
+# imports into that automatically. `pacman-key --populate` does, and it reads
+# the -trusted file beside the key to decide the trust level without asking.
+post_install() {
+  pacman-key --populate moarchy >/dev/null 2>&1 ||
+    echo "!! could not populate the moarchy keyring; pacman -Syu will refuse signed packages" >&2
+}
+
+post_upgrade() {
+  post_install
+}
+
+pre_remove() {
+  # Leaving the key trusted after the package is gone means a repo that is no
+  # longer configured can still be validated, which is the wrong default.
+  local keyid
+  keyid=$(sed 's/:.*//' /usr/share/pacman/keyrings/moarchy-trusted 2>/dev/null)
+  [ -n "$keyid" ] && pacman-key --delete "$keyid" >/dev/null 2>&1 || true
+}

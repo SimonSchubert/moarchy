@@ -1,0 +1,23 @@
+# Tell the user the shell needs restarting after its files change.
+#
+# It says so rather than doing it, deliberately. The running quickshell reads
+# its QML at startup, so new plugin code does nothing until it restarts -- but
+# restarting it from pacman's context would start it as a child of whatever ran
+# pacman. Over ssh that is a session with no seat, and polkit then refuses
+# NetworkManager actions and raises a password prompt for a password this image
+# does not have (docs/build-log.md 6l).
+#
+# Getting that wrong silently breaks Wi-Fi after every upgrade, which is far
+# worse than one line of output asking for a restart the user can do correctly.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = moarchy
+Target = omarchy-config
+Target = moarchy-keyboard
+
+[Action]
+Description = Shell files changed; a restart is needed to load them
+When = PostTransaction
+Exec = /usr/bin/bash -c 'echo ">> Restart the shell to load the update: moarchy-restart-shell (or reboot)"'

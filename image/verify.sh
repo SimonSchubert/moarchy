@@ -106,6 +106,15 @@ have /usr/share/omarchy/shell/shell.qml
 # The camera app, and the package it needs that nothing declares -- without
 # xdg-user-dirs every photo is captured and silently discarded.
 have /usr/bin/megapixels
+have /usr/share/pacman/keyrings/moarchy.gpg
+have /usr/share/libalpm/hooks/50-moarchy-shell-reload.hook
+# The update path in one check: without the stanza a phone can only be upgraded
+# by reflashing, which is the thing the repo exists to stop.
+if grep -q '^\[moarchy\]' "$R/etc/pacman.conf" 2>/dev/null; then
+  ok "pacman.conf carries the [moarchy] repo ($(grep -A2 '^\[moarchy\]' "$R/etc/pacman.conf" | sed -n 's/^SigLevel = //p'))"
+else
+  no "no [moarchy] repo in pacman.conf -- the phone could only be updated by reflashing"
+fi
 have /usr/bin/xdg-user-dirs-update
 # Without /var/log/journal, a boot that fails leaves nothing to read next time.
 have /var/log/journal

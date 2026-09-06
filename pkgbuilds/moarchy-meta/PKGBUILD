@@ -275,6 +275,10 @@ depends=(
   'ttf-ia-writer'
   'cbonsai'
 
+  # The key that signs this repository. Without it pacman cannot validate a
+  # single package, so SigLevel = Required would refuse everything.
+  'moarchy-keyring'
+
   # The phone layer itself, and the store. moarchy pulls omarchy-config in
   # turn, so this one name brings the whole environment.
   'moarchy'

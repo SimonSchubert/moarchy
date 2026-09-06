@@ -53,7 +53,8 @@ package() {
          "$pkgdir/usr/share/moarchy/default/systemd" \
          "$pkgdir/usr/share/moarchy/default/fontconfig" \
          "$pkgdir/usr/share/moarchy/default/omarchy" \
-         "$pkgdir/usr/share/moarchy/default/themed"
+         "$pkgdir/usr/share/moarchy/default/themed" \
+         "$pkgdir/usr/share/moarchy/default/pacman-hooks"
 
   # --- the shell plugins ---------------------------------------------------
   # PluginRegistry scans this directory before ~/.config/omarchy/plugins, so a
@@ -91,6 +92,9 @@ package() {
   # brings every GTK and Qt app along, which is the point.
   install -Dm644 "$_repo/default/fontconfig/50-moarchy-weight.conf" \
     "$pkgdir/etc/fonts/conf.d/50-moarchy-weight.conf"
+
+  install -Dm644 "$_repo/default/pacman-hooks/50-moarchy-shell-reload.hook" \
+    "$pkgdir/usr/share/libalpm/hooks/50-moarchy-shell-reload.hook"
 
   # --- systemd -------------------------------------------------------------
   install -Dm644 "$_repo/default/systemd/system/moarchy-firstboot.service" \

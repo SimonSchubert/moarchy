@@ -117,6 +117,23 @@ ref     = "6a643ecb56b91b3ef5f54f4fbfd69c9745b8437c"
 version = "1.4.2-1"
 
 # ---------------------------------------------------------------------------
+# Where published packages live, and the key that signs them.
+#
+# GitHub Releases rather than Pages: pacman fetches from any URL, and a
+# release's asset URLs are flat and stable, which is the shape a repo needs.
+# Pages would mean committing ~120 MB of binaries to git history per release,
+# permanently, for everyone who clones.
+#
+# The tag is a fixed one, re-uploaded rather than re-created, so the Server URL
+# below never changes. Version tags stay for images.
+# ---------------------------------------------------------------------------
+[repo]
+name    = "moarchy"
+tag     = "repo"
+server  = "https://github.com/SimonSchubert/moarchy/releases/download/repo"
+keyid   = "3CA83612E7F3108F442006B418305B893569BAD3"
+
+# ---------------------------------------------------------------------------
 # The base image we flash and install onto, from DanctNIX (Pine64-Arch).
 # Consumed as a release, never rebuilt (docs/structure.md §2). Was written in
 # two places -- scripts/flash-sd.sh and scripts/provision.sh -- until it moved

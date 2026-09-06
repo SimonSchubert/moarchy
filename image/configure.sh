@@ -63,6 +63,31 @@ sed -i 's/^#\(en_US.UTF-8 UTF-8\)/\1/' "$ROOTDIR/etc/locale.gen"
 arch-chroot "$ROOTDIR" locale-gen >/dev/null 2>&1 || true
 echo 'LANG=en_US.UTF-8' > "$ROOTDIR/etc/locale.conf"
 
+# --- the moarchy package repository ----------------------------------------
+# So `pacman -Syu` updates the phone UI as well as the base system, and nobody
+# has to reflash to get a fix (docs/structure.md R4).
+#
+# SigLevel = Required, not Never: these packages install as root, and without a
+# signature check the only thing between a download and the phone is HTTPS.
+# moarchy-keyring is in the package set, so the key is already trusted by the
+# time this repo is first consulted.
+_repo_name=$(. "$(dirname "$0")/../scripts/manifest.sh" && manifest_get repo name)
+_repo_server=$(. "$(dirname "$0")/../scripts/manifest.sh" && manifest_get repo server)
+if [ -n "$_repo_name" ] && [ -n "$_repo_server" ]; then
+  # Appended, not inserted: pacman resolves in file order, and putting ours
+  # after core/extra/alarm/danctnix means an upstream package of the same name
+  # always wins. Nothing here should shadow the base system by accident.
+  cat >>"$ROOTDIR/etc/pacman.conf" <<EOF
+
+[$_repo_name]
+SigLevel = Required
+Server = $_repo_server
+EOF
+  say "pacman.conf carries [$_repo_name] -- pacman -Syu updates the phone UI"
+else
+  say "!! could not read the repo from manifest.toml; pacman.conf left alone"
+fi
+
 # --- DNS -------------------------------------------------------------------
 # systemd ships /etc/resolv.conf as a symlink to systemd-resolved's stub, and
 # nsswitch.conf already lists `resolve` first. With resolved disabled that

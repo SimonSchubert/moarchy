@@ -1,0 +1,38 @@
+# The public half of the key that signs the [moarchy] repository
+# (docs/structure.md R5).
+#
+# Without this a phone cannot check any signature, so `SigLevel = Required`
+# would refuse every package and `SigLevel = Never` would accept anything --
+# neither of which is a repository you want to point a phone at.
+#
+# Chicken and egg, worth being explicit about: this package is itself in the
+# signed repo, so the very first install has to trust it some other way. The
+# image ships it pre-installed, and a phone adding the repo by hand installs it
+# with `pacman -U` from a URL before switching SigLevel on. That is the same
+# shape archlinux-keyring and danctnix-keyring use.
+
+. "$startdir/../../scripts/manifest.sh"
+_keyid=$(manifest_get repo keyid) || return 1
+
+pkgname=moarchy-keyring
+pkgver=20260906
+pkgrel=1
+pkgdesc="Signing key for the moarchy package repository"
+arch=('any')
+url='https://github.com/SimonSchubert/moarchy'
+license=('MIT')
+install=moarchy-keyring.install
+source=('moarchy.gpg')
+sha256sums=('SKIP')
+
+package() {
+  install -Dm644 "$srcdir/moarchy.gpg" \
+    "$pkgdir/usr/share/pacman/keyrings/moarchy.gpg"
+
+  # The trust file is what stops pacman-key asking a human whether to trust it.
+  # Format is <fingerprint>:<trust-level>: -- 4 is "fully trusted", which is
+  # what a repo key has to be to validate anything on its own.
+  printf '%s:4:\n' "$_keyid" > "$srcdir/moarchy-trusted"
+  install -Dm644 "$srcdir/moarchy-trusted" \
+    "$pkgdir/usr/share/pacman/keyrings/moarchy-trusted"
+}
