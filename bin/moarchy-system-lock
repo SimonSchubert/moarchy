@@ -21,7 +21,11 @@
 # producing events. That gives the thing you actually want from a pocket, and
 # the hardware power button is outside that state, so it can always undo it.
 #
-# MOARCHY_FORCE_LOCK=1 overrides, for anyone who means it and has ssh.
+# The same applies to a locked password, which the image now ships: swaylock
+# asks PAM, and a locked password authenticates nothing, so the prompt could
+# never be satisfied by anybody. Checked below alongside the keyboard.
+#
+# MOARCHY_FORCE_LOCK=1 overrides both, for anyone who means it and has ssh.
 # ---------------------------------------------------------------------------
 
 BIN="$(dirname "$(readlink -f "$0")")"
@@ -29,6 +33,27 @@ BIN="$(dirname "$(readlink -f "$0")")"
 if [[ ${MOARCHY_FORCE_LOCK:-0} != 1 ]] && ! "$BIN/moarchy-has-keyboard"; then
   echo "${0##*/}: no hardware keyboard -- blanking instead of locking" >&2
   exec "$BIN/moarchy-screen" lock
+fi
+
+# And a keyboard is not enough on its own: there has to be a password that
+# *works*.
+#
+# The image deliberately ships the account with a LOCKED password -- nothing to
+# leak, nothing to change, tty1 autologin does not consult one (docs/structure.md
+# I8). swaylock does consult one, through PAM, and a locked password
+# authenticates nothing. So plugging a keyboard in and locking would put up a
+# prompt that cannot be satisfied by anyone, including the person holding the
+# phone, and ext-session-lock hides every other client while it does.
+#
+# `passwd -S` reports P for a usable password, L for locked, NP for none. Only P
+# can be unlocked, so only P gets a real lock.
+if [[ ${MOARCHY_FORCE_LOCK:-0} != 1 ]]; then
+  pwstate=$(passwd -S "$(id -un)" 2>/dev/null | awk '{print $2}')
+  if [[ $pwstate != "P" ]]; then
+    echo "${0##*/}: account password is ${pwstate:-unreadable} -- nothing could unlock this; blanking instead" >&2
+    echo "${0##*/}: set one with \`passwd\` if you want a real lock screen" >&2
+    exec "$BIN/moarchy-screen" lock
+  fi
 fi
 
 THEME="$HOME/.local/state/omarchy/current/theme"
