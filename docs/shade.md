@@ -75,10 +75,18 @@ nothing saved in range is the case where turning it off matters least.
 
 It was `nmtui-connect`, which fits the 60x41 grid `moarchy-launch-tui` gives —
 the network list and its buttons are all on screen. They still cannot be
-pressed. A TUI's buttons are drawn text rather than surfaces, so touch does
-nothing to them, and driving them needs Tab, arrows and Enter, none of which the
-on-screen keyboard has. You could see your network and not join it. Found on the
-device, 2026-09-06.
+pressed. You could see your network and not join it. Found on the device,
+2026-09-06.
+
+The reason is narrower than it first looked, and the narrower version matters
+because it decides which *other* TUIs are safe to keep. It is not that a TUI's
+buttons are drawn text: foot turns a tap into a left-button click
+(`man 1 foot`, TOUCHSCREEN), so a terminal app that asks for mouse reporting
+does get the tap. `nmtui` never asks — its binary contains none of the
+`?1000/1002/1003/1006/1015h` sequences — so the click goes nowhere. Nor is the
+keyboard the problem: it has esc, tab, ctrl, alt and all four arrows.
+`wiremix` and `bluetui` both enable mouse reporting, and a tap on wiremix's tab
+bar and volume slider was verified to work on the device (2026-09-07).
 
 Upstream ships a complete network panel at `plugins/panels/network`, but its
 manifest declares one kind, `bar-widget`, and the panel opens from that widget.

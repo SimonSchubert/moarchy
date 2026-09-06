@@ -62,10 +62,10 @@ implementation behind two entry points.
 **`apps` leaves Settings entirely.** It is the app drawer, which already *is*
 upstream's `apps` provider. A launcher inside Settings would repeat it.
 
-Two rows exist that upstream has no id for: **Wi-Fi networks**
-(`nmtui-connect`) and **Bluetooth devices** (`bluetui`). The shade toggles both
-radios; it can now join a network too — the Wi-Fi row and the shade's long
-press open one picker (`docs/shade.md` S6) — but it still cannot pair a device.
+Two rows exist that upstream has no id for: **Wi-Fi networks** and **Bluetooth
+devices** (`bluetui`). The shade toggles both radios; it can now join a network
+too — the Wi-Fi row and the shade's long press open the same picker,
+`moarchy.wifi` (`docs/shade.md` S6b) — but it still cannot pair a device.
 
 ---
 
@@ -152,25 +152,28 @@ bound.
 
 **B8** A page whose every row is hidden is unreachable: the `nav` row that would
 open it is not rendered.
-→ on a base install, `settings rows apps.default` shows `browser` with `visible=0`
+→ on a base install, `settings rowsOn apps.default` shows `browser` with `visible=0`
 
 ## C. Switches
 
 **C1** Every `switch` reads its state from a command at page-open, never from a
 remembered value.
-→ for each switch, `settings value <id>` matches its reader run directly
+→ with the switch's page open, `settings value <rowId>` matches its reader run
+directly. The id is the bare one (`show`, not `appearance.bar.show`): rows are
+resolved against the open page, not by path
 
 **C2** The four negative-polarity flags render inverted: a present flag file means
 the feature is **off**.
-→ `omarchy-toggle bar-off on; settings refresh; settings value bar.show` == `off`
+→ `settings openAt appearance.bar; omarchy-toggle bar-off on; settings refresh;
+settings value show` == `off`
 
 **C3** Writing a switch re-reads it; the row shows the new value without the page
 being reopened.
-→ `settings set bar.show on; settings value bar.show` == `on`, and
+→ on `appearance.bar`: `settings set show on; settings value show` == `on`, and
 `omarchy-toggle-enabled bar-off` exits non-zero
 
 **C4** Turning the status bar off does not restart or kill the shell.
-→ the `quickshell` pid is unchanged across `settings set bar.show off`, and
+→ the `quickshell` pid is unchanged across `settings set show off`, and
 `settings state` is still `open`
 
 **C5** Stay awake actually stops the panel blanking, not just the row.
@@ -188,17 +191,17 @@ switch, so the row was removed rather than repaired.
 `no-bar`
 
 **C7** Crash capture reflects the unit, not only the flag.
-→ after `settings set sound.crashcapture off`, `omarchy-toggle-enabled
+→ on `sound`, after `settings set crashcapture off`, `omarchy-toggle-enabled
 crash-capture-off` exits 0 and the watch service is not `active`
 
 **C8** A switch may read natively while writing through a bridged launch.
-→ `settings value security.ssh` matches `systemctl is-enabled --quiet sshd`
+→ on `security`, `settings value ssh` matches `systemctl is-enabled --quiet sshd`
 
 ## D. Choices
 
 **D1** Exactly one row on a choice page is ticked, and it is the one the page's
 reader names.
-→ `settings rows net.dns | grep -c 'checked=1'` == `1`, and that row's value ==
+→ `settings rowsOn net.dns | grep -c 'checked=1'` == `1`, and that row's value ==
 `$(omarchy-dns)`
 
 **D2** A reader answering something no row declares ticks nothing, rather than
@@ -206,8 +209,11 @@ ticking the first row.
 → with `omarchy-dns` stubbed to print `Quad9`, the checked count is `0`
 
 **D3** Read-value and write-value are separate fields.
-→ `settings coverage` for `setup.default.editor.zed` names `readValue=zeditor`
-and `value=zed`
+→ the `epiphany` row on `apps.default.browser` reads
+`readValue=org.gnome.Epiphany.desktop` (what `omarchy-default-browser` prints)
+and writes an `xdg-settings` call. Upstream's own case is
+`setup.default.editor.zed`, which reads `zeditor` and writes `zed`; that id is
+Unsupported here, so the mechanism is asserted on the row that uses it
 
 **D4** Setting a choice re-reads the page's reader and moves the tick.
 → `settings set net.dns Cloudflare; settings value net.dns` == `Cloudflare`
@@ -216,20 +222,22 @@ and `value=zed`
 → the `dns` row on page `net` has detail == `$(omarchy-dns)`
 
 **D6** The font page is populated from the provider, not a hard-coded list.
-→ `settings rows appearance.font | wc -l` == `omarchy-font-list | wc -l`
+→ `settings rowsOn appearance.font | wc -l` == `omarchy-font-list | wc -l`
 
 ## E. Bridged launches
 
 **E1** In dry-run, a bridged row records the command it would run and runs nothing.
-→ `settings dryRun 1; settings activate tools.screensaver; settings lastLaunch` ==
-`omarchy-launch-screensaver force`, and no new window appears
+→ on `tools`: `settings dryRun 1; settings activate emoji; settings lastLaunch` ==
+`omarchy-menu-emoji`, and no new window appears
 
 **E2** Every bridged row's command is byte-identical to the `action` string in
-`omarchy-menu.jsonc` for the id it covers, with three declared exceptions.
-→ a static diff of `Pages.js` against the upstream file: 65 of 68 match exactly.
-`install.package`, `install.aur` and `remove.package` differ only in dropping
-upstream's `xdg-terminal-exec --app-id=...` for the TUI terminal, which is
-the point of bridging. Checked statically rather than through `lastLaunch`,
+`omarchy-menu.jsonc` for the id it covers, with four declared exceptions.
+→ a static diff of `Pages.js` against the upstream file. `install.package`,
+`install.aur` and `remove.package` differ only in dropping upstream's
+`xdg-terminal-exec --app-id=...` for the TUI terminal, which is the point of
+bridging. `update.password.user` runs `sudo passwd "$USER"` where upstream runs
+`passwd`: the image locks the account password, so the bare form has nothing to
+authenticate against and fails on its first question. Checked statically rather than through `lastLaunch`,
 because `lastLaunch` records the wrapped form that actually ran
 
 **E3** Every command named by a Native or Bridged row resolves on the shell's PATH.
@@ -259,7 +267,7 @@ from (`gestures.md` K12).
 `recents list` holds both `moarchy.settings` and the terminal
 
 **E7** A bridged row that summons a vendored picker reaches it.
-→ after `settings activate shell.plugins.enable`, `omarchy-shell shell listPlugins`
+→ on `shell.plugins`, after `settings activate enable`, `omarchy-shell shell listPlugins`
 shows `omarchy.menu` open within 2 s
 
 **E8** A bridged run leaves its output on screen until dismissed; it does not flash
@@ -304,26 +312,34 @@ visible, and nothing crashes
 is empty
 
 **G2** Every id appears exactly once.
-→ `settings coverage | cut -f1 | sort | uniq -d` is empty; the line count is `320`
+→ `settings coverage | cut -f1 | sort | uniq -d` is empty; the line count is
+`137`, one per id a row or page names, plus `apps` (the drawer) and the one
+Shade id. It is not `320`: an id with no row cannot be emitted by a map built
+out of rows
 
-**G3** Every class is one of the four words.
-→ `settings coverage | cut -f2 | sort -u` == `Bridged Native Shade Unsupported`
+**G3** Every class is one of the three *renderable* words.
+→ `settings coverage | cut -f2 | sort -u` == `Bridged Native Shade`.
+`Unsupported` must never reach a row, so it has no case in `Settings.qml`'s
+class map and cannot appear here; the Unsupported set lives in
+`docs/menu-coverage.md` alone
 
 **G4** Every Native and Bridged id resolves to a page and a row that exist, or
 names the surface outside this stack that satisfies it.
 → `settings rowsOn <pageId>` contains `<rowId>` for each. The one exception is
 `apps`, which is the app drawer: it names `moarchy.drawer` and no row
 
-**G5** Every Unsupported id carries a non-empty reason.
-→ no Unsupported row has an empty reason field
+**G5** Every upstream id is accounted for, live or dropped.
+→ `settings coverage` line count plus the `Unsupported` entry rows in
+`docs/menu-coverage.md` == the 320 keys in `omarchy-menu.jsonc`, and every one
+of those Unsupported rows carries a non-empty reason
 
 **G6** The doc and the code agree.
 → `diff` of `settings coverage | cut -f1,2` against the table in
 `docs/menu-coverage.md` is empty
 
 **G7** The class totals are the ones committed to.
-→ `settings coverage | cut -f2 | sort | uniq -c` == 74 Bridged, 66 Native,
-1 Shade, 179 Unsupported
+→ `settings coverage | cut -f2 | sort | uniq -c` == 71 Bridged, 65 Native,
+1 Shade. `Unsupported` is not one of the answers -- see G3
 
 ## H. Not repeating the shade
 
@@ -332,7 +348,7 @@ airplane mode, brightness, volume, silent, torch, rotate, media transport.
 → no row on any page has a `switch` whose label matches
 `^(wi-?fi|bluetooth|airplane|brightness|volume|silent|torch|rotate)`
 
-The two rows that open `nmtui-connect` and `bluetui` are network
+The two rows that open `moarchy.wifi` and `bluetui` are network
 *configuration*, not radio toggles, and are named "Wi-Fi networks" and
 "Bluetooth devices".
 

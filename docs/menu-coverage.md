@@ -46,9 +46,9 @@ appeared and the keys did not.
 | Class | Entries |
 | --- | ---: |
 | Native | 65 |
-| Bridged | 74 |
+| Bridged | 71 |
 | Shade | 1 |
-| Unsupported | 180 |
+| Unsupported | 183 |
 | **Total** | **320** |
 
 Roughly a third of the menu survives. That is not a gap to be closed: the
@@ -75,12 +75,12 @@ The two root entries that are not the head of a route of their own.
 
 ## System (8)
 
-Native 3 · Bridged 3 · Unsupported 2
+Native 3 · Bridged 2 · Unsupported 3
 
 | id | label | class | lands at | note |
 | --- | --- | --- | --- | --- |
 | `system` | System | Native | System > Power | also the shade's power glyph target |
-| `system.screensaver` | Screensaver | Bridged | Tools > Screensaver | cbonsai is prebuilt in `packages/` |
+| `system.screensaver` | Screensaver | Unsupported | -- | `omarchy-launch-screensaver` exits 1 unless `ttfx` is present, and ttfx has no aarch64 build in any repo here; it failed silently, which looked like a screensaver that ran |
 | `system.lock` | Lock | Native | System > Power > Lock | `moarchy-system-lock`; blanks unless a hardware keyboard is present |
 | `system.suspend` | Suspend | Unsupported | -- | suspending locks the session: install/config.sh starts sway-session.target, which brings up 4.x's omarchy-sleep-lock unit, and the lock it raises is an ext-session-lock surface -- so the on-screen keyboard is hidden by the very prompt asking for a password. Same trap idle-lock was disabled for. Locked a phone out on 2026-09-05 |
 | `system.hibernate` | Hibernate | Unsupported | -- | `omarchy-hibernation-available` tests for swap; the SD root has no resume device or RAM-sized swap |
@@ -189,7 +189,7 @@ Native 7 · Bridged 6 · Unsupported 8
 
 ## Setup (62)
 
-Native 25 · Bridged 15 · Unsupported 22
+Native 25 · Bridged 14 · Unsupported 23
 
 | id | label | class | lands at | note |
 | --- | --- | --- | --- | --- |
@@ -226,7 +226,7 @@ Native 25 · Bridged 15 · Unsupported 22
 | `setup.default.terminal` | Terminal | Native | Default apps > Terminal |  |
 | `setup.default.terminal.alacritty` | Alacritty | Native | Default apps > Terminal | installed |
 | `setup.default.terminal.foot` | Foot | Native | Default apps > Terminal | installed |
-| `setup.default.terminal.ghostty` | Ghostty | Bridged | Default apps > Terminal | aarch64-available; hidden until installed |
+| `setup.default.terminal.ghostty` | Ghostty | Unsupported | -- | no aarch64 build, so the `omarchy-cmd-present` guard can never pass |
 | `setup.default.terminal.kitty` | Kitty | Bridged | Default apps > Terminal | aarch64-available; hidden until installed |
 | `setup.default.editor` | Editor | Native | Default apps > Editor |  |
 | `setup.default.editor.neovim` | Neovim | Native | Default apps > Editor | installed; reads and writes `nvim` |
@@ -258,7 +258,7 @@ Native 25 · Bridged 15 · Unsupported 22
 
 ## Install (87)
 
-Native 6 · Bridged 20 · Unsupported 61
+Native 6 · Bridged 19 · Unsupported 62
 
 | id | label | class | lands at | note |
 | --- | --- | --- | --- | --- |
@@ -310,7 +310,7 @@ Native 6 · Bridged 20 · Unsupported 61
 | `install.editor.emacs` | Emacs | Unsupported | -- | x86_64-only |
 | `install.terminal.alacritty` | Alacritty | Bridged | Packages > More software | always hidden -- alacritty is installed |
 | `install.terminal.foot` | Foot | Bridged | Packages > More software | always hidden -- foot is installed |
-| `install.terminal.ghostty` | Ghostty | Bridged | Packages > More software | aarch64-available |
+| `install.terminal.ghostty` | Ghostty | Unsupported | -- | `pacman -Si ghostty` finds nothing for aarch64 and `omarchy-pkg-add` has no AUR fallback, so the row could only fail |
 | `install.terminal.kitty` | Kitty | Bridged | Packages > More software | aarch64-available |
 | `install.ai.chatgpt` | ChatGPT Desktop | Unsupported | -- | x86_64-only |
 | `install.ai.dictation` | Dictation | Unsupported | -- | x86_64-only |
@@ -445,7 +445,7 @@ Native 6 · Bridged 8 · Unsupported 14
 | `update.hardware.bluetooth` | Bluetooth | Bridged | System > Restart hardware |  |
 | `update.hardware.trackpad` | Trackpad | Unsupported | -- | no touchpad; `omarchy-restart-trackpad` reloads Hyprland input |
 | `update.password.drive` | Drive Encryption | Unsupported | -- | the SD/eMMC root is not LUKS, so cryptsetup has no volume to re-key |
-| `update.password.user` | User | Bridged | Security > Change password | `passwd` in a TUI. The account ships with a locked password, so this row is how you give it one |
+| `update.password.user` | User | Bridged | Security > Change password | `sudo passwd "$USER"` in a TUI -- an E2 exception. The account ships with a *locked* password, so upstream's bare `passwd` has nothing to authenticate against and fails on its first question; under sudo it sets one outright |
 
 ---
 

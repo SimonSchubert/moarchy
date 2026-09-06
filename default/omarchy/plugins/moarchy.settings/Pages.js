@@ -99,9 +99,10 @@ var PAGES = {
   //
   // Wi-Fi opens moarchy.wifi, the same screen the shade's tile opens on a long
   // press (docs/shade.md S6b). It used to run nmtui-connect in a TUI terminal,
-  // which fits the screen and cannot be operated: a TUI's buttons are drawn
-  // text, not surfaces, so touch cannot press them and the on-screen keyboard
-  // has neither Tab nor arrows to reach them with.
+  // which fits the screen and could not be operated -- but for a narrower
+  // reason than "a TUI cannot be touched". foot turns a tap into a left click,
+  // and nmtui simply never asks for mouse reporting, so the click went
+  // nowhere. TUIs that do ask are fine by touch; see the bluetooth row.
   //
   // returnTo brings Back here rather than dropping you on the home screen.
   { id: "wifi", type: "action", glyph: "󱚾", label: "Wi-Fi networks",
@@ -109,7 +110,10 @@ var PAGES = {
     run: "omarchy-shell shell summon moarchy.wifi '{\"returnTo\":\"moarchy.settings\",\"page\":\"net\"}'",
     launch: "none" },
   // Bluetooth keeps the TUI: pairing is rarer, and the equivalent screen is not
-  // written. bluetui, not impala's Bluetooth half -- and for Wi-Fi impala was
+  // written. That is affordable because bluetui is operable here -- it enables
+  // mouse reporting, and its own bindings (s scan, Enter connect, j/k) are all
+  // keys the on-screen keyboard has, tab and arrows included. Not impala's
+  // Bluetooth half -- and for Wi-Fi impala was
   // wrong outright, being an iwd client on a phone running NetworkManager with
   // iwd.service disabled but D-Bus activatable, so it would have started iwd to
   // fight NetworkManager for wlan0.
@@ -318,9 +322,9 @@ var PAGES = {
   { id: "foot", type: "choice", label: "Foot", value: "foot",
     when: "omarchy-cmd-present foot", write: "omarchy-default-terminal foot",
     covers: { "setup.default.terminal.foot": "N" } },
-  { id: "ghostty", type: "choice", label: "Ghostty", value: "ghostty",
-    when: "omarchy-cmd-present ghostty", write: "omarchy-default-terminal ghostty",
-    covers: { "setup.default.terminal.ghostty": "B" } },
+  // No Ghostty here either: its guard (`omarchy-cmd-present ghostty`) can never
+  // pass, because the package has no aarch64 build to install. See
+  // apps.packages.more.
   { id: "kitty", type: "choice", label: "Kitty", value: "kitty",
     when: "omarchy-cmd-present kitty", write: "omarchy-default-terminal kitty",
     covers: { "setup.default.terminal.kitty": "B" } }
@@ -422,10 +426,13 @@ var PAGES = {
     when: "! omarchy-pkg-present helix",
     run: "omarchy-launch-floating-terminal-with-presentation omarchy-install-editor-helix",
     launch: "none", covers: { "install.editor.helix": "B" } },
-  { id: "ghostty", type: "action", glyph: "", label: "Install Ghostty",
-    when: "! omarchy-pkg-present ghostty",
-    run: "omarchy-launch-floating-terminal-with-presentation 'omarchy-install-terminal ghostty'",
-    launch: "none", covers: { "install.terminal.ghostty": "B" } },
+  // No Ghostty row: it is the one entry on this page whose package does not
+  // exist for aarch64 -- `pacman -Si ghostty` finds nothing, and
+  // omarchy-pkg-add is a plain `pacman -S` with no AUR fallback. The guard
+  // (`! omarchy-pkg-present ghostty`) is therefore permanently true, so unlike
+  // Alacritty and Foot below -- hidden because they are already installed --
+  // this row showed itself and could only fail. install.terminal.ghostty and
+  // setup.default.terminal.ghostty are Unsupported in menu-coverage.md.
   { id: "kitty", type: "action", glyph: "", label: "Install Kitty",
     when: "! omarchy-pkg-present kitty",
     run: "omarchy-launch-floating-terminal-with-presentation 'omarchy-install-terminal kitty'",
@@ -487,11 +494,22 @@ var PAGES = {
     off: "omarchy-launch-floating-terminal-with-presentation omarchy-remove-security-sshd",
     launch: "none",
     covers: { "setup.security.sshd": "B", "remove.security.sshd": "B" } },
+  // The image already grants this permanently in /etc/sudoers.d/10-moarchy, so
+  // upstream's row -- which writes a 15-minute 99-omarchy-nopasswd-$USER and
+  // times it out -- changes nothing observable either way. Kept because it is
+  // harmless and covers the id, with the detail saying why it looks inert.
   { id: "sudo", type: "action", glyph: "󰟵", label: "Passwordless sudo",
+    detail: "Already on for this image",
     run: "omarchy-launch-floating-terminal-with-presentation omarchy-sudo-passwordless",
     launch: "none", covers: { "setup.security.passwordless-sudo": "B" } },
+  // `sudo passwd`, not upstream's bare `passwd` -- the fourth E2 exception.
+  // The image locks the account password, so `passwd` has no current password
+  // to authenticate against and fails on its first question ("Authentication
+  // failure", verified on the device). Under sudo it sets one outright, and
+  // /etc/sudoers.d/10-moarchy means that costs no prompt. This row is the only
+  // way to give the account a password, so it has to be the working form.
   { id: "passwd", type: "action", glyph: "", label: "Change password",
-    run: "omarchy-launch-floating-terminal-with-presentation passwd",
+    run: "omarchy-launch-floating-terminal-with-presentation 'sudo passwd \"$USER\"'",
     launch: "none", covers: { "update.password.user": "B", "update.password": "N" } }
 ]},
 
@@ -508,9 +526,12 @@ var PAGES = {
     covers: { "trigger.emoji": "B" } },
   { id: "reminders", type: "nav", page: "tools.reminders", glyph: "󰢌", label: "Reminders",
     covers: { "trigger.reminder": "N" } },
-  { id: "screensaver", type: "action", glyph: "󱄄", label: "Screensaver",
-    run: "omarchy-launch-screensaver force", launch: "none",
-    covers: { "system.screensaver": "B" } },
+  // Dropped, not guarded: omarchy-launch-screensaver opens with
+  // `omarchy-cmd-missing ttfx && exit 1`, and ttfx has no aarch64 build in any
+  // repo this phone uses -- so unlike gpu-screen-recorder (an optdepend that
+  // could be installed) there is no state in which this row could work. It
+  // exited 1 silently, which reads exactly like a screensaver that ran and was
+  // dismissed. system.screensaver is Unsupported in menu-coverage.md.
   { id: "tests", type: "nav", page: "tools.tests", glyph: "󰓅", label: "Speed tests",
     covers: { "trigger.tests": "N" } }
 ]},
