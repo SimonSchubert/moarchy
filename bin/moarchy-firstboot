@@ -37,7 +37,7 @@ usermod -aG input "$USER_NAME" || echo "!! could not add $USER_NAME to input" >&
 # at all -- so without this the tile is a control that lights nothing.
 usermod -aG feedbackd "$USER_NAME" || echo "!! could not add $USER_NAME to feedbackd" >&2
 
-# Autologin on tty1. /etc/profile.d/zz-moarchy-session.sh execs sway from the
+# Autologin on tty1. /etc/profile.d/zz-moarchy.sh execs sway from the
 # login shell, which is the same shape DanctNIX's own images use and far lighter
 # than a display manager on 2-3 GB of RAM.
 install -d /etc/systemd/system/getty@tty1.service.d

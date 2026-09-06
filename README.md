@@ -157,6 +157,10 @@ moarchy-selftest --gestures   # drives real synthetic touch via /dev/uinput
 Write the image to an SD card and put it in the phone. That is the whole
 procedure -- there is no installer to run on the device.
 
+Verified end to end on an original PinePhone on 2026-09-06: flash, insert,
+power on, and it comes up in the Sway session with the bar, the gesture strip
+and the on-screen keyboard.
+
 ```bash
 ./scripts/flash-sd.sh /dev/diskN     # run `diskutil list` first to find N
 ```

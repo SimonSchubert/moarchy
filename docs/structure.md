@@ -4,8 +4,8 @@ How the three repos, the packages, the package repository and the image builder
 fit together, and what has to be true before a PinePhone image can be built at
 all.
 
-Status: **M1, M2 and M4 built (2026-09-06); M3 not started. I4 — booting
-on real hardware — is the one acceptance criterion still unmet.** The
+Status: **M1, M2 and M4 done (2026-09-06), I4 included — the image boots to a
+Sway session on a real PinePhone. M3 (the published repo) is not started.** The
 acceptance criteria are the contract to argue with before any of them is; where
 one is my reading rather than your decision it is marked **?**. Each AC below
 carries its state, and §11 has the per-milestone summary.
@@ -287,29 +287,37 @@ kernel and DTB — is reused from DanctNIX's packages, not rebuilt. **Resolved
 > itself. So the image needs no UUID rewriting and no per-device boot script.
 
 **I4** The image boots to a Sway session on a real PinePhone with no SSH step in
-between. This is the acceptance test for the whole document. **NOT MET — it
-needs the phone, and nothing below substitutes for it.**
+between. This is the acceptance test for the whole document. **MET 2026-09-06.**
 
-> What has been verified without hardware, by `./scripts/verify-image.sh`: the
-> SPL magic at byte 131076, the GPT partition starts, `Image.gz` / `boot.scr`
-> (u-boot magic checked) / the 1.2 DTB / the initramfs in the boot partition,
-> every packaged path the shell and sway read, 9 plugins, 5 QML files on
-> `Quickshell.I3` and 0 on `Quickshell.Hyprland`, all three units enabled, both
-> accounts locked, no credentials — and then both first-boot scripts actually
-> **run** in a chroot, with the theme proven to generate the `sway.conf` that
-> `/usr/share/moarchy/config/sway/config` includes and the `colors.toml` that
-> `moarchy-keyboard` reads.
+> Flash, insert, power on. The A64 BROM accepted the SPL, megi's kernel booted,
+> the panel lit, `moarchy-firstboot` completed, tty1 autologin worked, the theme
+> applied, sway started, and the rootfs grew to fill a 64 GB card — partition 2
+> came back 63.7 GB with our `BOOT` label on partition 1, so I7 is confirmed on
+> the device and not only against a loop file.
 >
-> What it cannot prove: that the A64 BROM accepts this SPL, that megi's kernel
-> brings up this panel, or that sway starts on a Mali-400.
+> **Both defects it found were composition bugs**, where every individual piece
+> was present, correct and verified:
 >
-> `image/negative-test.sh` is why the green run means anything. It plants six
-> defects in a copy — a corrupted SPL, a leaked wifi profile, the debug marker,
-> a real password hash, a deleted plugin, a disabled unit — and asserts the
-> verifier reports each and exits non-zero. Written because four checks in the
-> first version of the suite were wrong in both directions: two passed
-> vacuously, and two reported a correctly enabled unit as missing because `-e`
-> follows an absolute symlink out of the mounted image.
+> 1. `moarchy-firstboot` wrote the autologin drop-in but raced `getty@tty1`, so
+>    the first boot stopped at a login prompt that a *locked password cannot
+>    answer*. The image build knows the username, so the drop-in is written at
+>    build time now.
+> 2. `/etc/profile` sources `profile.d` in sorted order, and
+>    `zz-moarchy-session.sh` sorts before `zz-moarchy.sh` — `-` is 0x2D, `.` is
+>    0x2E. The session `exec`'d sway before the file that puts
+>    `/usr/lib/moarchy/bin` on `PATH` ever ran, so `swaybg` painted the wallpaper
+>    and `moarchy-restart-shell` was simply not found: no bar, no gesture strip,
+>    and no log, because the missing script is the one that writes the log. They
+>    are one file now.
+>
+> Neither was reachable by checking files in isolation, which is the lesson. The
+> suite now checks the image *as shipped* rather than after running first-boot,
+> and simulates a tty1 login with `sway` replaced by a stub that reports the
+> environment it was handed. Both checks fail on the images that failed.
+>
+> `/var/log/journal` exists now too. It did not, so the first failure left
+> nothing to read and the card had to come out and be read on the Mac with
+> `debugfs` to find a two-character sort-order bug.
 
 **I5** The USB gadget is left as DanctNIX ships it. Access to a running phone is
 over wifi. **Met:** `danctnix-usb-tethering` is installed unmodified.
@@ -545,7 +553,7 @@ is then mostly partition arithmetic.
 
 **M3 — The repo.** R1–R7. Publishes what M2 defined.
 
-**M4 — The image. Built 2026-09-06, ahead of M3.** I1–I9, except I4.
+**M4 — The image. Done 2026-09-06, ahead of M3.** I1–I9, I4 included: it boots.
 
 > The sequencing said M3 first because "M4 consumes what M3 published". A
 > *local* `file://` repo built with `repo-add` satisfies that just as well —
@@ -553,13 +561,19 @@ is then mostly partition arithmetic.
 > What M3 is still needed for is the other consumer in §3: `pacman -Syu` on a
 > phone already in the field.
 >
-> Four defects were found by building it, each of which would have shipped:
+> Six defects were found by building it and then booting it, each of which
+> would have shipped:
 > a hand-picked device package set that omitted `linux-firmware-realtek` and so
 > had **no wifi**; `jack2` silently chosen over `pipewire-jack` by a provider
 > prompt with no tty; `OMARCHY_PATH` set but not exported, so the theme never
 > generated and the phone would have come up with no colours and no keyboard
-> palette; and upstream's `install/` excluded from `omarchy-config` while a
-> dozen runtime `omarchy-*` scripts source out of it.
+> palette; upstream's `install/` excluded from `omarchy-config` while a dozen
+> runtime `omarchy-*` scripts source out of it; and then, on the device, the two
+> composition bugs in I4 — the autologin race and the `profile.d` sort order.
+>
+> The split is worth noting. The first four were found by *building*, and a
+> container caught them. The last two needed the hardware, and both were cases
+> where every file was individually correct.
 
 Naming (§10) was not a milestone. It happened before M3 — 2026-09-05, ahead of
 M1 — which is the only reason it cost 80 files rather than every phone.

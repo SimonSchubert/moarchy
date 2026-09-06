@@ -1,7 +1,7 @@
 # moarchy -- top-level Sway config.
 #
 # Installed as /usr/share/moarchy/config/sway/config and passed to sway with
-# -c by /etc/profile.d/zz-moarchy-session.sh. NOT /etc/sway/config: the sway
+# -c by /etc/profile.d/zz-moarchy.sh. NOT /etc/sway/config: the sway
 # package owns that path and two packages cannot own one file.
 #
 # Nothing is copied into $HOME for the session to come up. To change something,
