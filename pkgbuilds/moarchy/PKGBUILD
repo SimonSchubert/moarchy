@@ -11,7 +11,7 @@
 #   ~/.config/omarchy/shell.json     -> omarchy-config's defaults, patched
 #   ~/.config/fontconfig/conf.d/     -> /etc/fonts/conf.d
 #   ~/.config/systemd/user/          -> /usr/lib/systemd/user, /etc/systemd/user
-#   ~/.bash_profile exec sway        -> /etc/profile.d
+#   ~/.bash_profile exec sway        -> /etc/profile.d (same file as the PATH)
 #
 # What is left needs a running user or a live system, and runs once from
 # moarchy-firstboot.service and moarchy-user-setup.service (P8).
@@ -82,8 +82,6 @@ package() {
   # --- /etc ----------------------------------------------------------------
   install -Dm644 "$_repo/default/etc/profile.d/zz-moarchy.sh" \
     "$pkgdir/etc/profile.d/zz-moarchy.sh"
-  install -Dm644 "$_repo/default/etc/profile.d/zz-moarchy-session.sh" \
-    "$pkgdir/etc/profile.d/zz-moarchy-session.sh"
   install -Dm644 "$_repo/default/etc/systemd/logind.conf.d/10-power-key.conf" \
     "$pkgdir/etc/systemd/logind.conf.d/10-power-key.conf"
 

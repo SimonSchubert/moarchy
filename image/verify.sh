@@ -267,6 +267,47 @@ THEME="$R/home/moarchy/.local/state/omarchy/current/theme"
 # ---------------------------------------------------------------------------
 # I7 has no other test. It runs exactly once, on a card, on first boot -- so
 # without this the first time it executes is on someone's phone.
+# The session is started by /etc/profile.d, and what sway inherits from it is
+# the whole ballgame: moarchy-restart-shell lives in /usr/lib/moarchy/bin, so if
+# that is not on PATH the shell never starts -- no bar, no gesture strip, and no
+# log either, because the script that writes the log is the missing one.
+#
+# Every static check passed while this was broken. It took the phone to find it,
+# so it is simulated here: a login shell on tty1, with sway replaced by a stub
+# that reports the environment it was handed instead of starting a compositor.
+sec "behaviour: what sway inherits from a tty1 login"
+
+install -Dm755 /dev/stdin "$R/usr/local/bin/sway" <<'STUB'
+#!/bin/bash
+echo "PATH=$PATH"
+echo "OMARCHY_PATH=${OMARCHY_PATH:-<unset>}"
+echo "MOARCHY_PATH=${MOARCHY_PATH:-<unset>}"
+for c in moarchy-restart-shell moarchy-keyboard omarchy-theme-set swaybg; do
+  command -v "$c" >/dev/null 2>&1 && echo "resolves $c" || echo "MISSING $c"
+done
+STUB
+
+login_env=$(chroot "$R" runuser -u moarchy -- \
+  env -i HOME=/home/moarchy XDG_VTNR=1 TERM=dumb /bin/bash -l -c true 2>&1)
+rm -f "$R/usr/local/bin/sway"
+
+if [ -z "$login_env" ]; then
+  no "the tty1 login never reached sway -- profile.d did not exec it"
+else
+  # The stub only runs if the session block was reached at all.
+  echo "$login_env" | grep -q '^PATH=' \
+    && ok "the login shell execs sway" || no "sway was not exec'd from profile.d"
+  for c in moarchy-restart-shell moarchy-keyboard omarchy-theme-set swaybg; do
+    if echo "$login_env" | grep -q "^resolves $c$"; then ok "sway would find $c"
+    else no "sway would NOT find $c -- it is not on the session PATH"; fi
+  done
+  for v in OMARCHY_PATH MOARCHY_PATH; do
+    val=$(echo "$login_env" | sed -n "s/^$v=//p")
+    [ "$val" != "<unset>" ] && [ -n "$val" ] \
+      && ok "$v=$val in the session" || no "$v is unset in the session"
+  done
+fi
+
 sec "behaviour: the rootfs grows onto a bigger card"
 
 # I7 runs exactly once, on a card, on first boot -- so without a test here the
