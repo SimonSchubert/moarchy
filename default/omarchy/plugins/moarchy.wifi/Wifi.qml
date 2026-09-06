@@ -276,10 +276,16 @@ Item {
 
   // Success is observed rather than reported: the device's connected network
   // becoming the one we asked for is the only signal that means it worked.
-  onRowsChanged: {
+  // liveRows, NOT rows. `rows` is frozen while a join is in flight -- that is
+  // what keeps the keyboard's focus -- so watching it means the success this
+  // looks for can never arrive, the timeout fires, and a connection that
+  // worked reports "check the passphrase". The freeze is for the delegates;
+  // the observation has to come from the live data.
+  onLiveRowsChanged: {
     if (root.busySsid === "") return
-    for (var i = 0; i < root.rows.length; i++) {
-      if (root.rows[i].ssid === root.busySsid && root.rows[i].connected) {
+    // The live list here too, for the same reason the signal is on it.
+    for (var i = 0; i < root.liveRows.length; i++) {
+      if (root.liveRows[i].ssid === root.busySsid && root.liveRows[i].connected) {
         joinTimeout.stop()
         root.busySsid = ""
         root.expandedSsid = ""
