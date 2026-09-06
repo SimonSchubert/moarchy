@@ -15,6 +15,31 @@ This is not a fork of Omarchy's installer. It is a thin overlay that vendors
 Omarchy's *configuration and theme layer* — which is architecture-neutral — onto
 an aarch64 base, and replaces the one part that cannot work on this hardware.
 
+## Install
+
+Download the latest `.img.xz` from
+**[Releases](https://github.com/SimonSchubert/moarchy/releases)**, write it to an
+SD card (8 GB or larger), put the card in the phone and power it on.
+
+```bash
+# macOS -- find the card with: diskutil list external physical
+diskutil unmountDisk /dev/diskN
+xz -dc moarchy-pinephone-*.img.xz | sudo dd of=/dev/rdiskN bs=4m
+
+# Linux -- find the card with: lsblk
+xz -dc moarchy-pinephone-*.img.xz | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync
+```
+
+That is the whole procedure. There is no installer to run on the device and no
+default password to change: the account's password is locked and tty1 autologin
+brings the session up without one. The rootfs grows to fill the card on first
+boot.
+
+<sub>A Mac's built-in card reader reports as `internal`, so `diskutil list
+external` shows nothing — use `system_profiler SPCardReaderDataType | grep 'BSD
+Name'`. If you have this repo checked out, `./scripts/flash-sd.sh /dev/diskN`
+does the same with guards.</sub>
+
 ## Why not just run Omarchy?
 
 Two hard blockers, both verified rather than assumed.
@@ -152,88 +177,19 @@ moarchy-selftest --gestures   # drives real synthetic touch via /dev/uinput
 | `docker/` | aarch64 container that builds every package natively on Apple Silicon |
 | `scripts/flash-sd.sh` | Guarded SD-card flasher for macOS |
 
-## Install
-
-Download the image, write it to an SD card, put the card in the phone and power
-it on. There is no installer to run on the device.
-
-**1. Download** the latest release from
-[Releases](https://github.com/SimonSchubert/moarchy/releases), or:
-
-```bash
-V=0.1.0-20260906
-curl -fLO https://github.com/SimonSchubert/moarchy/releases/download/v0.1.0/moarchy-pinephone-$V.img.xz
-curl -fLO https://github.com/SimonSchubert/moarchy/releases/download/v0.1.0/moarchy-pinephone-$V.img.xz.sha256
-```
-
-**2. Check it arrived intact.** A truncated download flashes without complaint
-and then fails to boot, which is a slow way to find out:
-
-```bash
-shasum -a 256 -c moarchy-pinephone-$V.img.xz.sha256   # macOS
-sha256sum   -c moarchy-pinephone-$V.img.xz.sha256     # Linux
-```
-
-**3. Find the card.** Get this wrong and you overwrite the wrong disk, so check
-the size matches the card you just inserted:
-
-```bash
-diskutil list external physical    # macOS -- but a BUILT-IN reader shows as
-                                   # `internal`; if nothing is listed, use:
-                                   #   system_profiler SPCardReaderDataType | grep 'BSD Name'
-lsblk -o NAME,SIZE,TRAN,MODEL      # Linux
-```
-
-**4. Write it.** The image is decompressed on the fly, so there is no need to
-unpack it first. It needs an **8 GB card or larger**: 1.2 GB compressed expands
-to about 6 GB, and the rootfs grows to fill the card on first boot.
-
-```bash
-# macOS -- /dev/rdiskN (raw) is far faster than /dev/diskN
-diskutil unmountDisk /dev/diskN
-xz -dc moarchy-pinephone-$V.img.xz | sudo dd of=/dev/rdiskN bs=4m
-sync && diskutil eject /dev/diskN
-
-# Linux
-xz -dc moarchy-pinephone-$V.img.xz | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync
-```
-
-If you have this repo checked out, `./scripts/flash-sd.sh` does the same with
-guards — it refuses `/dev/disk0`, detects a write-protected adapter, prints the
-partition table and makes you type the disk identifier back before it writes:
-
-```bash
-IMAGE_FILE=moarchy-pinephone-$V.img.xz ./scripts/flash-sd.sh /dev/diskN
-```
-
-**5. Boot it.** Put the card in the phone and power on. First boot creates the
-user, grows the rootfs and comes up in the Sway session.
-
-There is **no default password to change**: the account's password is locked
-rather than set to something like `123456`, and tty1 autologin brings the
-session up without one. `sshd` ships disabled. To use SSH later, run this from
-the terminal on the phone:
-
-```bash
-passwd
-sudo systemctl enable --now sshd
-```
-
-Verified end to end on an original PinePhone on 2026-09-06: flash, insert, power
-on, and it comes up with the bar, the gesture strip and the on-screen keyboard.
-
-### Building the image yourself
+## Building it yourself
 
 ```bash
 ./scripts/provision.sh build      # the packages, in an aarch64 container
 ./scripts/build-image.sh          # -> images/moarchy-pinephone-<version>-<date>.img.xz
+./scripts/verify-image.sh         # 75 checks against the image just built
 ```
 
 Everything comes from the commits pinned in `manifest.toml`, so two runs a
-month apart produce the same image. The package build produces nine:
+month apart produce the same image. The package build produces ten:
 `moarchy-keyboard` and `moarchy-store-git` from their own repos, `yay`,
-`xdg-terminal-exec`, `ttf-ia-writer` and `cbonsai` from the AUR, and `moarchy`,
-`omarchy-config` and `moarchy-meta` from `pkgbuilds/`.
+`xdg-terminal-exec`, `ttf-ia-writer`, `cbonsai` and `lcl-gui-bin` from the AUR,
+and `moarchy`, `omarchy-config` and `moarchy-meta` from `pkgbuilds/`.
 
 For a debug image that joins your wifi on first boot and enables sshd:
 
