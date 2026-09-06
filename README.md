@@ -174,7 +174,7 @@ with `passwd` from the terminal on the phone if you want to log in over SSH.
 
 ```bash
 ./scripts/provision.sh build      # the packages, in an aarch64 container
-./scripts/build-image.sh          # -> images/moarchy-pinephone-<date>.img.xz
+./scripts/build-image.sh          # -> images/moarchy-pinephone-<version>-<date>.img.xz
 ```
 
 Everything comes from the commits pinned in `manifest.toml`, so two runs a

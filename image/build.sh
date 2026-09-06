@@ -31,8 +31,13 @@ say() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 info() { printf '    %s\n' "$*"; }
 die() { printf '\033[31m!! %s\033[0m\n' "$*" >&2; exit 1; }
 
+# The release version, from manifest.toml -- the file that already answers
+# "what version of anything" (V1). Four images carrying only a date landed in
+# one afternoon, and telling them apart afterwards meant reading the .packages
+# manifest beside each.
+_version=$(. "$REPO/scripts/manifest.sh" && manifest_get moarchy version) || _version=0.0.0
 STAMP=$(date +%Y%m%d)
-NAME="moarchy-pinephone-$STAMP"
+NAME="moarchy-pinephone-$_version-$STAMP"
 IMG="$WORK/$NAME.img"
 ROOTDIR="$WORK/rootfs"
 
