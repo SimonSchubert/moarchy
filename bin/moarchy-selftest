@@ -45,6 +45,10 @@ fail=0
 
 ok()   { printf '  \033[32mPASS\033[0m  %s\n' "$1"; pass=$((pass + 1)); }
 no()   { printf '  \033[31mFAIL\033[0m  %s\n' "$1"; [[ -n ${2:-} ]] && printf '        %s\n' "$2"; fail=$((fail + 1)); }
+# Counted as neither: a check whose subject is not on this image at all. The
+# opt-in suites have had w_skip for this; the default suite needed it once
+# something outside the package set -- the store -- became worth asserting.
+skip_() { printf '  \033[90mSKIP  %s\033[0m\n' "$1"; }
 head_() { printf '\n%s\n' "$1"; }
 
 # --- the session is there at all -------------------------------------------
@@ -104,6 +108,34 @@ if [[ -x $OMARCHY_PATH/bin/omarchy-menu ]]; then
   ok "omarchy-menu exists where the plugin calls it"
 else
   no "omarchy-menu is missing from $OMARCHY_PATH/bin"
+fi
+
+# The same question for the store's terminal launcher, which is a harder one to
+# notice going wrong. A name that resolves to nothing does not raise anything
+# there: terminal_command() returns "", can_open() says no, and the Open button
+# is *hidden* -- which is also what the store correctly does for a package that
+# owns no single binary, so the screen looks right either way. That is how
+# `mobileomarchy-launch-tui` survived the rename, with every TUI in the
+# catalogue silently losing its Open button.
+#
+# Read out of the installed file rather than restated, so this asks about the
+# store on the image and not about the string in a checkout.
+store_py=$(pacman -Qlq moarchy-store-git 2>/dev/null | grep -m1 '/launcher\.py$')
+if [[ -z $store_py || ! -r $store_py ]]; then
+  skip_ "the store is not installed; nothing to ask about its TUI launcher"
+else
+  tui=$(sed -n 's/^TUI_LAUNCHER = "\(.*\)"$/\1/p' "$store_py" | head -1)
+  # Absolute or bare: `which` answers for both, and which of the two the store
+  # uses is its business, not this check's.
+  if [[ -z $tui ]]; then
+    no "cannot read TUI_LAUNCHER out of $store_py" \
+       "it stopped being a plain string literal, and this check now proves nothing"
+  elif command -v "$tui" >/dev/null 2>&1; then
+    ok "the store's terminal launcher exists where it calls it ($tui)"
+  else
+    no "the store calls '$tui', which is not here" \
+       "Open does not fail for terminal apps -- it disappears, and nothing says why"
+  fi
 fi
 
 # shade S6/S6b. The Wi-Fi picker, from both ends: the shade's long press and
