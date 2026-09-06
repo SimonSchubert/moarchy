@@ -132,8 +132,12 @@ else
   no "no autologin drop-in in the shipped image -- first boot stops at a login prompt"
 fi
 
-n=$(ls -1d "$R"/usr/share/moarchy/plugins/*/ 2>/dev/null | wc -l)
-[ "$n" = 9 ] && ok "9 shell plugins" || no "expected 9 plugins, found $n"
+# Counted from the repo rather than hardcoded. The literal 9 here failed the
+# build that added a tenth plugin, which is a check reporting on itself.
+want=$(ls -1d /repo/default/omarchy/plugins/*/ 2>/dev/null | wc -l | tr -d ' ')
+n=$(ls -1d "$R"/usr/share/moarchy/plugins/*/ 2>/dev/null | wc -l | tr -d ' ')
+[ "$n" = "$want" ] && ok "$n shell plugins (all of the repo's)" \
+                   || no "repo has $want plugins, image has $n"
 
 hy=$(grep -rl 'import Quickshell.Hyprland' "$R/usr/share/omarchy/shell" --include=*.qml 2>/dev/null | wc -l)
 i3=$(grep -rl 'import Quickshell.I3'       "$R/usr/share/omarchy/shell" --include=*.qml 2>/dev/null | wc -l)

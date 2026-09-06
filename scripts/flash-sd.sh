@@ -67,6 +67,16 @@ LOCKED
   exit 1
 fi
 
+# Resolve IMAGE_FILE BEFORE the cd below. Everything downloaded lives in
+# $CACHE, so this script works from there -- which silently breaks a relative
+# IMAGE_FILE, the natural way to name an image this repo just built:
+#   IMAGE_FILE=images/moarchy-pinephone-<date>.img.xz ./scripts/flash-sd.sh ...
+#   No such image: images/moarchy-pinephone-<date>.img.xz
+# It is there; the script had simply moved.
+if [[ -n ${IMAGE_FILE:-} && $IMAGE_FILE != /* ]]; then
+  IMAGE_FILE="$PWD/$IMAGE_FILE"
+fi
+
 mkdir -p "$CACHE"
 cd "$CACHE"
 

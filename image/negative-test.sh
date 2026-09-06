@@ -51,7 +51,9 @@ catches "eGON.BT0"                     "corrupted u-boot SPL"
 catches "network profile"              "leaked wifi credential"
 catches "DEBUG image"                  "debug-image marker"
 catches "real password hash"           "a real password in the image"
-catches "expected 9 plugins"           "a missing shell plugin"
+# Matched on the shape of the message, not a count: the check used to say
+# "expected 9 plugins" and now derives the number from the repo.
+catches "plugins, image has"           "a missing shell plugin"
 catches "not enabled in either tree"   "a disabled first-boot unit"
 
 echo
