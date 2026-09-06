@@ -43,6 +43,35 @@ ROOTDIR="$WORK/rootfs"
 
 rm -rf "$WORK"; mkdir -p "$WORK" "$OUT"
 
+# --- provenance ------------------------------------------------------------
+# What commit is this image? A published artifact that answers "none" cannot be
+# rebuilt, bisected, or trusted to contain what its release notes claim.
+#
+# This is not hypothetical. An image built during a parallel session's edits
+# picked up their uncommitted working tree, and one file in it matched neither
+# HEAD nor the finished file -- it was copied mid-write. Nothing in the build
+# noticed, and the only reason it was not published is that someone thought to
+# compare hashes afterwards.
+#
+# So the commit goes in the image and beside it, and a dirty tree is refused
+# unless the caller says otherwise.
+COMMIT=$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo unknown)
+if ! git -C "$REPO" diff-index --quiet HEAD -- 2>/dev/null; then
+  DIRTY=1
+  printf '\033[31m!! the working tree has uncommitted changes\033[0m\n' >&2
+  git -C "$REPO" diff-index --name-only HEAD -- 2>/dev/null | sed 's/^/       /' >&2
+  if [ "${ALLOW_DIRTY:-0}" != 1 ]; then
+    printf '   This image would correspond to no commit, and a file being edited\n' >&2
+    printf '   while it builds is copied half-written. Commit, or re-run with\n' >&2
+    printf '   ALLOW_DIRTY=1 if you mean it.\n' >&2
+    exit 1
+  fi
+  printf '   ALLOW_DIRTY=1 -- continuing; this image is not reproducible\n' >&2
+else
+  DIRTY=0
+fi
+info "commit ${COMMIT:0:12}$([ "$DIRTY" = 1 ] && echo ' (DIRTY)')"
+
 # ---------------------------------------------------------------------------
 say "local package repository"
 # M3 publishes this over HTTP. Until then the image build consumes the same
@@ -150,6 +179,18 @@ arch-chroot "$ROOTDIR" mkinitcpio -P
 info "boot.scr $(stat -c%s "$ROOTDIR/boot/boot.scr") bytes, Image.gz $(stat -c%s "$ROOTDIR/boot/Image.gz") bytes"
 
 # ---------------------------------------------------------------------------
+say "recording provenance"
+# Inside the image, so a phone can say what it is running, and beside the
+# download, so the release can be tied to a commit without unpacking it.
+install -d "$ROOTDIR/usr/share/moarchy"
+{ echo "commit=$COMMIT"
+  echo "dirty=$DIRTY"
+  echo "built=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "version=$_version"
+} > "$ROOTDIR/usr/share/moarchy/build-info"
+cp "$ROOTDIR/usr/share/moarchy/build-info" "$OUT/$NAME.build-info"
+info "commit ${COMMIT:0:12}, dirty=$DIRTY"
+
 say "first-boot configuration"
 "$REPO/image/configure.sh" "$ROOTDIR"
 

@@ -106,6 +106,14 @@ have /usr/share/omarchy/shell/shell.qml
 # The camera app, and the package it needs that nothing declares -- without
 # xdg-user-dirs every photo is captured and silently discarded.
 have /usr/bin/megapixels
+# Provenance: an image that answers "no commit" cannot be rebuilt or bisected.
+if [ -f "$R/usr/share/moarchy/build-info" ]; then
+  . "$R/usr/share/moarchy/build-info"
+  [ "${dirty:-1}" = 0 ] && ok "built from commit ${commit:0:12}, clean tree" \
+                        || no "built from a DIRTY tree (commit ${commit:0:12}) -- corresponds to no commit"
+else
+  no "no build-info in the image -- it cannot say what commit it is"
+fi
 have /usr/share/pacman/keyrings/moarchy.gpg
 have /usr/share/libalpm/hooks/50-moarchy-shell-reload.hook
 # The update path in one check: without the stanza a phone can only be upgraded
