@@ -58,6 +58,25 @@ Item {
 
   property bool opened: false
 
+  // The app-like half of this screen (docs/gestures.md K).
+  //
+  // `running` is "summoned and not yet closed", which outlives any number of
+  // hides -- swiping away to another app leaves Wi-Fi running, so the carousel
+  // keeps a card for it and coming back resumes where you were. `opened` is
+  // only whether the surface is on screen right now.
+  //
+  // Settings established this contract; moarchy.recents reads exactly these
+  // four things off a shell app: running, opened, pageTitle and quit().
+  property bool running: false
+
+  // The card shows the network you are on, which is the useful thing to see on
+  // a card, and nothing when there is none.
+  readonly property string pageTitle: {
+    for (var i = 0; i < root.rows.length; i++)
+      if (root.rows[i].connected) return root.rows[i].ssid
+    return Networking.wifiEnabled ? "Not connected" : "Off"
+  }
+
   // Where Back goes, set by whoever summoned this screen, so the chevron
   // returns to the shade or the Settings page you came from rather than
   // dropping you on the home screen.
@@ -93,7 +112,22 @@ Item {
   // incubating -- which segfaults quickshell on the dangling wrapper rather
   // than throwing anything catchable. Upstream's Model.js carries the same
   // warning. Actions resolve the object again, by ssid, at the moment they run.
-  readonly property var rows: {
+  // The list is frozen while a row is open, and that is the whole fix for
+  // "the keyboard loses focus every time the list refreshes".
+  //
+  // `rows` recomputes on every scan result. Reassigning a ListView's model
+  // rebuilds its delegates, the focused TextField is destroyed with them, and
+  // the on-screen keyboard retracts mid-passphrase. Holding the array
+  // reference steady while a drawer is open keeps the delegate -- and its focus
+  // -- alive. Signal strengths going stale for the few seconds someone is
+  // typing is not a cost worth mentioning next to that.
+  property var frozenRows: []
+  readonly property bool listFrozen: root.expandedSsid !== "" || root.busySsid !== ""
+  readonly property var rows: root.listFrozen ? root.frozenRows : root.liveRows
+
+  onListFrozenChanged: if (root.listFrozen) root.frozenRows = root.liveRows
+
+  readonly property var liveRows: {
     var objs = root.wifiDevice && root.wifiDevice.networks
              ? root.wifiDevice.networks.values : []
     var out = []
@@ -114,6 +148,18 @@ Item {
       return b.signal - a.signal
     })
     return out
+  }
+
+  // Whether a row should offer a passphrase field: any secured network that is
+  // not currently connected, INCLUDING one already saved.
+  //
+  // Saved-but-wrong is the ordinary case after a typo, and the first version
+  // sent you to Forget first: a known network only ever offered
+  // Disconnect/Forget, so correcting a passphrase meant deleting the network
+  // and starting again. NetworkManager will happily replace the stored secret,
+  // so there is no reason to make anyone do that.
+  function offersPassphrase(row) {
+    return !row.connected && root.needsPassphrase(row.security)
   }
 
   function networkForSsid(ssid) {
@@ -165,6 +211,11 @@ Item {
   //   ReferenceError: passField is not defined
   // at load, which cost the surface its bottom margin binding.
   property bool passphraseFocused: false
+
+  // Whether the passphrase is shown in the clear. Off by default; the eye in
+  // the field turns it on. A phone keyboard has no key feedback worth the name,
+  // and a wrong character is otherwise only discoverable 25 seconds later.
+  property bool showPassphrase: false
   property string errorSsid: ""
   property string errorText: ""
 
@@ -175,23 +226,29 @@ Item {
     root.errorSsid = ""
     root.errorText = ""
 
-    if (row.connected || row.known) {
-      // Already joined or remembered: the useful actions are the destructive
-      // ones, so they get an explicit drawer rather than firing on a tap.
-      root.expandedSsid = root.expandedSsid === row.ssid ? "" : row.ssid
-      return
-    }
     if (root.isEnterprise(row.security)) {
       root.errorSsid = row.ssid
       root.errorText = "Enterprise networks need the terminal"
       return
     }
-    if (root.needsPassphrase(row.security)) {
-      root.passphrase = ""
-      root.expandedSsid = root.expandedSsid === row.ssid ? "" : row.ssid
+    // An open network nobody has joined is the one case with nothing to ask:
+    // connect on the tap. Everything else opens its drawer, which carries the
+    // passphrase field when the network is secured and not connected, and the
+    // Disconnect/Forget actions when they apply.
+    if (!row.connected && !row.known && !root.needsPassphrase(row.security)) {
+      root.join(row.ssid, "")
       return
     }
-    root.join(row.ssid, "")
+    root.passphrase = ""
+    root.showPassphrase = false
+    root.expandedSsid = root.expandedSsid === row.ssid ? "" : row.ssid
+  }
+
+  function joinRow(row) {
+    if (root.offersPassphrase(row) && root.passphrase.length >= 8)
+      root.join(row.ssid, root.passphrase)
+    else if (row.known || !root.needsPassphrase(row.security))
+      root.join(row.ssid, "")
   }
 
   function join(ssid, psk) {
@@ -245,6 +302,7 @@ Item {
       root.errorText = "Could not join — check the passphrase, or move closer"
       root.expandedSsid = root.busySsid
       root.passphrase = ""
+      root.showPassphrase = false
       root.busySsid = ""
     }
   }
@@ -264,6 +322,7 @@ Item {
       if (root.shell.isPluginOpen("moarchy.drawer")) root.shell.hide("moarchy.drawer")
     }
     root.opened = true
+    root.running = true
     root.returnTo = ""
     root.returnPage = ""
     root.expandedSsid = ""
@@ -280,6 +339,17 @@ Item {
   }
 
   function close() { root.opened = false }
+
+  // Swiping the card away in the carousel. Distinct from close(): this ends the
+  // app rather than putting its surface down.
+  function quit(): void {
+    root.running = false
+    root.expandedSsid = ""
+    root.passphrase = ""
+    root.showPassphrase = false
+    if (root.shell && typeof root.shell.hide === "function") root.shell.hide(root.pluginId)
+    else root.close()
+  }
 
   function dismiss() {
     var back = root.returnTo
@@ -462,8 +532,11 @@ Item {
             width: list.width
             // Tall enough for a finger, and taller again when a drawer is open.
             height: Style.space(58)
-                    + (rowItem.isExpanded ? Style.space(52) : 0)
-                    + (rowItem.hasError ? Style.space(22) : 0)
+                    + (rowItem.isExpanded
+                       ? Style.space(60)
+                         + (root.offersPassphrase(rowItem.modelData) ? Style.space(52) : 0)
+                       : 0)
+                    + (rowItem.hasError ? Style.space(30) : 0)
             Behavior on height { NumberAnimation { duration: 120 } }
             radius: Style.space(14)
             color: rowItem.isExpanded ? root.containerHigh : root.container
@@ -551,9 +624,10 @@ Item {
             }
 
             // ----------------------------------------------------- drawer
-            // Either a passphrase field for a new secured network, or the two
-            // destructive actions for one already saved.
-            Item {
+            // Two rows, not one: at 360px a passphrase field, a Join and a
+            // Forget do not fit on a line, and shrinking the field is the wrong
+            // thing to shrink.
+            Column {
               visible: rowItem.isExpanded
               anchors.bottom: parent.bottom
               anchors.bottomMargin: Style.space(8)
@@ -561,76 +635,98 @@ Item {
               anchors.right: parent.right
               anchors.leftMargin: Style.space(12)
               anchors.rightMargin: Style.space(12)
-              height: Style.space(44)
+              spacing: Style.space(8)
 
-              // --- new secured network: type the passphrase
+              // --- passphrase, for any secured network not connected --------
               Rectangle {
-                visible: !rowItem.modelData.known && !rowItem.modelData.connected
-                anchors.left: parent.left
-                anchors.right: joinButton.left
-                anchors.rightMargin: Style.space(8)
-                height: parent.height
+                visible: root.offersPassphrase(rowItem.modelData)
+                width: parent.width
+                height: Style.space(44)
                 radius: height / 2
                 color: root.surface
 
                 Ui.TextField {
                   id: passField
-                  anchors.fill: parent
+                  anchors.left: parent.left
+                  anchors.right: revealButton.left
+                  anchors.verticalCenter: parent.verticalCenter
                   anchors.leftMargin: Style.space(16)
-                  anchors.rightMargin: Style.space(16)
-                  password: true
-                  placeholderText: "Passphrase"
+                  anchors.rightMargin: Style.space(4)
+                  password: !root.showPassphrase
+                  placeholderText: rowItem.modelData.known ? "New passphrase" : "Passphrase"
                   background: null
                   horizontalPadding: 0
                   verticalPadding: 0
                   text: root.passphrase
                   onTextChanged: root.passphrase = text
-                  onAccepted: root.join(rowItem.modelData.ssid, root.passphrase)
+                  onAccepted: root.joinRow(rowItem.modelData)
                   onActiveFocusChanged: root.passphraseFocused = activeFocus
                   // A delegate destroyed while focused never reports losing it,
                   // which would strand the surface with no bottom inset.
                   Component.onDestruction: if (activeFocus) root.passphraseFocused = false
                 }
-              }
 
-              Rectangle {
-                id: joinButton
-                visible: !rowItem.modelData.known && !rowItem.modelData.connected
-                anchors.right: parent.right
-                width: Style.space(84)
-                height: parent.height
-                radius: height / 2
-                // WPA needs 8 characters; refusing earlier is a clearer answer
-                // than a join that fails 25 seconds later.
-                readonly property bool ready: root.passphrase.length >= 8
-                color: ready ? root.accent : root.containerHigh
-                opacity: ready ? 1 : 0.6
-
-                Text {
-                  anchors.centerIn: parent
-                  text: "Join"
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.body
-                  font.weight: root.textWeight
-                  color: joinButton.ready ? root.textOnAccent : root.subdued
-                }
-                MouseArea {
-                  anchors.fill: parent
-                  enabled: joinButton.ready
-                  onClicked: root.join(rowItem.modelData.ssid, root.passphrase)
+                // Reveal. Square on the field's height so the tap target is the
+                // whole end of the pill rather than the glyph.
+                Rectangle {
+                  id: revealButton
+                  anchors.right: parent.right
+                  anchors.verticalCenter: parent.verticalCenter
+                  width: Style.space(44)
+                  height: width
+                  radius: width / 2
+                  color: "transparent"
+                  Text {
+                    anchors.centerIn: parent
+                    text: root.showPassphrase ? "󰛐" : "󰛑"   // eye / eye-off
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.icon
+                    color: root.showPassphrase ? root.accent : root.subdued
+                  }
+                  MouseArea {
+                    anchors.fill: parent
+                    onClicked: root.showPassphrase = !root.showPassphrase
+                  }
                 }
               }
 
-              // --- saved or connected: the destructive pair
+              // --- actions --------------------------------------------------
               Row {
-                visible: rowItem.modelData.known || rowItem.modelData.connected
                 anchors.right: parent.right
                 spacing: Style.space(8)
-                height: parent.height
+                height: Style.space(44)
+
+                Rectangle {
+                  visible: !rowItem.modelData.connected
+                  width: Style.space(96)
+                  height: parent.height
+                  radius: height / 2
+                  // A saved network can be rejoined with no passphrase typed --
+                  // NetworkManager still holds one. A new secured one cannot.
+                  readonly property bool ready:
+                    rowItem.modelData.known
+                    || !root.offersPassphrase(rowItem.modelData)
+                    || root.passphrase.length >= 8
+                  color: ready ? root.accent : root.containerHigh
+                  opacity: ready ? 1 : 0.6
+                  Text {
+                    anchors.centerIn: parent
+                    text: "Join"
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.body
+                    font.weight: root.textWeight
+                    color: parent.ready ? root.textOnAccent : root.subdued
+                  }
+                  MouseArea {
+                    anchors.fill: parent
+                    enabled: parent.ready
+                    onClicked: root.joinRow(rowItem.modelData)
+                  }
+                }
 
                 Rectangle {
                   visible: rowItem.modelData.connected
-                  width: Style.space(110)
+                  width: Style.space(120)
                   height: parent.height
                   radius: height / 2
                   color: root.containerHigh
@@ -649,27 +745,8 @@ Item {
                 }
 
                 Rectangle {
-                  visible: !rowItem.modelData.connected && rowItem.modelData.known
-                  width: Style.space(84)
-                  height: parent.height
-                  radius: height / 2
-                  color: root.accent
-                  Text {
-                    anchors.centerIn: parent
-                    text: "Join"
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.body
-                    font.weight: root.textWeight
-                    color: root.textOnAccent
-                  }
-                  MouseArea {
-                    anchors.fill: parent
-                    onClicked: root.join(rowItem.modelData.ssid, "")
-                  }
-                }
-
-                Rectangle {
-                  width: Style.space(90)
+                  visible: rowItem.modelData.known
+                  width: Style.space(96)
                   height: parent.height
                   radius: height / 2
                   color: root.containerHigh

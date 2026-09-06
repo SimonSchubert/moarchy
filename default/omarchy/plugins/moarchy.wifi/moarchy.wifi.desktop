@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name=Wi-Fi
+GenericName=Network
+Comment=Join a wireless network
+# A shell plugin is not a process you launch, it is a screen the shell already
+# holds. `toggle` and not `summon` so a second tap on the drawer icon puts it
+# away again, which is what every other entry here does.
+Exec=omarchy-shell shell toggle moarchy.wifi
+Icon=network-wireless-symbolic
+Terminal=false
+Categories=Settings;Network;
+Keywords=wifi;wlan;wireless;network;internet;passphrase;
+# Ownership marker: the packaging moves entries out of the plugin directory and
+# names the plugin they belong to.
+X-Moarchy-Plugin=moarchy.wifi

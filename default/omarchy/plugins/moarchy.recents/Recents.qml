@@ -323,15 +323,24 @@ Item {
   // Settings was on when the row was last rebuilt, and would keep its accent
   // border after the screen had gone.
   //
-  // One of these, not a registry, and K11 says so out loud: a mechanism with a
-  // single user reads as an oversight otherwise, and adding a second shell app
-  // should be a decision rather than a discovery that the machinery allows it.
+  // Two of these now. K11 said adding a second should be a decision rather than
+  // a discovery that the machinery allows it -- Wi-Fi is that decision, taken
+  // 2026-09-06: joining a network is something you sit in, retype a passphrase
+  // in, and come back to, which is the same shape as Settings and nothing like
+  // a sheet you summon and dismiss in one motion.
+  //
+  // Still not a registry. Two named properties are honest about there being
+  // two; a registry would imply plugins can opt in, and the ordering,
+  // focus and quit semantics below are not general enough for that to be true.
   property var settingsItem: null
+  property var wifiItem: null
 
-  function resolveSettings(): void {
-    var loader = root.shell && root.shell.panelLoaders
-      ? root.shell.panelLoaders["moarchy.settings"] : null
-    root.settingsItem = loader && loader.item ? loader.item : null
+  function resolveShellApps(): void {
+    var loaders = root.shell && root.shell.panelLoaders ? root.shell.panelLoaders : null
+    var s = loaders ? loaders["moarchy.settings"] : null
+    var w = loaders ? loaders["moarchy.wifi"] : null
+    root.settingsItem = s && s.item ? s.item : null
+    root.wifiItem = w && w.item ? w.item : null
   }
 
   // Polled, not bound, and not resolved once at startup either. `panelLoaders`
@@ -345,8 +354,8 @@ Item {
     interval: 250
     repeat: true
     triggeredOnStart: true
-    running: root.settingsItem === null
-    onTriggered: root.resolveSettings()
+    running: root.settingsItem === null || root.wifiItem === null
+    onTriggered: root.resolveShellApps()
   }
 
   QtObject {
@@ -378,10 +387,34 @@ Item {
     onActivatedChanged: root.rebuildMru()
   }
 
+  QtObject {
+    id: wifiApp
+
+    readonly property bool shellApp: true
+    readonly property string appId: "moarchy.wifi"
+    readonly property string name: "Wi-Fi"
+
+    // The literal character, not an escape. "\uF092F" is \uF092 followed by an
+    // "F" -- JavaScript's \u takes exactly four hex digits -- and U+F092 is the
+    // GitHub octocat, which is what the card drew. Settings embeds its glyph
+    // literally for the same reason.
+    readonly property string glyph: "󰤯"
+
+    readonly property bool running: !!(root.wifiItem && root.wifiItem.running)
+    readonly property bool activated: !!(root.wifiItem && root.wifiItem.opened)
+
+    // The network it is on, so the card says something worth reading.
+    readonly property string title:
+      root.wifiItem ? String(root.wifiItem.pageTitle || "") : ""
+
+    onRunningChanged: root.rebuildMru()
+    onActivatedChanged: root.rebuildMru()
+  }
+
   // A9/K1, asked by the gestures plugin when it needs to know whether the
   // strip has a carousel worth raising. Answered here so that "what counts as
   // an app" is decided in exactly one place.
-  readonly property bool shellAppsRunning: settingsApp.running
+  readonly property bool shellAppsRunning: settingsApp.running || wifiApp.running
 
   // --------------------------------------------------------------- the model
   //
@@ -403,6 +436,7 @@ Item {
     var out = []
     for (var i = 0; i < windows.length; i++) out.push(windows[i])
     if (settingsApp.running) out.push(settingsApp)
+    if (wifiApp.running) out.push(wifiApp)
     return out
   }
 
@@ -492,7 +526,7 @@ Item {
 
   onShellChanged: {
     root.buildIndex()
-    root.resolveSettings()
+    root.resolveShellApps()
   }
 
   function entryFor(appId) {
@@ -567,8 +601,8 @@ Item {
       // close *request* to make of our own surface and nothing it could
       // prompt about, so unlike a window this can never be refused -- which is
       // why the removal below is unconditionally right for it.
-      if (root.settingsItem && typeof root.settingsItem.quit === "function")
-        root.settingsItem.quit()
+      var item = app.appId === "moarchy.wifi" ? root.wifiItem : root.settingsItem
+      if (item && typeof item.quit === "function") item.quit()
     } else {
       app.close()
     }
