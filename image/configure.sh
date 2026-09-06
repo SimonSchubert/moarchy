@@ -63,6 +63,25 @@ sed -i 's/^#\(en_US.UTF-8 UTF-8\)/\1/' "$ROOTDIR/etc/locale.gen"
 arch-chroot "$ROOTDIR" locale-gen >/dev/null 2>&1 || true
 echo 'LANG=en_US.UTF-8' > "$ROOTDIR/etc/locale.conf"
 
+# --- keep the journal across reboots ---------------------------------------
+# journald's default Storage=auto writes to /run (volatile) unless
+# /var/log/journal exists, so a phone that fails to bring its session up loses
+# the only record of why on reboot.
+#
+# That is not hypothetical: the first boot on hardware came up to a wallpaper
+# and nothing else, and there was no journal and no shell log to read -- the
+# card had to come out and be read on the Mac with debugfs. The directory costs
+# nothing and turns that into `journalctl -b -1`.
+install -d -m 2755 "$ROOTDIR/var/log/journal"
+# Capped, because this is a phone with a card, not a server.
+install -d "$ROOTDIR/etc/systemd/journald.conf.d"
+cat >"$ROOTDIR/etc/systemd/journald.conf.d/10-moarchy.conf" <<'EOF'
+[Journal]
+Storage=persistent
+SystemMaxUse=200M
+EOF
+say "journal persists across reboots (capped at 200M)"
+
 # --- grow the rootfs on first boot (I7) ------------------------------------
 # The image is sized to its contents plus slack so the download stays small;
 # the card is whatever the user put in. sfdisk grows the last partition and

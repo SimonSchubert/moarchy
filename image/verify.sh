@@ -92,7 +92,6 @@ have /usr/bin/moarchy-keyboard
 have /usr/lib/moarchy/bin/moarchy-selftest
 have /usr/lib/moarchy/bin/hyprctl
 have /etc/profile.d/zz-moarchy.sh
-have /etc/profile.d/zz-moarchy-session.sh
 have /etc/profile.d/omarchy.sh
 have /etc/fonts/conf.d/50-moarchy-weight.conf
 have /etc/systemd/logind.conf.d/10-power-key.conf
@@ -104,6 +103,9 @@ have /usr/share/applications/moarchy.device.desktop
 # A dozen runtime omarchy-* scripts source out of upstream's install/ tree.
 have /usr/share/omarchy/install/helpers/browser-policy.sh
 have /usr/share/omarchy/shell/shell.qml
+# Without /var/log/journal, a boot that fails leaves nothing to read next time.
+have /var/log/journal
+have /etc/systemd/journald.conf.d/10-moarchy.conf
 
 # Checked here, in the image AS SHIPPED, not only after the behaviour section
 # has run moarchy-firstboot. That is exactly how this was missed: the suite ran
@@ -128,8 +130,15 @@ grep -q '"id": "moarchy.bar"' "$R/usr/share/omarchy/config/omarchy/shell.json" \
   && ok "packaged shell.json selects moarchy.bar" || no "shell.json does not select moarchy.bar"
 
 # The sway config is passed with -c and includes by absolute path.
-sess_cfg=$(grep -oE '/usr/share/moarchy/config/sway/config' "$R/etc/profile.d/zz-moarchy-session.sh" | head -1)
-[ -n "$sess_cfg" ] && ok "the session names the packaged sway config" || no "zz-moarchy-session.sh does not pass -c"
+# The session lives in zz-moarchy.sh, together with the PATH it needs -- see
+# the comment at the top of that file for why it is not two files.
+sess_cfg=$(grep -oE '/usr/share/moarchy/config/sway/config' "$R/etc/profile.d/zz-moarchy.sh" | head -1)
+[ -n "$sess_cfg" ] && ok "the session names the packaged sway config" || no "zz-moarchy.sh does not exec sway -c"
+# And nothing else may exec a session: a second profile.d file that execs would
+# reintroduce the ordering bug, sorted earlier or later.
+extra=$(grep -l 'exec sway' "$R"/etc/profile.d/*.sh 2>/dev/null | grep -cv 'zz-moarchy.sh')
+[ "$extra" = 0 ] && ok "only one profile.d file execs sway" \
+                 || no "$extra other profile.d files exec sway -- ordering hazard"
 miss=0
 while read -r _ f; do [ -e "$R$f" ] || { no "sway include missing: $f"; miss=1; }; done \
   < <(grep '^include /' "$R/usr/share/moarchy/config/sway/config")
