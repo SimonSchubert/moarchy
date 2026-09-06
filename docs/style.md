@@ -380,8 +380,38 @@ line at the same time, and five things moved:
   case B5 exists for. It is an `Ui.OpticalGlyph` now, like the gear and the four
   back chevrons.
 
-**Not yet verified on glass.** The accessors §F cites are new — `drawer
-searchTarget` and `wifi passTarget` — and `scripts/style-check.sh` deliberately
-does not pretend to cover them. Until one exists, or the checks above have been run
-against the phone by hand, this is the honest record: the code is written, the
-greps pass, and nothing has put a finger on it.
+**Verified on glass**, 2026-09-06, on the PinePhone over ssh with taps
+synthesised through `/usr/lib/moarchy/bin/moarchy-touch` (panel pixels, so twice
+the logical coordinate).
+
+*E1–E3, on the shade's gear.* Drawn at 36 logical px, spanning x 268–304; the
+grown target adds 4, so 264–308. A tap at **265.5** — outside the drawn circle,
+inside the target — opened Settings. The control tap at **257.5**, outside both,
+left it closed. That is E2 in two taps: the drawing did not change and the
+answering region did.
+
+*F1.* Six points across the search pill focus the field, including the two that
+were categorically dead before — the magnifier glyph, which sat *outside* the
+old field rather than merely near its edge, and the 16px right inset. Repeated
+three times each: 8 of 9 trials focused, the one miss a tap that landed while
+the sheet was still animating open.
+
+*F3.* `omarchy-shell drawer searchTarget` reports `pill=10,26 340x46
+field=10,26 340x46` — the field is not merely inside the pill, it *is* the pill.
+
+*F5.* That `field=` rect is identical focused and unfocused, in every reading.
+
+**Still unverified: F4.** It needs a secured network that is not the connected
+one, and the phone cannot scan: quickshell's polkit agent fails to register
+("An authentication agent already exists for the given subject"), NetworkManager
+falls through to `auth_admin`, and the account password is locked, so the prompt
+that appears can never be answered. The plugin itself is live — `wifi
+passTarget` answers with the empty string its no-row-expanded branch returns —
+there is simply no row to expand.
+
+**One trap worth writing down**, because it cost the most time here: a plugin's
+surface coordinates are not screen coordinates. The drawer's layer surface
+starts at screen y=26, below the bar, so the first taps aimed straight at
+`searchTarget`'s y landed 26 logical px high and hit nothing, with no error
+anywhere — the same silent-failure shape this file exists for. Read the offset
+from `drawer geometry` (`h=494` = 720 − 26 bar − 200 keyboard); never assume it.
