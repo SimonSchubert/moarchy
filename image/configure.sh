@@ -172,6 +172,37 @@ EOF
   arch-chroot "$ROOTDIR" systemctl enable sshd.service >/dev/null 2>&1 || true
   touch "$ROOTDIR/etc/moarchy-debug-image"
   say "DEBUG IMAGE: wifi '$WIFI_SSID' preseeded and sshd enabled -- do not publish this"
+fi
+
+# --- an authorised ssh key, debug images only ------------------------------
+# Every reflash wipes ~/.ssh, which costs whoever is working on the device
+# their way back in -- and getting back in needs the card, because the account
+# has no password. Preseeding a key removes that round trip.
+#
+# DEBUG ONLY, and the distinction is not bureaucratic. A *published* image with
+# an authorized_keys in it would have every phone that flashes it trust one
+# person's key: a backdoor, from the point of view of everyone who downloads it.
+# A public key is not a secret, which is exactly why this is easy to wave
+# through and worth refusing anyway.
+#
+# So it is gated on the same debug marker as the wifi PSK, and takes the key
+# from the environment rather than defaulting to whatever is lying around in
+# ~/.ssh.
+if [ -n "${MOARCHY_SSH_KEY:-}" ]; then
+  if [ ! -f "$MOARCHY_SSH_KEY" ]; then
+    say "!! MOARCHY_SSH_KEY=$MOARCHY_SSH_KEY does not exist; no key preseeded"
+  elif grep -qi "PRIVATE KEY" "$MOARCHY_SSH_KEY"; then
+    # Refusing rather than warning: a private key in an image is unrecoverable
+    # once it has been handed to anyone.
+    die "MOARCHY_SSH_KEY points at a PRIVATE key -- refusing to put it in an image"
+  else
+    install -d -m 700 "$ROOTDIR/home/$USER_NAME/.ssh"
+    install -m 600 "$MOARCHY_SSH_KEY" "$ROOTDIR/home/$USER_NAME/.ssh/authorized_keys"
+    arch-chroot "$ROOTDIR" chown -R "$USER_NAME:$USER_NAME" "/home/$USER_NAME/.ssh"
+    arch-chroot "$ROOTDIR" systemctl enable sshd.service >/dev/null 2>&1 || true
+    touch "$ROOTDIR/etc/moarchy-debug-image"
+    say "DEBUG IMAGE: $(basename "$MOARCHY_SSH_KEY") authorised for $USER_NAME, sshd enabled -- do not publish this"
+  fi
 else
   say "no credentials baked in (publishable)"
 fi

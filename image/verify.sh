@@ -210,6 +210,14 @@ for acct in moarchy root; do
 done
 [ -e "$R/etc/moarchy-debug-image" ] && no "this is a DEBUG image -- do not publish" \
                                     || ok "not a debug image"
+# An authorized_keys in a PUBLISHED image would make every phone that flashes it
+# trust one person's key. A public key is not a secret, which is why this is easy
+# to wave through and worth checking for anyway.
+if [ -s "$R/home/moarchy/.ssh/authorized_keys" ]; then
+  no "an ssh key is authorised in this image -- everyone who flashes it would trust it"
+else
+  ok "no ssh key authorised (nobody but the owner can log in)"
+fi
 np=$(ls -1 "$R"/etc/NetworkManager/system-connections/ 2>/dev/null | wc -l)
 [ "$np" = 0 ] && ok "no preseeded network profiles" || no "$np network profile(s) baked in"
 # -L too: an absolute symlink here would read as absent to -e, turning "sshd is

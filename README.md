@@ -247,10 +247,18 @@ and `moarchy`, `omarchy-config` and `moarchy-meta` from `pkgbuilds/`.
 For a debug image that joins your wifi on first boot and enables sshd:
 
 ```bash
-WIFI_SSID='MyNetwork' WIFI_PSK='secret' ./scripts/build-image.sh
+WIFI_SSID='MyNetwork' WIFI_PSK='secret' \
+  MOARCHY_SSH_KEY=~/.ssh/id_ed25519.pub ./scripts/build-image.sh
 ```
 
-That one carries your PSK. Do not publish it.
+Both are optional and both mark the image as a debug build. `MOARCHY_SSH_KEY`
+authorises that key for the phone's account and enables `sshd`, which saves the
+round trip through the card that a reflash otherwise costs — the account has no
+password, so there is no other way back in.
+
+Do not publish either. The PSK is a secret; the key is not, but an
+`authorized_keys` in a public image would have every phone that flashes it trust
+one person's key. `./scripts/verify-image.sh` fails an image carrying either.
 
 ### Developing against a phone you already have
 
@@ -284,12 +292,14 @@ Numbers from a real PinePhone (Allwinner A64, 2 GB), not estimates:
 | --- | --- |
 | GPU | `Mali400`, `OpenGL ES 2.0 Mesa 26.2.1` — Hyprland's 3.0 floor is unreachable |
 | Panel | DSI-1 720x1440, `scale 2` -> 360x720 logical |
-| Fullscreen terminal | 47x41 characters at font size 9 |
+| Terminal | 47x41 characters at font size 9 |
 | btop minimum | 60 columns, regardless of `shown_boxes` |
 
 That last pair is why `moarchy-launch-tui` drops TUIs to font size 7 (~60
-columns) and opens them fullscreen: at Omarchy's desktop font size, btop simply
-refuses to draw on this screen.
+columns): at Omarchy's desktop font size, btop simply refuses to draw on this
+screen. The window is a normal tiled one — the bar and the keyboard anchor to
+opposite edges, so neither costs a column, and a fullscreened terminal would
+only hide the keyboard.
 
 ## Known limitations
 

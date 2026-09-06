@@ -46,6 +46,8 @@ docker run --rm --privileged --platform linux/arm64 \
   -e "WIFI_SSID=${WIFI_SSID:-}" -e "WIFI_PSK=${WIFI_PSK:-}" \
   -e "MOARCHY_USER=${MOARCHY_USER:-moarchy}" \
   -e "XZ_LEVEL=${XZ_LEVEL:-9}" \
+  -e "MOARCHY_SSH_KEY=${MOARCHY_SSH_KEY:+/key.pub}" \
+  ${MOARCHY_SSH_KEY:+-v "$MOARCHY_SSH_KEY:/key.pub:ro"} \
   moarchy-image
 
 # Resolve the real filename rather than printing a placeholder: this line is
