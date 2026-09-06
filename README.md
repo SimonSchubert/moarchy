@@ -1,8 +1,11 @@
 # moarchy
 
 <p align="center">
-  <img src="docs/screenshots/home.png" width="45%" alt="The home screen: Omarchy's bar on top, the home pill on the bottom edge">
-  <img src="docs/screenshots/papers.png" width="45%" alt="Papers showing a PDF, with the gesture strip reserving the bottom edge">
+  <img src="docs/screenshots/system-drawer.png" width="19%" alt="The app drawer, filtered as you type, with the on-screen keyboard up">
+  <img src="docs/screenshots/system-center.png" width="19%" alt="The control centre: quick tiles, brightness and volume, the media player and notifications">
+  <img src="docs/screenshots/system-settings.png" width="19%" alt="The Settings suite's top level">
+  <img src="docs/screenshots/app-web.png" width="19%" alt="GNOME Web on omarchy.org, URL bar at the bottom, keyboard up">
+  <img src="docs/screenshots/app-lcl.png" width="19%" alt="Linux Command Library, an ordinary GTK app under the gesture strip">
 </p>
 
 Omarchy's look, keybindings and theming on an original **PinePhone**, running on
