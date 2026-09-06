@@ -38,7 +38,27 @@ export SWAYSOCK
 # shell, and without it in the environment every IPC check below reports the
 # plugin missing when it is loaded and fine.
 export OMARCHY_PATH="${OMARCHY_PATH:-$HOME/.local/share/omarchy}"
-export PATH="$HOME/.local/bin:$HOME/.local/share/moarchy/bin:$OMARCHY_PATH/bin:$PATH"
+
+# --- where moarchy's own files are ------------------------------------------
+#
+# moarchy installed itself into ~/.local/share/moarchy when it was an installer.
+# It is a package now: scripts in /usr/lib/moarchy/bin (not /usr/bin -- 19 names
+# collide with upstream Omarchy's, and two packages cannot own one path), the
+# rest under /usr/share/moarchy. The old root does not exist on a packaged
+# phone.
+#
+# Every check that reads a moarchy file goes through these two. Seven of them
+# were still spelling the installer's path, and none said so out loud: a `grep`
+# against a file that is not there, a `command -v` compared to a prefix nothing
+# can match, a PATH entry silently adding a directory that does not exist. W2
+# reported "pinephone.conf does not set gaps inner 0" about a config that sets
+# it on line 21.
+#
+# Overridable so the failing branch of each can be run on purpose.
+MOARCHY_ROOT="${MOARCHY_ROOT:-${MOARCHY_PATH:-/usr/share/moarchy}}"
+MOARCHY_BIN="${MOARCHY_BIN:-/usr/lib/moarchy/bin}"
+
+export PATH="$HOME/.local/bin:$MOARCHY_BIN:$OMARCHY_PATH/bin:$PATH"
 
 pass=0
 fail=0
@@ -50,6 +70,38 @@ no()   { printf '  \033[31mFAIL\033[0m  %s\n' "$1"; [[ -n ${2:-} ]] && printf ' 
 # something outside the package set -- the store -- became worth asserting.
 skip_() { printf '  \033[90mSKIP  %s\033[0m\n' "$1"; }
 head_() { printf '\n%s\n' "$1"; }
+
+# --- where a plugin's files are ---------------------------------------------
+#
+# Two directories hold plugins, and until now every check below read only the
+# second one. The shell's PluginRegistry scans /usr/share/moarchy/plugins first
+# and ~/.config/omarchy/plugins second, keyed by id so the later write wins:
+# the packaged copy is what runs unless a user copy overrides it.
+#
+# moarchy ships its plugins as a package now, so an empty ~/.config is the
+# normal state and not a broken one. Reading only there turned that into six
+# failures for the manifest checks -- and, worse, into a PASS for the icon
+# check, which found no literals to complain about because it had opened no
+# files. Eight overrides were deleted on 2026-09-07 and the directory is empty;
+# that is the state these checks now have to be correct in.
+#
+# Resolved per plugin rather than per directory, because an override is one
+# plugin and not a set: with moarchy.settings overridden and the rest packaged,
+# neither directory is the answer on its own.
+#
+# Overridable only so the failing branches can be run. A check that has never
+# been seen to fail is a claim, not a check, and pointing these at empty
+# directories is the only way to watch these ones fail on purpose.
+SYSTEM_PLUGINS="${SYSTEM_PLUGINS:-/usr/share/moarchy/plugins}"
+USER_PLUGINS="${USER_PLUGINS:-$HOME/.config/omarchy/plugins}"
+
+# plugin_dir <id> -- the directory the shell would load that plugin from.
+# Prints the packaged path when neither has it, so a caller's own "is it there"
+# test names the place it should have been.
+plugin_dir() {
+  if [[ -d $USER_PLUGINS/$1 ]]; then printf '%s\n' "$USER_PLUGINS/$1"
+  else printf '%s\n' "$SYSTEM_PLUGINS/$1"; fi
+}
 
 # --- the session is there at all -------------------------------------------
 head_ "session"
@@ -145,11 +197,17 @@ fi
 # The parity half is not pedantry -- the two were written apart and drifted
 # apart, and neither fails loudly when it is wrong: an action row opens a
 # terminal that closes again, which reads as the TUI having quit.
-shade_qml="$HOME/.config/omarchy/plugins/moarchy.shade/Shade.qml"
-pages_js="$HOME/.config/omarchy/plugins/moarchy.settings/Pages.js"
+shade_qml="$(plugin_dir moarchy.shade)/Shade.qml"
+pages_js="$(plugin_dir moarchy.settings)/Pages.js"
 shade_picker=$(sed -n 's/.*floating-terminal-with-presentation \([a-z0-9-]*\)".*/\1/p' "$shade_qml" | head -1)
 row_picker=$(sed -n '/label: "Wi-Fi networks"/,/}/s/.*run: "\([a-z0-9-]*\)".*/\1/p' "$pages_js" | head -1)
-if [[ -z $shade_picker || -z $row_picker ]]; then
+# An absent file and a renamed command both leave the sed empty, and they want
+# opposite things done about them. Separated, so the message does not send
+# someone hunting for a rename that has not happened.
+if [[ ! -f $shade_qml || ! -f $pages_js ]]; then
+  no "no plugin to read the Wi-Fi picker out of ($shade_qml, $pages_js)" \
+     "neither the package nor an override has these; S6b proves nothing"
+elif [[ -z $shade_picker || -z $row_picker ]]; then
   no "cannot read the Wi-Fi picker out of the shade (${shade_picker:-none}) or Settings (${row_picker:-none})" \
      "one of the two stopped naming a command the way this check reads it"
 elif [[ $shade_picker != "$row_picker" ]]; then
@@ -175,9 +233,9 @@ else
 fi
 
 # Declared as a service the plugin was mounted twice and drew two stacked pills.
-kinds=$(python3 - <<'PY' 2>/dev/null
-import json, os
-p = os.path.expanduser("~/.config/omarchy/plugins/moarchy.gestures/manifest.json")
+kinds=$(python3 - "$(plugin_dir moarchy.gestures)" <<'PY' 2>/dev/null
+import json, os, sys
+p = os.path.join(sys.argv[1], "manifest.json")
 try:
     print(",".join(json.load(open(p)).get("kinds", [])))
 except Exception:
@@ -255,12 +313,12 @@ for plugin in moarchy.drawer moarchy.recents moarchy.shade \
               moarchy.themes moarchy.settings moarchy.device; do
   k=$(python3 -c '
 import json, os, sys
-p = os.path.expanduser("~/.config/omarchy/plugins/%s/manifest.json" % sys.argv[1])
+p = os.path.join(sys.argv[1], "manifest.json")
 try:
     print(",".join(json.load(open(p)).get("kinds", [])))
 except Exception:
     pass
-' "$plugin" 2>/dev/null)
+' "$(plugin_dir "$plugin")" 2>/dev/null)
   if [[ $k == "overlay" ]]; then
     ok "$plugin is declared as an overlay"
   else
@@ -291,7 +349,13 @@ done
 #     coverage question, so ask fontconfig.
 #
 # Neither logs anything, hence both.
-glyph_problem=$(python3 - "$HOME/.config/omarchy/plugins" <<'PY' 2>/dev/null
+#
+# It reports how many files it read, and that is not decoration. This check
+# passed on 2026-09-07 against a directory that had just been emptied: no
+# files, so no literals, so no problems, so "every icon literal is fine". A
+# check that can pass while measuring nothing is not a check, and the count is
+# what makes that visible on the green line rather than only on the red one.
+glyph_out=$(python3 - "$SYSTEM_PLUGINS" "$USER_PLUGINS" <<'PY' 2>/dev/null
 import glob, os, re, subprocess, sys
 
 # The private use areas Nerd Fonts pack their icons into.
@@ -301,7 +365,19 @@ def is_icon(ch):
 problems = []
 codepoints = set()
 
-for path in sorted(glob.glob(os.path.join(sys.argv[1], "moarchy.*", "*.qml"))):
+# The same resolution the shell and plugin_dir do: both roots, later wins, so
+# an overridden plugin is read once -- from the copy that actually loads.
+dirs = {}
+for root in sys.argv[1:]:
+    for d in sorted(glob.glob(os.path.join(root, "moarchy.*"))):
+        if os.path.isdir(d):
+            dirs[os.path.basename(d)] = d
+
+files = []
+for _, d in sorted(dirs.items()):
+    files.extend(sorted(glob.glob(os.path.join(d, "*.qml"))))
+
+for path in files:
     name = os.path.basename(path)
     for n, line in enumerate(open(path, encoding="utf-8"), 1):
         for literal in re.findall(r'"([^"\\]*)"', line):
@@ -318,11 +394,16 @@ for cp in sorted(codepoints):
     if "Nerd Font" not in out and "omarchy" not in out:
         problems.append("no icon font covers U+%05X" % cp)
 
-print("; ".join(problems))
+print("%d|%s" % (len(files), "; ".join(problems)))
 PY
 )
-if [[ -z ${glyph_problem// /} ]]; then
-  ok "every icon literal is a single glyph in an installed icon font"
+glyph_n=${glyph_out%%|*}
+glyph_problem=${glyph_out#*|}
+if [[ -z $glyph_out || -z $glyph_n || $glyph_n == 0 ]]; then
+  no "no plugin QML to check under $SYSTEM_PLUGINS or $USER_PLUGINS" \
+     "with nothing to read, this check reports every icon fine"
+elif [[ -z ${glyph_problem// /} ]]; then
+  ok "every icon literal is a single glyph in an installed icon font ($glyph_n files)"
 else
   no "icon literals: $glyph_problem" \
      "a truncated \\uXXXX escape leaves the fifth hex digit in the string"
@@ -439,7 +520,7 @@ if [[ ${1:-} == "--gestures" ]]; then
   export XDG_RUNTIME_DIR
   export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-$(basename "$(ls "$XDG_RUNTIME_DIR"/wayland-[0-9] 2>/dev/null | head -1)" 2>/dev/null)}"
 
-  touch_bin="$HOME/.local/share/moarchy/bin/moarchy-touch"
+  touch_bin="$MOARCHY_BIN/moarchy-touch"
   ws() { swaymsg -t get_workspaces | python3 -c 'import json,sys; print(([w["name"] for w in json.load(sys.stdin) if w["focused"]] or [""])[0])'; }
   # Sway's own layout string for the focused workspace -- "V[foot]" with a
   # window on it, empty without. Read here through swaymsg, never through the
@@ -1367,7 +1448,7 @@ if [[ ${1:-} == "--settings" ]]; then
   # "no-bar" would take the bar down on the way past if the function ever came
   # back. The file test is the point -- a grep that cannot find the file would
   # otherwise pass while measuring nothing.
-  barqml="$HOME/.config/omarchy/plugins/moarchy.bar/Bar.qml"
+  barqml="$(plugin_dir moarchy.bar)/Bar.qml"
   trow=$(s rows | awk -F'\t' '$1=="transparent"' | wc -l)
   if [[ ! -f $barqml ]]; then
     no "C6 $barqml is not there" "the bar plugin is not installed; C6 proves nothing"
@@ -1397,7 +1478,7 @@ if [[ ${1:-} == "--settings" ]]; then
     || no "D5 the DNS row's detail is not the current value" "expected $current"
 
   # --- E. bridged launches --------------------------------------------------
-  plug_pages="$HOME/.config/omarchy/plugins/moarchy.settings/Pages.js"
+  plug_pages="$(plugin_dir moarchy.settings)/Pages.js"
 
   s dryRun 1 >/dev/null
   s openAt tools >/dev/null; sleep 2
@@ -1411,7 +1492,7 @@ if [[ ${1:-} == "--settings" ]]; then
   for shim in omarchy-launch-floating-terminal-with-presentation \
               omarchy-launch-config-editor omarchy-launch-webapp; do
     p=$(command -v "$shim" 2>/dev/null)
-    [[ $p == "$HOME/.local/share/moarchy/bin/"* ]] || missing="$missing $shim"
+    [[ $p == "$MOARCHY_BIN/"* ]] || missing="$missing $shim"
   done
   [[ -z $missing ]] \
     && ok "E4 the bridge shims shadow upstream" \
@@ -1449,8 +1530,8 @@ CMDS
   shell_pid=$(pgrep -x quickshell | head -1)
   shell_path=$(tr '\0' '\n' < "/proc/$shell_pid/environ" 2>/dev/null | sed -n 's/^PATH=//p')
   case ":$shell_path:" in
-    *":$HOME/.local/share/moarchy/bin:"*) ok "I5 the shell's PATH carries our bin" ;;
-    *) no "I5 the shell's PATH is missing $HOME/.local/share/moarchy/bin" \
+    *":$MOARCHY_BIN:"*) ok "I5 the shell's PATH carries our bin" ;;
+    *) no "I5 the shell's PATH is missing $MOARCHY_BIN" \
           "every bridged row would open nothing" ;;
   esac
 
@@ -1494,7 +1575,7 @@ JSONC
   # Defaulted, not assumed: this script runs under `set -u`, so a bare
   # $MOARCHY_PATH would abort the whole suite rather than fail one check,
   # and it is not exported by the session -- only PATH carries it.
-  doc="${MOARCHY_PATH:-$HOME/.local/share/moarchy}/docs/menu-coverage.md"
+  doc="$MOARCHY_ROOT/docs/menu-coverage.md"
   if [[ -f $doc ]]; then
     doc_nb=$(python3 - "$doc" <<'DOCTBL'
 import re, sys
@@ -1514,7 +1595,12 @@ DOCTBL
          "$(diff <(echo "$doc_nb") <(echo "$code_nb") | head -4 | tr '\n' ' ')"
     fi
   else
-    no "G6 docs/menu-coverage.md not found" "expected at $doc"
+    # Not a failure of the phone: the moarchy package ships bin/, default/ and
+    # config/ and no docs at all, so on a device this file is never there. G6
+    # is a repo invariant -- doc against code -- and it runs where the repo is,
+    # with MOARCHY_ROOT pointed at a checkout. Reported as absent rather than
+    # as broken, so the red lines stay ones somebody can act on.
+    skip_ "G6 skipped: no docs/ in the moarchy package, so $doc cannot exist here"
   fi
 
   # G5/H2. Everything upstream ships is accounted for: rendered, or recorded as
@@ -1542,7 +1628,7 @@ DOCTBL
     || no "H2 trigger.toggle.notifications is not recorded as Shade" ""
 
   # --- I. robustness --------------------------------------------------------
-  plug="$HOME/.config/omarchy/plugins/moarchy.settings"
+  plug="$(plugin_dir moarchy.settings)"
 
   # I2. The existing icon check catches a *truncated* glyph. It cannot catch a
   # glyph that is gone: every icon in omarchy-menu.jsonc below U+FFFF is three
@@ -1712,7 +1798,7 @@ print(r["x"], r["y"], r["width"], r["height"])'
   # I5. The drawer must still reflow above the keyboard -- the whole reason its
   # exclusive zone is zero. Needs a tap on the search field, so it needs the
   # injector and root.
-  touch_bin="$HOME/.local/share/moarchy/bin/moarchy-touch"
+  touch_bin="$MOARCHY_BIN/moarchy-touch"
   if [[ -x $touch_bin ]] && sudo -n true 2>/dev/null; then
     open_ drawer
     h_down=$(g drawer h); gap_down=$(g drawer gap)
@@ -1845,7 +1931,10 @@ print(" ".join(out))'; }
   }
 
   # --- W1, W2: the window area ---------------------------------------------
-  if ! grep -q '^gaps inner 0' "$HOME/.local/share/moarchy/default/sway/pinephone.conf" 2>/dev/null; then
+  wconf="$MOARCHY_ROOT/default/sway/pinephone.conf"
+  if [[ ! -f $wconf ]]; then
+    w_no W2 "no pinephone.conf at $wconf" "W2 is about a file that is not there"
+  elif ! grep -q '^gaps inner 0' "$wconf"; then
     w_no W2 "pinephone.conf does not set gaps inner 0" \
             "the installed config still insets every app"
   else
