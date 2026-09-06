@@ -475,8 +475,13 @@ var PAGES = {
   { id: "clone", type: "action", glyph: "󰆏", label: "Clone a plugin",
     run: "omarchy-menu-plugin clone", launch: "menu",
     covers: { "setup.plugin.clone": "B" } },
-  // Upstream's guard is true here -- six moarchy.* manifests match it --
-  // so this row can uninstall the phone UI. Kept, behind a confirm.
+  // This used to be able to uninstall the phone UI, back when the moarchy.*
+  // plugins were copied into ~/.config/omarchy/plugins and upstream's guard
+  // matched their six manifests. They are packaged now, under
+  // /usr/share/moarchy/plugins, and omarchy-plugin-remove only ever rm -rf's
+  // inside $HOME/.config/omarchy/plugins -- so it cannot reach them, and with
+  // that directory empty the guard is false and the row does not render at all.
+  // The confirm stays: a user who clones a plugin there puts the row back.
   { id: "remove", type: "action", glyph: "󰭌", label: "Remove a plugin",
     when: "compgen -G \"$HOME/.config/omarchy/plugins/*/manifest.json\"",
     confirm: "Removing a moarchy plugin takes away part of the phone UI.",

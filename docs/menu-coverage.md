@@ -242,7 +242,7 @@ Native 25 · Bridged 14 · Unsupported 23
 | `setup.plugin.disable` | Disable Plugin | Bridged | Shell & plugins > Plugins | `omarchy-menu-select` |
 | `setup.plugin.add` | Add Plugin | Bridged | Shell & plugins > Plugins | TUI; prompts for a repo URL |
 | `setup.plugin.clone` | Clone Plugin | Bridged | Shell & plugins > Plugins | `omarchy-menu-select` |
-| `setup.plugin.remove` | Remove Plugin | Bridged | Shell & plugins > Plugins | guard is TRUE here (six moarchy.* manifests) -- this row can uninstall the phone UI; confirm sheet added |
+| `setup.plugin.remove` | Remove Plugin | Bridged | Shell & plugins > Plugins | hidden while `~/.config/omarchy/plugins` is empty, which it now is -- the phone UI is packaged, and `omarchy-plugin-remove` only deletes inside that directory. Confirm sheet kept for a user-cloned plugin |
 | `setup.security` | Security | Native | Security |  |
 | `setup.config` | Config | Unsupported | -- | every child unsupported |
 | `setup.security.fingerprint` | Fingerprint | Unsupported | -- | `omarchy-hw-fingerprint` is false; fprintd is not installed |
