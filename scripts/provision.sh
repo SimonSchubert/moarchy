@@ -10,7 +10,7 @@
 # requires a real terminal. Everything after `flash` talks to the phone over SSH.
 #
 # Configuration (environment):
-#   PHONE       ssh target                (default alarm@192.168.0.18, over wifi)
+#   PHONE       ssh target                (default moarchy@192.168.0.18, over wifi)
 #   DISK        SD card device            (e.g. /dev/disk28) -- required for `flash`
 #   WIFI_SSID   preseed this wifi network into the image we build (optional)
 #   WIFI_PSK    its password (pass via env, never as an argument)
@@ -27,7 +27,12 @@ cd "$REPO_ROOT"
 
 . "$REPO_ROOT/scripts/manifest.sh"
 
-PHONE="${PHONE:-alarm@192.168.0.18}"
+# moarchy, not alarm. `alarm` is DanctNIX's stock user and was right while this
+# project provisioned on top of their image; the image built here creates
+# `moarchy` and locks both its password and root's, so `alarm` does not exist
+# and publickey is the only way in. The stale default sent a second session
+# hunting for a key that would never work, for an account that was not there.
+PHONE="${PHONE:-moarchy@192.168.0.18}"
 # One pin, read here and in scripts/flash-sd.sh, rather than the same date
 # written out in both (docs/structure.md V1).
 RELEASE="${RELEASE:-$(manifest_get danctnix release)}"
@@ -107,7 +112,7 @@ step_build() {
 
 step_deploy() {
   say "ship the built packages to $PHONE"
-  phone true 2>/dev/null || die "cannot reach $PHONE -- set PHONE=alarm@<ip> (the phone's wifi address; key auth via ssh-copy-id)"
+  phone true 2>/dev/null || die "cannot reach $PHONE -- set PHONE=moarchy@<ip>. The account has no password by design, so ssh-copy-id cannot work: authorise a key from the phone's own terminal, or with ./scripts/card-push.sh"
 
   # Passwordless sudo, so the install does not stall on a prompt.
   if ! phone 'sudo -n true' 2>/dev/null; then

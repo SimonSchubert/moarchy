@@ -183,6 +183,8 @@ Done. Next:
   1. Put the card in the PinePhone and power it on.
   2. Get it on wifi -- attach a USB keyboard once and run `sudo nmtui`.
   3. ssh alarm@<its address>      (password: 123456; root password: root)
+     -- that is DanctNIX's stock account. A moarchy image has no `alarm` and
+     no password at all; it logs itself in.
      Find the address from your router, or with `arp -a`.
   4. Change both passwords, then, from the Mac:
 
