@@ -795,8 +795,8 @@ Item {
               fontSize: Style.font.icon
               color: root.textOnSurface
             }
-            // Answers over 44 while staying drawn at 38 (docs/touch-targets.md
-            // C1, A2). The header is 44 tall and the circle is centred in it,
+            // Answers over 44 while staying drawn at 38 (docs/style.md E1,
+            // E2). The header is 44 tall and the circle is centred in it,
             // so the 3px is already there vertically; horizontally it eats into
             // the surface margin on one side and the 12px before the title on
             // the other, and neither takes a tap.

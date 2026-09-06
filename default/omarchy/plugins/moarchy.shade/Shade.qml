@@ -131,7 +131,7 @@ Item {
   readonly property int glyphSlot: Math.round(Style.font.iconLarge * 1.35)
 
   // The square a bare glyph gets to answer in, as opposed to the square it is
-  // drawn in (docs/touch-targets.md A1, A2). Derived from glyphSlot rather than
+  // drawn in (docs/style.md E1, E2, E5). Derived from glyphSlot rather than
   // fixed at 44, because glyphSlot follows the theme's font size: on a theme
   // with a larger base-size the glyph is already over the floor, and a fixed 44
   // would shrink its target back down to meet it.
@@ -1061,9 +1061,9 @@ Item {
       color: root.textOnSurface
     }
 
-    // 36 drawn, 44 answering (docs/touch-targets.md C2, A2). The two buttons
+    // 36 drawn, 44 answering (docs/style.md E1-E3). The two buttons
     // sit 8px apart, so 4 each is the most either may take without the later
-    // one eating the earlier one's edge (A3) -- and 4 is exactly what 36 needs.
+    // one eating the earlier one's edge (E3) -- and 4 is exactly what 36 needs.
     // Vertically it fills the 44px header the pair is centred in.
     MouseArea {
       anchors.fill: parent
@@ -1370,11 +1370,11 @@ Item {
 
             // Three tapSlot squares butted together with the glyph centred in
             // each, rather than three glyphs on a shared 10px spacing with the
-            // hit areas grown outward (docs/touch-targets.md C3).
+            // hit areas grown outward (docs/style.md E4).
             //
             // Grown outward they could not get there. On 34px centres -- a 24px
             // glyph plus the Row's 10px gap -- the middle button can claim 5 on
-            // each side before it starts eating its neighbours (A3), which tops
+            // each side before it starts eating its neighbours (E3), which tops
             // out at 34 and leaves play the smallest target on the sheet.
             // Carrying the gap *inside* the slot is what buys the floor, and it
             // costs the title 40px of width: the one place where 44 was not
@@ -1425,9 +1425,9 @@ Item {
         Item {
           // 24, not 20: Clear-all needs 44 of height, and the Column leaves a
           // 10px gap on each side of this row -- so 24 + 10 + 10 is the floor
-          // reached without either overhang running into a neighbour (A3). The
+          // reached without either overhang running into a neighbour (E3). The
           // label is the size it always was; the row around it is 4px taller
-          // (docs/touch-targets.md C4).
+          // (docs/style.md E1-E3).
           width: parent.width
           height: Style.space(24)
           visible: notificationList.count > 0

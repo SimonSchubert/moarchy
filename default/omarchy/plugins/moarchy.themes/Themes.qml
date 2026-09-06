@@ -74,7 +74,11 @@ Item {
   // the theme's shell.toml, so this is nearer 23 at the default ~1.15 -- which
   // is why nothing here or in the selftest writes the number down.
   readonly property int gestureStrip: Style.space(20)
-  readonly property int radiusCard: Style.space(20)
+  // 20 is the tile radius, and a cell in a grid you tap is a tile rather
+  // than a card (docs/style.md D1). The value never changed; the name was
+  // the odd one out, and a name is how the next screen picks the right
+  // number without measuring this one.
+  readonly property int radiusTile: Style.space(20)
 
   readonly property color surface: Color.menu.background
   // NOT `onSurface` / `onAccent`, however much the Material role names want to
@@ -367,7 +371,7 @@ Item {
               color: root.textOnSurface
             }
             // 38 drawn, 44 answering -- the same 3px as the Settings header,
-            // and for the same reasons (docs/touch-targets.md C1).
+            // and for the same reasons (docs/style.md E1, E2).
             MouseArea {
               anchors.fill: parent
               anchors.margins: -Style.space(3)
@@ -423,7 +427,7 @@ Item {
             Rectangle {
               anchors.fill: parent
               anchors.margins: Style.space(5)
-              radius: root.radiusCard
+              radius: root.radiusTile
               // Painted in the theme it names. That is the whole point of the
               // screen: the card is the preview.
               color: cell.modelData.background

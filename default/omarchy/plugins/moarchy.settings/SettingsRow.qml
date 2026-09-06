@@ -46,10 +46,13 @@ Rectangle {
   // edge. Equal slots make one left edge. 1.35x is the bar's ratio.
   readonly property int glyphSlot: Math.round(Style.font.iconLarge * 1.35)
 
+  readonly property int radiusCard: Style.space(18)
+
   signal activated()
 
   height: Style.space(58)
-  radius: Style.space(18)
+  // The card radius (docs/style.md D1).
+  radius: card.radiusCard
   opacity: card.rowEnabled ? 1 : 0.45
 
   Row {

@@ -199,6 +199,17 @@ Item {
   // is why nothing here or in the selftest writes the number down.
   readonly property int gestureStrip: Style.space(20)
 
+  // The weight the bar and every other surface runs at (docs/style.md B3).
+  // Light text on a dark ground reads thinner than it measures, and one
+  // screen left at Regular reads as a different phone.
+  readonly property int textWeight: Font.DemiBold
+
+  // The sheet radius, the same one the shade's sheet uses (docs/style.md
+  // D1). Named rather than written twice: it is also the height of the
+  // rectangle that squares the bottom corners back off, and those two
+  // numbers are the same number rather than two that happen to match.
+  readonly property int radiusSheet: Style.space(28)
+
   // Radii are written out rather than taken from Style.cornerRadius, which
   // mirrors Hyprland's `decoration:rounding` and is pinned to 0 here by the
   // hyprctl shim -- right for tiled windows under Sway, wrong for a phone.
@@ -282,6 +293,12 @@ Item {
 
     root.query = ""
     searchField.text = ""
+    // Belt to close()'s braces. close() is the path every dismissal takes and
+    // is where releasing the field belongs, but the invariant the margin gate
+    // rests on is "focused means the keyboard is up" -- so the open path
+    // asserts it too rather than trusting that nothing ever opens this surface
+    // from a state it did not close from.
+    focusSink.forceActiveFocus()
     root.dragging = false
     root.progress = 1
 
@@ -340,7 +357,7 @@ Item {
     // sampled. Recording in-process and reading the trace afterwards can.
     function dragTrace(): string { return root.dragTrace.join(" ") }
 
-    // docs/touch-targets.md B1, B3. Neither is answerable by a screenshot: the
+    // docs/style.md F1, F3. Neither is answerable by a screenshot: the
     // pill and the field draw the same picture whether or not they are the same
     // rectangle, which is exactly how the dead band survived this long. So the
     // two rects are reported side by side, in surface coordinates -- the panel
@@ -533,7 +550,7 @@ Item {
 
       // Rounded at the top only -- the edge it comes in from. The bottom
       // corners sit against the home pill and are never seen.
-      radius: Style.space(28)
+      radius: root.radiusSheet
 
       Keys.onEscapePressed: root.dismiss()
 
@@ -542,7 +559,7 @@ Item {
       Rectangle {
         anchors.bottom: parent.bottom
         width: parent.width
-        height: Style.space(28)
+        height: root.radiusSheet
         color: root.surface
       }
 
@@ -672,7 +689,7 @@ Item {
           }
 
           // Fills the pill, and the insets are padding rather than anchor
-          // margins (docs/touch-targets.md B1-B3). Both halves of that matter.
+          // margins (docs/style.md F1-F3). Both halves of that matter.
           //
           // A Ui.TextField with verticalPadding 0 and no background is exactly
           // one line of Style.font.body tall -- 16-22px of a 46px pill -- and
@@ -682,12 +699,12 @@ Item {
           // under them. Roughly a third of what is drawn here answered a tap.
           //
           // Padding draws identically to the margins it replaces and is
-          // *inside* the hit area, so nothing moves on screen (B2).
+          // *inside* the hit area, so nothing moves on screen (F2).
           //
           // Pinned rather than left to `horizontalPadding`, which the base type
           // adds to `Border.left(spec)` -- and that spec is `focus` or `normal`,
           // so on a theme whose two border widths differ the text used to jump
-          // sideways the instant the field was tapped (B5). Vertical is safe as
+          // sideways the instant the field was tapped (F5). Vertical is safe as
           // it stands: top and bottom move together, so the centre holds.
           Ui.TextField {
             id: searchField
@@ -778,6 +795,7 @@ Item {
                   ? root.shell.appLibrary.entryName(entry) : ""
                 font.family: Style.font.family
                 font.pixelSize: Style.font.caption
+                font.weight: root.textWeight
                 color: root.textOnSurface
                 elide: Text.ElideRight
                 maximumLineCount: 2
@@ -803,12 +821,29 @@ Item {
         }
       }
     }
-  }
 
-  // Somewhere for active focus to go when the drawer closes. It has to be a
-  // real item inside the window -- focus handed to nothing at all leaves Qt
-  // believing the text field still has it.
-  Item { id: focusSink }
+    // Somewhere for active focus to go when the drawer closes (I5c). It has to
+    // be a real item *inside this window*, and for a long time it was not: it
+    // sat out at plugin root, a child of an Item that belongs to no window at
+    // all. An item with no window cannot be given active focus, so
+    // `focusSink.forceActiveFocus()` in close() set a flag on an orphan and
+    // took nothing away from the search field, which kept its `focus` across
+    // the unmap and had it handed straight back the moment sway re-activated
+    // the surface on the next open.
+    //
+    // Two symptoms, one fault. The one that was noticed first is that the
+    // keyboard stops rising: a tap on a field Qt already considers focused
+    // changes no focus and so re-enables no text input. The one that is worse
+    // is the margin above -- gated on `searchField.activeFocus`, it dropped the
+    // bottom inset on every open, so the drawer drew its first frame under the
+    // strip and then shrank off it, leaving wallpaper in the band under the
+    // pill for as long as it was up.
+    //
+    // Zero-sized and declared last, which costs nothing: it takes no input and
+    // draws nothing, and the sheet's own drag areas are unaffected by a sibling
+    // with no area.
+    Item { id: focusSink }
+  }
 
   // Typing on a phone keyboard is slow enough that per-keystroke re-sorting of
   // every desktop entry is affordable, but the icon churn behind it is not.

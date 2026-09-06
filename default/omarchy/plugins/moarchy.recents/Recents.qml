@@ -230,6 +230,15 @@ Item {
     root.dragTrace = next
   }
 
+  // A carousel card is something in a row you tap as a unit, which is the
+  // tile radius rather than the card one (docs/style.md D1).
+  readonly property int radiusTile: Style.space(20)
+
+  // The weight the bar and every other surface runs at (docs/style.md B3).
+  // Light text on a dark ground reads thinner than it measures, and one
+  // screen left at Regular reads as a different phone.
+  readonly property int textWeight: Font.DemiBold
+
   // ------------------------------------------------------------------ palette
   //
   // NOT named `onSurface`/`onAccent` the Material way. QML reserves the
@@ -882,7 +891,7 @@ Item {
             width: cards.cardWidth
             anchors.horizontalCenter: parent.horizontalCenter
             height: parent.height
-            radius: Style.space(20)
+            radius: root.radiusTile
             color: root.cardSurface
 
             // Every card needs an edge, for the same reason it needs a raised
@@ -952,6 +961,7 @@ Item {
                 text: root.nameFor(modelData)
                 font.family: Style.font.family
                 font.pixelSize: Style.font.body
+                font.weight: root.textWeight
                 color: root.textOnSurface
                 elide: Text.ElideRight
                 maximumLineCount: 1
@@ -963,6 +973,7 @@ Item {
                 text: modelData ? (modelData.title || "") : ""
                 font.family: Style.font.family
                 font.pixelSize: Style.font.caption
+                font.weight: root.textWeight
                 color: root.subdued
                 elide: Text.ElideRight
                 maximumLineCount: 2

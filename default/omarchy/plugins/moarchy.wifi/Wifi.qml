@@ -86,6 +86,13 @@ Item {
   // --------------------------------------------------------------- palette
   // Matches the shade, which is where the tile that opens this lives.
   readonly property int gestureStrip: Style.space(20)
+
+  // The card radius, from the four this shell has (docs/style.md D1).
+  // Was a bare Style.space(14) -- a fifth radius nobody chose, which put
+  // this screen's rows next to Settings' rows at 18 and made the two lists
+  // read as different apps.
+  readonly property int radiusCard: Style.space(18)
+
   readonly property int textWeight: Font.DemiBold
   readonly property color surface: Color.popups.background
   readonly property color textOnSurface: Color.popups.text
@@ -128,7 +135,7 @@ Item {
   onListFrozenChanged: if (root.listFrozen) root.frozenRows = root.liveRows
 
   // The expanded row's passphrase pill and field, registered by the delegate
-  // that owns them (docs/touch-targets.md B3, B4). Ids declared inside a
+  // that owns them (docs/style.md F3, F4). Ids declared inside a
   // delegate are scoped to it, so the IpcHandler out here cannot reach them any
   // other way -- and a rect published once on expansion would be read before
   // the layout that produced it had settled. One row expands at a time, so
@@ -402,7 +409,7 @@ Item {
       return out.join("\n")
     }
 
-    // docs/touch-targets.md B3, B4. Same job as the drawer's searchTarget():
+    // docs/style.md F3, F4. Same job as the drawer's searchTarget():
     // the pill and the field draw identically whether or not they are the same
     // rectangle, so the rects have to be read rather than photographed.
     // Surface coordinates; bin/moarchy-touch takes these doubled.
@@ -488,7 +495,7 @@ Item {
               color: root.textOnSurface
             }
             // 38 drawn, 44 answering -- the same 3px as the Settings header,
-            // and for the same reasons (docs/touch-targets.md C1).
+            // and for the same reasons (docs/style.md E1, E2).
             MouseArea {
               anchors.fill: parent
               anchors.margins: -Style.space(3)
@@ -530,7 +537,7 @@ Item {
               Behavior on x { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
             }
             // A switch is 30 tall because that is what a switch looks like,
-            // and 30 is not a target (docs/touch-targets.md C5). The 7px fills
+            // and 30 is not a target (docs/style.md E1, E2). The 7px fills
             // the 44px header it sits in and reaches past both ends of the
             // track; the only thing to its left is the title, which is text.
             MouseArea {
@@ -583,7 +590,7 @@ Item {
                        : 0)
                     + (rowItem.hasError ? Style.space(30) : 0)
             Behavior on height { NumberAnimation { duration: 120 } }
-            radius: Style.space(14)
+            radius: root.radiusCard
             color: rowItem.isExpanded ? root.containerHigh : root.container
 
             Item {
@@ -709,16 +716,16 @@ Item {
                 }
 
                 // Fills its half of the pill, with the lead-in as padding
-                // rather than an anchor margin (docs/touch-targets.md B1-B3).
+                // rather than an anchor margin (docs/style.md F1-F3).
                 // Anchored by verticalCenter with verticalPadding 0 and no
                 // background, this control was one line of text tall -- about
                 // 20px of a 44px pill -- and the 16px lead-in was outside it as
                 // well, so most of the drawn field did not take a tap. Padding
                 // draws the same and is inside the hit area, and pinning it
                 // stops the text shifting sideways on focus, which the base
-                // type's border-width-dependent padding caused (B5).
+                // type's border-width-dependent padding caused (F5).
                 //
-                // Left/right, not fill: the eye keeps its own 44px square (B4).
+                // Left/right, not fill: the eye keeps its own 44px square (F4).
                 Ui.TextField {
                   id: passField
                   anchors.left: parent.left
@@ -751,11 +758,16 @@ Item {
                   height: width
                   radius: width / 2
                   color: "transparent"
-                  Text {
-                    anchors.centerIn: parent
+                  // A glyph centred in a slot goes through Ui.OpticalGlyph, which
+                  // measures the painted bounds and shifts by the difference
+                  // (docs/style.md B5). anchors.centerIn centres the box the font
+                  // reserves, and a Nerd Font glyph is rarely centred inside it --
+                  // measured on the shade's gear, 4 device pixels off.
+                  Ui.OpticalGlyph {
+                    anchors.fill: parent
                     text: root.showPassphrase ? "󰛐" : "󰛑"   // eye / eye-off
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.icon
+                    fontFamily: Style.font.family
+                    fontSize: Style.font.icon
                     color: root.showPassphrase ? root.accent : root.subdued
                   }
                   MouseArea {

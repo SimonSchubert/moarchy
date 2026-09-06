@@ -53,8 +53,13 @@ Item {
 
   // The weight the bar and every other screen in this shell run at. This file
   // used to say `font.bold` on two lines and nothing on the rest, which is how
-  // it came to be the one screen that did not match (docs/touch-targets.md C6).
+  // it came to be the one screen that did not match (docs/style.md B3).
   readonly property int textWeight: Font.DemiBold
+
+  // The card radius, from the four this shell has (docs/style.md D1). Was a
+  // bare Style.space(14) -- a fifth radius nobody chose, which left this
+  // screen's two panels 4px sharper than every card on the phone next to them.
+  readonly property int radiusCard: Style.space(18)
 
   property var facts: ({})
 
@@ -227,7 +232,7 @@ Item {
         // claim this header made in a comment long before it was true. It was
         // drawn in raw pixels at a font the theme does not set, with a
         // typographic ‹ where the other three headers use the Nerd Font
-        // chevron through Ui.OpticalGlyph (docs/touch-targets.md C6).
+        // chevron through Ui.OpticalGlyph (docs/style.md A1-A3, B1).
         RowLayout {
           Layout.fillWidth: true
           spacing: Style.space(10)
@@ -247,7 +252,7 @@ Item {
               color: root.textOnSurface
             }
 
-            // 40 drawn, 44 answering (docs/touch-targets.md C1, A2). Nothing
+            // 40 drawn, 44 answering (docs/style.md E1, E2). Nothing
             // sits within 2px of this circle: the title is 10px to its right
             // and the surface margin is 16px to its left.
             MouseArea {
@@ -296,7 +301,7 @@ Item {
               required property var modelData
               Layout.fillWidth: true
               Layout.preferredHeight: Style.space(84)
-              radius: Style.space(14)
+              radius: root.radiusCard
               color: root.container
               ColumnLayout {
                 anchors.centerIn: parent
@@ -325,7 +330,7 @@ Item {
         Rectangle {
           Layout.fillWidth: true
           Layout.fillHeight: true
-          radius: Style.space(14)
+          radius: root.radiusCard
           color: root.container
 
           ColumnLayout {

@@ -96,6 +96,20 @@ libadwaita apps and KDE's Kirigami/Plasma Mobile apps both reflow to a 360px
 screen and are the comfortable fit; availability is not the constraint, screen
 width and 2 GB of RAM are.
 
+## What it looks like
+
+[`docs/style.md`](docs/style.md) is the style contract — the type scale, the six
+colour roles, the four radii, the 44px touch-target floor and the motion budget
+a Mali-400 at GLES 2.0 can afford. It binds the shell plugins in this repo *and*
+the two surfaces that are not in it: the
+[keyboard](https://github.com/SimonSchubert/moarchy-keyboard) and the
+[store](https://github.com/SimonSchubert/moarchy-store). Three programs, three
+toolkits — quickshell/QML, standalone Qt, Python and GTK4 — one palette, read
+from the theme `omarchy-theme-set` stages at
+`~/.local/state/omarchy/current/theme/`.
+
+`scripts/style-check.sh` enforces the half of it that is visible in the source.
+
 ## How this was built
 
 [`docs/build-log.md`](docs/build-log.md) is the chronological account — every
