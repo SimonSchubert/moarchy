@@ -40,10 +40,10 @@ replaced by the fullscreen terminal, which is the entire point of bridging.
 
 | Class | Entries |
 | --- | ---: |
-| Native | 66 |
+| Native | 65 |
 | Bridged | 74 |
 | Shade | 1 |
-| Unsupported | 179 |
+| Unsupported | 180 |
 | **Total** | **320** |
 
 Roughly a third of the menu survives. That is not a gap to be closed: the
@@ -52,8 +52,8 @@ dropped two thirds are Steam and Battle.net, twenty language runtimes behind
 configuration files.
 
 Where an entry lands is written with `>` for one level down, e.g.
-`Appearance > Status bar > Transparent`. A container row that dissolves into
-several screens says so.
+`Appearance > Status bar > Battery percentage`. A container row that dissolves
+into several screens says so.
 
 ---
 
@@ -156,7 +156,7 @@ Native 12 · Bridged 9 · Shade 1 · Unsupported 25
 
 ## Style (21)
 
-Native 8 · Bridged 6 · Unsupported 7
+Native 7 · Bridged 6 · Unsupported 8
 
 | id | label | class | lands at | note |
 | --- | --- | --- | --- | --- |
@@ -167,7 +167,7 @@ Native 8 · Bridged 6 · Unsupported 7
 | `style.font` | Font | Native | Appearance > Font | provider list from `omarchy-font-list` / `-current` / `-set` |
 | `style.bar` | Menu Bar | Native | Appearance > Status bar |  |
 | `style.bar.position` | Position | Unsupported | -- | `moarchy.bar` declares `readonly property string position: "top"` |
-| `style.bar.transparency` | Transparency | Native | Appearance > Status bar > Transparent | needs Bar.qml to bind `transparent` to `barConfig` first, or the write is a silent no-op |
+| `style.bar.transparency` | Transparency | Unsupported | -- | `omarchy-bar transparent` reloads the shell config, and the reload leaves upstream's `omarchy.bar` drawing in place of the phone bar; the row was removed rather than repaired |
 | `style.hyprland` | Hyprland | Unsupported | -- | edits `~/.config/hypr/looknfeel.lua`; Hyprland cannot run here |
 | `style.screensaver` | Screensaver | Native | Appearance > Branding | container; its three children are the bridged rows |
 | `style.about` | About | Native | Appearance > Branding | container; its three children are the bridged rows |

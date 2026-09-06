@@ -835,7 +835,9 @@ A check only proven on passing input has not been proven.
 `pkill -x quickshell`, which made sense when the bar was all the shell drew and
 now takes the drawer, the shade, the gesture strip and Settings with it — from a
 row labelled "Menu Bar". `omarchy-bar transparent` committed to `shell.json`
-while `Bar.qml` held an unbound `property bool transparent: false`. Battery
+while `Bar.qml` held an unbound `property bool transparent: false`. (Binding it
+made the write show, and using it then showed what the write costs -- the switch
+is gone now; see below.) Battery
 percentage had no reader at all. And Stay Awake would have read and written its
 flag correctly while `swayidle` blanked the screen anyway, because nothing under
 Sway consulted it.
@@ -882,7 +884,7 @@ the same 3.14:1 from independent implementations once its checker grew a
 `mix(base;over;alpha)` form, which is better evidence than either of us checking
 our own arithmetic.
 
-### Two the Settings screens shipped, found by using them
+### Three the Settings screens shipped, found by using them
 
 **Confirm did nothing.** The Continue button cleared `confirmText` and then called
 `activate(row)` -- and `activate` armed the sheet whenever `row.confirm` was set
@@ -905,6 +907,33 @@ document and defend against, and the defence did not reach here: our shim guards
 guard the capability. `system.suspend` is Unsupported until the sleep unit is
 masked and that is verified on the device -- and it is worth doing, because
 suspend on a phone is worth having.
+
+**Transparency traded the bar away for a colour.** Tapping the row did change
+the status bar: upstream's `omarchy.bar` appeared in place of the phone bar and
+stayed there. The row wrote through `omarchy-bar transparent`, which commits
+`shell.json` and then asks the running shell to reload its config, and only one
+thing in `shell.qml` can put the built-in bar on screen -- `activeBarId` falling
+back to `defaultBarId`, which happens when the plugin bar fails to load
+(`failedBarId`) or when the registry answers that it is unavailable. So the
+reload unseated ours; which of those two branches it took was not narrowed down
+on the device, because the answer would not change what to do about it.
+
+Removed rather than repaired. The reload is the last line of `commit` in
+`omarchy-shell-config`, shared by every `omarchy-bar` verb, so nothing about how
+carefully the flag is bound would have helped -- the earlier fix bound
+`transparent` to `barConfig` precisely so the write would show, and the write
+was never the problem. Both halves are gone: the row, and `toggleTransparency`,
+the one function in `Bar.qml` whose whole body was that command. Its absence is
+the documented survivable case -- `omarchy-shell shell toggleBarTransparency`
+now answers `no-bar` and stops, writing nothing.
+
+The bar is opaque unconditionally, and ignoring `bar.transparent` is the
+deliberate half of that: a phone whose `shell.json` still carries the flag from
+before would otherwise come back transparent with the switch that set it gone
+from the UI. `style.bar.transparency` is Unsupported in `menu-coverage.md`, C6
+in `settings.md` says what has to stay gone, and the selftest asserts it against
+the live page and the installed `Bar.qml` rather than by calling the IPC -- a
+check that proved the point by taking the bar down would be its own defect.
 
 ## 6i. Three fixes that came from other people's measurements
 

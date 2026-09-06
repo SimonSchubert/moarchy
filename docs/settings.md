@@ -177,9 +177,15 @@ being reopened.
 → `omarchy-toggle-idle status | jq .enabled` == `true`, and the swayidle timeout
 command is a no-op while the flag is set
 
-**C6** Transparency is observable in the bar, not only in `shell.json`.
-→ after `settings set bar.transparent on`, the bar's `transparent` property reads
-back `true`
+**C6** Nothing in Settings writes `bar.transparent`, and the bar is opaque
+whatever `shell.json` says. The flag can only be set through `omarchy-bar
+transparent`, which ends by reloading the shell config -- and that reload leaves
+upstream's `omarchy.bar` drawing in place of the phone bar until the shell is
+restarted. An appearance switch that costs the status bar is worse than no
+switch, so the row was removed rather than repaired.
+→ `appearance.bar` lists no `transparent` row, and `moarchy.bar` declares no
+`toggleTransparency`, so `omarchy-shell shell toggleBarTransparency` answers
+`no-bar`
 
 **C7** Crash capture reflects the unit, not only the flag.
 → after `settings set sound.crashcapture off`, `omarchy-toggle-enabled
