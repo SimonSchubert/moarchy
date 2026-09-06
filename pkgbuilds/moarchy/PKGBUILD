@@ -22,7 +22,11 @@ _repo="$startdir/../.."
 
 pkgname=moarchy
 pkgver=$_ver
-pkgrel=1
+# 2: the polkit rule and the dropped fullscreen rule are content changes with no
+# version change behind them, and pacman compares versions, not contents. An
+# image installs fresh either way; a phone already in the field sees this only
+# because the pkgrel moved. Same trap manifest.toml records for the keyboard.
+pkgrel=2
 pkgdesc="Omarchy's look, keybindings and theming on a PinePhone, under Sway"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
@@ -54,7 +58,8 @@ package() {
          "$pkgdir/usr/share/moarchy/default/fontconfig" \
          "$pkgdir/usr/share/moarchy/default/omarchy" \
          "$pkgdir/usr/share/moarchy/default/themed" \
-         "$pkgdir/usr/share/moarchy/default/pacman-hooks"
+         "$pkgdir/usr/share/moarchy/default/pacman-hooks" \
+         "$pkgdir/usr/share/moarchy/default/polkit"
 
   # --- the shell plugins ---------------------------------------------------
   # PluginRegistry scans this directory before ~/.config/omarchy/plugins, so a
@@ -95,6 +100,14 @@ package() {
 
   install -Dm644 "$_repo/default/pacman-hooks/50-moarchy-shell-reload.hook" \
     "$pkgdir/usr/share/libalpm/hooks/50-moarchy-shell-reload.hook"
+
+  # The image locks the account password, so the store's pkexec action could
+  # never be authenticated and the store could install nothing. /usr/share, not
+  # /etc: this is a package's rule and /etc/polkit-1/rules.d stays free for the
+  # user to override it. Harmless if moarchy-store is not installed -- polkit
+  # matches on the action id, which then simply never appears.
+  install -Dm644 "$_repo/default/polkit/49-moarchy-store.rules" \
+    "$pkgdir/usr/share/polkit-1/rules.d/49-moarchy-store.rules"
 
   # --- systemd -------------------------------------------------------------
   install -Dm644 "$_repo/default/systemd/system/moarchy-firstboot.service" \

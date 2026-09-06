@@ -1,0 +1,35 @@
+// moarchy-store can install nothing without this file, and the reason is the
+// image's own doing: image/configure.sh runs `passwd -l` on the account, because
+// tty1 autologin never consults a password and a published image must ship no
+// secret. The store's polkit action asks for that password anyway
+// (`auth_self_keep` in org.moarchy.Store.policy), so pkexec exits 127 and every
+// app in the catalogue fails with "Wrong password, or not authorised".
+//
+// So grant the action outright. Three things bound what that gives away:
+//
+//   * The action does not point at pacman. It points at
+//     /usr/lib/moarchy-store/moarchy-store-helper, which refuses any package not
+//     in the root-owned catalogue -- or in a published one that gpgv verifies
+//     against the shipped keyring and whose serial is not older. This is
+//     "install one of these curated apps", not "install anything".
+//   * The same user already holds `ALL=(ALL) NOPASSWD: ALL` from
+//     /etc/sudoers.d/10-moarchy. Everything reachable through this action is
+//     reachable more directly through sudo, so this is the narrower of two
+//     doors that are already open, not a new one.
+//   * wheel, not everyone. On this image that group is the single autologin
+//     user; on a multi-user install it stays an explicit choice.
+//
+// A rule here rather than <allow_active>yes</allow_active> in the store's own
+// .policy: "this image has no password" is the image's decision, and
+// moarchy-store is a separate component that has to remain honest elsewhere
+// (docs/structure.md B2).
+//
+// Deliberately not gated on subject.local && subject.active. A shell restarted
+// over ssh lands in a session with no seat, and an active-only rule would put
+// the password dialog back exactly where it is hardest to answer -- on a phone
+// whose keyboard is not up because there is no session to raise it.
+polkit.addRule(function (action, subject) {
+  if (action.id === "org.moarchy.store.manage" && subject.isInGroup("wheel")) {
+    return polkit.Result.YES;
+  }
+});
