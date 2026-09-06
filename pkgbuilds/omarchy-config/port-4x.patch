@@ -1,5 +1,5 @@
 diff --git a/config/omarchy/shell.json b/config/omarchy/shell.json
-index e6202da8..81b25411 100644
+index e6202da8..ad281879 100644
 --- a/config/omarchy/shell.json
 +++ b/config/omarchy/shell.json
 @@ -23,8 +23,8 @@
@@ -13,7 +13,7 @@ index e6202da8..81b25411 100644
            "verticalFormat": "HH\n\u2014\nmm"
          },
          {
-@@ -60,7 +60,33 @@
+@@ -60,7 +60,36 @@
            "id": "omarchy.power"
          }
        ]
@@ -34,6 +34,9 @@ index e6202da8..81b25411 100644
 +    },
 +    {
 +      "id": "moarchy.shade"
++    },
++    {
++      "id": "moarchy.wifi"
 +    },
 +    {
 +      "id": "moarchy.themes"

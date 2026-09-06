@@ -601,14 +601,16 @@ Item {
   // run (`net.wifi`, `net.bluetooth`), so there is one picker behind two
   // entry points rather than two that drift.
   //
-  // nmtui-connect rather than impala: impala is an iwd client, this phone runs
-  // NetworkManager, and iwd.service is disabled -- but it is D-Bus activatable,
-  // so launching impala would start iwd to fight NetworkManager for wlan0
-  // rather than fail cleanly. nmtui-connect is NetworkManager's own list, and
-  // it fits: measured at the 60x41 grid moarchy-launch-tui gives, the
-  // network list and its buttons are all on screen.
-  readonly property string wifiPicker:
-    "omarchy-launch-floating-terminal-with-presentation nmtui-connect"
+  // Wi-Fi is a screen of its own now, not a terminal. nmtui-connect fits the
+  // 60x41 grid and its list and buttons are all on screen -- and none of them
+  // can be pressed, because a TUI's buttons are drawn text rather than
+  // surfaces. Driving it needs Tab, arrows and Enter, which the on-screen
+  // keyboard does not have, so you could see your network and not join it.
+  // moarchy.wifi is the same list with tap targets and a passphrase field.
+  //
+  // Bluetooth keeps bluetui for now: pairing is rarer, and the equivalent
+  // screen is not written.
+  readonly property string wifiPicker: ""
   readonly property string btPicker:
     "omarchy-launch-floating-terminal-with-presentation bluetui"
 
@@ -637,14 +639,26 @@ Item {
       return
     }
     if (root.wifiStranded) {
-      root.openPicker(root.wifiPicker)
+      root.openWifi()
       return
     }
     root.lastAction = "toggle"
     if (!root.dryRun) Networking.wifiEnabled = !Networking.wifiEnabled
   }
 
-  function wifiHold() { root.openPicker(root.wifiPicker) }
+  function wifiHold() { root.openWifi() }
+
+  // Its own entry point rather than openPicker's launch: this summons a plugin
+  // instead of spawning a process, so lastLaunch stays empty and lastAction
+  // records the same "picker" the tile tests assert.
+  function openWifi() {
+    root.dismiss()
+    root.lastAction = "picker"
+    root.lastLaunch = "moarchy.wifi"
+    if (root.dryRun) return
+    if (root.shell && typeof root.shell.summon === "function")
+      root.shell.summon("moarchy.wifi", JSON.stringify({ returnTo: "moarchy.shade" }))
+  }
 
   // S6c. The pair behaves the same way. No stranded case here: a Bluetooth
   // adapter with nothing paired in range is the normal resting state of one,

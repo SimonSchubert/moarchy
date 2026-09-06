@@ -34,6 +34,7 @@ These reflow to a phone width natively and are the most comfortable fit.
 | Papers | `papers 50.2-1` | PDF viewer (Evince's successor) |
 | Foliate | `foliate 3.3.0-3` | E-book reader; genuinely good on this screen |
 | Portfolio | `portfolio-file-manager 1.0.2-1` | File manager built for touch |
+| Maps | `gnome-maps` | Adaptive; reflows to 360px like the rest of the set |
 
 <p align="center">
   <img src="screenshots/apps/01-gnome-clocks.png" width="30%" alt="GNOME Clocks">
@@ -47,7 +48,7 @@ These reflow to a phone width natively and are the most comfortable fit.
 </p>
 
 ```bash
-sudo pacman -S gnome-clocks gnome-text-editor loupe papers foliate portfolio-file-manager
+sudo pacman -S gnome-clocks gnome-text-editor loupe papers foliate portfolio-file-manager gnome-maps
 ```
 
 ## Plasma Mobile (Kirigami)
@@ -58,29 +59,52 @@ run without a KDE session — they are ordinary Wayland clients under Sway.
 | App | Package | Notes |
 | --- | --- | --- |
 | Kalk | `kalk 26.08.0-1` | Calculator with unit conversion |
-| KClock | `kclock 26.08.0-1` | Clock, alarms, timers |
 | KWeather | `kweather 26.08.0-1` | Weather |
 | Keysmith | `keysmith 26.08.0-1` | TOTP / 2FA codes |
 | Calindori | `calindori 26.08.0-1` | Calendar |
 | QMLKonsole | `qmlkonsole 26.08.0-1` | Touch-friendly terminal |
-| Index | `index-fm 4.0.2-2` | File manager |
 
 <p align="center">
   <img src="screenshots/apps/07-kalk.png" width="30%" alt="Kalk">
-  <img src="screenshots/apps/08-kclock.png" width="30%" alt="KClock">
   <img src="screenshots/apps/09-kweather.png" width="30%" alt="KWeather">
+  <img src="screenshots/apps/10-keysmith.png" width="30%" alt="Keysmith">
 </p>
 <p align="center">
-  <img src="screenshots/apps/10-keysmith.png" width="30%" alt="Keysmith">
   <img src="screenshots/apps/11-calindori.png" width="30%" alt="Calindori">
   <img src="screenshots/apps/12-qmlkonsole.png" width="30%" alt="QMLKonsole">
 </p>
+
+```bash
+sudo pacman -S kalk kweather keysmith calindori qmlkonsole
+```
+
+**KClock and Index are no longer installed by default** (2026-09-06). Both were
+second copies of something already here: GNOME Clocks is the more adaptive of
+the two clocks, and Portfolio is the file manager — Index additionally drags the
+whole MauiKit stack in behind it. Both still install cleanly:
+
 <p align="center">
+  <img src="screenshots/apps/08-kclock.png" width="30%" alt="KClock">
   <img src="screenshots/apps/13-index-fm.png" width="30%" alt="Index">
 </p>
 
 ```bash
-sudo pacman -S kalk kclock kweather keysmith calindori qmlkonsole index-fm
+sudo pacman -S kclock index-fm
+```
+
+## Reference
+
+| App | Package | Notes |
+| --- | --- | --- |
+| Linux Command Library | `lcl-gui-bin 4.7.1-2` | Qt6 command reference and cheat sheets |
+
+Useful on a device whose fullscreen terminal is 47 columns: looking a flag up in
+a GUI beats scrolling a man page at that width. Not in Arch Linux ARM — built
+from the pin in `manifest.toml`, from an AUR PKGBUILD that declares `aarch64`
+and ships a matching prebuilt tarball.
+
+```bash
+sudo pacman -S lcl-gui-bin
 ```
 
 ## Terminal apps
@@ -95,14 +119,16 @@ So `moarchy-launch-tui` opens TUIs fullscreen at font size 7. For something
 that fits a *tiled* terminal with the bar still visible, use **`btm`** (bottom) —
 it adapts, and shows CPU, memory, all three thermal zones, disks and network.
 
-Also installed and worth knowing: `htop`, `lazygit`, `nmtui-connect` (wifi),
-`bluetui`, `wiremix` (audio), `s-tui` (CPU frequency/temperature graphs).
+Also installed and worth knowing: `htop`, `lazygit`, `bluetui`, `wiremix`
+(audio), `s-tui` (CPU frequency/temperature graphs).
 
-`impala` is installed too and looks like the wifi TUI to reach for, but it is an
-**iwd** client and this phone runs NetworkManager with `iwd.service` disabled —
-iwd is D-Bus activatable, so impala starts it to fight NetworkManager for
-`wlan0` rather than failing cleanly. `nmtui-connect` is the one both the shade
-and Settings open.
+**Wi-Fi is not a TUI.** The shade's tile and Settings both open `moarchy.wifi`,
+a touch screen with a passphrase field — see `docs/shade.md` S6b. `nmtui-connect`
+still works from a terminal, but its buttons cannot be pressed with a finger.
+`impala` looks like the wifi TUI to reach for and is wrong twice over: its
+buttons have the same problem, and it is an **iwd** client on a phone running
+NetworkManager with `iwd.service` disabled — iwd is D-Bus activatable, so impala
+starts it to fight NetworkManager for `wlan0` rather than failing cleanly.
 
 ## Browsers
 

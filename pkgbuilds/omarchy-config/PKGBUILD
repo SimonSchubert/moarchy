@@ -34,7 +34,7 @@ depends=('quickshell' 'bash')
 source=("omarchy-$_ref.tar.gz::$_url/archive/$_ref.tar.gz"
         'port-4x.patch')
 sha256sums=('f8fe9d0ca01226112a144d1961831ce3f27fddfa66e0f9f44b67c375a372b9f1'
-            '985b0132a992609831050ffcc86fb1ffa35ea9df899b4a9707019c146569ec73')
+            'af7959d7400d8cc3d2e5e9c5ef439c6867ebdb4d4c4299cb5d2a6b82506b3e78')
 
 prepare() {
   cd "omarchy-$_ref"

@@ -52,9 +52,9 @@ it. Its second line reads `No adapter`, `Off`, the connected device's name, or
 `On`.
 
 **S6** A **long press** on the Wi-Fi tile opens the network picker: the shade
-closes and `nmtui-connect` runs in the fullscreen TUI terminal. The tap it
-interrupts does not also fire, so the radio is left as it was. 500ms, Android's
-interval; a press that turns into a drag of the sheet cancels it.
+closes and the `moarchy.wifi` screen comes up. The tap it interrupts does not
+also fire, so the radio is left as it was. 500ms, Android's interval; a press
+that turns into a drag of the sheet cancels it.
 
 Joining a network is the one thing the tile could not do, and a radio switch
 that cannot get you online is half a control. Android puts the picker on
@@ -71,11 +71,31 @@ The cost is that Wi-Fi cannot be switched **off** from this tile while it is
 stranded. Airplane (S8) and Settings still do it, and an idle radio with
 nothing saved in range is the case where turning it off matters least.
 
-**S6b** The picker is `nmtui-connect`, not `impala`. `impala` is an iwd client
-and this phone runs NetworkManager with `iwd.service` disabled — running it
-would D-Bus-activate iwd to fight NetworkManager for `wlan0`. The Settings row
-that named `impala` (`docs/settings.md`, `net.wifi`) is corrected to match, so
-both entry points run one picker.
+**S6b** The picker is `moarchy.wifi`, a screen, not a terminal.
+
+It was `nmtui-connect`, which fits the 60x41 grid `moarchy-launch-tui` gives —
+the network list and its buttons are all on screen. They still cannot be
+pressed. A TUI's buttons are drawn text rather than surfaces, so touch does
+nothing to them, and driving them needs Tab, arrows and Enter, none of which the
+on-screen keyboard has. You could see your network and not join it. Found on the
+device, 2026-09-06.
+
+Upstream ships a complete network panel at `plugins/panels/network`, but its
+manifest declares one kind, `bar-widget`, and the panel opens from that widget.
+This phone replaces the bar with `moarchy.bar`, so the widget is never
+instantiated and its panel can never be summoned. `moarchy.wifi` is the same
+job as an overlay: scan, tap to join, a passphrase field the on-screen keyboard
+can fill, and Disconnect/Forget on a saved network.
+
+Nothing shells out to `nmcli` — `Quickshell.Networking` exposes `connect()`,
+`connectWithPsk()`, `disconnect()` and `forget()` as methods, with signal,
+security and known/connected as properties.
+
+`impala` was never right for either: it is an iwd client and this phone runs
+NetworkManager with `iwd.service` disabled — and iwd is D-Bus activatable, so
+running impala would start it to fight NetworkManager for `wlan0` rather than
+fail cleanly. Bluetooth keeps `bluetui`: pairing is rarer and the equivalent
+screen is not written.
 
 **S6c** A long press on the **Bluetooth** tile does the same for pairing: the
 shade closes and `bluetui` runs. The two wide tiles behave alike — hold for the

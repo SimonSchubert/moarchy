@@ -1,0 +1,675 @@
+// Joining a Wi-Fi network, with a finger.
+//
+// ---------------------------------------------------------------------------
+// Why not the TUI
+// ---------------------------------------------------------------------------
+// The Wi-Fi tile used to launch `nmtui-connect` in a floating terminal, and it
+// genuinely fits the 60x41 grid -- the network list and its buttons are all on
+// screen. But a TUI's buttons are drawn text, not surfaces: touch cannot press
+// them. Driving them needs Tab, arrows and Enter, and the on-screen keyboard
+// has no Tab and no arrow cluster, so the list was reachable and the join was
+// not. You could see your network and could not connect to it.
+//
+// ---------------------------------------------------------------------------
+// Why not upstream's network panel
+// ---------------------------------------------------------------------------
+// Omarchy ships a complete one at plugins/panels/network -- scan, passphrase,
+// forget, error mapping, 1970 lines of it. It is a `bar-widget`, though: its
+// manifest declares one kind and the panel opens from that widget. This phone
+// replaces the bar wholesale with moarchy.bar, so the widget is never
+// instantiated and the panel it owns can never be summoned. Adding upstream's
+// widget back to a 360px bar to reach its popup is not a trade worth making.
+//
+// So this is a screen of its own, the same shape as moarchy.themes: an overlay
+// plugin, summoned by the shade's tile and by Settings, with a back chevron.
+//
+// ---------------------------------------------------------------------------
+// What it does NOT reimplement
+// ---------------------------------------------------------------------------
+// Nothing talks to nmcli. Quickshell.Networking exposes the whole model --
+// devices, per-network signal/security/known/connected, and connect(),
+// connectWithPsk(), disconnect() and forget() as methods. Shelling out would
+// mean parsing output that already arrives as properties.
+//
+// Enterprise (802.1X) networks are deliberately out of scope: they need an
+// identity as well as a passphrase, and upstream reaches them through a
+// scripted `nmcli connection edit` because the secret must not become argv.
+// A phone that needs one can still use the terminal; guessing at a two-field
+// form nobody here can test would be worse than not offering it.
+import QtQuick
+import Quickshell
+import Quickshell.Io
+import Quickshell.Wayland
+import Quickshell.Networking
+import qs.Commons
+import qs.Ui as Ui
+
+Item {
+  id: root
+
+  // Injected by the host, the same set every moarchy overlay takes.
+  property var shell: null
+  property var manifest: null
+  property var barWidgetRegistry: null
+  property var pluginRegistry: null
+  property var service: null
+
+  readonly property string pluginId: "moarchy.wifi"
+
+  property bool opened: false
+
+  // Where Back goes, set by whoever summoned this screen, so the chevron
+  // returns to the shade or the Settings page you came from rather than
+  // dropping you on the home screen.
+  property string returnTo: ""
+  property string returnPage: ""
+
+  // --------------------------------------------------------------- palette
+  // Matches the shade, which is where the tile that opens this lives.
+  readonly property int gestureStrip: Style.space(20)
+  readonly property int textWeight: Font.DemiBold
+  readonly property color surface: Color.popups.background
+  readonly property color textOnSurface: Color.popups.text
+  readonly property color container: Util.alpha(Color.popups.text, 0.08)
+  readonly property color containerHigh: Util.alpha(Color.popups.text, 0.14)
+  readonly property color accent: Color.accent
+  readonly property color textOnAccent: Color.background
+  readonly property color subdued: Util.alpha(Color.popups.text, 0.62)
+  readonly property color danger: Color.popups.text
+
+  // ------------------------------------------------------------------ data
+  readonly property var wifiDevice: {
+    var devices = Networking.devices ? Networking.devices.values : []
+    for (var i = 0; i < devices.length; i++)
+      if (devices[i] && devices[i].type === DeviceType.Wifi) return devices[i]
+    return null
+  }
+
+  // PRIMITIVES ONLY in this list, and it is not a style preference.
+  //
+  // These rows become delegate data. A WifiNetwork put here leaves a live
+  // QObject wrapper in every delegate's `var` property, and a scan that removes
+  // an access point can destroy that object while a delegate is still
+  // incubating -- which segfaults quickshell on the dangling wrapper rather
+  // than throwing anything catchable. Upstream's Model.js carries the same
+  // warning. Actions resolve the object again, by ssid, at the moment they run.
+  readonly property var rows: {
+    var objs = root.wifiDevice && root.wifiDevice.networks
+             ? root.wifiDevice.networks.values : []
+    var out = []
+    for (var i = 0; i < objs.length; i++) {
+      var n = objs[i]
+      if (!n || !n.name) continue
+      out.push({
+        ssid: String(n.name),
+        signal: Math.round((n.signalStrength || 0) * 100),
+        security: n.security,
+        known: !!n.known,
+        connected: !!n.connected
+      })
+    }
+    out.sort(function(a, b) {
+      if (a.connected !== b.connected) return a.connected ? -1 : 1
+      if (a.known !== b.known) return a.known ? -1 : 1
+      return b.signal - a.signal
+    })
+    return out
+  }
+
+  function networkForSsid(ssid) {
+    var objs = root.wifiDevice && root.wifiDevice.networks
+             ? root.wifiDevice.networks.values : []
+    for (var i = 0; i < objs.length; i++)
+      if (objs[i] && String(objs[i].name) === String(ssid)) return objs[i]
+    return null
+  }
+
+  // OWE (Enhanced Open) encrypts without authenticating, so it has no
+  // credentials to ask for. Anything unrecognised stays credentialed, which is
+  // the conservative way to be wrong: a needless prompt beats a silent failure.
+  function needsPassphrase(security) {
+    return security !== WifiSecurityType.Open && security !== WifiSecurityType.Owe
+  }
+
+  function isEnterprise(security) {
+    return security === WifiSecurityType.Wpa2Eap || security === WifiSecurityType.WpaEap
+  }
+
+  function signalGlyph(strength) {
+    var icons = ["󱄯", "󱄟", "󱄢", "󱄥", "󱄨"]
+    return icons[Math.max(0, Math.min(4, Math.ceil(strength / 20) - 1))]
+  }
+
+  // ----------------------------------------------------------- interaction
+  // The row currently expanded: either into a passphrase field, or into
+  // Disconnect/Forget for one already joined. One at a time, so the list never
+  // grows two open drawers on a screen this size.
+  property string expandedSsid: ""
+  property string passphrase: ""
+
+  // The join in flight. Held by ssid rather than by object for the same reason
+  // the rows are primitives.
+  property string busySsid: ""
+  property string errorSsid: ""
+  property string errorText: ""
+
+  function rowTapped(row) {
+    if (root.busySsid !== "") return          // one join at a time
+    root.errorSsid = ""
+    root.errorText = ""
+
+    if (row.connected || row.known) {
+      // Already joined or remembered: the useful actions are the destructive
+      // ones, so they get an explicit drawer rather than firing on a tap.
+      root.expandedSsid = root.expandedSsid === row.ssid ? "" : row.ssid
+      return
+    }
+    if (root.isEnterprise(row.security)) {
+      root.errorSsid = row.ssid
+      root.errorText = "Enterprise networks need the terminal"
+      return
+    }
+    if (root.needsPassphrase(row.security)) {
+      root.passphrase = ""
+      root.expandedSsid = root.expandedSsid === row.ssid ? "" : row.ssid
+      return
+    }
+    root.join(row.ssid, "")
+  }
+
+  function join(ssid, psk) {
+    var net = root.networkForSsid(ssid)
+    if (!net) return
+    root.busySsid = ssid
+    root.errorSsid = ""
+    root.errorText = ""
+    joinTimeout.restart()
+    if (psk === "") net.connect()
+    else net.connectWithPsk(psk)
+  }
+
+  function disconnectSsid(ssid) {
+    var net = root.networkForSsid(ssid)
+    if (net) net.disconnect()
+    root.expandedSsid = ""
+  }
+
+  function forgetSsid(ssid) {
+    var net = root.networkForSsid(ssid)
+    if (net) net.forget()
+    root.expandedSsid = ""
+  }
+
+  // Success is observed rather than reported: the device's connected network
+  // becoming the one we asked for is the only signal that means it worked.
+  onRowsChanged: {
+    if (root.busySsid === "") return
+    for (var i = 0; i < root.rows.length; i++) {
+      if (root.rows[i].ssid === root.busySsid && root.rows[i].connected) {
+        joinTimeout.stop()
+        root.busySsid = ""
+        root.expandedSsid = ""
+        root.passphrase = ""
+        return
+      }
+    }
+  }
+
+  // No failure reason is exposed here that is worth trusting, so this reports
+  // what it actually knows: it did not come up in time. Guessing "wrong
+  // password" at a network that was simply out of range would send someone to
+  // retype a passphrase that was right.
+  Timer {
+    id: joinTimeout
+    interval: 25000
+    onTriggered: {
+      if (root.busySsid === "") return
+      root.errorSsid = root.busySsid
+      root.errorText = "Could not join — check the passphrase, or move closer"
+      root.expandedSsid = root.busySsid
+      root.passphrase = ""
+      root.busySsid = ""
+    }
+  }
+
+  // Scan only while the screen is up. A scanner left running costs radio time
+  // and battery for a list nobody is reading.
+  function setScanning(on) {
+    if (root.wifiDevice) root.wifiDevice.scannerEnabled = on
+  }
+  onOpenedChanged: root.setScanning(root.opened)
+  onWifiDeviceChanged: root.setScanning(root.opened)
+
+  // ------------------------------------------------------------- lifecycle
+  function open(payloadJson) {
+    if (root.shell && typeof root.shell.isPluginOpen === "function") {
+      if (root.shell.isPluginOpen("moarchy.shade")) root.shell.hide("moarchy.shade")
+      if (root.shell.isPluginOpen("moarchy.drawer")) root.shell.hide("moarchy.drawer")
+    }
+    root.opened = true
+    root.returnTo = ""
+    root.returnPage = ""
+    root.expandedSsid = ""
+    root.passphrase = ""
+    root.errorSsid = ""
+    root.errorText = ""
+    try {
+      var payload = JSON.parse(String(payloadJson || "{}"))
+      if (payload && payload.returnTo) root.returnTo = String(payload.returnTo)
+      if (payload && payload.page) root.returnPage = String(payload.page)
+    } catch (e) {
+      // A malformed payload is not worth refusing to open over.
+    }
+  }
+
+  function close() { root.opened = false }
+
+  function dismiss() {
+    var back = root.returnTo
+    var page = root.returnPage
+    root.passphrase = ""
+    if (root.shell && typeof root.shell.hide === "function") root.shell.hide(root.pluginId)
+    else root.close()
+    if (back && root.shell && typeof root.shell.summon === "function")
+      root.shell.summon(back, page ? JSON.stringify({ page: page }) : "{}")
+  }
+
+  // Driven by moarchy-selftest and by the Settings row, the same contract every
+  // other moarchy plugin exposes.
+  IpcHandler {
+    target: "wifi"
+
+    function state(): string { return root.opened ? "open" : "closed" }
+    function open(): string {
+      if (root.shell) root.shell.summon(root.pluginId, "{}")
+      return "ok"
+    }
+    function close(): string { root.dismiss(); return "ok" }
+    function enabled(): string { return Networking.wifiEnabled ? "on" : "off" }
+
+    // One line per network, so a check can assert the list without a screenshot.
+    function list(): string {
+      var out = []
+      for (var i = 0; i < root.rows.length; i++) {
+        var r = root.rows[i]
+        out.push([r.ssid, r.signal,
+                  root.needsPassphrase(r.security) ? "secured" : "open",
+                  r.known ? "known" : "new",
+                  r.connected ? "connected" : "-"].join("\t"))
+      }
+      return out.join("\n")
+    }
+  }
+
+  // ----------------------------------------------------------------- chrome
+  PanelWindow {
+    id: wifiWindow
+
+    visible: root.opened
+    anchors { top: true; bottom: true; left: true; right: true }
+    color: "transparent"
+
+    WlrLayershell.namespace: "moarchy-wifi"
+    WlrLayershell.layer: WlrLayer.Top
+
+    exclusionMode: ExclusionMode.Normal
+    exclusiveZone: 0
+
+    // Draw under the gesture strip, except while the passphrase field has
+    // focus -- then the on-screen keyboard needs the space and the inset has to
+    // go, or the field ends up behind it. Keyed on activeFocus rather than on
+    // the keyboard's visibility, because focus is the signal that arrives
+    // first. Same arrangement as the drawer's search field.
+    margins.bottom: passField.activeFocus ? 0 : -root.gestureStrip
+
+    // Exclusive, not OnDemand: the passphrase field needs the surface to hold
+    // keyboard focus for Qt to activate text-input-v3, and moarchy-keyboard
+    // raises itself off that activation. Without it the field takes taps and
+    // no keyboard ever appears.
+    WlrLayershell.keyboardFocus: root.opened ? WlrKeyboardFocus.Exclusive
+                                             : WlrKeyboardFocus.None
+
+    Rectangle {
+      anchors.fill: parent
+      color: root.surface
+      opacity: root.opened ? 1 : 0
+      Behavior on opacity { NumberAnimation { duration: 140 } }
+
+      Keys.onEscapePressed: root.dismiss()
+
+      Column {
+        anchors.fill: parent
+        anchors.leftMargin: Style.space(12)
+        anchors.rightMargin: Style.space(12)
+        anchors.topMargin: Style.space(8)
+        anchors.bottomMargin: Style.space(8)
+        spacing: Style.space(10)
+
+        // --------------------------------------------------------- header
+        Item {
+          width: parent.width
+          height: Style.space(44)
+
+          Rectangle {
+            id: backButton
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+            width: Style.space(38)
+            height: width
+            radius: width / 2
+            color: root.container
+
+            Ui.OpticalGlyph {
+              anchors.fill: parent
+              text: ""
+              fontFamily: Style.font.family
+              fontSize: Style.font.icon
+              color: root.textOnSurface
+            }
+            MouseArea { anchors.fill: parent; onClicked: root.dismiss() }
+          }
+
+          Text {
+            anchors.left: backButton.right
+            anchors.leftMargin: Style.space(12)
+            anchors.verticalCenter: parent.verticalCenter
+            text: "Wi-Fi"
+            font.family: Style.font.family
+            font.pixelSize: Style.font.heading
+            font.weight: root.textWeight
+            color: root.textOnSurface
+          }
+
+          // The radio switch. A pill rather than a checkbox: it is the one
+          // control on this screen that is not a list row, and it has to read
+          // as a switch at a glance.
+          Rectangle {
+            id: radioSwitch
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            width: Style.space(52)
+            height: Style.space(30)
+            radius: height / 2
+            color: Networking.wifiEnabled ? root.accent : root.containerHigh
+            Behavior on color { ColorAnimation { duration: 120 } }
+
+            Rectangle {
+              width: parent.height - Style.space(6)
+              height: width
+              radius: width / 2
+              y: Style.space(3)
+              x: Networking.wifiEnabled ? parent.width - width - Style.space(3) : Style.space(3)
+              color: Networking.wifiEnabled ? root.textOnAccent : root.textOnSurface
+              Behavior on x { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+            }
+            MouseArea {
+              anchors.fill: parent
+              onClicked: Networking.wifiEnabled = !Networking.wifiEnabled
+            }
+          }
+        }
+
+        // ---------------------------------------------------------- status
+        Text {
+          width: parent.width
+          text: {
+            if (!Networking.wifiEnabled) return "Wi-Fi is off"
+            if (root.busySsid !== "") return "Joining " + root.busySsid + "…"
+            if (root.rows.length === 0) return "Scanning…"
+            return root.rows.length + " networks"
+          }
+          font.family: Style.font.family
+          font.pixelSize: Style.font.caption
+          font.weight: root.textWeight
+          color: root.subdued
+        }
+
+        // ------------------------------------------------------------ list
+        ListView {
+          id: list
+          width: parent.width
+          height: Math.max(0, parent.height - y)
+          clip: true
+          spacing: Style.space(6)
+          model: Networking.wifiEnabled ? root.rows : []
+          boundsBehavior: Flickable.StopAtBounds
+
+          delegate: Rectangle {
+            id: rowItem
+            required property var modelData
+
+            readonly property bool isExpanded: root.expandedSsid === rowItem.modelData.ssid
+            readonly property bool isBusy: root.busySsid === rowItem.modelData.ssid
+            readonly property bool hasError: root.errorSsid === rowItem.modelData.ssid
+
+            width: list.width
+            // Tall enough for a finger, and taller again when a drawer is open.
+            height: Style.space(58)
+                    + (rowItem.isExpanded ? Style.space(52) : 0)
+                    + (rowItem.hasError ? Style.space(22) : 0)
+            Behavior on height { NumberAnimation { duration: 120 } }
+            radius: Style.space(14)
+            color: rowItem.isExpanded ? root.containerHigh : root.container
+
+            Item {
+              id: rowHead
+              width: parent.width
+              height: Style.space(58)
+
+              Text {
+                id: sig
+                anchors.left: parent.left
+                anchors.leftMargin: Style.space(16)
+                anchors.verticalCenter: parent.verticalCenter
+                text: root.signalGlyph(rowItem.modelData.signal)
+                font.family: Style.font.family
+                font.pixelSize: Style.font.icon
+                color: rowItem.modelData.connected ? root.accent : root.textOnSurface
+              }
+
+              Text {
+                id: ssidText
+                anchors.left: sig.right
+                anchors.leftMargin: Style.space(14)
+                anchors.right: lock.left
+                anchors.rightMargin: Style.space(10)
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.verticalCenterOffset: -Style.space(7)
+                text: rowItem.modelData.ssid
+                elide: Text.ElideRight
+                font.family: Style.font.family
+                font.pixelSize: Style.font.body
+                font.weight: root.textWeight
+                color: root.textOnSurface
+              }
+
+              Text {
+                anchors.left: ssidText.left
+                anchors.right: ssidText.right
+                anchors.top: ssidText.bottom
+                anchors.topMargin: Style.space(2)
+                text: rowItem.isBusy ? "Joining…"
+                    : rowItem.modelData.connected ? "Connected"
+                    : rowItem.modelData.known ? "Saved"
+                    : root.needsPassphrase(rowItem.modelData.security) ? "Secured"
+                    : "Open"
+                elide: Text.ElideRight
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+                font.weight: root.textWeight
+                color: rowItem.modelData.connected ? root.accent : root.subdued
+              }
+
+              Text {
+                id: lock
+                anchors.right: parent.right
+                anchors.rightMargin: Style.space(16)
+                anchors.verticalCenter: parent.verticalCenter
+                text: root.needsPassphrase(rowItem.modelData.security) ? "󰌾" : ""
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+                color: root.subdued
+              }
+
+              MouseArea {
+                anchors.fill: parent
+                onClicked: root.rowTapped(rowItem.modelData)
+              }
+            }
+
+            // ------------------------------------------------- error line
+            Text {
+              visible: rowItem.hasError
+              anchors.top: rowHead.bottom
+              anchors.left: parent.left
+              anchors.right: parent.right
+              anchors.leftMargin: Style.space(16)
+              anchors.rightMargin: Style.space(16)
+              text: root.errorText
+              wrapMode: Text.WordWrap
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
+              font.weight: root.textWeight
+              color: root.accent
+            }
+
+            // ----------------------------------------------------- drawer
+            // Either a passphrase field for a new secured network, or the two
+            // destructive actions for one already saved.
+            Item {
+              visible: rowItem.isExpanded
+              anchors.bottom: parent.bottom
+              anchors.bottomMargin: Style.space(8)
+              anchors.left: parent.left
+              anchors.right: parent.right
+              anchors.leftMargin: Style.space(12)
+              anchors.rightMargin: Style.space(12)
+              height: Style.space(44)
+
+              // --- new secured network: type the passphrase
+              Rectangle {
+                visible: !rowItem.modelData.known && !rowItem.modelData.connected
+                anchors.left: parent.left
+                anchors.right: joinButton.left
+                anchors.rightMargin: Style.space(8)
+                height: parent.height
+                radius: height / 2
+                color: root.surface
+
+                Ui.TextField {
+                  id: passField
+                  anchors.fill: parent
+                  anchors.leftMargin: Style.space(16)
+                  anchors.rightMargin: Style.space(16)
+                  password: true
+                  placeholderText: "Passphrase"
+                  background: null
+                  horizontalPadding: 0
+                  verticalPadding: 0
+                  text: root.passphrase
+                  onTextChanged: root.passphrase = text
+                  onAccepted: root.join(rowItem.modelData.ssid, root.passphrase)
+                }
+              }
+
+              Rectangle {
+                id: joinButton
+                visible: !rowItem.modelData.known && !rowItem.modelData.connected
+                anchors.right: parent.right
+                width: Style.space(84)
+                height: parent.height
+                radius: height / 2
+                // WPA needs 8 characters; refusing earlier is a clearer answer
+                // than a join that fails 25 seconds later.
+                readonly property bool ready: root.passphrase.length >= 8
+                color: ready ? root.accent : root.containerHigh
+                opacity: ready ? 1 : 0.6
+
+                Text {
+                  anchors.centerIn: parent
+                  text: "Join"
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.body
+                  font.weight: root.textWeight
+                  color: joinButton.ready ? root.textOnAccent : root.subdued
+                }
+                MouseArea {
+                  anchors.fill: parent
+                  enabled: joinButton.ready
+                  onClicked: root.join(rowItem.modelData.ssid, root.passphrase)
+                }
+              }
+
+              // --- saved or connected: the destructive pair
+              Row {
+                visible: rowItem.modelData.known || rowItem.modelData.connected
+                anchors.right: parent.right
+                spacing: Style.space(8)
+                height: parent.height
+
+                Rectangle {
+                  visible: rowItem.modelData.connected
+                  width: Style.space(110)
+                  height: parent.height
+                  radius: height / 2
+                  color: root.containerHigh
+                  Text {
+                    anchors.centerIn: parent
+                    text: "Disconnect"
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.body
+                    font.weight: root.textWeight
+                    color: root.textOnSurface
+                  }
+                  MouseArea {
+                    anchors.fill: parent
+                    onClicked: root.disconnectSsid(rowItem.modelData.ssid)
+                  }
+                }
+
+                Rectangle {
+                  visible: !rowItem.modelData.connected && rowItem.modelData.known
+                  width: Style.space(84)
+                  height: parent.height
+                  radius: height / 2
+                  color: root.accent
+                  Text {
+                    anchors.centerIn: parent
+                    text: "Join"
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.body
+                    font.weight: root.textWeight
+                    color: root.textOnAccent
+                  }
+                  MouseArea {
+                    anchors.fill: parent
+                    onClicked: root.join(rowItem.modelData.ssid, "")
+                  }
+                }
+
+                Rectangle {
+                  width: Style.space(90)
+                  height: parent.height
+                  radius: height / 2
+                  color: root.containerHigh
+                  Text {
+                    anchors.centerIn: parent
+                    text: "Forget"
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.body
+                    font.weight: root.textWeight
+                    color: root.textOnSurface
+                  }
+                  MouseArea {
+                    anchors.fill: parent
+                    onClicked: root.forgetSsid(rowItem.modelData.ssid)
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

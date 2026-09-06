@@ -700,7 +700,7 @@ print(found[0] if found else "")'; }
 
     timeout 8 omarchy-shell shade dryRun 1 >/dev/null 2>&1
 
-    # The marker is the *other* tile's picker, so "it already said nmtui-connect"
+    # The marker is the *other* tile's picker, so "it already said moarchy.wifi"
     # cannot be mistaken for a hold that landed. Twice, because the injector
     # builds a fresh uinput device per call and the first events after one
     # appears can land nowhere.
@@ -712,19 +712,28 @@ print(found[0] if found else "")'; }
         sleep 2
         sudo -n "$touch_bin" hold "$x" "$TILE_Y" 900 >/dev/null 2>&1
         sleep 2
-        [[ $(timeout 8 omarchy-shell shade lastLaunch 2>/dev/null) == *" $want" ]] && return 0
+        # Substring, not *" $want": the Wi-Fi tile summons a plugin now, so
+        # its lastLaunch is the bare id "moarchy.wifi" with no command before
+        # it, while Bluetooth's is still a terminal invocation ending in
+        # "bluetui". One glob has to match both shapes.
+        [[ $(timeout 8 omarchy-shell shade lastLaunch 2>/dev/null) == *"$want" ]] && return 0
       done
       return 1
     }
 
-    if ! hold_picker $WIFI_X nmtui-connect btHold; then
+    if ! hold_picker $WIFI_X moarchy.wifi btHold; then
       noac S6 "a 900ms press on the Wi-Fi tile launched '$(timeout 8 omarchy-shell shade lastLaunch)'" \
               "the hold never fired, so the tile still only toggles"
     elif [[ $(shell_state shade) != "closed" ]]; then
-      noac S6 "the picker ran but the shade is $(shell_state shade)" \
-              "the terminal comes up behind the sheet"
+      noac S6 "the picker opened but the shade is $(shell_state shade)" \
+              "the Wi-Fi screen comes up behind the sheet"
+    elif [[ $(shell_state wifi) != "open" ]]; then
+      noac S6 "the tile recorded the picker but moarchy.wifi is $(shell_state wifi)" \
+              "the summon was recorded and did not land, which is the failure a\
+ launch-only check cannot see"
     else
       okac S6 "a long press on the Wi-Fi tile opens the network picker"
+      timeout 8 omarchy-shell wifi close >/dev/null 2>&1
     fi
 
     if ! hold_picker $BT_X bluetui wifiHold; then

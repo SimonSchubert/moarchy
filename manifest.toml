@@ -95,6 +95,14 @@ version = "0.14.3-1"
 ref     = "e9aa94080338d7a7f83a561ce64bf30ab4fb24e4"
 version = "20181225-1"
 
+# The Linux Command Library GUI: a Qt6 command reference, and this project's
+# own app. A -bin package, but not an x86_64-only one -- its PKGBUILD declares
+# arch=('x86_64' 'aarch64') and ships a separate aarch64 tarball with its own
+# sha256, so it satisfies P10 the same way any source= entry does.
+[aur.lcl-gui-bin]
+ref     = "09e7c2d32d9f6e7ff4f00ebfd4cabee8f12392f6"
+version = "4.7.1-2"
+
 # cbonsai backs the Screensaver entry in omarchy-menu (docs/menu-coverage.md).
 # It shipped in packages/ as a prebuilt tarball with no recipe anywhere in the
 # repo -- built once by hand and never written down. Listing it here is what

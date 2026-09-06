@@ -187,16 +187,28 @@ depends=(
   'foliate'
   'portfolio-file-manager'
   'kalk'
-  'kclock'
+  # kclock removed 2026-09-06: gnome-clocks covers the same ground and is the
+  # more adaptive of the two (docs/apps.md), and two clock apps in a drawer this
+  # size is one too many.
   'kweather'
   'keysmith'
   'calindori'
   'qmlkonsole'
-  'index-fm'
+  # index-fm removed 2026-09-06: portfolio-file-manager is already the file
+  # manager, and Index brings the whole MauiKit stack with it for a second one.
 
   # WebKit, ~260 MB, and the URL bar is at the bottom where a thumb is. Firefox
   # and Chromium both run and both cost far more memory for no layout benefit.
   'epiphany'
+
+  # Maps. Adaptive GTK4/libadwaita, so it reflows to 360px like the rest of the
+  # GNOME set.
+  'gnome-maps'
+
+  # The Linux Command Library GUI -- a Qt6 command reference, useful on a device
+  # whose terminal is 47 columns wide. Built from the pin in manifest.toml; it
+  # is not in ALARM.
+  'lcl-gui-bin'
 
   # --- Fonts ------------------------------------------------------------------
   'noto-fonts'

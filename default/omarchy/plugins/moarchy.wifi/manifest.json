@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "moarchy.wifi",
+  "name": "Wi-Fi",
+  "version": "1.0.0",
+  "author": "moarchy",
+  "description": "Pick a Wi-Fi network and type its passphrase, with a finger.",
+  "kinds": [
+    "overlay"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "Wifi.qml"
+  }
+}

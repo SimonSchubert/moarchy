@@ -96,12 +96,23 @@ var PAGES = {
     detailCmd: "omarchy-dns", covers: { "setup.network.dns": "N" } },
   // The shade toggles the radios. Neither of these has an upstream id because
   // upstream has no equivalent: a desktop joins a network from a bar applet.
-  // nmtui-connect, not impala: impala is an iwd client and this phone runs
-  // NetworkManager with iwd.service disabled -- and iwd is D-Bus activatable,
-  // so impala would start it to fight NetworkManager for wlan0. Same picker the
-  // shade's Wi-Fi tile opens on a long press (docs/shade.md S6b).
+  //
+  // Wi-Fi opens moarchy.wifi, the same screen the shade's tile opens on a long
+  // press (docs/shade.md S6b). It used to run nmtui-connect in a TUI terminal,
+  // which fits the screen and cannot be operated: a TUI's buttons are drawn
+  // text, not surfaces, so touch cannot press them and the on-screen keyboard
+  // has neither Tab nor arrows to reach them with.
+  //
+  // returnTo brings Back here rather than dropping you on the home screen.
   { id: "wifi", type: "action", glyph: "󱚾", label: "Wi-Fi networks",
-    detailCmd: "omarchy-network-status", run: "nmtui-connect", launch: "tui" },
+    detailCmd: "omarchy-network-status",
+    run: "omarchy-shell shell summon moarchy.wifi '{\"returnTo\":\"moarchy.settings\",\"page\":\"net\"}'",
+    launch: "none" },
+  // Bluetooth keeps the TUI: pairing is rarer, and the equivalent screen is not
+  // written. bluetui, not impala's Bluetooth half -- and for Wi-Fi impala was
+  // wrong outright, being an iwd client on a phone running NetworkManager with
+  // iwd.service disabled but D-Bus activatable, so it would have started iwd to
+  // fight NetworkManager for wlan0.
   { id: "bluetooth", type: "action", glyph: "󰂯", label: "Bluetooth devices",
     run: "bluetui", launch: "tui" },
   { id: "qr", type: "action", glyph: "󰐲", label: "Wi-Fi QR code",
