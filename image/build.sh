@@ -79,10 +79,20 @@ say "local package repository"
 # needed §6 -- pacstrap does not care whether the repo is local or remote
 # (docs/structure.md I2).
 compgen -G "$PKGS/*.pkg.tar.*" >/dev/null || die "no packages in $PKGS -- run ./scripts/provision.sh build first"
+# docker/build-packages.sh never clears its output directory, so a pkgrel bump
+# or a moved pin leaves yesterday's file beside today's. repo-add below takes
+# whichever the glob puts last and pacstrap installs whatever the database then
+# names -- a version chosen by lexicographic order rather than by anyone. The
+# image is the worst place for that to be decided quietly, because the answer
+# ships on a card. See scripts/pkgset.sh.
+. "$REPO/scripts/pkgset.sh"
+pkgset_unique "$PKGS" || die "$PKGS is ambiguous; no image built"
 mkdir -p "$WORK/repo"
 cp "$PKGS"/*.pkg.tar.* "$WORK/repo/"
 repo-add --quiet "$WORK/repo/moarchy.db.tar.gz" "$WORK/repo"/*.pkg.tar.* >/dev/null
-info "$(ls -1 "$WORK/repo"/*.pkg.tar.* | wc -l | tr -d ' ') packages"
+# Named rather than counted, so a stale one is visible here rather than in
+# `pacman -Q` on a phone three days later.
+pkgset_list "$PKGS" | sed 's/^/    /'
 
 cat >"$WORK/pacman.conf" <<EOF
 [options]

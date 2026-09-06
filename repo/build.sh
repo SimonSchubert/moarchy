@@ -19,6 +19,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 . scripts/manifest.sh
+. scripts/pkgset.sh
 
 NAME=$(manifest_get repo name)   || exit 1
 KEYID=$(manifest_get repo keyid) || exit 1
@@ -37,6 +38,11 @@ die()  { printf '\033[31m!! %s\033[0m\n' "$*" >&2; exit 1; }
 
 compgen -G "$PKGDIR/*.pkg.tar.*" >/dev/null ||
   die "no packages in $PKGDIR -- run ./scripts/provision.sh build first"
+# Two versions of one package is a release nobody decided to make: repo-add
+# takes whichever the glob puts last, and the `repo` release already carries
+# moarchy-store-git r19 and r22 because of it. Refused rather than resolved
+# here -- see scripts/pkgset.sh.
+pkgset_unique "$PKGDIR" || die "$PKGDIR is ambiguous; nothing published"
 gpg --list-secret-keys "$KEYID" >/dev/null 2>&1 ||
   die "no secret key $KEYID -- run ./repo/genkey.sh, or import your backup"
 
@@ -47,7 +53,9 @@ gpg --list-secret-keys "$KEYID" >/dev/null 2>&1 ||
 say "assembling $DIST"
 rm -rf "$DIST"; mkdir -p "$DIST"
 cp "$PKGDIR"/*.pkg.tar.* "$DIST/"
-info "$(ls -1 "$DIST" | wc -l | tr -d ' ') packages"
+# Named, not counted. Eleven is eleven whether or not one of them is last
+# week's; the names are what make a stale one visible before it is signed.
+pkgset_list "$PKGDIR" | sed 's/^/    /'
 
 # The armored public key, published beside the packages.
 #

@@ -238,6 +238,20 @@ and `pacman -S moarchy-meta` then installs the whole environment.
 `scp` (`scripts/provision.sh:108`) is gone. The repo is how packages reach the
 phone.
 
+**R8** The directory a release or an image is built from holds **one version of
+each package**, and a build that finds two refuses rather than choosing.
+**Met 2026-09-07:** `scripts/pkgset.sh`, called by `repo/build.sh` and
+`image/build.sh`, which also print the set by name rather than by count.
+
+> `docker/build-packages.sh` never clears its output, which is right — a build
+> that fails halfway should not cost the packages that already built. The
+> consequence is that a pkgrel bump or a moved pin leaves yesterday's file
+> beside today's, and `repo-add ... *.pkg.tar.*` then takes whichever the glob
+> puts last. It has happened twice: the published `repo` release carries
+> `moarchy-store-git` r19 *and* r22, and `PKGDIR` exists because a
+> `moarchy-0.1.0-2` from another session's work in progress was one glob away
+> from being released.
+
 ---
 
 ## 7. The image
