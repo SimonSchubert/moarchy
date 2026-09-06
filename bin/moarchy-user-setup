@@ -84,6 +84,24 @@ if ! omarchy-theme-set tokyo-night; then
   exit 1
 fi
 
+# The starting background. Left to itself omarchy-theme-set takes whichever
+# file sorts first in the theme's backgrounds directory -- 0-winding-road on
+# tokyo-night -- so the phone's wallpaper is decided by a filename prefix
+# upstream is free to renumber. Name the one we want instead.
+#
+# Linked through current/theme rather than /usr/share/omarchy/themes: that is
+# the path omarchy-theme-bg-next builds its list from and compares the symlink
+# against, and a link to the packaged file matches no entry in that list, so
+# the first swipe to the next background would jump back to the first one.
+BACKGROUND="$HOME/.local/state/omarchy/current/theme/backgrounds/1-quattro.jpg"
+if [[ -f $BACKGROUND ]]; then
+  ln -nsf "$BACKGROUND" "$HOME/.local/state/omarchy/current/background"
+else
+  # Not fatal: the theme applied, and theme-set already left a background
+  # symlink of its own choosing. Only the choice is lost, so say so and stamp.
+  echo "!! no $(basename "$BACKGROUND") in the theme -- keeping the default background" >&2
+fi
+
 # Stamped only on success. Stamping a failed run is how a phone ends up with no
 # theme for good: sway includes the generated sway.conf and moarchy-keyboard
 # reads the generated colors.toml, and neither is retried once the stamp exists.
