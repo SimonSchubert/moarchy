@@ -74,6 +74,31 @@ Item {
   // that no single value is right. Expect to change it.
   readonly property int backEdgeWidth: Style.space(16)
 
+  // What the on-screen keyboard reserves at the bottom, in logical px.
+  //
+  // Measured, not chosen: it is moarchy-keyboard's panel and this shell does
+  // not set it. The same figure I5b pins the drawer's reflow to -- at 176 the
+  // drawer settles over the top key row.
+  //
+  // Deliberately *not* through Style.space, which every other length here goes
+  // through. Style.space applies this theme's spacing scale, and the keyboard
+  // is a separate client that never sees it: scaling this with the theme would
+  // cut the back edge shorter than the keys it exists to clear.
+  readonly property int keyboardPanelHeight: 200
+
+  // G10. How far short of the bottom the back edge stops. Below this the strip
+  // wants taps, and above the strip the keyboard does -- and this surface was
+  // taking both, because it is on Overlay and they are not.
+  //
+  // A number rather than an arrangement, and that is forced. Sway resolves
+  // exclusive zones layer by layer from Overlay down, so the keyboard's zone
+  // (Top) is subtracted after this surface has been placed: ExclusionMode
+  // .Normal here would move nothing. Nor can a tap be handed down to the
+  // keyboard after the fact -- Wayland picks the recipient from the input
+  // region before delivering the touch. Cutting the region is the only knob.
+  readonly property int backEdgeBottomInset:
+    root.stripHeight + root.keyboardPanelHeight
+
   // G6. Rightward travel that commits a back swipe -- three times the band, so
   // brushing the edge never closes an app.
   readonly property int backCommit: Style.space(48)
@@ -690,6 +715,19 @@ Item {
       return "ok: back"
     }
 
+    // G10. The back edge is transparent and reserves nothing, so where it stops
+    // is invisible from the outside and unmeasurable with a finger: a tap below
+    // the cut and a tap on a dead edge look identical, which is the confusion
+    // that let the keyboard's left column stay swallowed. Ask instead.
+    function geometry(): string {
+      return "backEdge w=" + Math.round(backEdge.width)
+             + " h=" + Math.round(backEdge.height)
+             + " inset=" + root.backEdgeBottomInset
+             + " strip=" + root.stripHeight
+             + " panel=" + root.keyboardPanelHeight
+             + " screen=" + (backEdge.screen ? backEdge.screen.height : 0)
+    }
+
     function status(): string {
       var tl = root.focusedToplevel()
       var focus = " focus=" + (tl ? (tl.appId || "?") : "none")
@@ -982,6 +1020,12 @@ Item {
     anchors { top: true; bottom: true; left: true }
     implicitWidth: root.backEdgeWidth
     color: "transparent"
+
+    // G10. Anchored top and bottom, then pulled up off the bottom edge. A
+    // positive bottom margin shrinks a surface anchored to both -- the same
+    // lever the drawer uses in the other direction, where a negative one
+    // extends it past the usable area (I5a).
+    margins.bottom: root.backEdgeBottomInset
 
     WlrLayershell.namespace: "moarchy-back"
     WlrLayershell.layer: WlrLayer.Overlay

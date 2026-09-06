@@ -455,6 +455,25 @@ print(found[0] if found else "")'; }
   okac()  { ac "$1"; shift; ok "$@"; }
   noac()  { ac "$1"; shift; no "$@"; }
 
+  # --- G10. the back edge stops short of the bottom -------------------------
+  # Deliberately above the uinput gate: this is a geometry read and needs
+  # neither root nor a finger. It also cannot be driven by one -- a tap below
+  # the cut and a tap on a dead edge are indistinguishable from the outside,
+  # which is exactly how the keyboard's left column stayed swallowed.
+  geom=$(timeout 8 omarchy-shell gestures geometry 2>/dev/null)
+  gv() { tr ' ' '\n' <<<"$geom" | sed -n "s/^$1=//p"; }
+  bh=$(gv h); bi=$(gv inset); bs=$(gv strip); bp=$(gv panel); bscr=$(gv screen)
+  if [[ -z $bh || -z $bscr ]]; then
+    noac G10 "gestures geometry did not answer" "is the shell running with moarchy.gestures loaded?"
+  elif (( bi != bs + bp )); then
+    noac G10 "inset $bi is not strip $bs plus panel $bp"
+  elif (( bh == bscr - bi )); then
+    okac G10 "the back edge stops $bi short of the bottom (h $bh of $bscr)"
+  else
+    noac G10 "the back edge is ${bh}px tall, wanted $(( bscr - bi ))" \
+             "a full-height band swallows the keyboard's leftmost key column"
+  fi
+
   if [[ ! -x $touch_bin ]]; then
     no "moarchy-touch is missing" "cannot drive touch without it"
   elif ! sudo -n true 2>/dev/null; then
@@ -1162,6 +1181,8 @@ print("armed=%d mid=%d lag=%d stop=%d landed_ok=%s landed=%s"
   #   E7/G5   absences, and a close-request that only a prompting app shows
   #   F1      home picks the lowest free workspace
   #   G7/G8/G9 constants, not behaviour
+  #   G10a    the dead column outside the band -- it is D3 restated, and D3
+  #           is already here for the same reason
   #   K2/K7   the card's three lines, and the last card going home -- visual,
   #           and E6 already drives the same code for a window
   #   K4a     needs Settings over a *bare* home screen with an app elsewhere,
@@ -1169,7 +1190,7 @@ print("armed=%d mid=%d lag=%d stop=%d landed_ok=%s landed=%s"
   #   K9      needs a tap on a named card, and nothing addresses one by name
   #   K10     the shrink out of Settings; J1 drives the same path from a window
   #   K11/K12 an absence, and a bridged launch that must not run for real here
-  printf '  \033[90m%-4s\033[0m   \033[90mnot covered: A6 A8 A9 B2 D2 D3 D4 E1 E4 E5 E6 E7 F1 G5 G7 G8 G9 J2 J4 J5 J6 J7 J8 J9 J10 K2 K4a K7 K9 K10 K11 K12\033[0m\n' ""
+  printf '  \033[90m%-4s\033[0m   \033[90mnot covered: A6 A8 A9 B2 D2 D3 D4 E1 E4 E5 E6 E7 F1 G5 G7 G8 G9 G10a J2 J4 J5 J6 J7 J8 J9 J10 K2 K4a K7 K9 K10 K11 K12\033[0m\n' ""
 fi
 
 # ---------------------------------------------------------------------------

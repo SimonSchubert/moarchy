@@ -281,6 +281,42 @@ of using it.
 **G9** Only the left edge is claimed. Android takes both; the right edge stays
 with apps here, which halves what this costs them.
 
+**G10** The band does not run the full height of the screen. It stops **one
+strip plus one keyboard panel** short of the bottom — 220 logical px — and
+everything below that belongs to whoever is drawing there.
+→ `omarchy-shell gestures geometry` reports `h` == `screen - inset`
+
+The bottom-left corner was the one place this surface took a touch that was
+never a gesture. The on-screen keyboard is on Top and this band is on Overlay,
+so the band won the overlap and swallowed the leftmost key column: `a`, shift,
+and the `123` key answered nothing at all. A tap there travelled zero px, so it
+committed no back swipe either (G6) — the touch simply went nowhere.
+
+Geometry has to fix it, because arrangement cannot. Sway resolves exclusive
+zones **layer by layer from Overlay down**, so the keyboard's zone is
+subtracted after this surface has already been placed; `ExclusionMode.Normal`
+here would move nothing. Nor can a short tap be handed back to the surface
+underneath — Wayland picks the recipient from the input region before the touch
+is delivered, and there is no returning it on release. The input region is the
+only knob, and cutting it is the only way to turn it.
+
+The cost is that a back swipe cannot *start* in the bottom 220px of the edge.
+That is the reach a thumb has least need of: it is where the strip and the keys
+already live, and G2 is unaffected — with the keyboard up, the edge above it is
+still 470px tall and still dismisses the keyboard.
+
+The keyboard's 200 is measured and not ours to choose (it is the same
+`panelHeight` I5b pins the drawer's reflow to), so unlike G8 it does **not** go
+through the theme's spacing scale. The keyboard is a separate client that never
+sees this theme; scaling our inset with it would cut the edge shorter than the
+keys it exists to avoid.
+
+**G10a** The dead column is otherwise unchanged: outside that band the leftmost
+16px of every app still belongs to the back gesture (D3), and G8's property is
+still the only knob for it. This is an edge gesture, and Android pays the same
+price — `getMandatorySystemGestureInsets()` exists precisely so apps can move
+their own controls out of the way.
+
 ## H. Closing an overlay by dragging it
 
 The drawer and the shade each came up before this spec existed, and each could
