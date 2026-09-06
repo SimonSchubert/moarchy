@@ -82,7 +82,7 @@ Native 3 · Bridged 2 · Unsupported 3
 | `system` | System | Native | System > Power | also the shade's power glyph target |
 | `system.screensaver` | Screensaver | Unsupported | -- | `omarchy-launch-screensaver` exits 1 unless `ttfx` is present, and ttfx has no aarch64 build in any repo here; it failed silently, which looked like a screensaver that ran |
 | `system.lock` | Lock | Native | System > Power > Lock | `moarchy-system-lock`; blanks unless a hardware keyboard is present |
-| `system.suspend` | Suspend | Unsupported | -- | suspending locks the session: install/config.sh starts sway-session.target, which brings up 4.x's omarchy-sleep-lock unit, and the lock it raises is an ext-session-lock surface -- so the on-screen keyboard is hidden by the very prompt asking for a password. Same trap idle-lock was disabled for. Locked a phone out on 2026-09-05 |
+| `system.suspend` | Suspend | Unsupported | -- | suspending locks the session: the session starts sway-session.target (config/sway/config, the target itself shipped by pkgbuilds/moarchy; install/config.sh started it until 2026-09-06), which brings up 4.x's omarchy-sleep-lock unit, and the lock it raises is an ext-session-lock surface -- so the on-screen keyboard is hidden by the very prompt asking for a password. Same trap idle-lock was disabled for. Locked a phone out on 2026-09-05 |
 | `system.hibernate` | Hibernate | Unsupported | -- | `omarchy-hibernation-available` tests for swap; the SD root has no resume device or RAM-sized swap |
 | `system.logout` | Logout | Native | System > Power > Log out | needs a new `moarchy-system-logout` (`swaymsg exit`); upstream's exits Hyprland |
 | `system.reboot` | Reboot | Bridged | System > Power > Restart |  |
@@ -429,7 +429,7 @@ Native 6 · Bridged 8 · Unsupported 14
 | `update.password` | Password | Native | dissolved: Security | only the user password survives |
 | `update.timezone` | Timezone | Bridged | System > Date & time | `omarchy-menu-timezone` uses `omarchy-menu-select` |
 | `update.time` | Time | Bridged | System > Date & time |  |
-| `update.channel.stable` | Stable | Unsupported | -- | a channel switch moves the vendored checkout off the pinned v4.0.2 that `install/port-4x.sh` patches against |
+| `update.channel.stable` | Stable | Unsupported | -- | a channel switch moves the vendored checkout off the pinned v4.0.2 that `pkgbuilds/omarchy-config/port-4x.patch` applies against |
 | `update.channel.rc` | RC | Unsupported | -- | as `update.channel.stable` |
 | `update.channel.edge` | Edge | Unsupported | -- | as `update.channel.stable` |
 | `update.channel.dev` | Dev | Unsupported | -- | as `update.channel.stable` |

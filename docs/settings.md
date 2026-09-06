@@ -431,6 +431,6 @@ parity a bash assertion rather than a promise.
   `bar.id: moarchy.bar` and every `moarchy.*` entry from `plugins[]`.
   It succeeds, then restarts into the thirteen-widget desktop bar with no drawer,
   shade or gestures.
-- **No vendored popup dismisses on tap-outside.** `install/port-4x.sh` stubs
-  `HyprlandFocusGrab`, which has no `Quickshell.I3` counterpart. AC B5 is the
-  compensation, not a fix.
+- **No vendored popup dismisses on tap-outside.**
+  `pkgbuilds/omarchy-config/port-4x.patch` stubs `HyprlandFocusGrab`, which has
+  no `Quickshell.I3` counterpart. AC B5 is the compensation, not a fix.

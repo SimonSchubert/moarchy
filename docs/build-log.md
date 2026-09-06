@@ -160,12 +160,13 @@ Measured, not guessed:
 | | |
 | --- | --- |
 | Panel | 720×1440, `scale 2` → **360×720 logical** |
-| Fullscreen terminal | **47×41 characters** at font size 9 |
+| Terminal | **47×41 characters** at font size 9 |
 | btop minimum | **60 columns**, regardless of `shown_boxes` |
 
-Hence `moarchy-launch-tui` runs TUIs fullscreen at font size 7. `btm`
-(bottom) is the system monitor that *does* fit a normal tiled terminal, so the
-bar stays visible.
+Hence `moarchy-launch-tui` runs TUIs at font size 7. `btm` (bottom) is the
+system monitor that *does* fit at the default font size.
+
+TUIs were fullscreened too, until 2026-09-06; see §6m.
 
 The bar is centre-anchored on the clock, so the clock's width decides where every
 module sits. Upstream's `dddd HH:mm` changes width with the day name and shifted
@@ -803,7 +804,7 @@ six browsers with no aarch64 build, and Hyprland's own config files.
 `omarchy-launch-floating-terminal-with-presentation <script>`, every script it
 names exists upstream, and our `bin/` shadows `$OMARCHY_PATH/bin` by PATH order.
 Replacing that one wrapper — upstream's logo/done presentation kept verbatim,
-only the terminal swapped for a fullscreen foot at font 7 — made all of them
+only the terminal swapped for a foot at font 7, fullscreened at the time (§6m) — made all of them
 work with nothing reimplemented. 65 of the bridged rows run a command
 byte-identical to upstream's `action`; the selftest asserts it.
 
@@ -1314,6 +1315,116 @@ the block and inode bitmaps out of step with the superblock — which is what
 consequence of its own write as "do NOT boot it; re-flash instead" is the worst
 possible advice to give someone whose only route into the phone is the card they
 have just been told to erase.
+
+## 6m. Two doors locked from the inside (2026-09-06)
+
+Neither of these was a crash, and neither showed up in a check. Both were a
+feature that ran exactly as written and could not be used.
+
+**The store asked for a password the image does not have.** `moarchy-store`
+installs through `pkexec`, and its polkit action is `auth_self_keep` — prove you
+are you, then keep it for a while. `image/configure.sh` runs `passwd -l` on the
+account, deliberately: tty1 autologin never consults a password and a published
+image must ship no secret. So the dialog appeared, nothing could be typed into
+it that would ever be right, `pkexec` exited 127, and the store reported "Wrong
+password, or not authorised" for every app in the catalogue.
+
+The fix is a polkit rule in this package —
+`default/polkit/49-moarchy-store.rules` — granting `org.moarchy.store.manage` to
+`wheel` outright. What makes that reasonable is where the action points: not at
+pacman, but at a helper that refuses any package outside the root-owned
+catalogue (or a published one `gpgv` verifies, whose serial is not older). And
+the same user already holds `ALL=(ALL) NOPASSWD: ALL` from
+`/etc/sudoers.d/10-moarchy`, so this is the narrower of two doors that were
+already open. It lives here rather than in the store's own `.policy` because
+"this image has no password" is the image's decision, not the component's.
+
+**The AUR row drew a prompt over a keyboard nobody could touch.** Settings ▸
+Install from the AUR bridges to `omarchy-pkg-aur-install`, which asks for a
+package name. The terminal appeared, the keyboard did not, and the row was a
+dead end.
+
+`pinephone.conf` fullscreened every `moa-tui` window. Sway draws a fullscreen
+view *above* the Top layer and routes touches to it alone — the same fact that
+put the launch splash on Overlay months earlier (`windows.md` L2a) — and
+`moarchy-keyboard`'s panel is on Top on purpose: on Overlay it maps before the
+home strip and takes the bottom exclusive zone the pill needs. So the keyboard
+was raised, present on the bus, and drawn underneath the terminal.
+
+The rule bought nothing it was written for. It was there for columns, and the
+columns never came from fullscreen: the bar anchors top and the keyboard anchors
+bottom, so both cost rows and neither costs a character of width. What buys
+btop's 60 columns is `moarchy-launch-tui`'s font size 7, tiled or not. Tiling
+also restores the reservation — the keyboard claims an exclusive zone when it
+comes up, so the prompt is pushed above the keys instead of sitting behind
+them, which a fullscreen window ignores. The rule is gone and `windows.md` W5
+says so as a criterion.
+
+**Both were "verified".** Settings E5 read *a bridged TUI opens fullscreen,
+identifiable, and typeable*, and checked typeable by watching `sm.puri.OSK0`
+raise. The property was true the whole time the surface was invisible and
+taking no touches. A check that cannot fail is not a check: E5 now wants
+`fullscreen_mode: 0` and a keystroke that arrives.
+
+## 6n. What a release would have shipped (2026-09-07)
+
+A sweep of everything between `v0.1.0` and here, before cutting the next image.
+Four findings, and what they have in common is that none of them is a bug in
+running code: each is a *version*, a *directory* or a *sentence* that stopped
+matching what the code does.
+
+**`moarchy-meta` would not have upgraded.** Its `depends()` gained
+gnome-contacts, geary, alligator, amberol, secrets and songrec and lost kclock
+and index-fm, and `pkgver`/`pkgrel` did not move. pacman compares versions, not
+contents, so a phone already holding `0.1.0-1` would never see any of it — the
+same trap `manifest.toml` records for the keyboard and `pkgbuilds/moarchy`
+records for its own bump. Checked against the published package rather than
+assumed: `moarchy-meta-0.1.0-1`'s `.PKGINFO` carries 95 `depend` lines and none
+of the six new names. Now `0.1.0-2`.
+
+**`packages/` decides releases by glob order.** `docker/build-packages.sh` never
+clears its output, which is correct — a build that fails halfway should not cost
+what already built — so the directory accumulates. `repo-add ... *.pkg.tar.*`
+and the image's `pacstrap` then take whichever file sorts last. That is not
+hypothetical either: the published `repo` release carries `moarchy-store-git`
+r19 **and** r22, `PKGDIR` exists because a `moarchy-0.1.0-2` from another
+session was one glob away from being published, and `packages/` right now holds
+the r19 store while `manifest.toml` pins r22. `scripts/pkgset.sh` refuses an
+ambiguous directory and both builds print the set by name instead of by count
+(R8).
+
+**The image's keyring check could not fail.** `image/verify.sh` asserted that
+`/usr/share/pacman/keyrings/moarchy.gpg` exists. pacman does not validate
+against that file; it validates against `/etc/pacman.d/gnupg`, which
+`moarchy-keyring`'s `post_install` populates and which swallows its own failure
+into a line `pacstrap` buries. Had it ever silently failed, `SigLevel =
+Required` would refuse every package in the repo and the phone's only symptom
+would be that `pacman -Syu` stops. It now asks `pacman-key --gpgdir` and tells
+three states apart — trusted, present-but-untrusted, absent — and all three were
+watched happening in a container before the check was kept (R9).
+
+**The README described a phone from two weeks ago.** It listed "`pacman -Syu`
+does not update moarchy's own packages yet. There is no published package
+repository" nine lines below a section explaining how to update with
+`pacman -Syu` from the published package repository; and it kept the camera
+under *Out of scope* as "`VIDIOC_STREAMON` fails on both sensors", which
+`docs/apps.md` retired on 2026-09-06 — nothing was configuring the media graph,
+which is what `libmegapixels` does. Four more sentences pointed at
+`install/preflight.sh`, `install/telephony.sh`, `install/port-4x.sh` and
+`install/build-src.sh`, none of which have existed since `ca129e8`.
+
+Two stale selftest assertions went with them, both inherited from work that had
+already landed. E1 activated the `screensaver` row that 1b01e5c deleted;
+`activate` on a row that is not there does nothing, so `lastLaunch` kept block
+C's value and E1 failed reading `moarchy-toggle-bar on` — a deleted row and a
+broken bridge with identical symptoms. It now tests that the row exists first,
+and uses `emoji`. And the S6b picker-parity check still read one *command* out
+of each side, which S6b itself made false: both ends name the plugin
+`moarchy.wifi`, `wifiPicker` is deliberately the empty string, and the sed for
+`floating-terminal-with-presentation` fell through to the Bluetooth tile and
+compared bluetui against a row naming no command at all. Wi-Fi is checked as a
+plugin id now; the command parity moved to Bluetooth, which is still one TUI on
+both sides (S6c).
 
 ## 7. Hardware status
 

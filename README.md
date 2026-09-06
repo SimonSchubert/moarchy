@@ -58,8 +58,9 @@ at **OpenGL ES 2.0**. That is a hardware limit, not a driver gap, and Hyprland
 it. Sway (wlroots, GLES2) runs fine.
 
 *(A PinePhone **Pro** is a different story: its Mali-T860 does GLES 3.1 under
-Panfrost, which clears Hyprland's floor. `install/preflight.sh` detects and says
-so.)*
+Panfrost, which clears Hyprland's floor. Nothing here targets one — moarchy is
+an image for the original PinePhone, and the preflight script that used to
+detect the difference went with the installer it belonged to.)*
 
 **2. Omarchy's package repo is x86_64-only.**
 
@@ -309,16 +310,16 @@ only hide the keyboard.
   LED, or a `sun6i-csi` fault on first pipeline setup.
 - **The microphone records digital silence** — RMS 0 at PipeWire *and* raw ALSA,
   with `Mic1` on and boost at 7. Calls and voice recording do not work.
-- **`pacman -Syu` does not update moarchy's own packages yet.** There is no
-  published package repository, so upgrading the phone UI means reflashing.
-  That is the next milestone ([docs/structure.md](docs/structure.md) M3).
 - Whether the camera flash physically fires is unverified.
 
 ## Out of scope for now
 
-The camera: `VIDIOC_STREAMON` fails on both sensors. Power tuning beyond the
-idle/blank path is untouched, and there is no rotation *sensor* handling — the
+Video recording (Megapixels' path wants GStreamer plugins nothing declares),
+power tuning beyond the idle/blank path, and rotation *sensor* handling — the
 shade's Rotate tile is manual.
 
-Telephony (`install/telephony.sh`), suspend and the on-screen keyboard
-(`moarchy-keyboard`, its own repo) were on this list and are not any more.
+The camera, telephony, suspend, the package repository and the on-screen
+keyboard were all on this list and are not any more. The camera entry here read
+"`VIDIOC_STREAMON` fails on both sensors" until 2026-09-06, and that was never
+the problem: nothing was configuring the media graph, which is what
+`libmegapixels` does. See [`docs/apps.md`](docs/apps.md).

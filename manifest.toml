@@ -21,9 +21,11 @@
 # Upstream Omarchy -- the configuration and theme layer we vendor.
 #
 # 4.x replaced the shell wholesale: no waybar, walker, mako or swayosd, all one
-# quickshell/QML shell. install/port-4x.sh translates its Hyprland coupling to
-# Sway. See docs/omarchy-4x-feasibility.md. Moved here from
-# install/vendor-omarchy.sh, which was the pin's home until 2026-09-06 (V3).
+# quickshell/QML shell. pkgbuilds/omarchy-config/port-4x.patch translates its
+# Hyprland coupling to Sway, at build time (P3/P4); it was install/port-4x.sh
+# doing it at install time until 2026-09-06. See
+# docs/omarchy-4x-feasibility.md. Moved here from install/vendor-omarchy.sh,
+# which was the pin's home until the same day (V3).
 # ---------------------------------------------------------------------------
 [omarchy]
 url     = "https://github.com/basecamp/omarchy"
@@ -80,9 +82,10 @@ pkgbuilddir = "."
 # in Omarchy's own repo, which has no aarch64 tree at all
 # (pkgs.omarchy.org/stable/aarch64/omarchy.db -> 404).
 #
-# This list is what docker/build-packages.sh builds and what
-# install/build-src.sh falls back to building on the phone. Adding one here
-# adds it to both; there is no second list to keep in step.
+# This list is what docker/build-packages.sh builds. It used to be built a
+# second way -- install/build-src.sh, on the phone -- and adding a package here
+# added it to both; the on-device path went with the installer, so the container
+# is now the only one. There is still no second list to keep in step.
 #
 # `version` is what the pinned commit's PKGBUILD produces. It is a record, not
 # an input -- nothing reads it, and it is here so that a pin bump shows the
@@ -108,7 +111,14 @@ version = "20181225-1"
 ref     = "09e7c2d32d9f6e7ff4f00ebfd4cabee8f12392f6"
 version = "4.7.1-2"
 
-# cbonsai backs the Screensaver entry in omarchy-menu (docs/menu-coverage.md).
+# cbonsai is what omarchy-launch-screensaver draws. That launcher cannot run
+# here -- it opens with `omarchy-cmd-missing ttfx && exit 1` and ttfx has no
+# aarch64 build -- so the Settings row was dropped on 2026-09-07 and
+# system.screensaver is Unsupported (docs/menu-coverage.md). cbonsai stays
+# because it is 15 KB and the launcher starts working the day ttfx exists;
+# style.screensaver's branding rows, which only write the text it would draw,
+# are still there.
+#
 # It shipped in packages/ as a prebuilt tarball with no recipe anywhere in the
 # repo -- built once by hand and never written down. Listing it here is what
 # makes it rebuildable.
