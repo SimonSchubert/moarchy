@@ -5,6 +5,11 @@
 #   ./repo/build.sh                # -> repo/dist/ (moarchy.db + signed packages)
 #   ./repo/publish.sh              # uploads it
 #
+# PKGDIR overrides where the packages come from, for a release that replaces
+# one component and carries the rest through unchanged:
+#
+#   PKGDIR=/tmp/staged ./repo/build.sh
+#
 # Everything a phone needs to run `pacman -Syu` lives in repo/dist afterwards:
 # every package, a detached signature per package, and the database with its
 # own signature. That is what lets the stanza say SigLevel = Required rather
@@ -18,13 +23,20 @@ cd "$REPO_ROOT"
 NAME=$(manifest_get repo name)   || exit 1
 KEYID=$(manifest_get repo keyid) || exit 1
 DIST="${DIST:-$REPO_ROOT/repo/dist}"
+# Where the packages come from. Overridable because publishing is not always
+# "ship everything that happens to be in packages/": rebuilding one component
+# leaves the rest of that directory holding whatever the last full build --
+# or another branch's work in progress -- put there, and shipping that by
+# accident is a release nobody decided to make. Point PKGDIR at a directory
+# holding exactly the set the release should contain.
+PKGDIR="${PKGDIR:-$REPO_ROOT/packages}"
 
 say()  { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 info() { printf '    %s\n' "$*"; }
 die()  { printf '\033[31m!! %s\033[0m\n' "$*" >&2; exit 1; }
 
-compgen -G "packages/*.pkg.tar.*" >/dev/null ||
-  die "no packages -- run ./scripts/provision.sh build first"
+compgen -G "$PKGDIR/*.pkg.tar.*" >/dev/null ||
+  die "no packages in $PKGDIR -- run ./scripts/provision.sh build first"
 gpg --list-secret-keys "$KEYID" >/dev/null 2>&1 ||
   die "no secret key $KEYID -- run ./repo/genkey.sh, or import your backup"
 
@@ -34,7 +46,7 @@ gpg --list-secret-keys "$KEYID" >/dev/null 2>&1 ||
 # upgrade fails at download with a 404 rather than anywhere useful.
 say "assembling $DIST"
 rm -rf "$DIST"; mkdir -p "$DIST"
-cp packages/*.pkg.tar.* "$DIST/"
+cp "$PKGDIR"/*.pkg.tar.* "$DIST/"
 info "$(ls -1 "$DIST" | wc -l | tr -d ' ') packages"
 
 # The armored public key, published beside the packages.
