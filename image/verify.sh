@@ -103,6 +103,10 @@ have /usr/share/applications/moarchy.device.desktop
 # A dozen runtime omarchy-* scripts source out of upstream's install/ tree.
 have /usr/share/omarchy/install/helpers/browser-policy.sh
 have /usr/share/omarchy/shell/shell.qml
+# The camera app, and the package it needs that nothing declares -- without
+# xdg-user-dirs every photo is captured and silently discarded.
+have /usr/bin/megapixels
+have /usr/bin/xdg-user-dirs-update
 # Without /var/log/journal, a boot that fails leaves nothing to read next time.
 have /var/log/journal
 # The image shipped once with a dangling /etc/resolv.conf and resolved disabled:
@@ -175,6 +179,7 @@ unit() {
   fi
 }
 unit system/multi-user.target moarchy-firstboot.service
+unit system/multi-user.target moarchy-led-perms.service
 unit system/sysinit.target    moarchy-grow-rootfs.service
 unit user/default.target      moarchy-user-setup.service
 

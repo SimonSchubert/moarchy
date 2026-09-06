@@ -1,0 +1,23 @@
+[Unit]
+Description=Re-trigger LED udev rules so the camera flash is writable
+# megapixels ships 90-megapixels.rules, which chmods
+# /sys/class/leds/white:flash/flash_strobe to 0666 on ACTION=="add" only. The
+# LED is added during early boot, before that rule is in play, so the attribute
+# stays root-owned and the flash toggle is a control that lights nothing --
+# every boot, not just the first (docs/apps.md, Camera).
+#
+# `udevadm trigger --subsystem-match=leds` is the fix the device was tested
+# with: it replays add events for LEDs once the rules are loaded. Doing that
+# here rather than editing megapixels' rule means an upgrade to the package
+# cannot quietly undo it.
+After=systemd-udevd.service systemd-udev-settle.service
+Wants=systemd-udevd.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/udevadm trigger --subsystem-match=leds
+ExecStartPost=/usr/bin/udevadm settle --timeout=10
+
+[Install]
+WantedBy=multi-user.target

@@ -205,6 +205,22 @@ depends=(
   # GNOME set.
   'gnome-maps'
 
+  # --- Camera -----------------------------------------------------------
+  # Megapixels, from [danctnix]. It is the only camera app that works on this
+  # device, and the reason is libmegapixels: it ships a pine64,pinephone.conf
+  # describing the media graph and configures the links itself before
+  # streaming. sun6i-csi on 6.18 requires that, and a generic app never does --
+  # which is why `snapshot` and `plasma-camera` cannot work here at all, and
+  # why the old "VIDIOC_STREAMON fails" note was really "nothing was
+  # configuring the pipeline". See docs/apps.md.
+  'megapixels'
+
+  # Required BY megapixels and declared by nothing. Without it ~/Pictures never
+  # exists and every photo is captured and then silently discarded at the last
+  # step -- the burst goes to /tmp first, so the failure appears only after the
+  # shutter animation and the app reports nothing at all.
+  'xdg-user-dirs'
+
   # The Linux Command Library GUI -- a Qt6 command reference, useful on a device
   # whose terminal is 47 columns wide. Built from the pin in manifest.toml; it
   # is not in ALARM.
@@ -269,6 +285,14 @@ depends=(
 )
 
 optdepends=(
+  # Megapixels' video path: movie.sh -> mpegize.py, GStreamer x264enc into
+  # ~/Videos. Not depends, because video is unverified on this device and these
+  # are ~100 MB for a feature that records silence anyway while the microphone
+  # reads RMS 0. Stills need none of them.
+  'python-gobject'
+  'gst-plugins-good'
+  'gst-plugins-ugly'
+
   # Not installed by default. All verified available for aarch64, but each is
   # heavy for an Allwinner A64 with 2-3 GB of RAM.
   #

@@ -95,9 +95,13 @@ package() {
   # --- systemd -------------------------------------------------------------
   install -Dm644 "$_repo/default/systemd/system/moarchy-firstboot.service" \
     "$pkgdir/usr/lib/systemd/system/moarchy-firstboot.service"
+  install -Dm644 "$_repo/default/systemd/system/moarchy-led-perms.service" \
+    "$pkgdir/usr/lib/systemd/system/moarchy-led-perms.service"
   install -d "$pkgdir/usr/lib/systemd/system/multi-user.target.wants"
   ln -s ../moarchy-firstboot.service \
     "$pkgdir/usr/lib/systemd/system/multi-user.target.wants/moarchy-firstboot.service"
+  ln -s ../moarchy-led-perms.service \
+    "$pkgdir/usr/lib/systemd/system/multi-user.target.wants/moarchy-led-perms.service"
 
   install -Dm644 "$_repo/default/systemd/user/moarchy-user-setup.service" \
     "$pkgdir/usr/lib/systemd/user/moarchy-user-setup.service"

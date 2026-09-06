@@ -48,7 +48,12 @@ version = "0.1.0"
 # ---------------------------------------------------------------------------
 [moarchy-keyboard]
 url        = "https://github.com/SimonSchubert/moarchy-keyboard"
-ref        = "634f8baf495b2d7ec3c29330eb150bc566d39158"
+ref        = "aca9f511f8ae83c7e4a775da4d5b42b3300acc47"
+# Its PKGBUILD still says 0.1.0-1 at this commit, so the package version does
+# not change even though its contents do. Fine for an image, which installs
+# fresh -- but a phone already in the field will not see an upgrade, because
+# pacman compares versions and not contents. The keyboard repo has to bump
+# pkgver for that to work.
 version    = "0.1.0"
 # The PKGBUILD lives in packaging/, not at the repo root.
 pkgbuilddir = "packaging"
