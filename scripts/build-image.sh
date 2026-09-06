@@ -21,6 +21,33 @@ docker info >/dev/null 2>&1 || { echo "Docker is not running" >&2; exit 1; }
 compgen -G "packages/*.pkg.tar.*" >/dev/null || {
   echo "No packages built yet. Run: ./scripts/provision.sh build" >&2; exit 1; }
 
+# --- provenance, decided here and not in the container -----------------------
+# The container sees /repo through a read-only bind mount, and a bind mount does
+# not carry the inode and mtime metadata git's index recorded on the host. So
+# `git diff-index`, which is a stat comparison, calls every tracked file
+# modified -- 159 of them, with no content difference between any of them and
+# HEAD. It cannot be fixed on that side either: the refresh that would settle it
+# writes to .git/index, and the mount is read-only on purpose.
+#
+# The host is where the working tree is a native idea, so the question is asked
+# here and the answer passed in. `git status --porcelain` rather than a diff,
+# because an untracked file counts: pkgbuilds/moarchy copies default/ wholesale,
+# so a file that is merely present lands in the package.
+COMMIT=$(git rev-parse HEAD 2>/dev/null || echo unknown)
+DIRTY=0
+if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+  DIRTY=1
+  printf '\033[31m!! the working tree has uncommitted changes\033[0m\n' >&2
+  git status --porcelain | sed 's/^/       /' >&2
+  if [ "${ALLOW_DIRTY:-0}" != 1 ]; then
+    printf '   This image would correspond to no commit, and a file being edited\n' >&2
+    printf '   while it builds is copied half-written. Commit, or re-run with\n' >&2
+    printf '   ALLOW_DIRTY=1 if you mean it.\n' >&2
+    exit 1
+  fi
+  printf '   ALLOW_DIRTY=1 -- continuing; this image is not reproducible\n' >&2
+fi
+
 mkdir -p "$OUTDIR"
 
 echo "==> building the image container"
@@ -47,6 +74,7 @@ docker run --rm --privileged --platform linux/arm64 \
   -e "MOARCHY_USER=${MOARCHY_USER:-moarchy}" \
   -e "XZ_LEVEL=${XZ_LEVEL:-9}" \
   -e "MOARCHY_SSH_KEY=${MOARCHY_SSH_KEY:+/key.pub}" \
+  -e "COMMIT=$COMMIT" -e "DIRTY=$DIRTY" \
   ${MOARCHY_SSH_KEY:+-v "$MOARCHY_SSH_KEY:/key.pub:ro"} \
   moarchy-image
 

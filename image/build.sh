@@ -55,20 +55,38 @@ rm -rf "$WORK"; mkdir -p "$WORK" "$OUT"
 #
 # So the commit goes in the image and beside it, and a dirty tree is refused
 # unless the caller says otherwise.
-COMMIT=$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo unknown)
-if ! git -C "$REPO" diff-index --quiet HEAD -- 2>/dev/null; then
-  DIRTY=1
-  printf '\033[31m!! the working tree has uncommitted changes\033[0m\n' >&2
-  git -C "$REPO" diff-index --name-only HEAD -- 2>/dev/null | sed 's/^/       /' >&2
-  if [ "${ALLOW_DIRTY:-0}" != 1 ]; then
-    printf '   This image would correspond to no commit, and a file being edited\n' >&2
-    printf '   while it builds is copied half-written. Commit, or re-run with\n' >&2
-    printf '   ALLOW_DIRTY=1 if you mean it.\n' >&2
-    exit 1
+#
+# scripts/build-image.sh answers both questions on the HOST and passes them in,
+# and that is not tidiness. /repo arrives as a read-only bind mount, which does
+# not carry the inode and mtime metadata the host's .git/index recorded, so a
+# stat-based `git diff-index --quiet HEAD` here calls all 159 tracked files
+# modified with no content difference in any of them -- and the refresh that
+# would settle it writes to .git/index, which this mount deliberately forbids.
+#
+# Only reached when this script is run directly. `git diff`, not `git
+# diff-index`: it refreshes the index in memory before comparing, so it answers
+# about content rather than about stat. Both directions were run against a
+# read-only mount, clean and with one file edited.
+COMMIT="${COMMIT:-$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo unknown)}"
+if [ -z "${DIRTY:-}" ]; then
+  if git -C "$REPO" diff --quiet HEAD -- 2>/dev/null; then
+    DIRTY=0
+  else
+    DIRTY=1
+    printf '\033[31m!! the working tree has uncommitted changes\033[0m\n' >&2
+    git -C "$REPO" diff --name-only HEAD -- 2>/dev/null | sed 's/^/       /' >&2
   fi
+fi
+if [ "$DIRTY" = 1 ] && [ "${ALLOW_DIRTY:-0}" != 1 ]; then
+  printf '   This image would correspond to no commit, and a file being edited\n' >&2
+  printf '   while it builds is copied half-written. Commit, or re-run with\n' >&2
+  printf '   ALLOW_DIRTY=1 if you mean it.\n' >&2
+  exit 1
+fi
+if [ "$DIRTY" = 1 ]; then
+  # An `if`, not `[ ... ] && printf`: this file runs under `set -e`, where a
+  # bare AND-list that is false is a live grenade at the end of any block.
   printf '   ALLOW_DIRTY=1 -- continuing; this image is not reproducible\n' >&2
-else
-  DIRTY=0
 fi
 info "commit ${COMMIT:0:12}$([ "$DIRTY" = 1 ] && echo ' (DIRTY)')"
 
