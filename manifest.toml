@@ -38,7 +38,7 @@ version = "v4.0.2"
 # Nothing else in the repo states a version.
 # ---------------------------------------------------------------------------
 [moarchy]
-version = "0.1.0"
+version = "0.1.1"
 
 # ---------------------------------------------------------------------------
 # Our own components. Separate repos, consumed as built packages and never as

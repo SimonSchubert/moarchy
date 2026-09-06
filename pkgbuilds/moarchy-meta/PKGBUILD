@@ -18,14 +18,15 @@ _ver=$(manifest_get moarchy version) || return 1
 
 pkgname=moarchy-meta
 pkgver=$_ver
-# 2: the app set below moved after 0.1.0-1 was published -- gnome-contacts,
-# geary, alligator, amberol, secrets and songrec added, kclock and index-fm
-# removed -- and the version did not. pacman compares versions, not depends, so
-# a phone already holding 0.1.0-1 would never see any of it. Verified against
-# the published package rather than assumed: its .PKGINFO carries 95 depends
-# and none of the six new names. Same trap manifest.toml records for the
-# keyboard and pkgbuilds/moarchy records for its own pkgrel.
-pkgrel=2
+# Back to 1, because pkgver moved: 0.1.1-1 is newer than the 0.1.0-2 this was.
+#
+# It was 2 for one release. The list below gained gnome-contacts, geary,
+# alligator, amberol, secrets and songrec and lost kclock and index-fm, and the
+# version did not move -- so a phone already holding 0.1.0-1 would never have
+# seen any of it. That is the failure this package is most exposed to, because
+# its entire content IS the depends line: a change here that does not move the
+# version is invisible to pacman, which compares versions and not depends.
+pkgrel=1
 pkgdesc="The moarchy package set -- install this and you have the phone"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'

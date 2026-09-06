@@ -22,11 +22,15 @@ _repo="$startdir/../.."
 
 pkgname=moarchy
 pkgver=$_ver
-# 2: the polkit rule and the dropped fullscreen rule are content changes with no
-# version change behind them, and pacman compares versions, not contents. An
-# image installs fresh either way; a phone already in the field sees this only
-# because the pkgrel moved. Same trap manifest.toml records for the keyboard.
-pkgrel=2
+# Back to 1, because pkgver moved: 0.1.1-1 is newer than the 0.1.0-2 this was.
+#
+# It was 2 for one release, and the reason is worth keeping because it comes
+# back every time. The polkit rule and the dropped fullscreen rule were content
+# changes with no version change behind them, and pacman compares versions, not
+# contents -- so a phone in the field would not have seen either. An image
+# installs fresh and hides that completely; only a device already running the
+# old package can tell you. Same trap manifest.toml records for the keyboard.
+pkgrel=1
 pkgdesc="Omarchy's look, keybindings and theming on a PinePhone, under Sway"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
