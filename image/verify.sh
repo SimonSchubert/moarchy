@@ -154,6 +154,29 @@ if grep -q '^\[moarchy\]' "$R/etc/pacman.conf" 2>/dev/null; then
 else
   no "no [moarchy] repo in pacman.conf -- the phone could only be updated by reflashing"
 fi
+# The cached database, and whether it is signed. This is the check that was
+# missing while the bug it catches shipped twice.
+#
+# The stanza above says SigLevel = Required, which implies DatabaseRequired, and
+# pacman refuses a database it cannot verify. The build's own repo is file://
+# with SigLevel = Never, so the db pacstrap leaves behind has no .sig beside it
+# -- and one unverifiable database fails the whole transaction, including
+# `pacman -S vim` out of [extra], which has nothing to do with ours. A phone
+# like that installs nothing at all until somebody runs `pacman -Sy` by hand,
+# and nothing on screen says why.
+#
+# configure.sh refreshes against the real server to fix exactly this, and it
+# failed silently for two different reasons in one evening (no DNS in the
+# chroot, then no Landlock on the build host). Both were invisible here,
+# because nothing looked.
+_db="$R/var/lib/pacman/sync/moarchy.db"
+if [ ! -f "$_db" ]; then
+  no "no cached moarchy.db -- the first install on this phone must sync first"
+elif [ -f "$_db.sig" ]; then
+  ok "cached moarchy.db is signed ($(stat -c %s "$_db.sig" 2>/dev/null) byte .sig) -- installs work on first boot"
+else
+  no "cached moarchy.db has NO .sig -- SigLevel = Required will refuse it, and every install dies until 'pacman -Sy'"
+fi
 have /usr/bin/xdg-user-dirs-update
 # Without /var/log/journal, a boot that fails leaves nothing to read next time.
 have /var/log/journal
