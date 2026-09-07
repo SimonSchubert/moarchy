@@ -1506,6 +1506,42 @@ so when *that* call was dropped the rows really fired and J9 went red saying
 nothing about J9; and G5 counted the Unsupported half out of a doc the package
 does not ship, so on a device it read 137 + 0 against 320 every run.
 
+## 6p. The screenshot that had already been taken (2026-09-07)
+
+Reported straight after the audit: Tools > Screenshot does not work. It did work,
+and had written the file every time.
+
+`moarchy-capture-screenshot` is grim, then satty -- the annotation editor -- then
+`wl-copy`, then a notification. satty cannot start on this GPU:
+
+```
+GLib-WARNING **: Unable to create a GL context
+```
+
+Mali-400 tops out at GLES 2.0, which is the same ceiling that made this a port
+rather than an install (section 0). satty does not exit on that error. It maps a
+360x474 window that paints nothing and waits, so the script never reaches
+`wl-copy` and never notifies. From the row, that is: Settings goes away (E6), an
+invisible window takes focus, the keyboard rises to meet it, and nothing appears
+to have happened -- while `~/Pictures/Screenshots` quietly filled up. Three files
+were already sitting there, one of them from the user's own attempt minutes
+before.
+
+Two other things were wrong with the same eighteen lines, and both were silent.
+`notify-send` is not on this image at all, so the only confirmation the row had
+was `command not found` swallowed by its own `2>/dev/null` --
+`omarchy-notification-send` is what exists here, and the shade shows it. And
+`region` mode calls `slurp`, which needs something to drag on a seat that has no
+pointer; it stays for the keyboard binding and the Settings row does not offer
+it.
+
+Worth recording as a shape rather than a bug: three of this session's findings
+were a program that fails and *keeps running*. satty here, `omarchy-menu-select`
+blocking on a done-file that never arrives, and `omarchy-launch-about` printing
+`Unknown option 'render'` and leaving the terminal up. A crash is visible. A
+process that holds the screen and does nothing reads as the feature not
+existing.
+
 ## 7. Hardware status
 
 | | |
@@ -1537,12 +1573,12 @@ does not ship, so on a device it read 137 + 0 against 320 every run.
   is the third standing base failure and is real: the file genuinely is not
   there, and nothing in the phone UI has needed it since the menu stopped
   being how Settings is reached.
-- **The on-screen keyboard was drawn over Settings in several captures with
-  no field focused**, during the 2026-09-07 audit. Not reproduced afterwards:
-  with Settings open at the root, `settings focused` is empty, the workspace
-  rect is unreduced and `grim` shows no keyboard. Recorded because a stuck OSK
-  over a layer surface would be hard to tell from this, and the DBus `Visible`
-  property is not evidence either way.
+- ~~**The on-screen keyboard was drawn over Settings with no field focused.**~~
+  **Explained 2026-09-07**, by the screenshot bug below: satty maps a window
+  that never paints, that window takes focus, and the OSK rises to meet it. What
+  looked like a keyboard appearing over Settings for no reason was a keyboard
+  appearing over an application you cannot see. The invisible window is what
+  needed finding, not the keyboard.
 - **The camera reboots the phone on first launch.** It works on the second
   attempt and every time after. Undiagnosed: the candidates are OOM under a
   software-rendered 2592x1944 preview on 2 GB, a power brownout from the

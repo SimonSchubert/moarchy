@@ -115,7 +115,7 @@ Native 15 · Bridged 6 · Shade 1 · Unsupported 25
 | `trigger.emoji` | Emoji | Bridged | Tools > Emoji | `omarchy-shell shell toggle omarchy.emojis`, a vendored QML picker |
 | `trigger.reminder` | Reminder | Native | Tools > Reminders | the screen, and the list on it, are moarchy's; the timers underneath stay `omarchy-reminder`'s |
 | `trigger.capture` | Capture | Native | Tools | only Screenshot survives |
-| `trigger.capture.screenshot` | Screenshot | Native | Tools > Screenshot | `moarchy-capture-screenshot` (grim/slurp/satty) |
+| `trigger.capture.screenshot` | Screenshot | Native | Tools > Screenshot | `moarchy-capture-screenshot` (grim); no satty -- it needs a GL context this GPU cannot give and blocks the capture |
 | `trigger.capture.screenrecord.stop` | Stop Screenrecording | Bridged | Tools > Screen record | upstream `when` on the running process kept |
 | `trigger.capture.screenrecord` | Screenrecord | Native | Tools > Screen record | container, presence-guarded on gpu-screen-recorder: extras-only but aarch64-verified |
 | `trigger.capture.text` | Text | Unsupported | -- | `omarchy-capture-text` needs tesseract, which has no aarch64 build |

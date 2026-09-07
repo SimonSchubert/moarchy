@@ -1,19 +1,41 @@
 #!/bin/bash
-# grim + slurp + satty, replacing Omarchy's hyprshot-based capture.
+# grim, replacing Omarchy's hyprshot-based capture.
+#
+# No satty. Upstream's capture pipes the PNG into satty, the annotation editor,
+# and on this GPU satty cannot start: Mali-400 tops out at GLES 2.0 and satty
+# asks for a GL context it never gets --
+#
+#   GLib-WARNING **: Unable to create a GL context
+#
+# It does not exit on that. It maps a 360x474 window that paints nothing and
+# then waits, so the script never reaches wl-copy and the tap never finishes.
+# From Tools > Screenshot that is: Settings goes away (E6), a window you cannot
+# see takes focus, the on-screen keyboard rises to meet it, and no screenshot
+# appears -- while grim has in fact already written the file. Reported as "the
+# screenshot feature is not working"; the capture was the one part working.
+#
+# Even with a GL context it would be the wrong tool here. Annotation is drawing
+# on an image, this seat has no pointer at all (`swaymsg` cursor commands
+# succeed and do nothing), and the window is a third of the screen. Tapping
+# Screenshot should take a screenshot.
 DIR="${XDG_PICTURES_DIR:-$HOME/Pictures}/Screenshots"
 mkdir -p "$DIR"
 OUT="$DIR/screenshot-$(date +%Y%m%d-%H%M%S).png"
 
 if [[ $1 == "region" ]]; then
+  # Bound to $mod+Ctrl+Print, and only useful with a keyboard and a pointer
+  # attached -- slurp needs something to drag. There is no touch path to it,
+  # which is why the Settings row does not offer one.
   GEOM=$(slurp) || exit 1
   grim -g "$GEOM" "$OUT" || exit 1
 else
   grim "$OUT" || exit 1
 fi
 
-if command -v satty >/dev/null; then
-  satty --filename "$OUT" --output-filename "$OUT" --early-exit
-fi
-
 wl-copy < "$OUT"
-notify-send "Screenshot" "Saved to $OUT" 2>/dev/null
+
+# omarchy-notification-send, not notify-send: this image ships no libnotify
+# binary, so the old line was `command not found` swallowed by its own
+# redirect -- the one confirmation the row had, silently absent. The shade
+# shows this one.
+omarchy-notification-send "Screenshot" "Saved to $(basename "$OUT")" 2>/dev/null || true
