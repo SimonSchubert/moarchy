@@ -177,8 +177,18 @@ var PAGES = {
 
 // -------------------------------------------------------------------- sound
 "sound": { title: "Sound & notifications", rows: [
-  { id: "mixer", type: "action", glyph: "", label: "Audio devices & volume",
-    run: "wiremix", launch: "tui" },
+  // Two screens, not a mixer. This was `wiremix` in a terminal, which on this
+  // panel mapped its window and drew nothing but a truncated tab strip -- no
+  // device list, no sliders -- and it was the only audio UI the phone had.
+  //
+  // Routing only. Volume, like brightness and the radios, belongs to the shade
+  // (H1), and a slider here would be the repetition that section exists to stop.
+  // What the shade has no room for is *which* device, and on a phone that is the
+  // earpiece against the speaker against a headset against a paired sink.
+  { id: "output", type: "nav", page: "sound.output", glyph: "󰓃",
+    label: "Output device", detailCmd: "moarchy-audio output-name" },
+  { id: "input", type: "nav", page: "sound.input", glyph: "󰍬",
+    label: "Input device", detailCmd: "moarchy-audio input-name" },
   { id: "crashcapture", type: "switch", glyph: "󱚡", label: "Crash capture",
     detail: "Keep a log when an app dies",
     read: "omarchy-toggle-enabled crash-capture-off && echo true || echo false",
@@ -187,6 +197,21 @@ var PAGES = {
     off: "omarchy-toggle crash-capture-off on",
     covers: { "trigger.toggle.crash-capture": "N" } }
 ]},
+
+// provider.json rather than provider.list: a row carries the command that
+// selects it, because the label a person reads (PipeWire's Description, "Built-in
+// Audio Internal speaker") and the handle pactl takes back are different strings.
+// One value per line cannot hold both, which is the same reason the reminders
+// list is json.
+"sound.output": { title: "Output device",
+  reader: "moarchy-audio current-output",
+  provider: { json: "moarchy-audio outputs" },
+  rows: [] },
+
+"sound.input": { title: "Input device",
+  reader: "moarchy-audio current-input",
+  provider: { json: "moarchy-audio inputs" },
+  rows: [] },
 
 // --------------------------------------------------------------- appearance
 "appearance": { title: "Appearance", rows: [
@@ -493,6 +518,7 @@ var PAGES = {
 // -------------------------------------------------------------------- shell
 "shell": { title: "Shell & plugins", rows: [
   { id: "plugins", type: "nav", page: "shell.plugins", glyph: "󰐱", label: "Plugins",
+    detailCmd: "moarchy-plugins summary",
     covers: { "setup.plugin": "N" } },
   { id: "restart", type: "action", glyph: "󰍜", label: "Restart shell",
     detail: "Bar, drawer, shade and gestures",
@@ -503,13 +529,21 @@ var PAGES = {
     launch: "none", covers: { "update.config.tmux": "B", "update.config": "N" } }
 ]},
 
-"shell.plugins": { title: "Plugins", rows: [
-  { id: "enable", type: "action", glyph: "󰄬", label: "Enable a plugin",
-    run: "omarchy-menu-plugin enable", launch: "menu",
-    covers: { "setup.plugin.enable": "B" } },
-  { id: "disable", type: "action", glyph: "󰅖", label: "Disable a plugin",
-    run: "omarchy-menu-plugin disable", launch: "menu",
-    covers: { "setup.plugin.disable": "B" } },
+"shell.plugins": { title: "Plugins",
+  // A list of switches instead of two launches of the vendored select box.
+  // Enable was: tap Enable, find the plugin in a clipped card, tap it.
+  // Disable was the same walk again to undo it, and neither screen ever
+  // showed which plugins were already on.
+  //
+  // Add, clone and remove stay where they are, and stay bridged: adding
+  // takes a repo URL typed in and cloning opens the copy in an editor.
+  // Those are terminal work rather than a row that could replace them.
+  provider: { json: "moarchy-plugins rows", before: true },
+  // The two ids the switches took over. They hang off the page rather than off a
+  // row because the rows that satisfy them are built at open, one per plugin,
+  // and a coverage map keyed by row id has nowhere to put forty of them.
+  covers: { "setup.plugin.enable": "N", "setup.plugin.disable": "N" },
+  rows: [
   { id: "add", type: "action", glyph: "󰖟", label: "Add a plugin",
     run: "omarchy-launch-floating-terminal-with-presentation 'omarchy-plugin-add'",
     launch: "none", covers: { "setup.plugin.add": "B" } },
@@ -669,13 +703,29 @@ var PAGES = {
 ]},
 
 "system.time": { title: "Date & time", rows: [
-  { id: "timezone", type: "action", glyph: "", label: "Time zone",
-    detailCmd: "timedatectl show -p Timezone --value",
-    run: "omarchy-menu-timezone", launch: "menu",
-    covers: { "update.timezone": "B" } },
+  // A screen, not omarchy-menu-timezone. That piped all ~420 zones into the
+  // vendored select box: a fixed card with the list clipped and a filter field
+  // that wants a keyboard, to find one entry out of four hundred.
+  { id: "zone", type: "nav", page: "system.time.zone", glyph: "󰗰",
+    label: "Time zone", detailCmd: "moarchy-timezone current",
+    covers: { "update.timezone": "N" } },
   { id: "time", type: "action", glyph: "", label: "Set the time",
     run: "omarchy-launch-floating-terminal-with-presentation omarchy-update-time",
     launch: "none", covers: { "update.time": "B" } }
+]},
+
+// Region, then city -- two taps down a list you can read, instead of a filter
+// field over four hundred entries. The region pages are generated below rather
+// than written out eleven times.
+//
+// UTC is a choice row and not a region: `timedatectl list-timezones` lists it
+// flat, with no "/" to walk into, and it is the one a phone with no fixed home
+// actually wants.
+"system.time.zone": { title: "Time zone",
+  reader: "moarchy-timezone current",
+  rows: [
+  { id: "utc", type: "choice", glyph: "󰥔", label: "UTC", value: "UTC",
+    write: "moarchy-timezone set UTC" }
 ]},
 
 "system.hardware": { title: "Restart hardware", rows: [
@@ -715,14 +765,24 @@ var PAGES = {
   { id: "keys", type: "nav", page: "about.keys", glyph: "", label: "Keybindings",
     covers: { "learn.keybindings": "N" } },
   { id: "help", type: "nav", page: "about.help", glyph: "󰧑", label: "Help & docs" },
-  { id: "aboutomarchy", type: "action", glyph: "", label: "About Omarchy",
-    run: "omarchy-launch-about", launch: "tui", covers: { "about": "B" } }
+  // A page of rows, not fastfetch in a terminal. omarchy-launch-about sizes
+  // itself by measuring its own output from inside the terminal and re-renders
+  // on every resize; here it re-execs through the default terminal with
+  // --render, and the default terminal is qmlkonsole, which answers "Unknown
+  // option 'render'" under a logo clipped to its first two letters. The fields
+  // were never the problem.
+  { id: "aboutomarchy", type: "nav", page: "about.omarchy", glyph: "󰋽",
+    label: "About Omarchy", covers: { "about": "N" } }
 ]},
 
 // A text page: one command, its output rendered as rows. Upstream's
 // learn.keybindings ends in `less` with no terminal to draw in, so today the
 // row shows nothing at all.
 "about.keys": { title: "Keybindings", text: "omarchy-menu-keybindings --print", rows: [] },
+
+"about.omarchy": { title: "About Omarchy",
+  provider: { json: "moarchy-about rows" },
+  rows: [] },
 
 "about.help": { title: "Help & docs", rows: [
   { id: "manual", type: "link", glyph: "", label: "Omarchy manual",
@@ -742,6 +802,31 @@ var PAGES = {
 ]}
 
 };
+
+// The tzdata areas. Static, because a page id has to exist in PAGES before
+// anything can navigate to it -- a provider cannot invent a destination -- and
+// these eleven have been the top level of the database since Antarctica was
+// added to it.
+var TZ_REGIONS = ["Africa", "America", "Antarctica", "Arctic", "Asia", "Atlantic",
+                  "Australia", "Europe", "Indian", "Pacific", "Etc"];
+
+for (var _t = 0; _t < TZ_REGIONS.length; _t++) {
+    var _region = TZ_REGIONS[_t];
+    PAGES["system.time.zone"].rows.push(
+        { id: "r" + _t, type: "nav", page: "system.time.zone." + _region,
+          glyph: "󰗰", label: _region });
+    // `label: "city"` keeps the whole zone as the row's value -- what
+    // timedatectl takes and what the reader answers -- while showing the half
+    // a person is looking for.
+    PAGES["system.time.zone." + _region] = {
+        title: _region,
+        reader: "moarchy-timezone current",
+        provider: { list: "timedatectl list-timezones | grep '^" + _region + "/'",
+                    label: "city" },
+        write: "moarchy-timezone set",
+        rows: []
+    };
+}
 
 function page(id) { return PAGES[id] || null; }
 function exists(id) { return !!PAGES[id]; }

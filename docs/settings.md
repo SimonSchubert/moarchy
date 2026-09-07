@@ -243,7 +243,7 @@ whatever the provider printed -- paths, for a directory listing -- so a reader
 that prettifies one ticks nothing at all. That is D2 behaving correctly and it is
 still a page of eight wallpapers with no current one, which is why the reader is
 the raw path and the *label* carries the prettifying instead.
-→ on `appearance.background`, `settings value` equals `readlink -f
+→ on `appearance.background`, `settings value <rowId>` equals `readlink -f
 ~/.local/state/omarchy/current/background`, exactly one row is `checked=1`, and
 its label is the name the `background` row on `appearance` shows as its detail
 
@@ -391,11 +391,15 @@ of those Unsupported rows carries a non-empty reason
 `docs/menu-coverage.md` is empty
 
 **G7** The class totals are the ones committed to.
-→ `settings coverage | cut -f2 | sort | uniq -c` == 68 Bridged, 68 Native,
+→ `settings coverage | cut -f2 | sort | uniq -c` == 64 Bridged, 72 Native,
 1 Shade. `Unsupported` is not one of the answers -- see G3
 
 It was 71/65 until the three `trigger.reminder.*` ids stopped being bridged
-(section J). The selftest's copy of this number had said 74 since `1b01e5c`
+(section J), and 68/68 until `update.timezone`, the two `setup.plugin`
+toggles and `about` followed them (sections L, M and N). The Totals table in
+`docs/menu-coverage.md` is the same numbers from the other side, and it stayed
+at 71/65 through the reminders change -- a summary nothing asserts drifts, so
+G7 is the copy to trust and the table is now moved with it. The selftest's copy of this number had said 74 since `1b01e5c`
 dropped three rows without moving it, so G7 was red for reasons unrelated to
 what it was asserting -- which is the failure mode a duplicated constant has.
 
@@ -548,6 +552,148 @@ message` == ``
 **J13** The list is read at open and after every write, never remembered.
 → a reminder set or cancelled from a terminal shows up on the next `settings
 refresh`, with no reopen
+
+## K. Audio devices
+
+`wiremix` in a terminal was the only audio UI this phone had, and on this panel
+it mapped its window and drew nothing but a truncated tab strip: no device list,
+no sliders, nothing to touch. These two screens are what it was there for.
+
+**Routing, not volume.** The shade owns volume, brightness and the radios (H1),
+and a slider here would be exactly the repetition that section exists to stop.
+What the shade has no room for is *which* device, and on a phone that is the
+earpiece against the speaker against a headset against a paired Bluetooth sink.
+
+**The devices stay PipeWire's.** `moarchy-audio` reads `pactl` and writes
+`pactl`; there is no second store and no remembered selection. A device chosen
+from a terminal shows here, and one chosen here is the default every application
+sees.
+
+**K1** Sound & notifications carries an output row and an input row, and no
+volume control.
+→ `settings rowsOn sound` holds `output` and `input`, and no row on any page has
+a label matching `^(volume|mixer|audio devices &)`
+
+**K2** Each page lists what PipeWire reports, labelled the way a person reads it
+-- PipeWire's Description, "Built-in Audio Internal speaker", not
+`alsa_output.platform-sound.HiFi__Speaker__sink` -- and ticks the one in use.
+The label and the handle are different strings, which is why the rows are
+`provider.json` and not one value per line.
+→ on `sound.output`, the row count equals `pactl list short sinks | wc -l`,
+exactly one row is `checked=1`, and `settings value <rowId>` on one of them ==
+`pactl get-default-sink`
+
+**K3** A monitor source is not an input device. Every sink has a matching
+`.monitor` source, and it records what is playing rather than what is said, so
+offering it is a voice memo of silence.
+→ no row on `sound.input` has a value ending in `.monitor`, and the row count
+equals `pactl list short sources | grep -vc '\.monitor'`
+
+**K4** Choosing a device moves what is already playing onto it, not just the
+default for the next thing to start. Otherwise picking the earpiece during a
+call changes a setting and nothing you can hear.
+→ after a `settings set` on `sound.output`, no entry in `pactl list short
+sink-inputs` names another sink
+
+**K5** A page with no device says so. "No output device" is a real state on a
+phone whose sound card has not come up, and an empty screen reads as one that
+failed to load.
+→ with `pactl` answering nothing, `settings rows` on `sound.output` is a single
+`info` row
+
+**K6** Neither page opens a terminal, and neither puts Settings away. That was
+the whole of what was wrong with the row they replace.
+→ `settings state` == `open` after activating a device row, and `settings
+lastLaunch` never begins `omarchy-launch-`
+
+## L. Time zone
+
+`omarchy-menu-timezone` piped all ~420 zones into the vendored select box: a
+fixed card with the list clipped and a filter field, to find one entry out of
+four hundred with no keyboard in front of you. Region then city is two taps down
+lists you can read.
+
+**The zone stays `timedatectl`'s.** `moarchy-timezone` writes through it and
+reads through it, and ends with upstream's own `omarchy.clock refresh`.
+
+**L1** Time zone is a screen reached by region, then city -- no filter field.
+→ `settings rowsOn system.time.zone` holds one `nav` row per tzdata area, and
+`system.time.zone.Europe` has as many rows as
+`timedatectl list-timezones | grep -c '^Europe/'`
+
+**L2** A city row is labelled by its city and carries the whole zone, because
+that is what `timedatectl` takes and what the reader answers.
+→ on `system.time.zone.Europe` a row labelled `Berlin` has value `Europe/Berlin`
+
+**L3** The zone in use is ticked on the region it belongs to, and nowhere else.
+→ with the zone set to `Europe/Berlin`, exactly one row on
+`system.time.zone.Europe` is `checked=1` and none on `system.time.zone.Asia` is
+
+**L4** UTC is a row and not a region: `timedatectl list-timezones` lists it flat,
+with no `/` to walk into, and it is what a phone with no fixed home wants.
+→ `settings rowsOn system.time.zone` holds a `choice` row whose value is `UTC`
+
+**L5** Setting a zone writes it and leaves Settings standing.
+→ after a `settings set` on a city row, `timedatectl show -p Timezone --value` is
+that zone and `settings state` == `open`
+
+## M. Plugins
+
+Enable and disable were two separate launches of the vendored select box: tap
+Enable, find the plugin, tap it; tap Disable, walk the same clipped card again to
+undo it. Neither screen ever showed which plugins were already on.
+
+**M1** Plugins is a list of switches, one per plugin the shell reports it can
+turn off, and it shows which are on.
+→ the `switch` row count on `shell.plugins` equals
+`omarchy-shell shell listPlugins | jq '[.[] | select(.canDisable)] | length'`
+
+**M2** A plugin the shell will not let go of is not offered as a switch. Both
+bars are that: `moarchy.bar` is the one this phone draws, and `omarchy.bar`
+replaces it with the thirteen-widget desktop bar. A switch that costs you the
+status bar is worse than no switch -- C6 says the same about transparency.
+→ no row on `shell.plugins` is `p-omarchy.bar` or `p-moarchy.bar`
+
+**M3** The switches read their state from the listing that built them, not from
+a command per row. Forty-odd rows with a `read` apiece is a fork apiece, and F5
+exists because that cost is real on this SoC.
+→ every switch row `moarchy-plugins rows` emits carries `state` and none carries
+`read`
+
+**M4** Flipping a switch changes the plugin, and the row settles on what the
+shell then reports without the page being reopened. A provider page needs the
+provider re-run for that, not the guard batch: `refresh` alone would read the
+state the rows were built with.
+→ `settings set p-<id> off` leaves that row `checked=0` and `listPlugins` agrees
+
+**M5** The row that opens the page says how many are on.
+→ the `plugins` row on `shell` has a detail matching `^[0-9]+ of [0-9]+ on$`
+
+**M6** Add, clone and remove stay bridged and stay where they are. Adding takes a
+repo URL typed in and cloning opens the copy in an editor; those are terminal
+work, not a row that a switch could replace.
+→ `settings rowsOn shell.plugins` still holds `add` and `clone`
+
+## N. About
+
+`omarchy-launch-about` is fastfetch in a terminal that sizes itself by measuring
+its own output from inside that terminal and re-renders on every resize. On this
+phone it re-execs through the default terminal with `--render`, and the default
+terminal is qmlkonsole, which answers `Unknown option 'render'` under an ASCII
+logo clipped to its first two letters. The fields were never the problem.
+
+**N1** About Omarchy is a page of rows, and opens no terminal.
+→ `settings activate aboutomarchy` leaves `settings state` == `open`, and
+`settings lastLaunch` does not name `omarchy-launch-about`
+
+**N2** Every row has a value. A field that cannot be read is not shown as a blank
+label -- B1 was exactly that, an "Omarchy" row with nothing beside it.
+→ no row on `about.omarchy` has an empty detail
+
+**N3** It says which Omarchy and which moarchy, because on this phone they are
+different versions of different packages and the pair is what a bug report needs.
+→ `settings rowsOn about.omarchy` holds a row labelled `Omarchy` and one
+labelled `moarchy`
 
 ## The IPC surface
 

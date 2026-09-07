@@ -1,0 +1,100 @@
+#!/bin/bash
+# Audio routing for the Settings screen: which device plays, which one records.
+#
+# Not volume. The shade owns volume, brightness and the radios (docs/settings.md
+# H1), and repeating a slider here would be the mistake that section exists to
+# stop. This is the half the shade has no room for -- picking between the
+# earpiece, the speaker, a headset and a paired Bluetooth sink.
+#
+# It replaces `wiremix` in a terminal, which mapped its window on this panel and
+# drew nothing but a truncated tab strip: no device list, no sliders, and it was
+# the only audio UI the phone had.
+#
+# `rows` emits provider.json rows -- the shape Settings builds a page out of --
+# so each row carries the command that selects it. pactl rather than wpctl
+# because its output is a stable record format; wpctl status is a tree drawn for
+# a human.
+set -uo pipefail
+
+# Sink/source records, as `<name><TAB><description>`. The Description is what
+# PipeWire means for a person to read ("Built-in Audio Internal speaker"); the
+# Name is the handle pactl takes back.
+devices() { # $1 = sinks|sources
+  pactl list "$1" 2>/dev/null | awk '
+    /^(Sink|Source) #/          { name = ""; desc = "" }
+    /^[[:space:]]*Name: /       { name = $2 }
+    /^[[:space:]]*Description: / { sub(/^[[:space:]]*Description: /, ""); desc = $0 }
+    name != "" && desc != ""    { print name "\t" desc; name = ""; desc = "" }
+  '
+}
+
+# Every sink has a matching `.monitor` source -- it is the loopback for
+# recording what is playing, not a microphone. Offering it as an input device
+# means a call that records silence, so it is not a row.
+inputs()  { devices sources | grep -v '\.monitor	'; }
+outputs() { devices sinks; }
+
+current_output() { pactl get-default-sink 2>/dev/null; }
+current_input()  { pactl get-default-source 2>/dev/null; }
+
+# The detail line under the row that opens each page. Falls back to the raw
+# name, because a device with no Description is still the one you are hearing.
+name_of() { # $1 = sinks|sources, $2 = name
+  local d
+  d=$(devices "$1" | awk -F'\t' -v n="$2" '$1 == n { print $2; exit }')
+  echo "${d:-$2}"
+}
+
+rows() { # $1 = outputs|inputs
+  local verb glyph
+  case "$1" in
+    outputs) verb="moarchy-audio set-output"; glyph=$'\U000f04c3' ;;
+    inputs)  verb="moarchy-audio set-input";  glyph=$'\U000f036c' ;;
+    *) echo "[]"; return 0 ;;
+  esac
+
+  # An empty list is an info row, not a blank page: "no output device" is a
+  # real state on a phone whose sound card has not come up, and a page with
+  # nothing on it reads as a screen that failed to load.
+  "$1" | jq -R -s --arg verb "$verb" --arg glyph "$glyph" '
+    split("\n") | map(select(length > 0)) | to_entries
+    | map((.value | split("\t")) as $f | {
+        id:    ("d" + (.key | tostring)),
+        type:  "choice",
+        glyph: $glyph,
+        label: $f[1],
+        value: $f[0],
+        write: ($verb + " " + ($f[0] | @sh))
+      })
+    | if length == 0
+      then [{ id: "none", type: "info", glyph: $glyph,
+              label: "No device found", detail: "Nothing is available to select" }]
+      else . end'
+}
+
+case "${1:-}" in
+  outputs|inputs)   rows "$1" ;;
+  current-output)   current_output ;;
+  current-input)    current_input ;;
+  output-name)      name_of sinks   "$(current_output)" ;;
+  input-name)       name_of sources "$(current_input)" ;;
+  # Moving the default does not move what is already playing, so the streams on
+  # the old device come too -- otherwise selecting the earpiece mid-call changes
+  # a setting and nothing else.
+  set-output)
+    [[ -n ${2:-} ]] || { echo "usage: moarchy-audio set-output <name>" >&2; exit 1; }
+    pactl set-default-sink "$2" || exit 1
+    while read -r id _; do pactl move-sink-input "$id" "$2" 2>/dev/null; done \
+      < <(pactl list short sink-inputs 2>/dev/null)
+    ;;
+  set-input)
+    [[ -n ${2:-} ]] || { echo "usage: moarchy-audio set-input <name>" >&2; exit 1; }
+    pactl set-default-source "$2" || exit 1
+    while read -r id _; do pactl move-source-output "$id" "$2" 2>/dev/null; done \
+      < <(pactl list short source-outputs 2>/dev/null)
+    ;;
+  *)
+    echo "usage: moarchy-audio {outputs|inputs|current-output|current-input|output-name|input-name|set-output <name>|set-input <name>}" >&2
+    exit 2
+    ;;
+esac

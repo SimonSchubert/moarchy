@@ -1,0 +1,25 @@
+#!/bin/bash
+# Set the system timezone, for the Settings time zone pages.
+#
+# Upstream's omarchy-menu-timezone pipes all ~420 zones into omarchy-menu-select,
+# which on this screen is a fixed card with a clipped list and a filter field
+# that wants a keyboard. The pages that replaced it walk region then city, so
+# this only has to do the write.
+#
+# The clock refresh is upstream's, kept: the bar reads the zone once.
+set -euo pipefail
+
+case "${1:-}" in
+  set)
+    [[ -n ${2:-} ]] || { echo "usage: moarchy-timezone set <Area/City>" >&2; exit 1; }
+    sudo timedatectl set-timezone "$2"
+    omarchy-shell -q omarchy.clock refresh
+    ;;
+  current)
+    timedatectl show -p Timezone --value
+    ;;
+  *)
+    echo "usage: moarchy-timezone {set <Area/City>|current}" >&2
+    exit 2
+    ;;
+esac

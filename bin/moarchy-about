@@ -1,0 +1,56 @@
+#!/bin/bash
+# What "About Omarchy" says, as rows.
+#
+# Upstream's omarchy-launch-about is fastfetch in a terminal, sized by measuring
+# its own output from inside that terminal and re-rendering on every resize. On
+# this phone it re-execs through the default terminal with --render, and the
+# default terminal here is qmlkonsole, which answers:
+#
+#   qmlkonsole: Unknown option 'render'.
+#
+# under an ASCII logo clipped to the first two letters. The information was never
+# the problem; the frame around it was. These are the same fields as rows, which
+# is a thing a 360px screen can draw.
+#
+# Read-only, so nothing here needs to be fast or to be a single process: the page
+# is opened rarely and every command below is a file read or a one-line query.
+set -uo pipefail
+
+pkg() { pacman -Q "$1" 2>/dev/null | awk '{print $2}'; }
+
+field() { # name, value -- an empty value is skipped rather than shown blank
+  [[ -n ${2:-} ]] || return 0
+  printf '%s\t%s\n' "$1" "$2"
+}
+
+collect() {
+  field "Omarchy"    "$(omarchy-version 2>/dev/null)"
+  field "moarchy"    "$(pkg moarchy)"
+  field "Device"     "$(tr -d '\0' < /proc/device-tree/model 2>/dev/null)"
+  field "Kernel"     "$(uname -r)"
+  field "Compositor" "$(sway -v 2>/dev/null | head -1)"
+  # "Quickshell 0.3.1 (revision , distributed by Arch Linux)" -- the revision is
+  # empty in the packaged build, so the parenthetical is a blank and a comma.
+  field "Shell"      "$(quickshell --version 2>/dev/null | head -1 | sed 's/ (revision.*//')"
+  field "Uptime"     "$(uptime -p 2>/dev/null | sed 's/^up //')"
+  field "Packages"   "$(pacman -Q 2>/dev/null | grep -c .)"
+  field "Memory"     "$(free -h --si 2>/dev/null | awk '/^Mem:/ { print $3 " of " $2 }')"
+  field "Storage"    "$(df -h --output=used,size / 2>/dev/null | awk 'NR==2 { print $1 " of " $2 }')"
+}
+
+case "${1:-}" in
+  rows)
+    collect | jq -R -s '
+      split("\n") | map(select(length > 0)) | to_entries
+      | map((.value | split("\t")) as $f | {
+          id:     ("a" + (.key | tostring)),
+          type:   "info",
+          label:  $f[0],
+          detail: $f[1]
+        })'
+    ;;
+  *)
+    echo "usage: moarchy-about rows" >&2
+    exit 2
+    ;;
+esac

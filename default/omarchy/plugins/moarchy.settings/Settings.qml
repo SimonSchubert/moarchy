@@ -282,8 +282,14 @@ Item {
       // Unknown is not "off inverted". Before the first read there is no answer,
       // and an inverted switch would otherwise paint ON for a frame and then
       // flip -- which reads as the tap having done something.
-      if (root.valueMap[row.id] === undefined) return false
-      var v = String(root.valueMap[row.id]).toLowerCase()
+      var raw = root.valueMap[row.id]
+      // A provider that built this row already knows: one `listPlugins` answers
+      // for all forty-odd of them, where a `read` per row is a fork per row on
+      // a 1.15GHz A53. The guard batch still wins when there is one, so a row
+      // may carry both.
+      if (raw === undefined && row.state !== undefined) raw = row.state
+      if (raw === undefined) return false
+      var v = String(raw).toLowerCase()
       var on = (v === "true" || v === "1" || v === "on" || v === "enabled")
       return row.invert ? !on : on
     }
@@ -540,6 +546,11 @@ Item {
             // The same transform omarchy-theme-bg-current applies, so the row
             // that ticks reads the way the Appearance detail line above it does:
             // "Quattro", not "1-quattro.jpg".
+            // "Europe/Berlin" -> "Berlin", "America/New_York" -> "New York".
+            // The value stays the whole zone, because that is what timedatectl
+            // takes and what the reader answers.
+            else if (p.provider.label === "city")
+              label = value.replace(/^.*\//, "").replace(/_/g, " ")
             else if (p.provider.label === "background")
               label = value.replace(/^.*\//, "").replace(/\.[^.]+$/, "")
                            .replace(/^\d+-/, "").replace(/-/g, " ")
@@ -618,7 +629,11 @@ Item {
 
   Process {
     id: switchProc
-    onExited: Qt.callLater(root.refresh)
+    // reloadDynamic, not refresh: on a provider page `refresh` re-runs the
+    // provider only while `dynamicLoaded` is false, so a switch whose state
+    // comes from the provider would flip back to the built-in value on the next
+    // read. Off a provider page the two are the same call.
+    onExited: Qt.callLater(root.reloadDynamic)
   }
 
   // `confirmed` is a parameter, not a reading of confirmText. It used to arm the

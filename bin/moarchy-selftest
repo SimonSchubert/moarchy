@@ -1796,12 +1796,13 @@ DOCTBL
   totals=$(cut -f2 <<<"$cov" | sort | uniq -c | awk '{printf "%s=%s ", $2, $1}')
   # 74/65 until 2026-09-07, and wrong from `1b01e5c` onward: that commit dropped
   # three bridged rows and left this number where it was, so G7 was red about a
-  # constant rather than about coverage. It is 68/68 since the three
-  # trigger.reminder.* ids became Native (docs/settings.md J).
-  [[ $totals == "Bridged=68 Native=68 Shade=1 " ]] \
+  # constant rather than about coverage. 68/68 after the three trigger.reminder.*
+  # ids became Native (docs/settings.md J), and 64/72 since update.timezone, the
+  # two setup.plugin toggles and about followed them (L, M and N).
+  [[ $totals == "Bridged=64 Native=72 Shade=1 " ]] \
     && ok "G7 the class totals are the ones committed to ($totals)" \
     || no "G7 the class totals moved: $totals" \
-          "expected Bridged=68 Native=68 Shade=1; update docs/settings.md if deliberate"
+          "expected Bridged=64 Native=72 Shade=1; update docs/settings.md if deliberate"
 
   grep -q '^trigger.toggle.notifications	Shade' <<<"$cov" \
     && ok "H2 the shade-owned toggle is recorded, not rendered" \
@@ -2118,6 +2119,193 @@ ICONS
   fi
 
   s close >/dev/null
+
+  # --- K. audio devices -----------------------------------------------------
+  # The row these replace was `wiremix` in a terminal, which drew a truncated tab
+  # strip and nothing else. Every check here is about the page being a page.
+
+  # K1. Routing, not volume: the shade owns the slider (H1).
+  sound_rows=$(s openAt sound >/dev/null; sleep 2; s rows)
+  if grep -q '^output	' <<<"$sound_rows" && grep -q '^input	' <<<"$sound_rows"; then
+    ok "K1 Sound carries an output row and an input row"
+  else
+    no "K1 Sound has no device rows" "rows: $(cut -f1 <<<"$sound_rows" | tr '\n' ' ')"
+  fi
+  if awk -F'\t' 'tolower($3) ~ /^(volume|mixer|audio devices &)/' <<<"$sound_rows" | grep -q .; then
+    no "K1 Sound offers a volume control" "the shade owns volume, brightness and the radios"
+  else
+    ok "K1 no volume control is repeated in Settings"
+  fi
+
+  # K2. The list is PipeWire's, and the one in use is ticked.
+  s goto sound.output >/dev/null; sleep 2
+  want_sink=$(pactl get-default-sink 2>/dev/null)
+  n_sinks=$(pactl list short sinks 2>/dev/null | grep -c .)
+  n_rows=$(s rows | grep -c .)
+  sink_checked=$(s rows | awk -F'\t' '$5=="1"' | wc -l)
+  # `value` takes a row id -- Quickshell's typed IPC has no optional arguments --
+  # and on a choice row it answers the page's reader, which is what is wanted.
+  sink_row=$(s rows | awk -F'\t' '$2=="choice"{print $1; exit}')
+  sink_says=$(s value "${sink_row:-none}")
+  if [[ $n_rows -eq $n_sinks && $sink_checked -eq 1 && $sink_says == "$want_sink" ]]; then
+    ok "K2 the output page lists $n_sinks sink(s) and ticks the one in use"
+  else
+    no "K2 output page: $n_rows row(s) for $n_sinks sink(s), $sink_checked ticked" \
+       "reader says '$sink_says', pactl says '$want_sink'"
+  fi
+
+  # K2 again, on the labels: a row named by its pactl handle is not a phone UI.
+  if s rows | awk -F'\t' '$3 ~ /^alsa_/' | grep -q .; then
+    no "K2 a device row is labelled by its pactl handle" \
+       "the label is PipeWire's Description; the handle is the value"
+  else
+    ok "K2 device rows are labelled the way a person reads them"
+  fi
+
+  # K3. Every sink has a .monitor source, and it records playback, not a voice.
+  s goto sound.input >/dev/null 2>&1 || { s openAt sound.input >/dev/null; }
+  sleep 2
+  if s rows | awk -F'\t' '$1 ~ /^d/' | grep -q monitor; then
+    no "K3 a monitor source is offered as an input device" \
+       "it records what is playing, so it is a recording of silence"
+  else
+    want_src=$(pactl list short sources 2>/dev/null | grep -vc '\.monitor')
+    got_src=$(s rows | grep -c .)
+    [[ $got_src -eq $want_src ]] \
+      && ok "K3 the input page lists $want_src source(s), monitors excluded" \
+      || no "K3 input page has $got_src row(s) for $want_src source(s)" \
+            "monitors are excluded; nothing else should be"
+  fi
+
+  # K6. And neither page is a terminal. That was the whole complaint.
+  s goto sound.output >/dev/null 2>&1 || s openAt sound.output >/dev/null
+  sleep 2
+  first_dev=$(s rows | awk -F'\t' '$2=="choice"{print $1; exit}')
+  if [[ -n $first_dev ]]; then
+    s dryRun 1 >/dev/null
+    s activate "$first_dev" >/dev/null
+    launched=$(s lastLaunch)
+    s dryRun 0 >/dev/null
+    if [[ $(s state) == open && $launched != omarchy-launch-* ]]; then
+      ok "K6 selecting a device keeps Settings up and opens no terminal"
+    else
+      no "K6 state=$(s state) after selecting a device" "it would run: $launched"
+    fi
+  fi
+
+  # --- L. time zone ---------------------------------------------------------
+  s openAt system.time.zone >/dev/null; sleep 2
+  n_regions=$(s rows | awk -F'\t' '$2=="nav"' | wc -l)
+  (( n_regions >= 10 )) \
+    && ok "L1 the time zone page walks $n_regions regions, with no filter field" \
+    || no "L1 the time zone page has $n_regions region rows" "the tzdata areas are eleven"
+
+  # L4. UTC is flat in the database, so it is a row here and not a region.
+  s rows | awk -F'\t' '$1=="utc" && $2=="choice"' | grep -q . \
+    && ok "L4 UTC is a row, not a region to walk into" \
+    || no "L4 there is no UTC row on the time zone page" "list-timezones lists it flat"
+
+  s goto system.time.zone.Europe >/dev/null; sleep 3
+  want_eu=$(timedatectl list-timezones | grep -c '^Europe/')
+  got_eu=$(s rows | grep -c .)
+  [[ $got_eu -eq $want_eu ]] \
+    && ok "L1 Europe lists $want_eu cities" \
+    || no "L1 Europe has $got_eu row(s) for $want_eu zones" "the provider greps one area"
+
+  # L2. The label is the city; the value is the whole zone timedatectl takes.
+  berlin=$(s rows | awk -F'\t' '$3=="Berlin"{print $1; exit}')
+  if [[ -n $berlin && $(s value "$berlin") != "" ]]; then
+    ok "L2 a city row is labelled by its city"
+  else
+    no "L2 no row on Europe is labelled Berlin" "label: \"city\" keeps the zone as the value"
+  fi
+
+  # L3. Ticked where it belongs, and nowhere else.
+  zone_now=$(timedatectl show -p Timezone --value)
+  eu_checked=$(s rows | awk -F'\t' '$5=="1"' | wc -l)
+  case "$zone_now" in
+    Europe/*) [[ $eu_checked -eq 1 ]] \
+                && ok "L3 the zone in use ($zone_now) is ticked on its region" \
+                || no "L3 $eu_checked rows ticked on Europe for $zone_now" "exactly one" ;;
+    *)        [[ $eu_checked -eq 0 ]] \
+                && ok "L3 nothing is ticked on a region the zone ($zone_now) is not in" \
+                || no "L3 $eu_checked rows ticked on Europe with the zone set to $zone_now" \
+                      "D2: a reader naming no row ticks nothing" ;;
+  esac
+
+  # --- M. plugins -----------------------------------------------------------
+  s openAt shell.plugins >/dev/null; sleep 3
+  want_pl=$(omarchy-shell shell listPlugins | jq '[.[] | select(.canDisable)] | length')
+  got_pl=$(s rows | awk -F'\t' '$2=="switch"' | wc -l)
+  [[ $got_pl -eq $want_pl ]] \
+    && ok "M1 one switch per plugin the shell can turn off ($want_pl)" \
+    || no "M1 $got_pl switch row(s) for $want_pl plugin(s)" "the provider lists canDisable only"
+
+  # M2. Neither bar is a switch. Enabling omarchy.bar costs the phone bar.
+  if s rows | awk -F'\t' '$1=="p-omarchy.bar" || $1=="p-moarchy.bar"' | grep -q .; then
+    no "M2 a bar is offered as a switch" "canDisable is false for both; flipping one loses the status bar"
+  else
+    ok "M2 neither bar is offered as a switch"
+  fi
+
+  # M3. State on the row, not a read per row.
+  if moarchy-plugins rows | jq -e 'all(.[]; (has("read") | not))' >/dev/null \
+     && moarchy-plugins rows | jq -e 'all(.[]; .type != "switch" or has("state"))' >/dev/null; then
+    ok "M3 the switches carry their state, so the page is one listing not $want_pl forks"
+  else
+    no "M3 a plugin row carries a read" "one listing already answered for all of them"
+  fi
+
+  # M4. A write moves the row, which on a provider page needs the provider re-run.
+  pl_row=$(s rows | awk -F'\t' '$2=="switch" && $5=="1"{print $1; exit}')
+  if [[ -n $pl_row ]]; then
+    pl_id=${pl_row#p-}
+    s set "$pl_row" off >/dev/null; sleep 3
+    off_row=$(s rows | awk -F'\t' -v r="$pl_row" '$1==r{print $5}')
+    off_shell=$(omarchy-shell shell listPlugins | jq -r --arg i "$pl_id" '.[]|select(.id==$i)|.enabled')
+    s set "$pl_row" on >/dev/null; sleep 3
+    on_row=$(s rows | awk -F'\t' -v r="$pl_row" '$1==r{print $5}')
+    if [[ $off_row == 0 && $off_shell == false && $on_row == 1 ]]; then
+      ok "M4 a switch moves the plugin and settles on what the shell reports ($pl_id)"
+    else
+      no "M4 $pl_id: row went $off_row then $on_row, shell said $off_shell when off" \
+         "a provider page needs reloadDynamic after a write, not refresh"
+    fi
+  fi
+
+  # M5/M6. The count, and the three rows that stay bridged.
+  s openAt shell >/dev/null; sleep 2
+  pl_detail=$(s rows | awk -F'\t' '$1=="plugins"{print $6}')
+  [[ $pl_detail =~ ^[0-9]+\ of\ [0-9]+\ on$ ]] \
+    && ok "M5 the Plugins row says how many are on ($pl_detail)" \
+    || no "M5 the Plugins row reads '$pl_detail'" "expected '<n> of <m> on'"
+  s openAt shell.plugins >/dev/null; sleep 3
+  if s rows | grep -q '^add	' && s rows | grep -q '^clone	'; then
+    ok "M6 add and clone are still there, still bridged"
+  else
+    no "M6 add or clone went missing from the plugins page" \
+       "a URL to type and an editor to open are terminal work, not rows"
+  fi
+
+  # --- N. about -------------------------------------------------------------
+  s openAt about >/dev/null; sleep 2
+  s activate aboutomarchy >/dev/null; sleep 2
+  if [[ $(s state) == open && $(s page) == about.omarchy ]]; then
+    ok "N1 About Omarchy is a page, and opens no terminal"
+  else
+    no "N1 About Omarchy left Settings $(s state) on $(s page)" \
+       "it was omarchy-launch-about, which qmlkonsole refuses --render"
+  fi
+  sleep 2
+  n_blank=$(s rows | awk -F'\t' '$6==""' | wc -l)
+  [[ $n_blank -eq 0 ]] \
+    && ok "N2 every About row has a value ($(s rows | grep -c .) rows)" \
+    || no "N2 $n_blank About row(s) have no value" "a field that cannot be read is not a row"
+  if s rows | awk -F'\t' '$3=="Omarchy"' | grep -q . && s rows | awk -F'\t' '$3=="moarchy"' | grep -q .; then
+    ok "N3 About names both Omarchy and moarchy"
+  else
+    no "N3 About does not name both versions" "they are different packages here"
+  fi
 
   printf '  \033[90m%-4s\033[0m   \033[90mnot covered here: A3 A5 B5 B7 C5 C7 C8 D3 D4 E2 E5 E6 E7 E8 F1 F2 F3 F4 F5 F6 F7 G4 H1 I4 J11\033[0m\n' ""
   # A3     needs a real finger or the touch injector

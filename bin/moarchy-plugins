@@ -1,0 +1,57 @@
+#!/bin/bash
+# The shell's plugins as switch rows, for the Settings plugins page.
+#
+# Enable and disable were two separate launches of the vendored select box --
+# tap Enable, find the plugin, tap it; tap Disable, find it again to undo. A
+# list of switches is the same information without the round trip, and it is the
+# one page in Settings where you can see what is on.
+#
+# Add, clone and remove stay bridged and stay where they are: adding takes a
+# repo URL typed in, and cloning opens the copy in an editor. Those are terminal
+# work, not a row.
+#
+# The state rides along on each row (`state`), rather than each row carrying a
+# `read` for the guard batch to run: one listing answers for all forty-odd
+# plugins, where a read apiece is a fork apiece on a 1.15GHz A53.
+set -uo pipefail
+
+PLUGIN_GLYPH=$'\U000f0431'
+
+# The shell is the source of truth and is running, since it is the thing asking.
+# omarchy-plugin-list reads the same registry but needs the shell's environment
+# to find the plugin directories at all.
+listing() { omarchy-shell shell listPlugins 2>/dev/null; }
+
+case "${1:-}" in
+  rows)
+    listing | jq --arg glyph "$PLUGIN_GLYPH" '
+      # canDisable false is not a setting. It covers both bars: moarchy.bar,
+      # which the phone cannot be without, and upstream omarchy.bar, which
+      # replaces it -- a switch that costs you the status bar is worse than no
+      # switch (docs/settings.md C6 says the same about transparency).
+      map(select(.canDisable))
+      | sort_by(.name | ascii_downcase)
+      | map({
+          id:     ("p-" + .id),
+          type:   "switch",
+          glyph:  $glyph,
+          label:  .name,
+          detail: .id,
+          state:  .enabled,
+          on:     ("omarchy-plugin-enable "  + (.id | @sh)),
+          off:    ("omarchy-plugin-disable " + (.id | @sh))
+        })
+      | if length == 0
+        then [{ id: "none", type: "info", glyph: $glyph, label: "No plugins",
+                detail: "The shell reported none it can turn on or off" }]
+        else . end'
+    ;;
+  summary)
+    listing | jq -r 'map(select(.canDisable))
+                     | "\([.[] | select(.enabled)] | length) of \(length) on"'
+    ;;
+  *)
+    echo "usage: moarchy-plugins {rows|summary}" >&2
+    exit 2
+    ;;
+esac

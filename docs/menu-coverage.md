@@ -45,8 +45,8 @@ appeared and the keys did not.
 
 | Class | Entries |
 | --- | ---: |
-| Native | 65 |
-| Bridged | 71 |
+| Native | 72 |
+| Bridged | 64 |
 | Shade | 1 |
 | Unsupported | 183 |
 | **Total** | **320** |
@@ -71,7 +71,7 @@ The two root entries that are not the head of a route of their own.
 | id | label | class | lands at | note |
 | --- | --- | --- | --- | --- |
 | `apps` | Apps | Native | App drawer | the drawer is the `apps` provider; not repeated in Settings |
-| `about` | About | Bridged | About phone > About Omarchy | `omarchy-launch-about` is a fastfetch TUI |
+| `about` | About | Native | About phone > About Omarchy | a page of rows; `omarchy-launch-about` re-execs through the default terminal with `--render`, and qmlkonsole refuses it |
 
 ## System (8)
 
@@ -238,8 +238,8 @@ Native 25 · Bridged 14 · Unsupported 23
 | `setup.default.editor.vim` | Vim | Bridged | Default apps > Editor | aarch64-available; hidden until installed |
 | `setup.default.editor.emacs` | Emacs | Unsupported | -- | x86_64-only |
 | `setup.plugin` | Plugins | Native | Shell & plugins > Plugins |  |
-| `setup.plugin.enable` | Enable Plugin | Bridged | Shell & plugins > Plugins | `omarchy-menu-select` |
-| `setup.plugin.disable` | Disable Plugin | Bridged | Shell & plugins > Plugins | `omarchy-menu-select` |
+| `setup.plugin.enable` | Enable Plugin | Native | Shell & plugins > Plugins | a switch per plugin, built at open; the page covers this id, not a row |
+| `setup.plugin.disable` | Disable Plugin | Native | Shell & plugins > Plugins | the same switch, the other way; two launches of the select box became one list |
 | `setup.plugin.add` | Add Plugin | Bridged | Shell & plugins > Plugins | TUI; prompts for a repo URL |
 | `setup.plugin.clone` | Clone Plugin | Bridged | Shell & plugins > Plugins | `omarchy-menu-select` |
 | `setup.plugin.remove` | Remove Plugin | Bridged | Shell & plugins > Plugins | hidden while `~/.config/omarchy/plugins` is empty, which it now is -- the phone UI is packaged, and `omarchy-plugin-remove` only deletes inside that directory. Confirm sheet kept for a user-cloned plugin |
@@ -427,7 +427,7 @@ Native 6 · Bridged 8 · Unsupported 14
 | `update.hardware` | Hardware | Native | System > Restart hardware |  |
 | `update.firmware` | Firmware | Unsupported | -- | fwupd is not installed and the PinePhone has no UEFI capsule path |
 | `update.password` | Password | Native | dissolved: Security | only the user password survives |
-| `update.timezone` | Timezone | Bridged | System > Date & time | `omarchy-menu-timezone` uses `omarchy-menu-select` |
+| `update.timezone` | Timezone | Native | System > Date & time | region then city, two provider pages; the select box was a filter field over ~420 entries |
 | `update.time` | Time | Bridged | System > Date & time |  |
 | `update.channel.stable` | Stable | Unsupported | -- | a channel switch moves the vendored checkout off the pinned v4.0.2 that `pkgbuilds/omarchy-config/port-4x.patch` applies against |
 | `update.channel.rc` | RC | Unsupported | -- | as `update.channel.stable` |
