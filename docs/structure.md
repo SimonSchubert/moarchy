@@ -234,6 +234,17 @@ and `pacman -S moarchy-meta` then installs the whole environment.
 **R6** Republishing is idempotent: running the build twice with an unchanged
 `manifest.toml` produces the same package versions and does not bump `pkgrel`.
 
+**R6a** A published repository contains **only** what its database names. Assets
+that are no longer part of it are removed on publish. **Met 2026-09-07:**
+`repo/publish.sh` prunes what is absent from `repo/dist`; `PRUNE=0` opts out.
+
+> `gh release upload --clobber` replaces a file of the same name and does
+> nothing about one with no counterpart, so the tag accumulated:
+> `moarchy-store-git` r19 beside r22, and `moarchy` 0.1.0-1 and -2 both
+> outliving the database that named them. `repo/build.sh` already rebuilds the
+> database from scratch so a phone is never offered a version whose file is
+> gone; this is the other half of that bargain.
+
 **R7** `packages/*.pkg.tar.*` as a directory of loose artifacts shipped over
 `scp` (`scripts/provision.sh:108`) is gone. The repo is how packages reach the
 phone.
@@ -271,6 +282,28 @@ flashed phone never gets it.
 > or u-boot upgrade land on a moarchy image, and the failure mode of getting
 > that wrong is a reflash on a device whose only other way in is the card.
 > Decided 2026-09-07.
+
+**R8b** A package build reports **skipped** and **failed** as different things,
+and every package in the output directory is one that build vouches for.
+**Met 2026-09-07:** `docker/build-packages.sh` writes
+`packages/.build-manifest` — a sha256 per file plus the commit — and
+`pkgset_vouched` refuses a stray or a file whose bytes have changed under a
+stable name.
+
+> R8 catches two versions of one name. It cannot catch a *lone* leftover, and
+> that is the one that shipped: `packages/` held `moarchy-store-git` r19 while
+> `manifest.toml` pinned r22, with no duplicate to notice it against. The hash
+> is the other half — three separate times in one day a filename outlived its
+> contents: `moarchy-meta 0.1.0-1` existed as two different packages, seven
+> cached `.pkg.tar.xz` files did, and so did the published `v0.1.0` image
+> (`03f64c75` released, `5b6aa24c` locally under the same name).
+>
+> The skipped/failed split is the same lesson at the other end. `makepkg`
+> refuses to overwrite an existing artifact, and that refusal was recorded as a
+> build failure — so a rebuild into a populated directory ended with `FAILED:
+> moarchy-keyboard …` and "the phone has no on-screen keyboard" about a package
+> that was sitting right there. A build's loudest line being routinely wrong
+> teaches you to skip it.
 
 **R9** A published image's own pacman keyring **trusts** the signing key, rather
 than merely carrying the file. **Met 2026-09-07:** `image/verify.sh` asks

@@ -105,6 +105,34 @@ compgen -G "$PKGS/*.pkg.tar.*" >/dev/null || die "no packages in $PKGS -- run ./
 # ships on a card. See scripts/pkgset.sh.
 . "$REPO/scripts/pkgset.sh"
 pkgset_unique "$PKGS" || die "$PKGS is ambiguous; no image built"
+# A leftover from an earlier build is not a duplicate and looks like nothing at
+# all, which is how a release nearly shipped a store from a pin that had moved.
+pkgset_vouched "$PKGS" || die "$PKGS holds files no build vouches for; no image built"
+# Our own packages are evicted from the shared pacman cache before pacstrap
+# runs, and this is not housekeeping.
+#
+# /var/cache/pacman/pkg is a bind mount from .cache/, kept because pacstrap
+# pulls 1.26 GiB and re-downloading it turns a five-minute change into a
+# thirty-minute one. It is keyed by FILENAME. Rebuild a pinned package and the
+# name does not move but the bytes do -- so the cached copy is stale for exactly
+# the packages this project builds, and for no others.
+#
+# What that looked like: the first 0.1.1 attempt died with seven packages
+# "corrupted (invalid or corrupted package (checksum))" -- lcl-gui-bin, yay,
+# xdg-terminal-exec, ttf-ia-writer, cbonsai, moarchy-keyring, omarchy-config,
+# which is precisely the set that had just been rebuilt. pacman was right, and
+# the retry loop above absorbed it. But that loop is there for a slow mirror,
+# and a local cache going stale on every clean rebuild is not that: it cost a
+# whole pacstrap and read like a network fault.
+#
+# Only ours, and only by name. Everything else in the cache is an upstream
+# package whose filename does identify its contents, and re-downloading 1.26 GiB
+# to avoid thinking about that would be the wrong trade.
+for _p in "$PKGS"/*.pkg.tar.*; do
+  [ -e "$_p" ] || continue
+  rm -f "/var/cache/pacman/pkg/${_p##*/}" "/var/cache/pacman/pkg/${_p##*/}.sig"
+done
+
 mkdir -p "$WORK/repo"
 cp "$PKGS"/*.pkg.tar.* "$WORK/repo/"
 repo-add --quiet "$WORK/repo/moarchy.db.tar.gz" "$WORK/repo"/*.pkg.tar.* >/dev/null

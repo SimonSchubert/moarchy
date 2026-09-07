@@ -19,3 +19,8 @@ images/
 # The whole reason for choosing Releases over Pages was to keep ~120 MB of
 # binaries out of git history.
 repo/dist/
+
+# What a package build vouched for -- names, hashes, and the commit it came
+# from. Untracked and ignored on purpose: it describes a local build directory,
+# and scripts/build-image.sh refuses a tree with untracked files in it.
+packages/.build-manifest

@@ -43,6 +43,10 @@ compgen -G "$PKGDIR/*.pkg.tar.*" >/dev/null ||
 # moarchy-store-git r19 and r22 because of it. Refused rather than resolved
 # here -- see scripts/pkgset.sh.
 pkgset_unique "$PKGDIR" || die "$PKGDIR is ambiguous; nothing published"
+# And the other half: a lone leftover is not a duplicate, so pkgset_unique
+# cannot see it. On 2026-09-07 packages/ held moarchy-store-git r19 while the
+# manifest pinned r22, with nothing to compare it against.
+pkgset_vouched "$PKGDIR" || die "$PKGDIR holds files no build vouches for; nothing published"
 gpg --list-secret-keys "$KEYID" >/dev/null 2>&1 ||
   die "no secret key $KEYID -- run ./repo/genkey.sh, or import your backup"
 

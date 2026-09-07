@@ -47,6 +47,37 @@ say "uploading $(ls -1 "$DIST" | wc -l | tr -d ' ') files"
 # that the URLs are stable while the contents move.
 gh release upload "$TAG" "$DIST"/* --clobber
 
+# --- prune what this release is no longer made of ---------------------------
+# --clobber replaces an asset of the same name and does nothing about one that
+# has no counterpart here any more, so the release accumulates. It already has:
+# moarchy-store-git r19 sat beside r22 for a day, and moarchy 0.1.0-1 and -2
+# both outlived the database that named them.
+#
+# repo/build.sh rebuilds the database from scratch precisely so a phone is never
+# offered a version whose file is gone. The other half of that bargain is this:
+# a file no database names is not part of the repository, and leaving it there
+# means the tag's contents and its index disagree.
+#
+# Only ever files absent from $DIST, so what was just uploaded can never be a
+# candidate. PRUNE=0 keeps them.
+if [ "${PRUNE:-1}" = 1 ]; then
+  say "pruning assets this release does not contain"
+  _pruned=0
+  while IFS= read -r _asset; do
+    [ -n "$_asset" ] || continue
+    [ -e "$DIST/$_asset" ] && continue
+    info "removing $_asset"
+    gh release delete-asset "$TAG" "$_asset" --yes >/dev/null 2>&1 ||
+      info "!! could not remove $_asset"
+    _pruned=$(( _pruned + 1 ))
+  done <<EOF
+$(gh release view "$TAG" --json assets --jq '.assets[].name')
+EOF
+  [ "$_pruned" = 0 ] && info "nothing to prune" || info "$_pruned removed"
+else
+  info "PRUNE=0 -- leaving assets that are no longer part of this repository"
+fi
+
 say "verifying the database is actually reachable"
 NAME=$(manifest_get repo name) || exit 1
 code=$(curl -sL -o /dev/null -w '%{http_code}' "$SERVER/$NAME.db")

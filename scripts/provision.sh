@@ -104,7 +104,17 @@ step_build() {
   docker info >/dev/null 2>&1 || die "Docker is not running"
   docker build --platform linux/arm64 -f docker/Dockerfile.builder -t moarchy-builder . >/dev/null
   mkdir -p packages
-  docker run --rm --platform linux/arm64 -v "$PWD/packages:/out" moarchy-builder
+  # The commit goes in, because .dockerignore excludes .git and the container
+  # has no repository to ask. packages/.build-manifest records it beside the
+  # hashes, so a set of packages can say which tree it came from the same way an
+  # image can.
+  local _commit _dirty
+  _commit=$(git rev-parse HEAD 2>/dev/null || echo unknown)
+  _dirty=0; [ -n "$(git status --porcelain 2>/dev/null)" ] && _dirty=1
+  [ "$_dirty" = 1 ] && info "!! the working tree is dirty; these packages match no commit"
+  docker run --rm --platform linux/arm64 -v "$PWD/packages:/out" \
+    -e "COMMIT=$_commit" -e "DIRTY=$_dirty" -e "REBUILD=${REBUILD:-0}" \
+    moarchy-builder
   info "built: $(ls -1 packages/*.pkg.tar.* 2>/dev/null | wc -l | tr -d ' ') packages"
   info "  (the components, the AUR rebuilds, and pkgbuilds/: moarchy,"
   info "   omarchy-config and moarchy-meta)"

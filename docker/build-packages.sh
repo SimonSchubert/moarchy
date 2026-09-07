@@ -21,7 +21,80 @@ export PKGDEST="$OUT"
 # Dockerfile.builder copies manifest.toml in next to this script's reader.
 . /usr/local/share/moarchy/manifest.sh
 
+# REBUILD=1 rebuilds everything even when the artifact is already there. It has
+# to carry -f as well: without it makepkg refuses the overwrite, which is the
+# very refusal this flag exists to get past.
+FORCE=()
+[ "${REBUILD:-0}" = 1 ] && FORCE=(-f)
+
 failed=()
+skipped=()
+
+# Everything this build vouches for, name and hash, written to /out at the end.
+produced=()
+
+# already_built <dir> -- true when every file makepkg would produce is already
+# in PKGDEST.
+#
+# makepkg refuses to overwrite an existing artifact and exits non-zero saying
+# "A package has already been built", and until now that was recorded as a build
+# failure, indistinguishable from a compile error. A full rebuild into a
+# directory that already held the last one therefore ended with
+#
+#   ==> FAILED: moarchy-keyboard yay xdg-terminal-exec ... omarchy-config
+#       There is no fallback for moarchy-keyboard: without it the phone
+#       has no on-screen keyboard and no hardware one either.
+#
+# about eight packages that were sitting right there. A build's loudest line
+# being routinely wrong is worse than no line: it teaches you to skip it, and
+# the next one is real.
+#
+# --packagelist rather than a guess at the filename: it evaluates the PKGBUILD,
+# so it accounts for pkgver(), PKGEXT and PKGDEST. If it cannot be read, say so
+# and build -- an unreadable recipe is not a reason to skip one.
+already_built() {
+  [ "${REBUILD:-0}" = 1 ] && return 1
+  local dir="$1" list f
+  list=$( cd "$dir" && makepkg --packagelist 2>/dev/null ) || return 1
+  [ -n "$list" ] || return 1
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    [ -f "$f" ] || return 1
+  done <<< "$list"
+  return 0
+}
+
+# try_makepkg <dir> <args...> -- 0 built, 2 already there, 1 genuinely failed.
+#
+# The second signal, because --packagelist cannot always answer in advance. A
+# VCS package derives its version in pkgver(), which needs the sources fetched,
+# so `makepkg --packagelist` for moarchy-store-git says 0.1.0-1 while the build
+# produces 0.1.0.r22.c08a073-1. already_built therefore looks for a filename
+# that never exists, runs makepkg, and gets the refusal anyway.
+#
+# So the refusal itself is read. That covers the VCS case and anything else
+# --packagelist cannot predict, and it is the only place "has already been
+# built" is treated as anything other than a failure.
+try_makepkg() {
+  local dir="$1"; shift
+  local log rc
+  log=$(mktemp)
+  ( cd "$dir" && makepkg "$@" ) 2>&1 | tee "$log"
+  rc=${PIPESTATUS[0]}
+  if [ "$rc" = 0 ]; then rm -f "$log"; return 0; fi
+  if grep -q "has already been built" "$log"; then rm -f "$log"; return 2; fi
+  rm -f "$log"
+  return 1
+}
+
+# record <dir> -- add what makepkg would name for this recipe to the manifest.
+record() {
+  local dir="$1" list f
+  list=$( cd "$dir" && makepkg --packagelist 2>/dev/null ) || return 0
+  while IFS= read -r f; do
+    [ -n "$f" ] && [ -f "$f" ] && produced+=("$(basename "$f")")
+  done <<< "$list"
+}
 
 # Clone at a pin and prove it landed there. A checkout that silently resolves
 # to something else is the whole class of failure the manifest is for, so this
@@ -50,11 +123,19 @@ for component in moarchy-keyboard moarchy-store; do
   echo "==> $component @ ${c_ref:0:7}"
   if clone_pinned "$c_url" "/home/builder/$component" "$c_ref" \
        --filter=blob:none --no-checkout; then
-    if ( cd "/home/builder/$component/$c_dir" && makepkg -s --noconfirm --needed ); then
-      cp "/home/builder/$component/$c_dir"/*.pkg.tar.* "$OUT/" 2>/dev/null || true
+    if already_built "/home/builder/$component/$c_dir"; then
+      echo "    already in $OUT for this pin -- kept"
+      skipped+=("$component")
+      record "/home/builder/$component/$c_dir"
     else
-      echo "!! build failed: $component" >&2
-      failed+=("$component")
+      try_makepkg "/home/builder/$component/$c_dir" "${FORCE[@]}" -s --noconfirm --needed
+      case $? in
+        0) cp "/home/builder/$component/$c_dir"/*.pkg.tar.* "$OUT/" 2>/dev/null || true
+           record "/home/builder/$component/$c_dir" ;;
+        2) echo "    already in $OUT for this pin -- kept"
+           skipped+=("$component"); record "/home/builder/$component/$c_dir" ;;
+        *) echo "!! build failed: $component" >&2; failed+=("$component") ;;
+      esac
     fi
   else
     echo "!! clone failed: $component" >&2
@@ -76,11 +157,19 @@ for pkg in $packages; do
     failed+=("$pkg")
     continue
   fi
-  if ( cd "/home/builder/$pkg" && makepkg -s --noconfirm --needed ); then
-    cp "/home/builder/$pkg"/*.pkg.tar.* "$OUT/" 2>/dev/null || true
+  if already_built "/home/builder/$pkg"; then
+    echo "    already in $OUT for this pin -- kept"
+    skipped+=("$pkg")
+    record "/home/builder/$pkg"
   else
-    echo "!! build failed: $pkg" >&2
-    failed+=("$pkg")
+    try_makepkg "/home/builder/$pkg" "${FORCE[@]}" -s --noconfirm --needed
+    case $? in
+      0) cp "/home/builder/$pkg"/*.pkg.tar.* "$OUT/" 2>/dev/null || true
+         record "/home/builder/$pkg" ;;
+      2) echo "    already in $OUT for this pin -- kept"
+         skipped+=("$pkg"); record "/home/builder/$pkg" ;;
+      *) echo "!! build failed: $pkg" >&2; failed+=("$pkg") ;;
+    esac
   fi
 done
 
@@ -98,16 +187,53 @@ if [ -d /repo/pkgbuilds ]; then
   for d in /home/builder/repo/pkgbuilds/*/; do
     p=$(basename "$d")
     echo "==> $p (in-repo)"
-    if ! ( cd "$d" && makepkg --nodeps --noconfirm --nocheck ); then
-      echo "!! build failed: $p" >&2
-      failed+=("$p")
+    if already_built "$d"; then
+      echo "    already in $OUT for this version -- kept"
+      skipped+=("$p")
+      record "$d"
+    else
+      try_makepkg "$d" "${FORCE[@]}" --nodeps --noconfirm --nocheck
+      case $? in
+        0) record "$d" ;;
+        2) echo "    already in $OUT for this version -- kept"
+           skipped+=("$p"); record "$d" ;;
+        *) echo "!! build failed: $p" >&2; failed+=("$p") ;;
+      esac
     fi
   done
 fi
 
+# --- the manifest ----------------------------------------------------------
+# What this build vouches for, by name and by hash, so a later step can tell a
+# file this build produced from one left behind by an earlier one. A name alone
+# is not enough and today proved it three times over: moarchy-meta 0.1.0-1
+# existed as two different packages, seven cached .pkg.tar.xz files outlived
+# their bytes, and so did a published image. The hash is the part that makes a
+# filename mean something.
+#
+# COMMIT and DIRTY arrive from the host if the caller knows them --
+# .dockerignore excludes .git, so there is no repository in here to ask.
+{
+  echo "# moarchy package build"
+  echo "built=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "commit=${COMMIT:-unknown}"
+  echo "dirty=${DIRTY:-unknown}"
+  for f in "${produced[@]}"; do
+    [ -f "$OUT/$f" ] || continue
+    echo "$(sha256sum "$OUT/$f" | cut -d' ' -f1)  $f"
+  done
+} > "$OUT/.build-manifest"
+
 echo
 echo "==> built into $OUT:"
-ls -1 "$OUT" || true
+ls -1 "$OUT" | grep -v '^\.build-manifest$' || true
+
+if (( ${#skipped[@]} )); then
+  echo
+  echo "==> already present, not rebuilt: ${skipped[*]}"
+  echo "    Their pin has not moved and the artifact is in $OUT, so makepkg was"
+  echo "    not run. This is not a failure; REBUILD=1 forces one."
+fi
 
 if (( ${#failed[@]} )); then
   echo
