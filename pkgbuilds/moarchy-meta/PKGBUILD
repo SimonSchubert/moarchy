@@ -18,25 +18,29 @@ _ver=$(manifest_get moarchy version) || return 1
 
 pkgname=moarchy-meta
 pkgver=$_ver
-# 3, because the build toolchain below is new and 0.1.1-2 has since been built
-# -- packages/moarchy-meta-0.1.1-2-any.pkg.tar.xz -- so the waiver the next
-# paragraph granted itself cannot be taken twice. That artifact has to go
-# before the next build: pkgset_unique refuses a directory holding two of a
-# name rather than letting repo-add pick by glob order.
+# 2 covers everything since 0.1.1-1, which is what the [moarchy] repo actually
+# publishes: the list gaining mise-bin, nodejs and npm, losing lisgd in dafd34f,
+# and gaining the AUR build toolchain below. Three changes on one bump, and that
+# is not a waiver being stretched -- the rule is the one pkgbuilds/moarchy
+# states since 11b98fe. pkgrel moves when content has changed since the last
+# artifact that was PUBLISHED, and packages/ holding a 0.1.1-2 nobody has ever
+# installed is not that. Rebuilding it from a newer HEAD under the same version
+# hides nothing from anything, because no device holds it.
 #
-# 2 was for the list gaining mise-bin, nodejs and npm and losing lisgd, in
-# dafd34f, while manifest.toml's [moarchy] version stayed at 0.1.1. Both
-# changes rode that one bump because 0.1.1-2 had not been built yet. That is
-# the failure this package is most exposed to, because its entire content IS
-# the depends line: a change here that does not move the version is invisible
-# to pacman, which compares versions and not depends.
+# This paragraph said "built" rather than "published" until now, and briefly
+# bought a 3 that nothing needed.
+#
+# The distinction is worth the words because this package is the one most
+# exposed to getting it wrong in the other direction: its entire content IS the
+# depends line, so a change here that does not move the version is invisible to
+# pacman, which compares versions and not depends.
 #
 # It has been here before. It was 2 for 0.1.0 as well, after the list gained
 # gnome-contacts, geary, alligator, amberol, secrets and songrec and lost kclock
 # and index-fm with no version move at all -- so a phone already holding
 # 0.1.0-1 would never have seen any of it. Then pkgver moved to 0.1.1 and this
 # went back to 1, because 0.1.1-1 is already newer than 0.1.0-2.
-pkgrel=3
+pkgrel=2
 pkgdesc="The moarchy package set -- install this and you have the phone"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
