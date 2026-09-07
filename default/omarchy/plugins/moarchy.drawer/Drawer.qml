@@ -340,6 +340,39 @@ Item {
   // five settings rows is a query that was going to be narrowed anyway.
   readonly property int settingsLimit: 5
 
+  // The height a settings result is drawn at, named here because the fit
+  // below has to do arithmetic with it and a number in two places is a number
+  // that drifts.
+  readonly property int settingsRowHeight: Style.space(58)
+
+  // How many of them there is actually room for. `settingsLimit` is the
+  // editorial answer and the comment above is still the reason for it; this is
+  // the physical one, and with the on-screen keyboard up the two are very
+  // different numbers.
+  //
+  // Without this the section took its natural height first and the grid was
+  // left the remainder -- so typing one letter with the keyboard raised
+  // collapsed the apps to a 12px strip of icons clipped through their tops,
+  // with five timezone rows laid out in the space underneath. That is the
+  // "list with some icons on top" the limit above exists to prevent; it just
+  // could not see the keyboard coming.
+  //
+  // No binding loop: this reads sheetColumn.height and grid.y, and grid.y is
+  // fixed by the search pill above the grid rather than by the height this
+  // goes on to decide.
+  readonly property int settingsFit: {
+    if (!sheetColumn || !grid || !settingsCaption) return root.settingsLimit
+    var below = sheetColumn.height - grid.y
+    if (below <= 0) return root.settingsLimit
+    // One full row of apps survives whenever the query matched any, so the
+    // sheet cannot become a settings list wearing a search field.
+    var keep = root.appRows.length > 0 ? grid.cellHeight : 0
+    var room = below - keep - sheetColumn.spacing
+               - settingsCaption.height - root.gestureStrip
+    var per = root.settingsRowHeight + Style.space(4)
+    return Math.max(0, Math.min(root.settingsLimit, Math.floor(room / per)))
+  }
+
   // The whole of the matching. Everything else on this side is about which of
   // these the guards allow on screen.
   readonly property var settingsHits: Search.search(root.query, root.settingsLimit)
@@ -357,8 +390,9 @@ Item {
   readonly property var settingsRows: {
     var hits = root.settingsHits
     var answers = root.settingsGuards
+    var fit = root.settingsFit
     var out = []
-    for (var i = 0; i < hits.length; i++) {
+    for (var i = 0; i < hits.length && out.length < fit; i++) {
       var h = hits[i]
       if (h.row.when && answers[h.key] !== true) continue
       out.push(h)
@@ -937,6 +971,7 @@ Item {
 
 
       Column {
+        id: sheetColumn
         anchors.top: handleStrip.bottom
         anchors.left: parent.left
         anchors.right: parent.right
@@ -1155,6 +1190,7 @@ Item {
           bottomPadding: root.gestureStrip
 
           Text {
+            id: settingsCaption
             leftPadding: Style.space(6)
             topPadding: Style.space(6)
             bottomPadding: Style.space(2)
@@ -1180,7 +1216,7 @@ Item {
               // The height a Settings row is (docs/style.md I), because this is
               // one -- read here, tapped there, and a person should not be able
               // to tell which list they are looking at by its rhythm.
-              height: Style.space(58)
+              height: root.settingsRowHeight
 
               // Like the app cells above: the row has no chrome of its own, so
               // the veil is the chrome (H8). Guarded on `sheetDragging`, because
