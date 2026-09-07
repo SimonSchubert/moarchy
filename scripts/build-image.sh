@@ -46,6 +46,10 @@ if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
     exit 1
   fi
   printf '   ALLOW_DIRTY=1 -- continuing; this image is not reproducible\n' >&2
+  # And it has to reach the container, which asks the same question again off
+  # the DIRTY passed below. Without it this waiver got exactly as far as the
+  # `docker build`, and image/build.sh then refused with the very message that
+  # tells you to set the flag you had already set.
 fi
 
 mkdir -p "$OUTDIR"
@@ -75,6 +79,7 @@ docker run --rm --privileged --platform linux/arm64 \
   -e "XZ_LEVEL=${XZ_LEVEL:-9}" \
   -e "MOARCHY_SSH_KEY=${MOARCHY_SSH_KEY:+/key.pub}" \
   -e "COMMIT=$COMMIT" -e "DIRTY=$DIRTY" \
+  -e "ALLOW_DIRTY=${ALLOW_DIRTY:-0}" \
   ${MOARCHY_SSH_KEY:+-v "$MOARCHY_SSH_KEY:/key.pub:ro"} \
   moarchy-image
 
