@@ -554,6 +554,27 @@ if [[ ${1:-} == "--gestures" ]]; then
     [[ $out != *"Function not found"* && $out != *"Target not found"* ]]
   }
 
+  # Post a notification, from the tool this image actually has.
+  #
+  # `notify-send` is not on it -- libnotify is not installed and nothing pulls
+  # it in, which section 6p of the build log recorded about a different caller
+  # for the same reason. So every check that wanted a notification was posting
+  # into a `command not found`, swallowing it, and then reporting the empty
+  # history as the very failure it was hunting: H7 could not have passed on a
+  # stock image, and would have blamed the swipe.
+  #
+  # `omarchy-notification-send` is upstream's own and is on PATH here. -t, so a
+  # posted notification expires into the history rather than sitting as a live
+  # popup -- the history is what the shade lists and what these checks count.
+  # notify-send stays as the fallback for an image that does have it.
+  post_note() {
+    if command -v omarchy-notification-send >/dev/null 2>&1; then
+      omarchy-notification-send -t 2500 "$1" "$2" >/dev/null 2>&1
+    else
+      notify-send -t 2500 "$1" "$2" >/dev/null 2>&1
+    fi
+  }
+
   # Every check below names the acceptance criterion it proves, from
   # docs/gestures.md. That file is the contract; this is the part of it a
   # machine can check. An AC with no check here is visible by its absence --
@@ -853,11 +874,20 @@ print(found[0] if found else "")'; }
     sleep 3
 
     # --- H2. the shade follows the finger shut -----------------------------
-    # Started on the scrim, deliberately. The sheet stops at 90% of the usable
-    # height, so the bottom ~70 logical px of an open shade is scrim -- and
-    # that band is where a thumb starts an up-swipe. It answered `clicked` and
-    # nothing else, so the drag moved nothing and the release dismissed the
-    # shade outright.
+    # Started on the scrim, deliberately. The sheet is as tall as its content
+    # and stops at 90% of the usable height (S21, S22), so the band of scrim
+    # below it runs from ~70 logical px with the shade full to several hundred
+    # with it near empty -- and that band is where a thumb starts an up-swipe.
+    #
+    # y=650 logical is inside it at either extreme, and 250 of travel commits a
+    # close against any sheet (1 - 250/630 = 0.60, under closeFraction 0.75).
+    # The margin that is *not* generous is saturation: samples stop accruing
+    # once progress hits 0, which needs travel >= the sheet's height, and the
+    # shortest possible sheet -- no audio sink, no media, no notifications -- is
+    # ~272 against 250. Removing a row from the shade's chrome moves that.
+    #
+    # The band used to answer `clicked` and nothing else, so the drag moved
+    # nothing and the release dismissed the shade outright.
     #
     # The sample count is the whole assertion. `state` reaches `closed` just as
     # fast when the shade jumps shut, and the 220ms fall after release looks
@@ -996,14 +1026,14 @@ print(found[0] if found else "")'; }
     # so a swipe that does not land means a notification that cannot be
     # dismissed at all. Posted rather than waited for: a suite that needs a
     # real notification to arrive on its own tests nothing most of the time.
-    notify-send "moa-selftest" "swipe me away" >/dev/null 2>&1
+    post_note "moa-selftest" "swipe me away"
     sleep 3
     timeout 8 omarchy-shell shade open >/dev/null 2>&1
     sleep 3
     before_n=$(timeout 8 omarchy-shell shade notifications 2>/dev/null | grep -c . || true)
     if (( before_n == 0 )); then
       no "no notification to swipe, so H7 cannot be tested" \
-         "notify-send produced nothing the shade could see"
+         "posting a notification produced nothing the shade could see"
     else
       # Sideways across a card. The list is at the top, so the first card sits
       # just under the header.
@@ -1021,6 +1051,86 @@ print(found[0] if found else "")'; }
         noac H7 "the notification count went $before_n -> $after_n" \
                 "with no close button, a swipe that does not land leaves it undismissable"
       fi
+    fi
+    timeout 8 omarchy-shell shade close >/dev/null 2>&1
+    sleep 2
+
+    # --- S21/S22. the sheet is as tall as what is in it -------------------
+    # The shade used to be a fixed 90% of the usable height whatever it held,
+    # so an empty one was two thirds blank space below the sliders. It is its
+    # content's height now, capped at that same 90%.
+    #
+    # The second assertion is the one a capture could never make, and it is why
+    # the IPC exists: past the cap the overflow has to land in a *scrolling
+    # list* rather than off the bottom of the sheet. The sheet clips now, so
+    # both failures look identical from outside -- a sheet that ends at the cap.
+    if ! ipc_present shade sheet; then
+      printf '  \033[90m%-4s\033[0m   \033[90mS21 skipped: this shell has no `shade sheet`\033[0m\n' ""
+    else
+      # key=value on one line, the form the carousel's preview already uses.
+      sf() { timeout 8 omarchy-shell shade sheet 2>/dev/null | tr ' ' '\n' | sed -n "s/^$1=//p"; }
+
+      # Reopened after each post, and that is not padding.
+      #
+      # `historyRows` is filled by refresh(), which runs on open() and nowhere
+      # else, so a notification that arrives while the shade is already down
+      # does not join the list until it is next opened -- the sheet cannot grow
+      # under a shade you are looking at. That predates the sheet being its
+      # content's height (the list has always been read on open) and it is what
+      # a user sees, so it is what this check drives. A version of this check
+      # that posted without reopening measured the refresh, not the height.
+      #
+      # The sleeps are the history's own lag: a notification is written to disk
+      # when its toast expires, several seconds after it is posted, so a reopen
+      # that is too quick reads the directory as it was before.
+      reopen() {
+        timeout 8 omarchy-shell shade close >/dev/null 2>&1
+        sleep 1
+        timeout 8 omarchy-shell shade open >/dev/null 2>&1
+        sleep 3
+      }
+
+      timeout 8 omarchy-shell shade clear >/dev/null 2>&1
+      reopen
+      s_empty=$(sf height); s_cap=$(sf max)
+      post_note "moa-selftest" "grow the sheet"
+      sleep 8
+      reopen
+      s_one=$(sf height)
+      if [[ -z $s_empty || -z $s_cap || -z $s_one ]]; then
+        noac S21 "shade sheet answered nothing readable (empty=$s_empty one=$s_one cap=$s_cap)" \
+                 "the function is present but produced no key=value line"
+      elif (( s_one > s_empty && s_one < s_cap )); then
+        okac S21 "the sheet is as tall as its content ($s_empty -> $s_one, cap $s_cap)"
+      else
+        noac S21 "the sheet went $s_empty -> $s_one against a cap of $s_cap" \
+                 "a sheet that does not grow with a notification is the fixed 90% this replaced"
+      fi
+
+      for i in 1 2 3 4 5 6 7 8; do
+        post_note "moa-selftest" "fill the sheet $i"
+        sleep 1
+      done
+      sleep 8
+      reopen
+      s_h=$(sf height); s_scrolls=$(sf scrolls)
+      s_content=$(sf content); s_list=$(sf list); s_listmax=$(sf listmax)
+      if [[ -z $s_h || -z $s_scrolls || -z $s_content || -z $s_list ]]; then
+        noac S22 "shade sheet answered nothing readable at the cap" \
+                 "the function is present but produced no key=value line"
+      elif (( s_h == s_cap && s_scrolls == 1 && s_content > s_list )); then
+        okac S22 "at the cap the overflow scrolls ($s_content of content in $s_list)"
+      else
+        noac S22 "height=$s_h cap=$s_cap scrolls=$s_scrolls content=$s_content list=$s_list" \
+                 "content past the cap must land in a scrolling list, never off the sheet"
+      fi
+      # A listmax at or near zero means the chrome alone no longer fits the cap
+      # -- the sheet clips, so that is otherwise silent. Reported, not asserted:
+      # it is a property of the theme's spacing scale, not of this change.
+      [[ -n $s_listmax ]] && (( s_listmax < 40 )) \
+        && printf '        \033[90mlistmax=%s: the chrome nearly fills the cap on this theme\033[0m\n' "$s_listmax"
+
+      timeout 8 omarchy-shell shade clear >/dev/null 2>&1
     fi
     timeout 8 omarchy-shell shade close >/dev/null 2>&1
     sleep 2

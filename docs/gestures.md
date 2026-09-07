@@ -328,8 +328,11 @@ implementation stopped.
 → `omarchy-shell drawer dragTrace` leaves ≥ 8 samples; `drawer state` == `closed`
 
 **H2** Dragging **up** anywhere on the shade closes it, following the finger.
-"Anywhere" includes the band of scrim below the sheet -- the bottom ~70px of
-the screen, which is where a thumb starts an up-swipe. That band used to answer
+"Anywhere" includes the band of scrim below the sheet, which is where a thumb
+starts an up-swipe. That band is not a fixed height: the sheet is as tall as
+its content and stops at 90% of the usable height (`shade.md` S21, S22), so
+the band is ~70px with the shade full and several hundred with it near empty
+-- never less, which is what the cap is protecting. That band used to answer
 `clicked` and nothing else, so a drag begun there moved nothing and then
 dismissed the shade outright on release: it looked like a shade with no close
 animation, and it was one being shut by a tap that happened to have travelled

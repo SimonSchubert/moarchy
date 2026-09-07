@@ -97,15 +97,61 @@ Item {
 
   readonly property int screenHeight: shadeWindow.screen ? shadeWindow.screen.height : 720
 
-  // Deliberately short of the full screen. The band of scrim left underneath is
-  // the tap-to-dismiss target, and it is the only workable one: the drag handle
-  // is the status bar, so an upward drag to close would start within 26px of the
-  // top of the screen and have nowhere to travel. The home swipe closes the
-  // shade too, but a phone should not have exactly one way out of a full-screen
-  // panel.
+  // Deliberately short of the full screen -- and a cap now, not the height.
+  // The band of scrim left underneath is the tap-to-dismiss target, and it is
+  // the only workable one: the drag handle is the status bar, so an upward drag
+  // to close would start within 26px of the top of the screen and have nowhere
+  // to travel. The home swipe closes the shade too, but a phone should not have
+  // exactly one way out of a full-screen panel. A sheet shorter than the cap
+  // hands back more of that band, never less (docs/shade.md S22).
   readonly property real sheetFraction: 0.9
-  readonly property int sheetHeight:
+  readonly property int sheetMax:
     Math.max(1, Math.round((root.screenHeight - root.gestureStrip) * root.sheetFraction))
+
+  // The sheet's own inset. Named because the cap arithmetic and the layout both
+  // need it, and a second copy of Style.space(18) is how those two drift apart.
+  readonly property int sheetPadTop: Style.space(8)
+  readonly property int sheetPadBottom: Style.space(18)
+  readonly property int sheetPadSide: Style.space(12)
+  readonly property int sheetGap: Style.space(10)
+
+  // S21. As tall as what is in it. Measured off the Column rather than summed
+  // here: the volume slider, the media card and the notifications header each
+  // come and go, and a sum written at this end of the file would be a second
+  // layout to keep in step with the first.
+  readonly property int sheetWanted:
+    sheetColumn.implicitHeight + root.sheetPadTop + root.sheetPadBottom
+
+  // S22. The Math.min is belt and braces, not the mechanism. The cap is enforced
+  // one level down, on the list, whose own ceiling is derived from sheetMax -- so
+  // a sheet that would overrun becomes a sheet at exactly sheetMax with a
+  // *scrolling* list inside it, never one with its bottom cut off. The min only
+  // bites if the chrome alone outgrows the cap, and it fails safe toward keeping
+  // the scrim band.
+  readonly property int sheetTarget:
+    Math.max(1, Math.min(root.sheetMax, root.sheetWanted))
+
+  // S23. sheetHeight is the divisor for both drag mappings and the multiplier for
+  // the sheet's y, so a notification landing mid-drag would rescale the gesture
+  // under the finger: the sheet would grow downward as the same millimetre of
+  // thumb became worth less of it. Latched when the drag latches, released by
+  // this binding when it ends -- a condition stated once, rather than an
+  // assignment that a third drag entry point could forget.
+  //
+  // Latched from sheetHeight and not from sheetTarget, deliberately. If a growth
+  // is part-way through its Behavior when the finger arrives, what is on screen
+  // is the interpolated value; freezing at the target would snap the sheet at
+  // the instant of the press, which is the jump this exists to prevent.
+  property int sheetFrozen: 0
+  property int sheetHeight: root.dragging ? root.sheetFrozen : root.sheetTarget
+
+  // Both drag entry points go through this. The latch is written *before*
+  // `dragging` flips, so there is no frame in which the binding above can read a
+  // stale sheetFrozen.
+  function beginDrag(): void {
+    root.sheetFrozen = root.sheetHeight
+    root.dragging = true
+  }
 
   // -------------------------------------------------------------- type
   //
@@ -281,7 +327,7 @@ Item {
       // claiming it would fight the notification list (H5).
       if (dy >= -root.dragSlop) return
       root.sheetDragging = true
-      root.dragging = true
+      root.beginDrag()
     }
     var nowY = item.mapToItem(null, mouse.x, mouse.y).y
     var now = Date.now()
@@ -349,9 +395,20 @@ Item {
     if (!airplaneProbe.running) airplaneProbe.running = true
     if (!brightnessProbe.running) brightnessProbe.running = true
     if (!torchProbe.running) torchProbe.running = true
-    // Deferred: clearPopups() archives through the service's own serialised
-    // file-job queue, so reading the directory in the same tick shows the list
-    // as it was a moment before the shade opened.
+    // Twice, on purpose, and the deferred one is not the redundant one.
+    //
+    // Immediately, because the sheet is as tall as its content now, so the
+    // height it opens at has to be decided before the open animation starts.
+    // Without this the first open after a shell start opens at the
+    // no-notifications height and grows 250ms later -- a step the eye reads as a
+    // glitch rather than as an arrival.
+    //
+    // Deferred as well: clearPopups() archives through the service's own
+    // serialised file-job queue, so reading the directory in the same tick shows
+    // the list as it was a moment before the shade opened. The immediate read
+    // gets the height approximately right; the deferred one gets the contents
+    // exactly right.
+    if (!historyRead.running) historyRead.running = true
     historyRefresh.restart()
   }
 
@@ -388,6 +445,19 @@ Item {
     NumberAnimation { duration: 220; easing.type: Easing.OutCubic }
   }
 
+  // Only while the sheet is parked open. Shut, it is `visible: false` and
+  // animating its height is layout work for a surface with no pixels; mid-
+  // gesture the 220ms progress ramp already owns the frame budget and a second
+  // animated property on top of it buys nothing anyone can see. `opened` is
+  // exactly `progress >= 1 && !dragging`, which is both halves of that.
+  //
+  // 180 rather than the 220 the shade opens with: a list filling in is not a
+  // second open, and at 220 it reads as one.
+  Behavior on sheetHeight {
+    enabled: root.opened
+    NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
+  }
+
   // A touch sequence normally ends in released or canceled, but a compositor
   // restart or a lost seat can strand one. Left stranded mid-drag the surface
   // stays full-screen and the phone stops responding to touch entirely, which
@@ -409,6 +479,46 @@ Item {
 
     // The samples the last drag actually produced, as the drawer reports them.
     function dragTrace(): string { return root.dragTrace.join(" ") }
+
+    // S21/S22. The sheet is as tall as its content and no taller, and the list
+    // inside it scrolls once that would overrun the cap. Neither half is
+    // assertable from outside: `state` says `open` either way, and a capture of
+    // a short sheet and a tall one differ only in where a colour stops, which is
+    // a pixel comparison against a theme -- the kind of check I1 had to be
+    // rewritten to stop being.
+    //
+    // key=value, the form the carousel's preview line already uses. Each field
+    // earns its place:
+    //   height/wanted/max  the whole cap story. height == wanted below the cap,
+    //                      both == max at it. A sheet that stretched would show
+    //                      height > wanted; one truncating its own chrome would
+    //                      show wanted > max.
+    //   listy/listmax      where the list starts and what it may have. A listmax
+    //                      at or near 0 is a shade whose chrome no longer fits
+    //                      its own cap -- invisible now that the sheet clips.
+    //   list/content       the overflow itself, and the only direct evidence
+    //                      that there is more history than is being shown.
+    //   scrolls            what the list decided, read from its own binding
+    //                      rather than re-derived out here.
+    //
+    // `content` is the view's estimate for rows it has not built: exact below
+    // the cap, approximate above it. Assert `content > list`, never equality.
+    function sheet(): string {
+      return ["height=" + root.sheetHeight,
+              "wanted=" + root.sheetWanted,
+              "max=" + root.sheetMax,
+              "rows=" + root.historyRows.length,
+              "listy=" + Math.round(notificationList.y),
+              "listmax=" + notificationList.listMax,
+              "list=" + Math.round(notificationList.height),
+              "content=" + Math.round(notificationList.contentHeight),
+              "scrolls=" + (notificationList.interactive ? 1 : 0)].join(" ")
+    }
+
+    // S19 by another route. The check for a growing sheet has to start from a
+    // known-empty one, and tapping Clear all is not something a test can do
+    // without the touch device.
+    function clear(): string { root.clearNotifications(); return "ok" }
 
     function open(): string {
       if (root.shell) root.shell.summon(root.pluginId, "{}")
@@ -1123,13 +1233,17 @@ Item {
       visible: root.progress > 0
 
       // Tap-to-dismiss *and* the close drag (H2), because the band of scrim
-      // left below the sheet is the bottom ~70px of the screen -- which is
-      // where a thumb starts an up-swipe. Wired to the same trio as the sheet
-      // rather than to `clicked` alone: a MouseArea that only answers `clicked`
-      // still consumes the whole gesture, so an up-drag begun here moved
-      // nothing at all and then dismissed the shade outright on release. The
-      // shade appeared to have no close animation, and it had none -- it was
-      // being closed by a tap that happened to have travelled 250px.
+      // left below the sheet is where a thumb starts an up-swipe. That band is
+      // no longer a fixed ~70px: the sheet is as tall as its content, so the
+      // band is ~70px with the shade full and several hundred with it near
+      // empty. Never less -- that is what the cap is for (S22).
+      //
+      // Wired to the same trio as the sheet rather than to `clicked` alone: a
+      // MouseArea that only answers `clicked` still consumes the whole gesture,
+      // so an up-drag begun here moved nothing at all and then dismissed the
+      // shade outright on release. The shade appeared to have no close
+      // animation, and it had none -- it was being closed by a tap that
+      // happened to have travelled 250px.
       //
       // Gated on `progress`, NOT on `opened`, and that is the same trap the
       // drawer's keyboardFocus documents. `opened` goes false on the first
@@ -1155,6 +1269,17 @@ Item {
       height: root.sheetHeight
       y: -root.sheetHeight * (1 - root.progress)
       visible: root.progress > 0
+
+      // The height animates and the content's does not -- the Column's
+      // implicitHeight jumps to its new value the instant the model changes --
+      // so for the 180ms of a growth the content is taller than the box it sits
+      // in, and the newly arrived card would be painted on the scrim below the
+      // rounded edge. Axis-aligned and unrotated, so the scene graph does this
+      // with a scissor rect rather than a stencil pass or an off-screen render:
+      // one GL call per frame, which is the only reason it is affordable on a
+      // Mali-400. Rotating or layering this Item would turn it into a real
+      // off-screen pass.
+      clip: true
 
       // Rounded at the bottom only: the sheet slides out from under the top
       // edge, so its top corners are never on screen and rounding them would
@@ -1183,12 +1308,24 @@ Item {
       }
 
       Column {
-        anchors.fill: parent
-        anchors.leftMargin: Style.space(12)
-        anchors.rightMargin: Style.space(12)
-        anchors.topMargin: Style.space(8)
-        anchors.bottomMargin: Style.space(18)
-        spacing: Style.space(10)
+        id: sheetColumn
+        // Top/left/right, not fill: the sheet's height is derived from this
+        // Column's implicitHeight now, and a Column stretched to fill the thing
+        // it is measuring is a binding loop -- height -> implicitHeight ->
+        // sheetHeight -> height. Qt reports that once and then leaves the
+        // property at whatever it last held, which renders as a sheet stuck at
+        // one frame's guess.
+        //
+        // The bottom inset has nowhere to hang without a bottom anchor, so it
+        // moves into sheetWanted. Drop it there and the sheet is 18px short and
+        // every card sits on the rounded corner.
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.leftMargin: root.sheetPadSide
+        anchors.rightMargin: root.sheetPadSide
+        anchors.topMargin: root.sheetPadTop
+        spacing: root.sheetGap
 
         // ------------------------------------------------------- header
         Item {
@@ -1423,7 +1560,11 @@ Item {
           // (docs/style.md E1-E3).
           width: parent.width
           height: Style.space(24)
-          visible: notificationList.count > 0
+          // Off the model, not off `notificationList.count`. The sheet's height
+          // is this Column's implicitHeight now, so nothing that decides that
+          // height may be read back out of the list item -- model data and
+          // static heights only, and the loop cannot be reintroduced by accident.
+          visible: root.historyRows.length > 0
 
           Text {
             anchors.left: parent.left
@@ -1460,17 +1601,55 @@ Item {
         ListView {
           id: notificationList
           width: parent.width
+
+          // A ListView with an empty model is not a zero-height item: the height
+          // below is `contentHeight + bottomMargin`, which with no rows is the
+          // margin alone -- and a *visible* zero-height child of a Column still
+          // takes a gap above it. That is two stray bands at the foot of a sheet
+          // whose whole point is to end where its content does. Read off the
+          // model rather than `count`, for the reason the header above states.
+          visible: root.historyRows.length > 0
+
+          // The cap, and the reason the sheet's own height appears nowhere in it.
+          // The sheet is as tall as this Column now, so a list measured against
+          // the sheet would be measured against itself -- a binding loop.
+          //
+          // `y` is safe where `parent.height` is not: a Column sets each child's
+          // y from the heights of the children *before* it, and this is the last
+          // one, so y cannot depend on this list's height. Anything added below
+          // this item breaks that, which is why nothing is.
+          readonly property int listMax: Math.max(0, root.sheetMax
+            - root.sheetPadTop - root.sheetPadBottom - notificationList.y)
+
           // Only as tall as its rows. Stretched to fill, an empty or short
           // list still covers the sheet below it and swallows a drag that
           // starts there -- a Flickable takes the press whether or not it has
           // anything to show at that point. Capped, the sheet's own drag (H2)
           // gets those touches; with more notifications than fit, this is the
           // full height again and scrolls as before.
-          height: Math.min(Math.max(0, parent.height - y), contentHeight)
+          //
+          // + bottomMargin, or the cap defeats itself. contentHeight is the rows
+          // and their spacing alone -- Flickable's margins sit outside it and
+          // extend the scrollable range -- so a list that fits becomes scrollable
+          // by exactly the margin, interactive where it was not, swallowing the
+          // close drag the cap exists to protect. The drawer's grid carries the
+          // same note for the same reason.
+          height: Math.min(notificationList.listMax, contentHeight + bottomMargin)
           // H5: while it can scroll, the list owns vertical drags. Closing the
           // shade out from under someone reading their notifications is
           // exactly the conflict this gesture is not allowed to create.
           interactive: contentHeight > height
+          // The house default in every other list in this shell, and missing
+          // only here: without it a capped list rubber-bands past the sheet's
+          // rounded bottom on every overscroll.
+          boundsBehavior: Flickable.StopAtBounds
+          // contentHeight is an estimate for rows the view has not built, which
+          // puts a damped feedback path through C++ polish rather than through
+          // bindings -- it never warns, and it can wobble by a delegate right at
+          // the cap. A buffer of a whole sheet forces every row within reach of
+          // the viewport to exist, so contentHeight is exact across the range
+          // that decides the height. ~21 text delegates worst case.
+          cacheBuffer: root.sheetMax
           clip: true
           spacing: Style.space(6)
           // Room for the sheet's rounded bottom, so a list that overflows ends
@@ -1607,7 +1786,7 @@ Item {
         root.lastT = Date.now()
         root.startProgress = root.progress
         root.velocity = 0
-        root.dragging = true
+        root.beginDrag()
         watchdog.restart()
       }
 

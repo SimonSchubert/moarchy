@@ -1542,6 +1542,98 @@ blocking on a done-file that never arrives, and `omarchy-launch-about` printing
 process that holds the screen and does nothing reads as the feature not
 existing.
 
+## 6q. A shade the size of what is in it (2026-09-07)
+
+The sheet was a fixed 90% of the usable height whatever it held, so an empty
+shade was two thirds blank space below the sliders and a full one was no
+bigger. `shade.md` had carried that as an open question -- **? S21**, the only
+`?` left in the file -- since the sheet was written. It is answered now: the
+sheet is its content's height, capped at the same 90%, and at the cap the list
+scrolls. Measured on the device: **330 logical px empty, 454 with one
+notification, 630 at the cap**, against 630 for everything before.
+
+**The cap stays, and it is not slack.** The band of scrim under the sheet is
+the tap-to-dismiss target and where a thumb starts H2's up-drag; the drag
+handle is the status bar, so a sheet allowed the full screen would leave an
+upward drag starting within 26px of the top with nowhere to go. A short sheet
+now hands back *more* of that band -- H2 got easier, not harder, and measured
+52 drag samples on a 330 sheet against 16 on a 630 one.
+
+**Half of it was already built.** The `ListView` was capped to `contentHeight`
+with `interactive` gated on overflow -- the fix two sections up, which handed
+the empty space back to the sheet's own drag. The list already took only what
+it needed and already scrolled. What was missing was the sheet noticing.
+
+**The whole change is one causality reversal, and everything else follows.**
+The sheet's height used to flow down into the Column (`anchors.fill`) and into
+the list (`parent.height - y`). It flows *up* now: list -> Column
+`implicitHeight` -> `sheetWanted` -> sheet. Which makes the old downward reads
+binding loops, so both had to go -- the Column anchors top/left/right, and the
+list caps against `sheetMax` (a constant) minus its own `y`. `y` is safe where
+`parent.height` is not, because a `Column` sets each child's y from the
+children *before* it and the list is the last one. Qt answers a loop by
+reporting it once and then leaving the property at whatever it last held, which
+would render as a sheet stuck at one frame's guess.
+
+Three things that were not obvious, all of which bit:
+
+- **A `Column`'s bottom inset has nowhere to live once the Column stops
+  filling.** `anchors.bottomMargin` is gone; the 18px moved into `sheetWanted`.
+  Drop it and every card sits on the rounded corner.
+- **An empty `ListView` is not a zero-height item.** Its height is
+  `contentHeight + bottomMargin`, which with no rows is the margin alone -- and
+  a *visible* zero-height child of a Column still takes a gap above it. Two
+  stray bands at the foot of a sheet whose whole purpose is to end where its
+  content does. It is `visible: historyRows.length > 0` now, read off the model
+  rather than off `count` so that nothing deciding the height reads back out of
+  the list item.
+- **`contentHeight` does not include the Flickable's margins.** So the drawer's
+  `+ bottomMargin` on the cap is required and does not double-count -- without
+  it a list that exactly fits becomes scrollable by exactly the margin,
+  interactive where it was not, swallowing the close drag the cap exists to
+  protect. The shade's list was also the only one in the shell without
+  `boundsBehavior: StopAtBounds`.
+
+**The height must not move under a finger.** It is the divisor for both drag
+mappings and the multiplier for the sheet's `y`, so a notification landing
+mid-drag would grow the sheet downward while making the same millimetre of
+thumb worth less of it. `sheetHeight` is `dragging ? sheetFrozen : sheetTarget`
+and both drag entry points go through one `beginDrag()` -- a condition stated
+once rather than an assignment a third entry point could forget. Latched from
+`sheetHeight`, not `sheetTarget`, so a growth caught mid-animation freezes at
+what is on screen. Verified by clearing the list mid-drag: 630 held through
+`dragging 92%` and `dragging 86%`, then settled to 330 on release.
+
+**The sheet had to start clipping.** The height animates over 180ms and the
+Column's `implicitHeight` does not -- it jumps the instant the model changes --
+so for the length of a growth the content is taller than the box, and the new
+card would paint on the scrim below the rounded edge. Axis-aligned and
+unrotated, so this is a scissor rect rather than a stencil pass: one GL call,
+which is the only reason it is affordable here. The corners are still a
+rectangular clip against a 28px radius, so a card can peek into ~16px of
+corner-bite for 180ms. Accepted; a true rounded clip is the off-screen pass
+that ruled out theme previews.
+
+**And the shade now reads its history twice on open.** `open()` archives the
+live popups and then deferred the disk read by 250ms, which was invisible while
+the sheet was a fixed height and is a 60px step 100ms after it settles now that
+it is not. The immediate read decides the height before the open animation
+starts; the deferred one still gets the contents right, because `clearPopups()`
+archives through the service's own serialised queue.
+
+**A check that could not have passed.** `moarchy-selftest` posts with
+`notify-send`, and this image has no libnotify -- the same finding as 6p, one
+caller over. H7 was posting into a `command not found`, swallowing it, and then
+reporting the empty history as the swipe having failed. It would have blamed
+the gesture. `post_note` goes through `omarchy-notification-send` now, which is
+what exists here, and H7 passes for the first time on a stock image.
+
+The new S21/S22 check reads a `shade sheet` IPC line rather than a capture:
+`height=630 wanted=630 max=630 rows=8 listy=348 listmax=256 list=256
+content=602 scrolls=1`. The second half is the part no screenshot could make --
+now that the sheet clips, content that overflowed *into a scrolling list* and
+content that fell off the bottom of the sheet look identical from outside.
+
 ## 7. Hardware status
 
 | | |

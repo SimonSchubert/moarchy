@@ -23,8 +23,9 @@ Ids are `S<n>`, cited by any check that proves one.
 | media | title and transport, when something is playing |
 | notifications | history, newest first, with a clear-all |
 
-The sheet is 90% of the screen height below the gesture strip. Everything
-scrolls only in the notification list; the rest is fixed.
+The sheet is as tall as what is in it, up to 90% of the screen height below
+the gesture strip. Everything scrolls only in the notification list; the rest
+is fixed.
 
 ## S1–S3. Header
 
@@ -258,12 +259,38 @@ emptying the shade from depending on knowing about H7's swipe.
 
 **S20** The list is the only scrolling region on the sheet, and while it can
 scroll it keeps vertical drags — the shade must never close out from under
-someone reading it (`gestures.md` H5). When it fits, it gives that space back.
+someone reading it (`gestures.md` H5). When it fits, it gives that space back,
+and so does the sheet: it ends where the list does (S21).
 
-**? S21** With no notifications the list is simply empty — no "no
-notifications" placeholder, and no change to the sheet's height.
-— confirm: the sheet is a fixed 90%, so an empty list leaves a large blank
-area below the sliders.
+**S21** The sheet is as tall as its content. With no notifications it ends
+below the sliders; every card that arrives extends it. There is still no "no
+notifications" placeholder — an empty list is simply empty, and the sheet now
+stops there rather than holding two thirds of the screen blank underneath it.
+
+**? S21a** The sheet grows *per open*, not live: a notification that arrives
+while the shade is already down does not join the list, or extend the sheet,
+until it is next opened.
+— confirm: this is not new and not about the height. `historyRows` is filled
+by `refresh()`, which runs on `open()` and nowhere else, so the list has always
+behaved this way; the height simply follows whatever the list holds. Making it
+live means watching the notification service rather than re-reading the history
+directory on open, which is a change to S18, not to this.
+
+**S22** It stops growing at 90% of the height below the gesture strip, and at
+that cap the list scrolls rather than the sheet growing further (S20).
+
+The cap is not slack. The band of scrim left underneath is the tap-to-dismiss
+target and where a thumb starts the up-drag that closes the shade
+(`gestures.md` H2), and the drag handle is the status bar, so a sheet allowed
+to reach the full screen would leave an upward drag starting within 26px of
+the top with nowhere to travel. A short sheet hands back more of that band,
+never less.
+
+**S23** The height never changes under a finger. It is latched when a drag
+begins and released when it ends: the sheet's own height is the divisor for
+both drag mappings (`gestures.md` D2a, 1:1 against the sheet it moves), so a
+notification landing mid-gesture would otherwise grow the sheet downward while
+making the same millimetre of thumb worth less of it.
 
 ---
 
