@@ -33,6 +33,8 @@ import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
 import qs.Ui as Ui
+import "../moarchy.common/Theme.js" as Theme
+import "../moarchy.common" as Shared
 
 Item {
   id: root
@@ -93,67 +95,20 @@ Item {
   // measured across all 22 colors.toml files -- and no single alpha clears AA
   // everywhere without being loud enough to stop reading as secondary. Walk
   // from quiet toward the foreground and stop the moment it is legible. Same
-  // arithmetic as moarchy.settings/Settings.qml; four small pure
-  // functions rather than an import, because plugins are separate directories
-  // and a relative path across them is the kind of thing that breaks silently.
-  readonly property color subdued: root.readableOn(root.surface, Color.menu.text,
+  // arithmetic every other surface uses, because it is now literally the same
+  // code: moarchy.common/Theme.js. It was copied into six files under a comment
+  // saying an import across plugin directories "breaks silently"; that was
+  // never tested, and when it was it turned out to work (docs/refactor.md E1).
+  readonly property color subdued: Theme.readableOn(root.surface, Color.menu.text,
                                                    0.55, 4.5)
 
-  // ------------------------------------------------------- press (style.md H)
-  //
-  // One blended quad the size of the chrome, the control's own ink at 12%
-  // composited over whatever the resting fill is -- so a control whose colour
-  // already says something keeps saying it while pressed (H2).
-  //
-  // Both ends are one ink at two alphas, never "transparent". That is
-  // #00000000 and it carries black: a ColorAnimation to it would fade through
-  // a grey wash, and Qt.tint over it returns 12% grey rather than 12% ink (H3).
-  //
-  // Instant in, 120 out (H5). A Behavior reads `enabled` at the moment of the
-  // write, when the property still holds the *old* colour -- so this is false
-  // arriving and true leaving, with no second binding to order against.
-  //
-  // Culled at rest rather than drawn transparent: nothing in the scene graph
-  // culls an alpha-0 rectangle, and this is a Mali-400.
-  component PressVeil: Rectangle {
-    id: pv
-    property color ink: root.textOnSurface
-    property bool on: false
-    visible: pv.color.a > 0
-    color: Util.alpha(pv.ink, pv.on ? 0.12 : 0)
-    Behavior on color {
-      enabled: pv.color.a > 0
-      ColorAnimation { duration: 120 }
-    }
-  }
+  // The veil is shared (docs/refactor.md E2); the default ink is this
+  // surface's own, which is the half a shared type cannot know (style.md H2).
+  component PressVeil: Shared.PressVeil { ink: root.textOnSurface }
 
   // Matches the bar and the Settings list. See moarchy.bar's textWeight
   // for the ink measurements behind DemiBold.
   readonly property int textWeight: Font.DemiBold
-
-  function luminance(c) {
-    function chan(v) { return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4) }
-    return 0.2126 * chan(c.r) + 0.7152 * chan(c.g) + 0.0722 * chan(c.b)
-  }
-
-  function contrastRatio(a, b) {
-    var la = root.luminance(a), lb = root.luminance(b)
-    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
-  }
-
-  function mix(bg, fg, a) {
-    return Qt.rgba(bg.r + a * (fg.r - bg.r),
-                   bg.g + a * (fg.g - bg.g),
-                   bg.b + a * (fg.b - bg.b), 1)
-  }
-
-  function readableOn(bg, fg, from, minRatio) {
-    for (var a = from; a < 1.0; a += 0.01) {
-      var c = root.mix(bg, fg, a)
-      if (root.contrastRatio(c, bg) >= minRatio) return c
-    }
-    return fg
-  }
 
   function open(payloadJson) {
     if (root.shell && typeof root.shell.isPluginOpen === "function") {

@@ -212,26 +212,59 @@ component is named by its filename.
 Anything §E lands has to re-prove this, because the packaged path is what
 matters and a `/usr/share` edit is not a package.
 
-**E2** `PressVeil` is defined once. Nine copies today, 27 lines each counting
-the banner comment they all share — 243 lines of one text:
-`Device.qml:70`, `Recents.qml:289`, `Themes.qml:118`, `Wifi.qml:122`,
-`Drawer.qml:281`, `Bluetooth.qml:146`, `Settings.qml:204`, `SettingsRow.qml:60`,
-`Shade.qml:231`. Eight are byte-identical; `SettingsRow`'s differs in one line,
-the default for `ink`, which is already a property.
+**E2** `PressVeil` is defined once, in `moarchy.common/PressVeil.qml`. *Done for
+seven of nine plugins.*
 
-**E3** `luminance`, `contrastRatio`, `mix` and `readableOn` are defined once.
-Six copies, byte-identical function bodies, 24–40 lines per file counting
-banners: `Bluetooth.qml:157`, `Drawer.qml:292`, `Recents.qml:300`,
-`Settings.qml:236`, `Shade.qml:242`, `Themes.qml:133`.
+Each plugin keeps a one-line inline component rather than importing the type at
+every call site:
 
-**E4** The strip height is one number. Seven declarations of `Style.space(20)`
+```qml
+component PressVeil: Shared.PressVeil { ink: root.textOnSurface }
+```
+
+That shape is forced and is the better answer. `ink` must default to the
+*surface's own* text colour (`style.md` H2), which a shared type cannot know —
+and 20 of the 29 call sites relied on that default. Binding it once per plugin
+leaves all 29 untouched, so 27 duplicated lines become one line that says
+something true about its own screen. `SettingsRow`'s default is `card.textColor`
+rather than `root.textOnSurface`, which is exactly the per-plugin fact this
+line exists to carry.
+
+**E3** `luminance`, `contrastRatio`, `mix` and `readableOn` are defined once, in
+`moarchy.common/Theme.js`. *Done for six of six plugins that had them;* the ten
+external call sites now read `Theme.readableOn(…)` / `Theme.mix(…)`.
+
+`.pragma library`, so there is one instance rather than a copy per importing
+component. That was the risk in this AC: a library script has no QML component
+scope, and `mix()` returns `Qt.rgba(…)`. **Verified on the device** — the shade
+and the drawer both draw their `subdued` greys legibly, and a `mix()` that threw
+would leave `subdued` undefined, which paints black on a dark surface rather
+than failing loudly.
+
+> **322 lines removed from seven files, 43 added.** `Settings.qml` and
+> `SettingsRow.qml` are not migrated: another session owns them and had them
+> open. They are named in `style-check.sh`'s `E7_EXEMPT`, so the debt is
+> counted rather than invisible, and E7 fails the day that list stops
+> describing reality.
+
+**E4** *Not done, and not by omission.* The strip height is one number. Seven
+declarations of `Style.space(20)`
 today — `Service.qml:68` as `stripHeight`, and `gestureStrip` in `Shade.qml:89`,
 `Themes.qml:76`, `Wifi.qml:88`, `Bluetooth.qml:108`, `Drawer.qml:223`,
 `Settings.qml:158` — each carrying a comment saying it must match the others.
 The comments are right, which is the problem: a constraint stated six times is
 not enforced once.
 
-**E5** The extended-sheet margin (`gestures.md` I5a) is written once. Five
+> **Blocked on a mechanism E1 did not test.** This number is
+> `Style.space(20)`, and `Style` is a QML singleton from `qs.Commons` — which a
+> `.pragma library` script cannot reach, so `Theme.js` is the wrong home for
+> it. The options are a `qmldir` declaring a singleton in `moarchy.common`, or
+> a plain item each plugin instantiates. E1 verified a *directory import with
+> no qmldir*; adding one changes the shape and has to be proved on the device
+> before six files depend on it. Deliberately left rather than guessed.
+
+**E5** *Not done.* The extended-sheet margin (`gestures.md` I5a) is written
+once. Five
 copies, three spellings of the focus condition: `Wifi.qml:479`,
 `Bluetooth.qml:631`, `Themes.qml:358`, `Drawer.qml:756`, `Settings.qml:1130`.
 
@@ -242,14 +275,37 @@ declarations* stay per-surface, because C1's two palettes are real; the
 arithmetic underneath them stops being copied six times, and C3 points at the
 one implementation.
 
-**E7** `scripts/style-check.sh` gains a duplication check: no two plugin files
-contain the same function body. A rule that only lives in this file is a rule
-the tenth plugin breaks — the same argument `style.md` opens with.
+**E7** `scripts/style-check.sh` gains a duplication check. *Done.* No plugin
+outside `moarchy.common` defines `PressVeil` or any of the four colour
+functions. A rule that only lives in this file is a rule the tenth plugin
+breaks — the same argument `style.md` opens with.
 
-**E8** The common dir is not a plugin. It carries no `manifest.json`, so the
-patched `PluginRegistry` scan (`pkgbuilds/omarchy-config/port-4x.patch:436`)
-skips it, and `pkgbuilds/moarchy/PKGBUILD` copies it with everything else in
-`default/omarchy/plugins/`.
+The exemption list is part of the check, not a hole in it. `E7_EXEMPT` names
+the two un-migrated files, and the check **also fails when an exemption stops
+describing anything** — a stale entry reads as remaining debt and would
+silence a real regression in that file. Both failing branches were run: a
+`PressVeil` put back into `Device.qml` fails it, and adding `Wifi.qml` to the
+exemption list fails it.
+
+**E8** The common dir is not a plugin. *Done.* It carries no `manifest.json`, so
+the patched `PluginRegistry` scan (`pkgbuilds/omarchy-config/port-4x.patch:436`)
+skips it — verified on the device, all eleven plugins still load and the scan
+logs nothing — and `pkgbuilds/moarchy/PKGBUILD` copies it with everything else
+in `default/omarchy/plugins/` because `cp -a` takes the tree. That last part is
+load-bearing rather than incidental: a plugin whose import target did not ship
+would fail to load, so the PKGBUILD now says so where the copy happens.
+
+**E9** The press veil is still drawn under a finger. **Not verified.** The
+plugins load, the surfaces render and no `ink` binding failed, but a veil is
+invisible at rest by construction (`visible: color.a > 0`), so a screenshot of
+an idle screen proves nothing about it. Two synthetic-touch attempts measured
+zero difference and both were the *test* failing, not the code: `sudo` resets
+PATH, so `sudo moarchy-touch` was never found, and the error went into a
+`/dev/null` I had put there. With the absolute path it ran — and by then
+another session had the phone with an app focused, so the touch went into their
+surface. It needs the device to itself.
+→ `sudo /usr/lib/moarchy/bin/moarchy-touch hold 130 330 5000` over an open
+shade, `grim` mid-hold, and the Silent tile lifts by 12% of its own ink
 
 ---
 
@@ -317,7 +373,10 @@ Ordered by value over risk, not by section number.
    canonical list now lives in `moarchy.gestures`, and eight plugins reading it
    across a plugin boundary is the cross-directory question §E1 exists to
    answer. Doing it before E1 would build the coupling twice.
-5. **§E** — blocked on E1, which needs the phone.
+5. **§E2, E3, E7, E8** — the shared module and seven of nine plugins. *Done;
+   E9 unverified.* **§E4, E5** and the last two plugins remain: E4 needs a
+   singleton mechanism nothing has tested, E5 and the two files need the
+   session that owns them.
 6. **§F** — the largest win and the largest risk; last, on top of a green G1.
 
 **Verified on the device, 2026-09-07** (192.168.0.18, plugin and bins deployed

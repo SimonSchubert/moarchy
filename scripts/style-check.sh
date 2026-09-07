@@ -148,6 +148,64 @@ else
   no "style violations" "$report"
 fi
 
+# --- E7: nothing that lives in moarchy.common is written out again ----------
+# docs/refactor.md E2, E3, E7. PressVeil stood in nine files at 27 identical
+# lines apiece and the colour maths in six at twenty, each under a comment
+# explaining that an import across plugin directories could not be relied on.
+# It can (E1), so the copies are gone -- and this is what stops them coming
+# back one screen at a time, which is exactly how they arrived.
+#
+# Named exceptions rather than a silent pass. moarchy.settings is another
+# session's file (docs/refactor.md Open questions) and is migrated in a second
+# pass; listing it here means the day it is migrated this check tightens by
+# deleting a line, and until then the debt is counted rather than invisible.
+printf '\nE. shared code\n'
+E7_EXEMPT="moarchy.settings/Settings.qml moarchy.settings/SettingsRow.qml"
+e7=$(python3 - "$PLUGINS" "$E7_EXEMPT" <<'PY'
+import pathlib, re, sys
+
+owned = {
+    "component PressVeil": r"^\s*component PressVeil\s*:\s*Rectangle",
+    "function luminance": r"^\s*function luminance\s*\(",
+    "function contrastRatio": r"^\s*function contrastRatio\s*\(",
+    "function mix": r"^\s*function mix\s*\(",
+    "function readableOn": r"^\s*function readableOn\s*\(",
+}
+exempt = set(sys.argv[2].split())
+problems, stale = [], []
+
+for path in sorted(pathlib.Path(sys.argv[1]).glob("*/*.qml")):
+    rel = f"{path.parent.name}/{path.name}"
+    if path.parent.name == "moarchy.common":
+        continue
+    text = path.read_text()
+    hits = [name for name, rx in owned.items()
+            if re.search(rx, text, re.M)]
+    if not hits:
+        if rel in exempt:
+            stale.append(rel)
+        continue
+    if rel in exempt:
+        continue
+    problems.append(f"{rel}  defines {', '.join(hits)}; "
+                    "import it from moarchy.common instead")
+
+# An exemption that no longer describes anything is worse than none: it reads
+# as remaining debt and silences a real regression in that file.
+for rel in stale:
+    problems.append(f"{rel}  is listed as an E7 exception but defines none of "
+                    "the shared types; drop it from E7_EXEMPT")
+
+print("\n".join(problems))
+PY
+)
+if [[ -z $e7 ]]; then
+  ok "PressVeil and the colour maths exist once, in moarchy.common (E2, E3, E7)"
+  [[ -n $E7_EXEMPT ]] && printf '        still to migrate: %s\n' "$E7_EXEMPT"
+else
+  no "shared code written out again (E7)" "$e7"
+fi
+
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 printf 'E (touch targets) and F (text inputs) are not checked here -- they need the phone.\n'
 [[ $fail -eq 0 ]]

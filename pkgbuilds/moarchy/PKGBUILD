@@ -84,6 +84,13 @@ package() {
   # default/omarchy/plugins/ -- they used to be copied into every home and are
   # upgraded now by upgrading the package. Deliberately not counted here: the
   # count moves and a number in a comment does not.
+  #
+  # Not every directory under it is a plugin. moarchy.common carries no
+  # manifest.json and is imported by relative path from the ones that are
+  # (docs/refactor.md E1, E8); the registry's scan skips it because the scan
+  # is keyed on the manifest, which is verified on the device rather than
+  # assumed. It ships with the rest because `cp -a` takes the tree, and it has
+  # to: a plugin whose import target did not ship would fail to load.
   install -d "$pkgdir/usr/share/moarchy/plugins"
   cp -a "$_repo"/default/omarchy/plugins/. "$pkgdir/usr/share/moarchy/plugins/"
 
