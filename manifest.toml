@@ -77,6 +77,23 @@ version = "0.1.0"
 # Its PKGBUILD is at the repo root, unlike the keyboard's.
 pkgbuilddir = "."
 
+# Notes and checklists, kept on the device. A default app rather than something
+# to install, because a phone with no way to write a note down is missing
+# something a phone is for -- and it is pure Python against the GTK4/libadwaita
+# stack the image already carries for Clocks, Text Editor and the rest, so it
+# costs the image almost nothing.
+#
+# The only one of the three pinned twice over, and it is the shape the other
+# two should grow into. `ref` pins the packaging, exactly as above -- but its
+# PKGBUILD sources a release asset with a sha256sum rather than cloning at
+# HEAD, so the pin names the exact code as well. The keyboard's note above and
+# the store's below are both about that gap; this one does not have it.
+[moarchy-keep]
+url     = "https://github.com/SimonSchubert/moarchy-keep"
+ref     = "ddc7dcad790e16b32c043a7632a810c6076d70d6"
+version = "0.1.0"
+pkgbuilddir = "aur/moarchy-keep"
+
 # ---------------------------------------------------------------------------
 # AUR packages with no aarch64 binary anywhere -- neither in Arch Linux ARM nor
 # in Omarchy's own repo, which has no aarch64 tree at all

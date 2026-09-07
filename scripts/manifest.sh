@@ -81,6 +81,48 @@ manifest_get() {
 # The AUR half of the package list. docker/build-packages.sh reads it here and
 # pkgbuilds/moarchy-meta names the same packages in depends, so pacman resolves
 # what used to be resolved by three lists with two of them right (P5).
+# manifest_components -- the sections that name a `pkgbuilddir`, in file order.
+#
+# Our own repos, built from a PKGBUILD they carry themselves. Derived rather
+# than listed: docker/build-packages.sh looped over a hardcoded
+# `moarchy-keyboard moarchy-store`, which is the second list this file exists to
+# abolish -- a component could be pinned here and simply never built, and the
+# way you would find out is a package missing from an image.
+#
+# `pkgbuilddir` is the marker because it is already the thing that makes a
+# section buildable: it says where in the clone the PKGBUILD lives. [aur.*]
+# pins, [repo], [danctnix] and [builder] do not have one and are not this.
+#
+# File order is load-bearing and cheap to keep: the keyboard is pinned first
+# and is built first, because it is the component whose absence leaves the
+# phone with no way to type at all.
+manifest_components() {
+  if [ ! -f "$MANIFEST_FILE" ]; then
+    echo "manifest: no such file: $MANIFEST_FILE" >&2
+    return 1
+  fi
+
+  _manifest_comps=$(awk '
+    /^[ \t]*#/ { next }
+    /^[ \t]*\[/ {
+      sec = $0
+      sub(/^[ \t]*\[/, "", sec)
+      sub(/\][ \t]*$/, "", sec)
+      next
+    }
+    /^[ \t]*pkgbuilddir[ \t]*=/ { if (sec != "") print sec }
+  ' "$MANIFEST_FILE")
+
+  # Same reasoning as below: empty means the file was unreadable or its shape
+  # moved, never that this project has no components of its own.
+  if [ -z "$_manifest_comps" ]; then
+    echo "manifest: no sections with a pkgbuilddir in $MANIFEST_FILE" >&2
+    return 1
+  fi
+
+  printf '%s\n' "$_manifest_comps"
+}
+
 manifest_aur_packages() {
   if [ ! -f "$MANIFEST_FILE" ]; then
     echo "manifest: no such file: $MANIFEST_FILE" >&2

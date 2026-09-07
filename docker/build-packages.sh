@@ -111,11 +111,14 @@ clone_pinned() {   # clone_pinned <url> <dir> <ref> [extra git-clone args...]
   fi
 }
 
-# The two components with their own repos. Not AUR packages, so they are not
-# in the list below; each names its own PKGBUILD directory in the manifest.
-# The keyboard is built first, because it is the one whose absence leaves the
-# phone with no way to type at all.
-for component in moarchy-keyboard moarchy-store; do
+# The components with their own repos. Not AUR packages, so they are not in the
+# list below; each names its own PKGBUILD directory in the manifest, and naming
+# one is what puts it here -- the loop used to spell out `moarchy-keyboard
+# moarchy-store`, so a component could be pinned in manifest.toml and simply
+# never built, with a package missing from an image as the way you found out.
+# Order is the manifest's, and the keyboard is pinned first because it is the
+# component whose absence leaves the phone with no way to type at all.
+for component in $(manifest_components); do
   c_url=$(manifest_get "$component" url) || { failed+=("$component"); continue; }
   c_ref=$(manifest_get "$component" ref) || { failed+=("$component"); continue; }
   c_dir=$(manifest_get "$component" pkgbuilddir) || { failed+=("$component"); continue; }

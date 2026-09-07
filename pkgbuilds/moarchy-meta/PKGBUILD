@@ -235,6 +235,16 @@ depends=(
   # Both families are chosen for the 360px screen: GNOME's libadwaita and KDE's
   # Kirigami apps reflow natively, and neither needs its own session -- they are
   # ordinary Wayland clients under Sway.
+  # Ours, and in this list for the same reason the rest of it is here: a phone
+  # you cannot write a note on is missing something a phone is for, and the
+  # drawer should not send you to the store for it. Pure Python on the
+  # GTK4/libadwaita stack the apps below already pull in, so it adds a
+  # dependency to nothing.
+  #
+  # Pinned in manifest.toml like the keyboard and the store, and built from the
+  # PKGBUILD its own repo carries (docs/structure.md B1-B2).
+  'moarchy-keep'
+
   'gnome-clocks'
   'gnome-text-editor'
   'loupe'
