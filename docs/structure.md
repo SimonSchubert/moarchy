@@ -339,9 +339,10 @@ absent.
 
 **I1** `image/` produces `moarchy-pinephone-<version>-<date>.img.xz` and a
 `.sha256`, from a single command, with no phone attached. **Met 2026-09-06:**
-`./scripts/build-image.sh` → **1.25 GB compressed**, 771 packages, and a
-`.packages` manifest beside it (V4). (0.1.0 was 1.2 GB and 747 packages; the
-version is in the filename because two of them sit in `images/` at once.)
+`./scripts/build-image.sh` → **1,242.8 MiB compressed**, 6,414 MiB expanded,
+791 packages, and a `.packages` manifest beside it (V4). (0.1.1 was 1.25 GB and
+771 packages, 0.1.0 1.2 GB and 747; the version is in the filename because
+several of them sit in `images/` at once.)
 
 **I2** The rootfs is built by `pacstrap`-ing into a directory: DanctNIX's base
 plus `moarchy-meta` from the `moarchy` repo. It is never produced by
