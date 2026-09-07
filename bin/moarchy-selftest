@@ -2994,6 +2994,83 @@ print(r["x"], r["y"], r["width"], r["height"])'
          "the inset stays dropped for the rest of the session and the keyboard stops rising"
     fi
     close_ drawer
+
+    # --- I5d. closing an overlay must not raise the keyboard ---------------
+    #
+    # The workspace rect and not `Visible`, because the rect is the compositor's
+    # own number: the keyboard's exclusive zone shortens it by the panel height,
+    # so 674 becomes 474 on this screen the moment the keyboard is up. Measured
+    # against `Visible` throughout and the two agreed on every sample here, but
+    # only one of them is evidence about what is on screen.
+    #
+    # An app with a text input focused underneath, and that precondition is the
+    # whole check. The keyboard comes back because sway re-activates the window
+    # the overlay was covering; with nothing to re-activate there is no handback
+    # and this passes on an empty stage -- measured 0 of 4 on a bare home screen
+    # against 4 of 4 with an app, which is exactly why the bug read as
+    # intermittent for so long.
+    osk_set() { busctl --user call sm.puri.OSK0 /sm/puri/OSK0 sm.puri.OSK0 \
+                       SetVisible b "$1" >/dev/null 2>&1; }
+    ws_h() { swaymsg -t get_workspaces 2>/dev/null \
+               | jq -r '.[]|select(.focused)|.rect.height'; }
+
+    setsid foot --app-id=moa-i5d -e sh -c 'while :; do sleep 300; done' \
+      >/dev/null 2>&1 </dev/null &
+    sleep 4
+    swaymsg '[app_id=moa-i5d] focus' >/dev/null 2>&1
+    sleep 2
+
+    if [[ -z $(ws_h) ]]; then
+      no "I5d could not read the workspace rect" "swaymsg or jq is unavailable"
+    else
+      i5d_bad=""
+      for sheet in drawer settings themes; do
+        osk_set false; sleep 2
+        i5d_before=$(ws_h)
+        open_ "$sheet"
+        close_ "$sheet"
+        # Sampled over 3s rather than read once, for F3's reason: a single late
+        # reading cannot tell "never went up" from "went up and something put it
+        # back down", and on a shared phone that second case is real.
+        i5d_up=0
+        for _ in 1 2 3 4 5 6; do
+          sleep 0.5
+          [[ $(ws_h) != "$i5d_before" ]] && i5d_up=$(( i5d_up + 1 ))
+        done
+        (( i5d_up == 0 )) || i5d_bad="$i5d_bad $sheet:$i5d_up/6"
+        omarchy-shell "$sheet" close >/dev/null 2>&1
+      done
+      if [[ -z $i5d_bad ]]; then
+        ok "I5d closing the drawer, Settings and the theme picker leaves the keyboard down"
+      else
+        no "I5d the keyboard came up after closing:$i5d_bad" \
+           "an overlay hands the window underneath its text input back; it must put the keyboard away on the way out"
+      fi
+    fi
+
+    # --- I5e. the inset follows the keyboard, not the field ----------------
+    #
+    # Forced up with the field deliberately untouched, which is the state I5a's
+    # `activeFocus` gate cannot see and I5d reaches on its own. Without the
+    # second term the drawer keeps its negative inset and its last row of icons
+    # paints over the keyboard's top key row.
+    osk_set false; sleep 2
+    open_ drawer
+    osk_set true; sleep 3
+    e_focused=$(omarchy-shell drawer searchTarget 2>/dev/null \
+                  | tr ' ' '\n' | sed -n 's/^focused=//p')
+    e_margin=$(g drawer margin)
+    if ! osk_up; then
+      printf '  \033[90m%-4s\033[0m   \033[90mI5e skipped: the keyboard would not come up\033[0m\n' ""
+    elif [[ $e_focused == false && -n $e_margin && $e_margin == 0 ]]; then
+      ok "I5e the inset lifts for a keyboard the search field did not raise"
+    else
+      no "I5e focused=${e_focused:-?} margin=${e_margin:-?}, wanted focused=false margin=0" \
+         "the sheet's last row is drawn over the keyboard's top key row"
+    fi
+    close_ drawer
+    osk_set false
+    swaymsg '[app_id=moa-i5d] kill' >/dev/null 2>&1
   else
     printf '  \033[90m%-4s\033[0m   \033[90mI5 skipped: needs the touch injector and passwordless sudo\033[0m\n' ""
   fi

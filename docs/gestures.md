@@ -480,6 +480,77 @@ raising the keyboard at all.
 reports `focused=false` and `drawer geometry` reports `margin` equal to
 `-<strip>`
 
+**I5d** Closing an overlay never *raises* the on-screen keyboard. It may leave
+it down and it may put it down; it may not put it up.
+
+Reported as "sometimes when I close the app drawer the keyboard shows up", and
+it is F3 one rung down: the keyboard does not pop up, it fails to go down. An
+overlay that declares `WlrKeyboardFocus.Exclusive` takes the seat's keyboard
+while it is up, which deactivates the window underneath and lowers the keyboard
+with it. On unmap sway re-activates that window, its `zwp_text_input_v3`
+re-enters, and the keyboard rises -- so the drawer hands back a keyboard the
+user had not asked for, standing on whatever is now on screen.
+
+The cause is the exclusive grab and not the drawer, and the four sheets separate
+on exactly that line. Measured 2026-09-07 on 0.1.1-1, three closes each with a
+focused `foot` underneath:
+
+| | `keyboardFocus` | raised |
+| --- | --- | --- |
+| drawer | `Exclusive` while up | 3/3 |
+| Settings | `Exclusive` while up | 3/3 |
+| theme picker | `Exclusive` while up | 3/3 |
+| shade | `None` | 0/3 |
+
+With nothing focused underneath it never fires -- 0 of 4 on a bare home screen,
+4 of 4 with an app -- which is the whole of the "sometimes" and the reason a
+home-screen test reads as "not reproducible". The drawer is the one that gets
+reported because it is the one you dismiss most, and because a blank workspace
+is where you open it: the app that takes the keyboard back is the one left
+running on another workspace.
+
+The fix is F3's, for F3's reason -- an unconditional `SetVisible false` on the
+dismissal path, which F3 measured as sticking even with a text field still
+focused. It is deliberately *not* conditional on the keyboard having been down
+beforehand: that question needs the DBus probe's round trip, and G2's comment
+already records what acting on a stale answer costs. The cost of the
+unconditional call is that dismissing an overlay over an app you were typing in
+puts the keyboard away, and you tap the field again. That is the same trade F3
+made and the same one G1 makes -- on this phone a dismissal puts things away.
+
+Hand-offs are the exception, and they are why the call cannot simply live in
+every `close()`. `activateSetting` and `launch` on the drawer, and `dismiss`
+on Settings and the theme picker, close one surface in order to open another;
+firing the hide there robs the successor of a keyboard it may be about to want.
+→ with an app focused, open and close each of the drawer, Settings and the theme
+picker: the focused workspace's `rect.height` is unchanged across the close, at
+6 samples over 3s. One late reading cannot tell "never went up" from "went up
+and something put it down"
+
+**I5e** The bottom inset follows the keyboard rather than the field. I5a gates
+it on `activeFocus` as a stand-in for "the keyboard is up", and I5d is the proof
+that the stand-in can be wrong in the direction I5a cannot see: keyboard up,
+field not focused. The inset then stays at `-<strip>` with the keyboard under
+it, and the sheet's last row paints over the top key row -- the same
+`qwertyuiop`-reduced-to-a-sliver picture I5a records from before the gate
+existed, reached by a different road.
+
+The signal is the compositor's own configure, which is already what `geometry`
+reports and already what makes that field evidence. On this panel the granted
+height is 694 or 674 with the keyboard down and 494 or 474 with it up -- the two
+clusters are 180px apart, so no threshold between them can be walked into by the
+20px the inset itself moves. `activeFocus` is not merely a worse signal here, it
+is a *lagging* one: it answers about the field, and the field is only one of the
+things that raises a keyboard.
+
+It matters even with I5d fixed. The hide is `execDetached` and the keyboard
+takes time to retract, so every close with the keyboard up spends the slide
+animation in exactly this state.
+→ with the drawer open and the keyboard forced up on `sm.puri.OSK0` rather than
+by a tap, `drawer geometry` reports `margin=0` while `searchTarget` reports
+`focused=false`. Forced, because a tap would focus the field and hand the answer
+to the term this AC exists to check the *other* one against
+
 **I6** The pill still works over all four, and none of them needs a mask to
 manage it. All four are on Top -- the keyboard included, deliberately, because
 on Overlay it would map before the strip and take the bottom exclusive zone the

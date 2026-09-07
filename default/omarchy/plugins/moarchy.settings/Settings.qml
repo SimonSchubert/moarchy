@@ -134,6 +134,40 @@ Item {
   property var inputMap: ({})
   property string focusedInput: ""
 
+  // What the on-screen keyboard reserves at the bottom. Duplicated from
+  // moarchy.gestures for the reason gestureStrip below is, and deliberately not
+  // through Style.space: it is moarchy-keyboard's panel and that client never
+  // sees this theme's spacing scale. Only ever half of a threshold (I5e), so it
+  // has to be nowhere near either cluster rather than exact.
+  readonly property int keyboardPanelHeight: 200
+
+  // I5e. Is the keyboard up? Asked of the compositor's configure, because
+  // `focusedInput` answers a different question -- see the inset binding below.
+  // False while the surface is down, so a stale height from before the last
+  // unmap cannot drop the inset on the first frame of the next open.
+  readonly property bool keyboardUp:
+    settingsWindow.visible && settingsWindow.screen
+    && settingsWindow.height < settingsWindow.screen.height - root.keyboardPanelHeight / 2
+
+  // I5d. Put the keyboard away on the way out. This surface holds the seat's
+  // keyboard while it is up, so sway re-activates the window underneath on the
+  // unmap and its text input brings the keyboard back -- measured 3 of 3 with
+  // an app focused underneath, against 0 of 3 for the shade, which takes no
+  // keyboard. Fire-and-forget for F3's reason: the answer is not needed and a
+  // dismissal must not wait on a round trip.
+  function hideKeyboard(): void {
+    Quickshell.execDetached(["busctl", "--user", "call", "sm.puri.OSK0",
+                             "/sm/puri/OSK0", "sm.puri.OSK0", "SetVisible",
+                             "b", "false"])
+  }
+
+  // Set for the length of a dismissal that exists to open something else --
+  // hideOnly()'s callers, and dismiss() when it has somewhere to go back to --
+  // and cleared by the close() it guards. Every one of those is about to stand
+  // something up that may want the keyboard, and a screenshot or a terminal is
+  // not improved by racing a SetVisible against it.
+  property bool handingOff: false
+
   function inputValue(id) {
     var v = root.inputMap[id]
     return v === undefined ? "" : String(v)
@@ -379,6 +413,9 @@ Item {
     }
 
     root.returnTo = ""
+    // A hand-off that never reached an unmap must not silence the next real
+    // close (I5d).
+    root.handingOff = false
     var start = "root"
     var resume = false
     var pending = ""
@@ -453,6 +490,10 @@ Item {
     root.stack = root.quietStack
     root.resetReadState()
     root.resetFields()
+    // A quiet open never mapped and so never took the keyboard: there is no
+    // handback to undo, and firing the hide here would put away a keyboard this
+    // screen was never over (I5d).
+    root.handingOff = true
     root.hideOnly()
   }
 
@@ -518,7 +559,15 @@ Item {
   // Hidden, not closed. Every hide in this shell lands here -- shell.hide()
   // calls it -- so `running` deliberately survives: the card stays in the
   // carousel and the stack stays standing for K5 to resume.
-  function close() { root.opened = false }
+  //
+  // Which is exactly why the keyboard hide belongs here and not in dismiss():
+  // the gestures that put this screen away (the back swipe, the up-flick, going
+  // home) never reach dismiss() at all, and they are the ones that leave a
+  // keyboard standing (I5d).
+  function close() {
+    if (!root.handingOff) root.hideKeyboard()
+    root.opened = false
+  }
 
   // K6. Closed for good: the card leaves the carousel and the next opening is
   // a fresh one at the root. Exactly two gestures reach this -- flicking the
@@ -548,6 +597,9 @@ Item {
   function dismiss() {
     var back = root.returnTo
     root.returnTo = ""
+    // Going back to whoever opened us is a hand-off and the keyboard is theirs
+    // to decide about; closing to nothing is not (I5d).
+    root.handingOff = back !== ""
     root.quit()
     if (back && root.shell && typeof root.shell.summon === "function")
       root.shell.summon(back, "{}")
@@ -813,6 +865,9 @@ Item {
     if (row.type === "plugin") {
       var target = String(row.plugin)
       var here = root.currentPage
+      // A hand-off: Wi-Fi and Bluetooth both stand up a passphrase field, and
+      // forcing the keyboard down here would race it (I5d).
+      root.handingOff = true
       root.hideOnly()
       if (root.shell && typeof root.shell.summon === "function")
         root.shell.summon(target, JSON.stringify({ returnTo: root.pluginId,
@@ -828,7 +883,9 @@ Item {
       // through mise and then opens it. It is the same reason the action branch
       // below hides: a foot window mapped under a full-screen layer surface is
       // indistinguishable from a tap that did nothing.
-      if (row.hides && !root.dryRun) root.hideOnly()
+      // The command being run is the thing that gets to ask for a keyboard --
+      // this row exists to open a terminal (I5d).
+      if (row.hides && !root.dryRun) { root.handingOff = true; root.hideOnly() }
       root.runCommand(root.commandFor(row))
       // Re-read rather than assume: the reader is the truth, and a write that
       // did not take must not leave the tick moved.
@@ -857,7 +914,7 @@ Item {
     // action, link. Settings goes away first so the terminal or the vendored
     // picker is not underneath a layer surface -- and so a screenshot is not
     // a screenshot of this screen.
-    if (!root.dryRun) root.hideOnly()
+    if (!root.dryRun) { root.handingOff = true; root.hideOnly() }
     root.runCommand(cmd)
   }
 
@@ -1097,6 +1154,28 @@ Item {
     }
   }
 
+
+  // I5d, second half. The keyboard is raised *by* the unmap -- sway re-activates
+  // the window this surface was covering and its text input re-enters -- so a
+  // SetVisible sent from close() is answering a question that has not been
+  // asked yet, and the handback undoes it.
+  //
+  // Measured with the close()-time call alone: the theme picker passed 0 of 6
+  // and the drawer and Settings failed 6 of 6, on identical code. The variable
+  // is how much runs between the call and the surface actually going away --
+  // the drawer animates its progress to 0 over 200ms and the busctl lands well
+  // inside that window.
+  //
+  // So it is repeated once the surface is down. Both are kept and they do
+  // different jobs: the early one takes the keyboard away as the sheet leaves,
+  // which is what stops it flashing, and this one is the only one guaranteed to
+  // be after the handback.
+  Timer {
+    id: keyboardRetreat
+    interval: 250
+    onTriggered: root.hideKeyboard()
+  }
+
   // --------------------------------------------------------------- surface
   PanelWindow {
     id: settingsWindow
@@ -1104,6 +1183,18 @@ Item {
     visible: root.opened
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
+
+    // I5d. The unmap is the event that raises the keyboard, so it is also the
+    // event that has to put it away. `handingOff` is consumed here rather than
+    // in close(): for the drawer close() runs a whole animation before the
+    // surface goes, and a flag cleared at the top of it would be gone by the
+    // time this ran.
+    onVisibleChanged: {
+      if (visible) return
+      if (!root.handingOff) keyboardRetreat.restart()
+      root.handingOff = false
+    }
+
 
     WlrLayershell.namespace: "moarchy-settings"
     WlrLayershell.layer: WlrLayer.Top
@@ -1130,10 +1221,18 @@ Item {
     // Gated on focus since Set a reminder gave Settings its first text field
     // (J11). The inset is what lets the sheet draw under the gesture strip;
     // while a field has the keyboard it has to go, or the field ends up behind
-    // it. Keyed on focus rather than on the keyboard being visible, because
-    // focus is the signal that arrives first -- the same arrangement the Wi-Fi
-    // passphrase field and the drawer's search field use.
-    margins.bottom: root.focusedInput !== "" ? 0 : -root.gestureStrip
+    // it. Focus is the signal that arrives first -- the same arrangement the
+    // Wi-Fi passphrase field and the drawer's search field use.
+    //
+    // But focus alone answers only for a keyboard *this* surface raised, and
+    // I5d is the proof that is not the only kind: closing an overlay hands the
+    // window underneath its text input back and the keyboard comes up with
+    // nothing here focused at all. `keyboardUp` covers that gap, read off the
+    // compositor's configure. OR, so this can only drop the inset in more cases
+    // than before and never in fewer. See the drawer's copy for the measured
+    // clusters the threshold sits between (I5e).
+    margins.bottom: (root.focusedInput !== "" || root.keyboardUp)
+                    ? 0 : -root.gestureStrip
     WlrLayershell.keyboardFocus: root.opened ? WlrKeyboardFocus.Exclusive
                                              : WlrKeyboardFocus.None
 

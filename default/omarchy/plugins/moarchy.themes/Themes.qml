@@ -162,6 +162,9 @@ Item {
     }
     root.opened = true
     root.returnTo = ""
+    // A hand-off that never reached an unmap must not silence the next real
+    // close (I5d).
+    root.handingOff = false
     root.returnPage = ""
     try {
       var payload = JSON.parse(String(payloadJson || "{}"))
@@ -173,13 +176,35 @@ Item {
     root.scan()
   }
 
+  // I5d. Put the keyboard away on the way out, for the reason the drawer's
+  // close() spells out at length: this surface holds the seat's keyboard while
+  // it is up, so sway re-activates the window underneath on the unmap and its
+  // text input brings the keyboard back with it. Measured 3 of 3 with an app
+  // focused underneath, against 0 of 3 for the shade, which takes no keyboard.
+  //
+  // No inset gate to go with it (I5e). This screen has no text field, so the
+  // keyboard is only ever over it because something else forced it up.
+  function hideKeyboard(): void {
+    Quickshell.execDetached(["busctl", "--user", "call", "sm.puri.OSK0",
+                             "/sm/puri/OSK0", "sm.puri.OSK0", "SetVisible",
+                             "b", "false"])
+  }
+
+  // Set for the length of a dismissal that exists to open something else, and
+  // cleared by the close() it guards.
+  property bool handingOff: false
+
   function close() {
+    if (!root.handingOff) root.hideKeyboard()
     root.opened = false
   }
 
   function dismiss() {
     var back = root.returnTo
     var page = root.returnPage
+    // Going back to whoever opened us is a hand-off, so the keyboard is theirs
+    // to decide about. Closing to nothing is not.
+    root.handingOff = back !== ""
     if (root.shell && typeof root.shell.hide === "function") root.shell.hide(root.pluginId)
     else root.close()
     if (back && root.shell && typeof root.shell.summon === "function")
@@ -325,12 +350,38 @@ Item {
     }
   }
 
+  // I5d, second half. The keyboard is raised *by* the unmap -- sway re-activates
+  // the window this surface was covering and its text input re-enters -- so a
+  // SetVisible sent from close() is answering a question that has not been
+  // asked yet, and the handback undoes it.
+  //
+  // This screen happened to pass on the close()-time call alone while the drawer
+  // and Settings failed 6 of 6 on identical code, and that is exactly why it
+  // gets this too: what differed was how much ran between the call and the
+  // surface going away, which is timing and not a property of the screen.
+  Timer {
+    id: keyboardRetreat
+    interval: 250
+    onTriggered: root.hideKeyboard()
+  }
+
   PanelWindow {
     id: themeWindow
 
     visible: root.opened
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
+
+    // I5d. The unmap is the event that raises the keyboard, so it is also the
+    // event that has to put it away. `handingOff` is consumed here rather than
+    // in close(), so that one flag is cleared in one place across all three
+    // sheets -- and on the drawer close() runs a whole animation before its
+    // surface goes.
+    onVisibleChanged: {
+      if (visible) return
+      if (!root.handingOff) keyboardRetreat.restart()
+      root.handingOff = false
+    }
 
     WlrLayershell.namespace: "moarchy-themes"
     WlrLayershell.layer: WlrLayer.Top
