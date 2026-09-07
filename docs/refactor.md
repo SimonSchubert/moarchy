@@ -94,8 +94,19 @@ added after it. Both plugins define `quit()` (`Wifi.qml:395`,
 reached.
 
 → On the phone: `omarchy-shell wifi open`, then `omarchy-shell gestures back`.
-It must answer with Wi-Fi closing and the app behind it still open. **Derived
-from the source; not yet reproduced on the device.**
+It must answer with Wi-Fi closing and the app behind it still open.
+
+> **Reproduced on the device, 2026-09-07.** One `foot` on workspace 1, Wi-Fi
+> opened over it, `gestures back`:
+>
+> | Build | Wi-Fi after back | Windows |
+> | --- | --- | --- |
+> | pre-fix (`c8e07e4`) | still **open** | 1 → **0** |
+> | post-fix | **closed** | 1 → 1 |
+>
+> The pre-fix run is the failing branch, run deliberately: a check that only
+> ever sees the fixed build cannot tell a fix from a check that measures
+> nothing.
 
 **B5** Back over a shell app *ends* it rather than parking it, and does not
 return to whatever opened it. This is K6 already, and it is what Settings has
@@ -180,14 +191,26 @@ next `wake` would have refused.
 
 ## E. Shared plugin code
 
-**E1** A plugin can import from a sibling directory, or this section does not
-happen. `moarchy.settings/Settings.qml:38` already does
-`import "Pages.js" as Pages`, so Quickshell resolves plugin QML by file URL and
-relative paths work *within* a plugin. Whether `"../moarchy.common/Theme.js"`
-resolves has to be shown on the device before anything is moved.
-→ `omarchy-shell <plugin> state` answers after a shell restart, and the journal
-carries no import error (`qt-on-arch-logs-to-journald`: it goes to journald, not
-to a file)
+**E1** A plugin can import from a sibling directory. **Answered on the device,
+2026-09-07: yes, in both forms.** `moarchy.device` was given a probe against a
+throwaway `/usr/share/moarchy/plugins/moarchy.common/`, the shell restarted
+through `swaymsg exec` so it kept its seat, and `omarchy-shell device geometry`
+came back `common=common-ok veil=ok`:
+
+| Form | Import | Result |
+| --- | --- | --- |
+| JS library | `import "../moarchy.common/Theme.js" as Common` | `Common.marker()` ran |
+| QML component | `import "../moarchy.common" as Shared` | `Shared.PressVeil {}` constructed |
+
+Two things fell out of the same run and both matter. The directory has no
+`manifest.json` and the patched `PluginRegistry` skipped it silently — all
+eleven plugins still answered their IPC, and `~/.local/state/moarchy/shell.log`
+carried no scan warning. And a directory import needs no `qmldir`: the
+component is named by its filename.
+
+→ the probe is not in the repo; it was created, read and removed on the device.
+Anything §E lands has to re-prove this, because the packaged path is what
+matters and a `/usr/share` edit is not a package.
 
 **E2** `PressVeil` is defined once. Nine copies today, 27 lines each counting
 the banner comment they all share — 243 lines of one text:
@@ -297,10 +320,24 @@ Ordered by value over risk, not by section number.
 5. **§E** — blocked on E1, which needs the phone.
 6. **§F** — the largest win and the largest risk; last, on top of a green G1.
 
-Nothing in 1–3 has run on the phone. `bash -n` passes on every script touched,
-the QML balances, and `scripts/style-check.sh` passes — but a QML file that
-parses here is not a plugin that loads there (`offscreen-cannot-parse-check`),
-and G1 and G3 are both device checks.
+**Verified on the device, 2026-09-07** (192.168.0.18, plugin and bins deployed
+into `/usr/share/moarchy` and `/usr/lib/moarchy/bin`, shell restarted through
+`swaymsg exec`):
+
+| | Result |
+| --- | --- |
+| B4 | pre-fix kills the app behind Wi-Fi and leaves the sheet up; post-fix closes Wi-Fi and the window survives |
+| C1 | both implementations answer 1, then 3, then 4 as workspaces are taken — including `3:web`, where the old `int(name)` rule picks 3, which is occupied |
+| C3 | selftest: *both free-workspace implementations answer 2* |
+| D1–D3 | `blank` darkens without setting the flag; `wake` restores; `brightness-display on` under a lock leaves the panel dark and the flag set; unlocked, the same call lights it |
+| A1, A3 | `moarchy-gestures` is off PATH; the selftest no longer greps for lisgd |
+| E1 | both import forms resolve; eleven plugins still load |
+
+The whole non-opt-in suite is 33 passed, 3 failed. All three failures are
+pre-existing and outside this work — `omarchy-menu is missing from
+$OMARCHY_PATH/bin` (that directory does not exist on this image; upstream's
+bins are installed to `/usr/bin`), and two gsettings reads. None of them appear
+in this change's diff.
 
 ## Constraints
 
@@ -324,8 +361,15 @@ Not acceptance criteria — the boundaries any implementation works inside.
 
 ## Open questions
 
-- **E1 is unanswered.** Everything in §E depends on a relative import across
-  plugin directories resolving under Quickshell. It has not been tried.
+- ~~**E1 is unanswered.**~~ *Answered 2026-09-07: yes, both forms, no `qmldir`,
+  and a manifest-less directory does not disturb the registry.* §E is unblocked.
+- **§E collides with another session's files.** Seven of the nine `PressVeil`
+  copies and four of the six colour-maths copies are in `Settings.qml`,
+  `SettingsRow.qml`, `Themes.qml`, `Shade.qml` and `Drawer.qml`, and the
+  worktree ownership split puts settings and themes on another session's side
+  ([[shared-worktree-and-phone]]). §E is one change that touches nine files at
+  once, which is the shape that does not divide. It needs agreeing before it
+  starts, not merging afterwards.
 - ~~**§C3's shape.**~~ *Settled: two implementations, held against each other.*
   One owner would mean the gesture forking `swaymsg` and parsing its JSON
   before `home` can dispatch, which the touch-rate constraint rules out. So
