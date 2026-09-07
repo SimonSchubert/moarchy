@@ -1426,6 +1426,86 @@ compared bluetui against a row naming no command at all. Wi-Fi is checked as a
 plugin id now; the command parity moved to Bluetooth, which is still one TUI on
 both sides (S6c).
 
+## 6o. Auditing every row in Settings (2026-09-07)
+
+All 33 pages walked row by row on the device through the `settings` IPC surface,
+every `action` row's command resolved and read, and the launch paths exercised
+with `grim` behind them. Nine defects, one of which was not about Settings at
+all.
+
+**Two ways of measuring were wrong before any of them were found**, and both are
+worth more than the bugs. `goto` returns as soon as the page is pushed and the
+`when:` guards go out afterwards as one batch (F4), so `rows` read immediately
+reports `visible=0` for *every* guarded row: the first sweep showed a dozen empty
+pages and three of them were real. And a non-login `ssh` to this phone lands in
+`LC_CTYPE=POSIX`, where bash does not expand `$'\U000f0431'` — so every icon in
+upstream's menu scripts stayed literal and the vendored picker rendered
+`)00F0431` over each label. That was written down as a defect before the second
+test; launched from Settings it inherits the shell's `LANG` and is fine. A UI has
+to be tested the way the UI launches it.
+
+**The one that was not a Settings bug.** `pacman -Sp vim` — out of `[extra]`,
+nothing to do with our repo — failed:
+
+```
+error: moarchy: missing required signature
+error: database 'moarchy' is not valid (invalid or corrupted database)
+```
+
+`image/build.sh` pacstraps with `[moarchy]` on a `file://` directory at
+`SigLevel = Never`, so the database cached into the image has no signature.
+`image/configure.sh` then writes the real stanza at `SigLevel = Required`, which
+implies DatabaseRequired. The image ships a database its own configuration
+refuses, and one unverifiable database stops the whole transaction — so the three
+package rows, the eight More software rows and the six font installs were dead
+together from first boot. Every part looks right in isolation, which is why it
+lasted: the repo *is* signed, `moarchy.db.sig` *is* published, and the key is
+trusted (`pacman-key --list-keys` shows it `[ full ]`). `pacman -Sy` repairs it
+in one call; the image now does that at build time.
+
+**The six that were the screen saying something it could not know.** `open()`
+rebuilt the stack without the reset `push()`/`pop()` do, so an `openAt` onto a
+provider page painted the *previous* provider page — "No reminders set" under a
+"Font" header, surviving a close and reopen. Wallpaper ticked nothing because its
+rows are paths and its reader prettified one (`1-quattro.jpg` → `Quattro`); the
+reader answers the path now and the label does the prettifying. Font ticked
+nothing for a different and legitimate reason — `fc-match` falls back to a family
+`fc-list :spacing=100` does not report — so D2 was correct and the page was still
+useless, and the current value joins the list when the list omits it. `AI agent`
+was always visible and always opened an empty screen. `omarchy-version` reads
+`pacman -Q omarchy` on an image that installs `omarchy-config`, so About's
+headline row was blank. And the Wi-Fi row ran `omarchy-network-status`, which
+answers a four-field record for a bar widget: the whole record landed in the
+detail line and its tabs shifted every column of the `rows` TSV after it, so
+`enabled` came back as an SSID.
+
+**Four things that worked and were still not a phone UI.** `wiremix` mapped its
+window and drew a truncated tab strip and nothing else — no device list, no
+sliders, and it was the only audio UI the phone had. `omarchy-menu-timezone`
+piped ~420 zones into a fixed card with a filter field to type into. Plugin
+enable and disable were two separate launches of that card, neither of which ever
+showed which plugins were on. `omarchy-launch-about` sizes itself by measuring
+its own output from inside the terminal and re-execs with `--render`, which
+qmlkonsole refuses. All four are screens now; 16 ids were expected to move
+Bridged→Native and four did.
+
+**And one that was offering a setting it could not honour.** Branding's six rows
+edited two files of ASCII art that nothing on this phone renders — About Omarchy
+is a page of rows now, and `omarchy-screensaver` needs ttfx, which is why
+`system.screensaver` was already Unsupported. 54 columns across 360 logical
+pixels is six pixels a character, so there was no version of it to build either.
+Gone, with the eight ids recorded as Unsupported and the reason with them.
+
+Totals went 68/68/1 → **58 Bridged / 70 Native / 191 Unsupported**, still 320.
+The Totals table in `menu-coverage.md` had drifted three behind since the
+reminders change and was moved with them — a summary nothing asserts drifts,
+which is the argument G7 already makes about its own constant. Two test hygiene
+fixes came out of it as well: `dryRun` could only be written, and it is the
+precondition for every check that activates a row without wanting it to happen,
+so when *that* call was dropped the rows really fired and J9 went red saying
+nothing about J9; and G5 counted the Unsupported half out of a doc the package
+does not ship, so on a device it read 137 + 0 against 320 every run.
+
 ## 7. Hardware status
 
 | | |
@@ -1447,6 +1527,22 @@ both sides (S6c).
   `openPanelIds` for `omarchy.` surfaces after its own, so a vendored popup can
   at least be dismissed. Tapping outside one still does nothing.
 - `I3.workspaces` shape differs from Hyprland's in ways not fully explored.
+- **Two selftest base checks can never pass on this phone.**
+  `screen-keyboard-enabled is false` and `no input source is configured` gate
+  *squeekboard*, and the keyboard that owns `sm.puri.OSK0` here is
+  `moarchy-keyboard`. They ask for gsettings nothing on this image reads, so
+  they are red every run and cannot go green — the same fault G5 had before
+  it learned to skip. They should skip when the running keyboard does not need
+  them, rather than fail. `omarchy-menu is missing from /usr/share/omarchy/bin`
+  is the third standing base failure and is real: the file genuinely is not
+  there, and nothing in the phone UI has needed it since the menu stopped
+  being how Settings is reached.
+- **The on-screen keyboard was drawn over Settings in several captures with
+  no field focused**, during the 2026-09-07 audit. Not reproduced afterwards:
+  with Settings open at the root, `settings focused` is empty, the workspace
+  rect is unreduced and `grim` shows no keyboard. Recorded because a stuck OSK
+  over a layer surface would be hard to tell from this, and the DBus `Visible`
+  property is not evidence either way.
 - **The camera reboots the phone on first launch.** It works on the second
   attempt and every time after. Undiagnosed: the candidates are OOM under a
   software-rendered 2592x1944 preview on 2 GB, a power brownout from the
