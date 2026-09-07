@@ -276,7 +276,7 @@ Native 6 · Bridged 19 · Unsupported 62
 | --- | --- | --- | --- | --- |
 | `install` | Install | Native | Apps & defaults > Packages | merged with `remove` |
 | `install.package` | Package | Bridged | Packages > Install package | fzf + pacman; both installed |
-| `install.aur` | AUR | Bridged | Packages > Install from AUR | yay is built for aarch64 from the `[aur.yay]` pin and installed from the `[moarchy]` repo |
+| `install.aur` | AUR | Bridged | Packages > Install from AUR | yay is built for aarch64 from the `[aur.yay]` pin and installed from the `[moarchy]` repo; the build toolchain it shells out to is in `moarchy-meta` (base-devel minus debugedit, which drags gdb) |
 | `install.webapp` | Web App | Bridged | Apps & defaults > Web apps > Add | creates a .desktop running our `omarchy-launch-webapp` shim |
 | `install.tui` | TUI | Bridged | Apps & defaults > Terminal apps > Add |  |
 | `install.style` | Style | Native | Appearance > Get more |  |

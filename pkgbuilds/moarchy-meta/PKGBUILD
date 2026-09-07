@@ -18,20 +18,25 @@ _ver=$(manifest_get moarchy version) || return 1
 
 pkgname=moarchy-meta
 pkgver=$_ver
-# 2, because the list below gained mise-bin, nodejs and npm -- and then lost
-# lisgd, in dafd34f -- while manifest.toml's [moarchy] version stayed at 0.1.1.
-# Both changes ride this one bump because 0.1.1-2 has not been built yet; if it
-# ever is, the next change to the list needs a 3. That is the failure this
-# package is most exposed to, because its entire content IS the depends line: a
-# change here that does not move the version is invisible to pacman, which
-# compares versions and not depends.
+# 3, because the build toolchain below is new and 0.1.1-2 has since been built
+# -- packages/moarchy-meta-0.1.1-2-any.pkg.tar.xz -- so the waiver the next
+# paragraph granted itself cannot be taken twice. That artifact has to go
+# before the next build: pkgset_unique refuses a directory holding two of a
+# name rather than letting repo-add pick by glob order.
+#
+# 2 was for the list gaining mise-bin, nodejs and npm and losing lisgd, in
+# dafd34f, while manifest.toml's [moarchy] version stayed at 0.1.1. Both
+# changes rode that one bump because 0.1.1-2 had not been built yet. That is
+# the failure this package is most exposed to, because its entire content IS
+# the depends line: a change here that does not move the version is invisible
+# to pacman, which compares versions and not depends.
 #
 # It has been here before. It was 2 for 0.1.0 as well, after the list gained
 # gnome-contacts, geary, alligator, amberol, secrets and songrec and lost kclock
 # and index-fm with no version move at all -- so a phone already holding
 # 0.1.0-1 would never have seen any of it. Then pkgver moved to 0.1.1 and this
 # went back to 1, because 0.1.1-1 is already newer than 0.1.0-2.
-pkgrel=2
+pkgrel=3
 pkgdesc="The moarchy package set -- install this and you have the phone"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
@@ -405,6 +410,41 @@ depends=(
   'xdg-terminal-exec'
   'ttf-ia-writer'
   'cbonsai'
+
+  # What yay needs to build anything. Without these it gets all the way to the
+  # build and stops at `==> ERROR: Cannot find the fakeroot binary.` -- Settings
+  # > Packages > Install from AUR lists all 119,015 packages, lets you pick one,
+  # and then fails in a way that reads as a dead package rather than a missing
+  # toolchain. `base` already carries gcc, binutils, libtool, gettext, file,
+  # findutils, gawk, grep, gzip, sed and which; these ten are the rest of what
+  # makepkg calls. 79.9 MiB installed, 13.0 MiB of it downloaded.
+  #
+  # Named one by one rather than as 'base-devel', which is a package rather than
+  # a group now and would be the obvious single line. It depends on debugedit,
+  # which depends on gdb, which pulls source-highlight and boost-libs: 105 MiB
+  # of debugger on top of the 80 MiB that does the work. None of it would ever
+  # run -- /etc/makepkg.conf ships !debug, and makepkg's
+  # executable/debugedit.sh only looks for the binary under that option, so
+  # debugedit is reachable here only by someone who edits OPTIONS, and
+  # `pacman -S debugedit` is their answer.
+  #
+  # What naming them costs: `pacman -Qi base-devel` says not installed, and an
+  # AUR PKGBUILD that lists base-devel in makedepends -- against Arch's own
+  # guidelines, but it happens -- makes yay pull the whole thing at that point.
+  #
+  # guile is not in this list and is 54.7 MiB of the 79.9: Arch's make depends
+  # on it, so it arrives whether or not anyone wants a Scheme interpreter on a
+  # 2 GB phone. gc comes with it.
+  'm4'
+  'autoconf'
+  'automake'
+  'bison'
+  'fakeroot'
+  'flex'
+  'make'
+  'patch'
+  'pkgconf'
+  'texinfo'
 
   # The key that signs this repository. Without it pacman cannot validate a
   # single package, so SigLevel = Required would refuse everything.

@@ -106,6 +106,15 @@ have /usr/share/omarchy/shell/shell.qml
 # The camera app, and the package it needs that nothing declares -- without
 # xdg-user-dirs every photo is captured and silently discarded.
 have /usr/bin/megapixels
+# The AUR build path. yay's query side works with none of this present, so the
+# failure is not that Settings > Packages > Install from AUR does nothing: it
+# lists all 119,015 packages, lets you choose one, and then stops at
+# `==> ERROR: Cannot find the fakeroot binary.` -- a missing toolchain wearing
+# the costume of a dead package. fakeroot and make are the two names `base`
+# does not carry that makepkg cannot start without; moarchy-meta pulls the
+# other eight beside them.
+have /usr/bin/fakeroot
+have /usr/bin/make
 # Provenance: an image that answers "no commit" cannot be rebuilt or bisected.
 if [ -f "$R/usr/share/moarchy/build-info" ]; then
   . "$R/usr/share/moarchy/build-info"
