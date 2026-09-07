@@ -159,6 +159,27 @@ else
   no "cannot read the shell's environment"
 fi
 
+# The package databases, because Settings has thirty-odd rows that are a pacman
+# call and every one of them fails together. The image caches its databases from
+# a file:// repo with SigLevel = Never and then configures the real one with
+# SigLevel = Required, so a flashed phone shipped a moarchy.db with no signature
+# beside it -- and pacman refuses the whole transaction over one database it
+# cannot verify, so even `pacman -Sp vim` out of [extra] failed. One
+# `pacman -Sy` repairs it; image/configure.sh now does that at build time.
+_repo=$(awk -F'[][]' '/^\[.*\]/ && $2 != "options" { print $2 }' /etc/pacman.conf \
+        | grep -x moarchy || true)
+if [[ -n $_repo ]]; then
+  if [[ -f /var/lib/pacman/sync/moarchy.db && ! -f /var/lib/pacman/sync/moarchy.db.sig ]]; then
+    no "the moarchy database has no signature beside it" \
+       "SigLevel = Required refuses it, and every pacman row in Settings fails: sudo pacman -Sy"
+  elif pacman -Sp --print-format '%n' pacman >/dev/null 2>&1; then
+    ok "pacman can resolve a package, so the install rows have something to run"
+  else
+    no "pacman cannot resolve a package" \
+       "$(pacman -Sp --print-format '%n' pacman 2>&1 | head -1)"
+  fi
+fi
+
 if [[ -x $OMARCHY_PATH/bin/omarchy-menu ]]; then
   ok "omarchy-menu exists where the plugin calls it"
 else

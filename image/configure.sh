@@ -102,6 +102,35 @@ arch-chroot "$ROOTDIR" systemctl enable systemd-resolved >/dev/null 2>&1 ||
   say "!! could not enable systemd-resolved -- the image will have no DNS"
 say "systemd-resolved enabled (without it the image resolves no names)"
 
+# --- prime the databases against the repo just configured -------------------
+# The build's own pacman.conf (image/build.sh) points [moarchy] at a file://
+# directory with SigLevel = Never, so the database cached into the image has no
+# signature beside it. The stanza written above says SigLevel = Required, which
+# implies DatabaseRequired -- and pacman refuses a database it cannot verify:
+#
+#   error: moarchy: missing required signature
+#   error: database 'moarchy' is not valid (invalid or corrupted database)
+#
+# Not "installs take a moment to start working". One invalid database stops the
+# whole transaction, so `pacman -Sp vim` failed too, out of [extra], which has
+# nothing to do with ours. Every Install and Remove row in Settings, every
+# "More software" row and every font install was dead from first boot until
+# somebody ran `pacman -Sy` by hand -- and nothing on screen said so, because
+# the row opens a terminal that prints the error and waits (E8).
+#
+# Refreshing here fetches $repo.db.sig from the real server into the image, so a
+# flashed phone can install something before it has ever been online. Warned
+# about rather than fatal: a build machine behind a proxy that cannot reach the
+# release URL still produces a usable image, one `pacman -Sy` away.
+if [ -n "$_repo_name" ] && [ -n "$_repo_server" ]; then
+  if arch-chroot "$ROOTDIR" pacman -Sy >/dev/null 2>&1; then
+    say "package databases refreshed against [$_repo_name] (the .db.sig is in the image)"
+  else
+    say "!! could not refresh the package databases -- the phone will need one"
+    say "   \`sudo pacman -Sy\` before it can install anything"
+  fi
+fi
+
 # --- the clock (I10) -------------------------------------------------------
 # Nothing in this image sets the time. Arch enables no NTP client by default,
 # and this systemd ships no /usr/lib/clock-epoch, so the only thing holding the
