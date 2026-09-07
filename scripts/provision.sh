@@ -117,7 +117,7 @@ step_build() {
     moarchy-builder
   info "built: $(ls -1 packages/*.pkg.tar.* 2>/dev/null | wc -l | tr -d ' ') packages"
   info "  (the components, the AUR rebuilds, and pkgbuilds/: moarchy,"
-  info "   omarchy-config and moarchy-meta)"
+  info "   omarchy-config, moarchy-meta and moarchy-keyring)"
 }
 
 step_deploy() {

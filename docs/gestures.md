@@ -16,7 +16,7 @@ cites these ids, so an AC with no test is visible.
 | **strip** | The reserved 20px band at the very bottom holding the home pill. Owned by `moarchy.gestures`. |
 | **home screen** | A sway workspace with no windows on it: wallpaper, bar, pill. One app per workspace, so an empty workspace *is* the home screen. |
 | **app** | A workspace with a window on it, or Settings, which is treated as one (K). |
-| **shell app** | A screen this shell draws itself that behaves like an app: it has a carousel card and the strip hides it. Settings is the only one (K11). |
+| **shell app** | A screen this shell draws itself that behaves like an app: it has a carousel card and the strip hides it. Three of them: Settings, Wi-Fi and Bluetooth (K11). |
 | **carousel** | The recent-apps switcher (`moarchy.recents`). |
 | **drawer** | The searchable app grid (`moarchy.drawer`). |
 | **shade** | The pull-down from the top edge (`moarchy.shade`). |
@@ -77,8 +77,8 @@ empty switcher is a dead end you would only have to dismiss.
 thing is Settings has one card, so the strip has a carousel worth raising (K1).
 
 With E6, this means **the carousel has no empty state**: it can never be on
-screen with zero cards, so that state is not built. (`Recents.qml` currently
-has a "No open apps" label — it becomes unreachable and comes out.)
+screen with zero cards, so that state is not built. `Recents.qml` had a
+"No open apps" label; it became unreachable and was removed.
 
 ## B. Strip — swipe sideways
 
@@ -137,10 +137,11 @@ workspace and the top edge still opens the shade.
 ## E. The carousel
 
 **E1** One card per open app, most recent first, with the app you just left
-leading and marked. Settings has a card here on the same terms as a window
-(K1); everything E says about a card applies to it unchanged.
-→ `omarchy-shell recents list` has one line per open window, plus one for
-Settings while it is running
+leading and marked. Each running shell app — Settings, Wi-Fi, Bluetooth (K11) —
+has a card here on the same terms as a window (K1); everything E says about a
+card applies to it unchanged.
+→ `omarchy-shell recents list` has one line per open window, plus one per shell
+app that is running
 
 **E2** Tapping a card focuses that app and closes the carousel.
 → focused workspace holds that window; `recents state` == `closed`
@@ -395,9 +396,11 @@ stopped there too. They now extend under the strip. Nothing about what the strip
 and it stays exactly as it was.
 
 Sizes are never written as numbers here. `Style.space(20)` rounds a *scaled*
-value, and the scale comes from the theme's `shell.toml`: at the default ~1.15
-the nominal-20 strip actually reserves 23. Every check below takes the height
-from `geometry`'s `strip` field rather than assuming one.
+value, and the scale comes from the theme's `shell.toml`: measured 20 on the
+default theme and 23 on a larger one, and it has read higher again. Every check
+below takes the height from `geometry`'s `strip` field rather than assuming one
+— including the ones in `bin/moarchy-selftest`, whose comments quote a number
+they measured on the theme of the day and not a constant.
 
 **I1** With the drawer, Settings, the theme picker or the keyboard up, the
 surface reaches the bottom row of the screen. No band of wallpaper, and no band
@@ -477,11 +480,18 @@ raising the keyboard at all.
 reports `focused=false` and `drawer geometry` reports `margin` equal to
 `-<strip>`
 
-**I6** The pill still works over all four. The three sheets need no mask for
-this: they are on Top, the strip is on Overlay, and every Overlay surface sits
-above every Top one. **The keyboard is the exception and needs one** -- it is on
-Overlay itself and maps after the strip, so an unmasked keyboard extended under
-the strip lands above the pill and swallows every touch meant for it.
+**I6** The pill still works over all four, and none of them needs a mask to
+manage it. All four are on Top -- the keyboard included, deliberately, because
+on Overlay it would map before the strip and take the bottom exclusive zone the
+pill needs (`windows.md` W5, `moarchy-keyboard/src/panel.cpp`) -- the strip is
+on Overlay, and every Overlay surface sits above every Top one. So the strip
+takes those touches before any of the four sees them.
+
+The mask the keyboard does carry is for the **left** edge, not this one: the
+back-gesture band is on Overlay with `ExclusionMode.Ignore`, and the keyboard
+excludes that column from its input region so the gesture that dismisses it is
+never swallowed. The shade is the surface that needs a mask for the pill, and
+only because it is on Overlay itself.
 → A7 with the drawer; `omarchy-shell {settings,themes} state` == `closed` after
 an up-flick from the strip; and, with the keyboard up, an up-flick still goes
 home

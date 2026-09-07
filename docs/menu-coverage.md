@@ -19,22 +19,26 @@ v4.0.2 (`346e69e1`). Every one of them appears below exactly once.
 
 Two rules decide the hard cases.
 
-**A package in `moarchy-extras.packages` is Bridged, not Unsupported.**
-Those are aarch64-verified and merely not installed by default, so the row gets a
+**A package that is aarch64-verified but not installed by default is Bridged,
+not Unsupported.** That set used to be a file, `moarchy-extras.packages`; since
+M2 deleted both `.packages` files (`docs/structure.md` P6) it is the commented
+"Not installed by default" block at the foot of
+`pkgbuilds/moarchy-meta/PKGBUILD`. The row gets a
 `when: omarchy-cmd-present <bin>` guard and appears once the user installs it.
-"Not installed" is not "impossible". Genuine hardware blocks -- the microphone
-records digital silence, `VIDIOC_STREAMON` fails on both cameras -- stay
-Unsupported.
+"Not installed" is not "impossible". Genuine hardware blocks stay Unsupported --
+today that is the microphone, which records digital silence at PipeWire and at
+raw ALSA. It is no longer the camera: Megapixels 2.1.0 streams both sensors as
+of 2026-09-06 (`docs/apps.md`), so any row still resting on `VIDIOC_STREAMON`
+is resting on a diagnosis that was wrong.
 
 **Bridged means the command is untouched.** 128 of the 320 rows are
-`omarchy-launch-floating-terminal-with-presentation <script>`, and all 137
-`omarchy-*` scripts they name exist upstream. Because `bin/` here shadows
+`omarchy-launch-floating-terminal-with-presentation <script>`, and every
+`omarchy-*` script they name exists upstream. Because `bin/` here shadows
 `$OMARCHY_PATH/bin` by PATH order, one shim for that wrapper -- routing to
 `moarchy-launch-tui`, a foot at font size 7 -- makes the whole class work
-without reimplementing any of it. 62 of the bridged rows run a command
-byte-identical to upstream's `action`; the selftest asserts it. The exceptions are
-the three package rows, where upstream's `xdg-terminal-exec --app-id=...` is
-replaced by that terminal, which is the entire point of bridging.
+without reimplementing any of it. Of the 58 Bridged rows, all but four run a
+command byte-identical to upstream's `action`; `docs/settings.md` E2 names the
+four and the selftest diffs them statically.
 
 That terminal is a normal tiled window. It was fullscreened until 2026-09-06,
 which made every row that asks a question unanswerable: sway draws a fullscreen
@@ -132,7 +136,7 @@ Native 15 · Bridged 6 · Shade 1 · Unsupported 25
 | `trigger.capture.screenrecord.no-audio` | With no audio | Bridged | Tools > Screen record | presence-guarded on gpu-screen-recorder |
 | `trigger.capture.screenrecord.desktop-audio` | With desktop audio | Bridged | Tools > Screen record | presence-guarded on gpu-screen-recorder |
 | `trigger.capture.screenrecord.microphone` | With desktop + microphone audio | Unsupported | -- | the microphone records digital silence (RMS 0) at PipeWire and at raw ALSA |
-| `trigger.capture.screenrecord.webcam` | With desktop + microphone audio + webcam | Unsupported | -- | `VIDIOC_STREAMON` fails on both ov5640 and gc2145; `omarchy-hw-webcam` is false |
+| `trigger.capture.screenrecord.webcam` | With desktop + microphone audio + webcam | Unsupported | -- | `omarchy-hw-webcam` is false: there is no `/dev/video*` a generic app can stream, because the sensors only work through `libmegapixels` configuring the media graph. The microphone half is unsupported anyway |
 | `trigger.transcode` | Transcode | Unsupported | -- | `omarchy-transcode` shells out to ffmpeg, which is not installed |
 | `trigger.share` | Share | Unsupported | -- | every child unsupported |
 | `trigger.toggle` | Toggle | Native | dissolved: Appearance > Status bar, Display, Sound | grouped by mechanism upstream, by subject here |
@@ -272,7 +276,7 @@ Native 6 · Bridged 19 · Unsupported 62
 | --- | --- | --- | --- | --- |
 | `install` | Install | Native | Apps & defaults > Packages | merged with `remove` |
 | `install.package` | Package | Bridged | Packages > Install package | fzf + pacman; both installed |
-| `install.aur` | AUR | Bridged | Packages > Install from AUR | yay is prebuilt for aarch64 in `packages/` |
+| `install.aur` | AUR | Bridged | Packages > Install from AUR | yay is built for aarch64 from the `[aur.yay]` pin and installed from the `[moarchy]` repo |
 | `install.webapp` | Web App | Bridged | Apps & defaults > Web apps > Add | creates a .desktop running our `omarchy-launch-webapp` shim |
 | `install.tui` | TUI | Bridged | Apps & defaults > Terminal apps > Add |  |
 | `install.style` | Style | Native | Appearance > Get more |  |
@@ -303,7 +307,7 @@ Native 6 · Bridged 19 · Unsupported 62
 | `install.service.1password` | 1Password | Unsupported | -- | x86_64-only |
 | `install.service.dropbox` | Dropbox | Unsupported | -- | x86_64-only |
 | `install.service.spotify` | Spotify | Unsupported | -- | x86_64-only |
-| `install.service.signal` | Signal | Bridged | Packages > More software | signal-desktop is aarch64-verified in `moarchy-extras.packages` |
+| `install.service.signal` | Signal | Bridged | Packages > More software | signal-desktop is aarch64-verified; in moarchy-meta's not-installed-by-default list |
 | `install.service.tailscale` | Tailscale | Unsupported | -- | x86_64-only |
 | `install.service.nordvpn` | NordVPN | Unsupported | -- | x86_64-only |
 | `install.service.once` | ONCE | Unsupported | -- | x86_64-only |

@@ -17,9 +17,13 @@ file is the destination.
 
 ## 1. What this decides
 
-Today the project is a config overlay with an on-device installer. `install.sh`
-sources eight scripts that clone upstream Omarchy at a pinned SHA, mechanically
-rewrite five QML files, build Go programs, and write `~/.config` — all on the
+*Written before M1. The present tense in this section is the starting point it
+argues against, not the shape of the project today — `install.sh` and
+`install/` were deleted with M2 (P9), and §11 records what replaced them.*
+
+Then, the project was a config overlay with an on-device installer. `install.sh`
+sourced eight scripts that cloned upstream Omarchy at a pinned SHA, mechanically
+rewrote five QML files, built Go programs, and wrote `~/.config` — all on the
 phone, at install time, over SSH.
 
 That shape cannot produce an image. An image build has no phone, no SSH, no
@@ -48,8 +52,8 @@ moarchy installs onto today:
 | Total | 3,183,512,064 bytes raw / 522 MB as `.img.xz` |
 
 The artifact this project ships is therefore
-`moarchy-pinephone-<date>.img.xz` plus a checksum. Wherever this document says
-"image", that is what it means.
+`moarchy-pinephone-<version>-<date>.img.xz` plus a checksum. Wherever this
+document says "image", that is what it means.
 
 ---
 
@@ -136,11 +140,13 @@ moarchy-store/             unchanged; PKGBUILD + its own signed catalogue
 moarchy/
 ├── manifest.toml          the version pins — the only file that says "v0.2.0"
 ├── pkgbuilds/
-│   ├── moarchy/         bin/ default/ config/
+│   ├── moarchy/               bin/ default/ config/
 │   ├── omarchy-config/        upstream pin + port-4x.patch
-│   ├── moarchy-meta/    the package list, as depends=()
-│   └── <aur rebuilds>/        yay, xdg-terminal-exec, ttf-ia-writer, …
-├── repo/                  build container → repo-add → moarchy.db → publish
+│   ├── moarchy-meta/          the package list, as depends=()
+│   └── moarchy-keyring/       the repo signing key (R5)
+├── docker/                build container; the AUR rebuilds are cloned at the
+│                          [aur.*] pins rather than kept as PKGBUILDs here
+├── repo/                  repo-add → moarchy.db → publish
 ├── image/                 pacstrap a rootfs + boot chain → .img.xz
 ├── bin/ default/ config/  packaged by pkgbuilds/moarchy
 ├── scripts/               dev loop: provision.sh, flash-sd.sh
@@ -219,7 +225,8 @@ fetched by `source=()` with a checksum, or by a tag `makepkg` can verify.
 > `.../aarch64/omarchy.db` → 404.
 
 **R2** It contains every package this project builds: the keyboard, the store,
-the AUR rebuilds, `moarchy`, `omarchy-config`, `moarchy-meta`.
+the AUR rebuilds, `moarchy`, `omarchy-config`, `moarchy-meta` and
+`moarchy-keyring` (R5). Eleven today.
 
 **R3** Packages are built in an `aarch64` container, natively on Apple Silicon —
 the existing `docker/Dockerfile.builder`, generalised from a fixed list to
@@ -245,9 +252,14 @@ that are no longer part of it are removed on publish. **Met 2026-09-07:**
 > database from scratch so a phone is never offered a version whose file is
 > gone; this is the other half of that bargain.
 
-**R7** `packages/*.pkg.tar.*` as a directory of loose artifacts shipped over
-`scp` (`scripts/provision.sh:108`) is gone. The repo is how packages reach the
-phone.
+**R7** The repo is how packages reach a phone in the field. **Met 2026-09-06,
+with the dev loop as the stated exception:** `pacman -Syu` from `[moarchy]` is
+the supported path, and nothing on the phone is a file no package owns — which
+is the half that mattered. `scripts/provision.sh deploy` still `scp`s
+`packages/*.pkg.tar.*` and installs them with `pacman -U`, on purpose: that is
+D3, iterating on a build that has not been published, and it ships *packages*
+rather than the tarball of the working tree it used to (D2). Publishing to test
+a one-line QML change is not a development cycle.
 
 **R8** The directory a release or an image is built from holds **one version of
 each package**, and a build that finds two refuses rather than choosing.
@@ -263,8 +275,9 @@ each package**, and a build that finds two refuses rather than choosing.
 > `moarchy-0.1.0-2` from another session's work in progress was one glob away
 > from being released.
 
-**R8a** *Open.* The image's `/etc/pacman.conf` carries `[moarchy]` and nothing
-else beyond what the `pacman` package ships. Stock Arch Linux ARM's copy is
+**R8a** *Decided 2026-09-07: deliberately not done for 0.1.x.* The image's
+`/etc/pacman.conf` carries `[moarchy]` and nothing else beyond what the `pacman`
+package ships. Stock Arch Linux ARM's copy is
 `core`/`extra`/`alarm`/`aur`; `[danctnix]` is added by DanctNIX's own image
 build and by `image/Dockerfile` for the *builder*, not by any package, so a
 flashed phone never gets it.
@@ -322,10 +335,11 @@ absent.
 
 ## 7. The image
 
-**I1** `image/` produces `moarchy-pinephone-<date>.img.xz` and a `.sha256`,
-from a single command, with no phone attached. **Met 2026-09-06:**
-`./scripts/build-image.sh` → **1.2 GB compressed**, 747 packages, and a
-`.packages` manifest beside it (V4).
+**I1** `image/` produces `moarchy-pinephone-<version>-<date>.img.xz` and a
+`.sha256`, from a single command, with no phone attached. **Met 2026-09-06:**
+`./scripts/build-image.sh` → **1.25 GB compressed**, 771 packages, and a
+`.packages` manifest beside it (V4). (0.1.0 was 1.2 GB and 747 packages; the
+version is in the filename because two of them sit in `images/` at once.)
 
 **I2** The rootfs is built by `pacstrap`-ing into a directory: DanctNIX's base
 plus `moarchy-meta` from the `moarchy` repo. It is never produced by
@@ -492,7 +506,7 @@ place a version is written. **Met 2026-09-06.**
 > **What V2 does not yet cover: the toolchain.** The container still runs
 > `pacman -Syu`, which installs whatever Arch Linux ARM has today. So the
 > *sources* are pinned and the *build environment* is not, and that gap is
-> measurable rather than theoretical — see Q3 in §12. **?**
+> measurable rather than theoretical — see Q4 in §12. **?**
 
 **V3** The upstream Omarchy pin moves out of `install/vendor-omarchy.sh` into
 `manifest.toml` alongside the rest. **Met 2026-09-06.**
@@ -614,11 +628,18 @@ same manifest now agree.
 >
 > Verified in the container: the whole set resolves as **one transaction of 564
 > packages**; `omarchy-config` and `moarchy` install together with no file
-> conflict; `pacman -Ql` shows no path under `/home` for either; nine plugin
+> conflict; `pacman -Ql` shows no path under `/home` for either; the plugin
 > directories land in `/usr/share/moarchy/plugins` and the patched registry
-> scans it; the packaged `shell.json` carries `bar.id = moarchy.bar`, eight
-> plugins and the `HH:mm` clock; and every absolute `include` in the sway config
-> points at a file that exists.
+> scans it; the packaged `shell.json` carries `bar.id = moarchy.bar`, the
+> `moarchy.*` plugin list and the `HH:mm` clock; and every absolute `include` in
+> the sway config points at a file that exists.
+>
+> The counts in that sentence were nine directories and eight plugins when it
+> was written and are eleven and ten today (`moarchy.wifi`, `moarchy.bluetooth`
+> and `moarchy.splash` arrived after). They are deliberately no longer written
+> down here: `default/omarchy/plugins/` and `port-4x.patch`'s `plugins[]` are
+> the two places that answer it, and a third copy is the divergence P5 exists to
+> prevent.
 
 > **The collision the old installer hid.** `moarchy` ships 19 scripts whose
 > names upstream Omarchy also uses — `omarchy-toggle-bar`, `omarchy-system-lock`,
@@ -709,14 +730,19 @@ M1 — which is the only reason it cost 80 files rather than every phone.
 
 ## 12. Open questions
 
-Marked **?** above, collected here:
+The questions this document opened, with what has since answered them. Two are
+closed; the three that are still open are the ones to read.
 
-1. **I3 — the boot chain.** Whether DanctNIX's boot partition and pre-GPT region
-   can be assembled from their packages, or have to be copied verbatim out of a
-   release image. Unverified; changes the shape of `image/` but not this plan.
-2. **Where `moarchy.db` is hosted.** GitHub Pages off this repo is the cheap
-   answer and needs no domain. A `pkgs.moarchy.org` mirrors what upstream
-   Omarchy does and survives moving off GitHub. Not decided.
+1. ~~**I3 — the boot chain.**~~ **Answered 2026-09-06.** Everything the boot
+   chain needs is in `uboot-pinephone`, `linux-megi`, `uboot-tools` and
+   mkinitcpio, and the SPL assembled from packages is a byte-exact match for the
+   one on the release image. Nothing is copied verbatim. See I3.
+2. ~~**Where `moarchy.db` is hosted.**~~ **Decided 2026-09-06: GitHub
+   Releases**, under a fixed `repo` tag whose assets are replaced in place so
+   the `Server` URL never moves; the URL and the key are `[repo]` in
+   `manifest.toml`. Pages was the cheap answer and was rejected because it
+   serves from a branch — every publish would commit ~120 MB of binaries to git
+   history, permanently, for everyone who clones. See M3.
 3. **`moarchy-store` cannot be pinned from this side.** Its PKGBUILD builds
    `moarchy-store-git` from `source=("...::git+$url.git")` — a VCS package, so
    makepkg fetches at HEAD however the repo is cloned. `[moarchy-store]` in
@@ -745,6 +771,8 @@ Marked **?** above, collected here:
    the thing that decides this — if it grows past a few hundred lines, it is a
    fork, and pretending otherwise costs more than it saves.
 
-   **Measured 2026-09-06: 9 files, 224 insertions, 30 deletions.** So the
+   **Measured 2026-09-07: 9 files, 230 insertions, 30 deletions.** So the
    package stays, on the test this question set itself. Worth re-measuring on
-   every upstream bump; the number to watch is this one.
+   every upstream bump; the number to watch is this one. Reproduce it with
+   `git diff --stat` against a clean v4.0.2 checkout, or count `+`/`-` lines in
+   `pkgbuilds/omarchy-config/port-4x.patch`.

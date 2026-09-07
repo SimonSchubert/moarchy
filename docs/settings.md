@@ -33,15 +33,18 @@ upstream's dmenu. Ten rows:
 Settings
 ├─ Network & internet   Private DNS · Wi-Fi networks · Bluetooth devices · Wi-Fi QR
 ├─ Display              Night light · Stay awake
-├─ Sound & notifications Audio devices · Crash capture
-├─ Appearance           Theme · Wallpaper · Font · Status bar · Branding · Get more
+├─ Sound & notifications Output device · Input device · Crash capture
+├─ Appearance           Theme · Wallpaper · Font · Status bar · Get more
 ├─ Apps & defaults      Default apps · Web apps · Terminal apps · Packages
 ├─ Shell & plugins      Plugins · Restart shell · Reset tmux config
 ├─ Security             Remote access · Passwordless sudo · Change password
-├─ Tools                Screenshot · Screen record · Emoji · Reminders · Screensaver · Speed tests
-├─ System               Date & time · Restart hardware · Power
-└─ About phone          Version · Kernel · Device · Keybindings · Help & docs · About Omarchy
+├─ Tools                Screenshot · Screen record · Emoji · Reminders · Speed tests
+├─ System               Date & time · Restart hardware · Update system · Power
+└─ About phone          Omarchy · Kernel · Device · Keybindings · Help & docs · About Omarchy
 ```
+
+There is no Branding row and no Screensaver row; both left for Unsupported on
+2026-09-07, for the reasons under **Known-bad** at the foot of this file.
 
 Four departures from upstream, each deliberate:
 

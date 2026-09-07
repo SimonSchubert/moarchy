@@ -150,24 +150,26 @@ Everything follows the finger rather than firing at a threshold.
 One drag up from the home pill has three stops, the way Android's does:
 
 ```
-0 ---- 40% -------- 75% ---- 100%
-app    RECENTS       HOME
+0 -- 15% ---------- 75% ---- 100%
+app       RECENTS      HOME
 ```
 
 | Gesture | What it does |
 | --- | --- |
-| Swipe up, short | The recents carousel: every open app as a card |
-| Swipe up, further | Home — a workspace with nothing on it |
-| Swipe up **from home** | The app drawer |
-| Swipe left / right | Previous / next workspace, which is previous / next app |
-| Press and hold | Arms; release closes the focused window |
+| Swipe up from the pill, short | The recents carousel: every open app as a card |
+| Swipe up from the pill, further | Home — a workspace with nothing on it |
+| Swipe up **on the wallpaper** | The app drawer |
+| Swipe left / right | Next / previous workspace, which is next / previous app |
 | Tap a card | Focus that app |
 | Swipe a card up | Close that app |
 | Pull down from the status bar | The shade: quick settings, brightness, media |
 
-Which of the two overlays the up-drag reaches is decided by what is on screen:
-an occupied workspace gets recents, a blank one gets the drawer. So the drawer
-is one swipe from home and two from an app.
+The two edges are different gestures, not one gesture with two outcomes. The
+strip raises the carousel and goes home; it never opens the drawer
+(`docs/gestures.md` A5). The drawer comes from dragging up on the *workspace*,
+which only a home screen has bare (D1) — so the drawer is one swipe from home
+and two from an app. Nothing on the strip closes a window: apps are closed from
+the carousel, one card at a time (C1, E3).
 
 Everything is reachable without a finger, which is how the selftest asserts it:
 
@@ -182,7 +184,7 @@ moarchy-selftest --gestures   # drives real synthetic touch via /dev/uinput
 | Path | What it is |
 | --- | --- |
 | `manifest.toml` | The version pins. The only file that says what version of anything is built |
-| `pkgbuilds/` | `moarchy`, `omarchy-config` (upstream + the Sway port as a patch), `moarchy-meta` |
+| `pkgbuilds/` | `moarchy`, `omarchy-config` (upstream + the Sway port as a patch), `moarchy-meta`, `moarchy-keyring` |
 | `pkgbuilds/moarchy-meta/PKGBUILD` | The aarch64 package set, as `depends`, with every omission explained |
 | `default/sway/bindings.conf` | Omarchy's bindings, translated to Sway, key-for-key |
 | `default/sway/pinephone.conf` | 720×1440 @ scale 2, touch, tightened gaps |
@@ -240,10 +242,11 @@ first boot, or to the u-boot SPL — that lives outside any partition, at byte
 ```
 
 Everything comes from the commits pinned in `manifest.toml`, so two runs a
-month apart produce the same image. The package build produces ten:
+month apart produce the same image. The package build produces eleven:
 `moarchy-keyboard` and `moarchy-store-git` from their own repos, `yay`,
 `xdg-terminal-exec`, `ttf-ia-writer`, `cbonsai` and `lcl-gui-bin` from the AUR,
-and `moarchy`, `omarchy-config` and `moarchy-meta` from `pkgbuilds/`.
+and `moarchy`, `omarchy-config`, `moarchy-meta` and `moarchy-keyring` from
+`pkgbuilds/`.
 
 For a debug image that joins your wifi on first boot and enables sshd:
 

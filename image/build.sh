@@ -1,5 +1,6 @@
 #!/bin/bash
-# Build moarchy-pinephone-<date>.img.xz -- a GPT disk image to write with dd.
+# Build moarchy-pinephone-<version>-<date>.img.xz -- a GPT disk image to write
+# with dd.
 #
 # Runs inside image/Dockerfile with no phone attached (docs/structure.md I1).
 #

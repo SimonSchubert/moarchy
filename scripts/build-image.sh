@@ -2,7 +2,7 @@
 # Build the flashable image, on the Mac, with no phone attached.
 #
 #   ./scripts/provision.sh build      # the packages, first
-#   ./scripts/build-image.sh          # -> images/moarchy-pinephone-<date>.img.xz
+#   ./scripts/build-image.sh          # -> images/moarchy-pinephone-<version>-<date>.img.xz
 #
 # For a debug image that joins your wifi on first boot and enables sshd:
 #

@@ -1,8 +1,11 @@
 # Can Omarchy 4.x run on the PinePhone?
 
-**Short answer: probably yes, and it is a real project rather than a dead end.**
-This document exists because an earlier assessment in this repo was wrong, and
-the correction matters.
+**Answered: yes. It has been what moarchy ships since 2026-09-06.** This
+document is kept as the correction to an earlier assessment in this repo that
+was wrong, and as the record of what the port actually cost. The tense below is
+the tense it was written in, on 2026-09-02, when the question was still open;
+the outcome is in the README and the port itself is
+`pkgbuilds/omarchy-config/port-4x.patch`.
 
 ## What the earlier assessment got wrong
 
@@ -107,40 +110,48 @@ Two further requirements, both easy to miss:
   The shell shells out to `hyprctl` for layout metrics; without it every call
   logs "binary could not be found".
 
-### Known remaining defect
+### The one defect the first pass left, since fixed
 
 ```
 Workspaces.qml[58]: TypeError: Cannot read property 'values' of undefined
 ```
 
-`I3.workspaces` has a different shape to Hyprland's. Workspaces still render, so
-this is a refinement rather than a blocker, and it is the obvious next task.
+`I3Workspace` has no `toplevels` model, so upstream's `occupied` binding read
+`.values` off `undefined`. `port-4x.patch` answers it from sway's own
+`representation` string instead, and adds a `wsNumber()` helper because sway's
+visible number is `.number` (or `.num`) where Hyprland conflated number and id.
 
 ## What still cannot work
 
 Hyprland itself, for the reason in the README: the Mali-400 is GLES 2.0 and
 Hyprland hard-requires a GLES 3.0 context. So 4.x's `default/themed/hyprland.lua.tpl`,
 `omarchy-hyprland-*` scripts, hyprlock, hypridle and hyprsunset all remain
-unusable. A 4.x port would need the same Sway substitution this repo already
-does for 3.8.4 — the difference is that the *shell* layer would be adopted
-rather than replaced.
+unusable — the Sway substitution this repo does for the *compositor* is
+unchanged by 4.x. What 4.x changes is that the *shell* layer is adopted rather
+than replaced.
 
-## Suggested order of experiments
+## How it went
 
-Step 1 is **done** (see above) and it passed.
+The plan below was written on 2026-09-02 with step 1 done. All of it except
+herdr landed by 2026-09-06, and the outcome replaced the 3.8.4 port rather than
+running beside it.
 
 1. ~~**Memory ceiling.**~~ Done: 197 MB of 1246 MB available. Not a blocker.
-2. **Sway substitution.** Repoint the 5 `Quickshell.Hyprland` imports at
-   `Quickshell.I3` and see how much behaviour survives (workspaces, focus).
-3. **Theme bridge.** 4.x themes through `shell.toml.tpl` rather than
-   `waybar.css.tpl`; check whether the same `colors.toml` still drives it.
-4. **herdr build.** Straightforward Rust cross-build in the existing
-   `docker/Dockerfile.builder` container — do this last, it is optional polish.
-5. **Path migration.** 4.x moved the current theme from
-   `~/.config/omarchy/current` to `~/.local/state/omarchy/current`.
+2. ~~**Sway substitution.**~~ Done, and it is
+   `pkgbuilds/omarchy-config/port-4x.patch` — 9 files, applied in
+   `omarchy-config`'s `prepare()` at build time rather than by a script on the
+   phone (`docs/structure.md` P3, P4).
+3. ~~**Theme bridge.**~~ Done: the same `colors.toml` drives `shell.toml.tpl`,
+   and all 22 themes work with `default/themed/sway.conf.tpl` as the only file
+   added.
+4. **herdr build.** Not done and not needed. herdr is a terminal workspace
+   manager, not part of the shell; `learn.herdr-keybindings` is Unsupported in
+   `docs/menu-coverage.md` and nothing else refers to it.
+5. ~~**Path migration.**~~ Done: the current theme is read from
+   `~/.local/state/omarchy/current`.
 
-## If it works
-
-The result would be a second branch of this project — Omarchy 4.x's shell on
-Sway — rather than a replacement. Keep the v3.8.4 path working until the 4.x one
-is demonstrably better on this hardware, because 3.8.4 is known-good today.
+**What it turned out to be.** Not a second branch. moarchy runs Omarchy v4.0.2
+(`346e69e`) and the v3.8.4 port is gone from the tree — it exists only in git
+history. Whether `omarchy-config` should stay a package at all, versus vendoring
+the shell outright, is the live version of this question now; the patch size is
+the test, and `docs/structure.md` §12 Q5 carries it.

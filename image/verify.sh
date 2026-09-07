@@ -1,7 +1,7 @@
 #!/bin/bash
 # Verify a built image without a phone.
 #
-#   ./scripts/verify-image.sh [path/to/moarchy-pinephone-<date>.img.xz]
+#   ./scripts/verify-image.sh [path/to/moarchy-pinephone-<version>-<date>.img.xz]
 #
 # Three layers, in order of how much they prove:
 #

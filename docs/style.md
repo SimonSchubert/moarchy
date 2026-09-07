@@ -25,7 +25,7 @@ comment in its header claimed it mirrored every other screen in the shell.
 
 | Term | What it means |
 | --- | --- |
-| **surface** | One screen this shell draws: the bar, the drawer, the shade, Settings, Themes, Wi-Fi, Device, the carousel, the splash. |
+| **surface** | One screen this shell draws: the bar, the drawer, the shade, Settings, Themes, Wi-Fi, Bluetooth, Device, the carousel, the splash. |
 | **token** | A value read from `Style` or `Color` rather than written as a number. |
 | **chrome** | What is drawn to say a control is there: the pill, the circle, the track. |
 | **target** | The region that answers a tap. Not the same object as the chrome, and this file spends §E on the difference. |
@@ -452,9 +452,11 @@ numbers.
 | `moarchy.bluetooth` | radio switch | 52 × 30 drawn, 44 tall answering | ok, E2 |
 | `moarchy.device` | header back | 40 drawn, 44 answering | ok, E2 |
 
-**State.** `scripts/style-check.sh` passes: 5 checks, 0 failures. Each of the
-eight rules it enforces has been broken on a copy of the tree and seen to fail, so
-the green is a measurement rather than an absence.
+**State.** `scripts/style-check.sh` passes: 5 checks, 0 failures. Those five
+checks carry ten rules — A1, A2, A3, B1, B3, B5, C4, D1, H1, H6 — and each has
+been broken on a copy of the tree and seen to fail, so the green is a
+measurement rather than an absence. (It was eight until H1 and H6 arrived with
+§H; the count lives in the script's header comment, which is the copy to trust.)
 
 §H holds across all 28 controls. One of them had a press state before it was
 written — `moarchy.device`'s back chevron, which snapped between `container` and

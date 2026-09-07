@@ -67,8 +67,10 @@ package() {
 
   # --- the shell plugins ---------------------------------------------------
   # PluginRegistry scans this directory before ~/.config/omarchy/plugins, so a
-  # user copy of the same id still wins. Ten directories that used to be
-  # copied into every home, upgraded now by upgrading the package.
+  # user copy of the same id still wins. Every directory in
+  # default/omarchy/plugins/ -- they used to be copied into every home and are
+  # upgraded now by upgrading the package. Deliberately not counted here: the
+  # count moves and a number in a comment does not.
   install -d "$pkgdir/usr/share/moarchy/plugins"
   cp -a "$_repo"/default/omarchy/plugins/. "$pkgdir/usr/share/moarchy/plugins/"
 

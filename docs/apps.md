@@ -177,16 +177,19 @@ tapping it flips which sensor link to `sun6i-csi-bridge` is `[ENABLED]`, cycling
 
 ### Three things that bite
 
-1. **`xdg-user-dirs` is required, and nothing pulled it in.** Without it
-   `~/Pictures` never exists, and every photo is captured and then **silently
-   thrown away** at the last step:
+1. **`xdg-user-dirs` is required, and `megapixels` does not declare it.**
+   Without it `~/Pictures` never exists, and every photo is captured and then
+   **silently thrown away** at the last step:
    `cp: cannot create regular file '/home/…/Pictures/IMG….dng': No such file or
    directory`. The burst is written to `/tmp` first, so the failure appears only
-   after the shutter animation, and the app reports nothing.
-2. **The flash permission does not survive a reboot.** The shipped
+   after the shutter animation, and the app reports nothing. `moarchy-meta`
+   declares it, so an image has it; a hand-built system has to add it.
+2. **The flash permission does not survive a reboot on its own.** The shipped
    `90-megapixels.rules` chmods `flash_strobe` to 666 on `ACTION=="add"` only,
    and the LED is added at boot before the rule exists, so it stays root-owned.
-   `udevadm trigger --subsystem-match=leds` fixes it until the next boot.
+   `udevadm trigger --subsystem-match=leds` fixes it until the next boot, and
+   `moarchy-led-perms.service` runs exactly that after `systemd-udevd` on every
+   boot rather than editing someone else's udev rule.
 3. **The preview is software-rendered, by Megapixels' own choice.** It matches
    the devicetree and forces `LIBGL_ALWAYS_SOFTWARE=1`, so the GLES preview runs
    on the A53s, not the Mali — GTK4 then reports "OpenGL ES 3.2" because that is
@@ -206,7 +209,7 @@ RMS 0. Video also needs `python-gobject`, `gst-plugins-good` and
 | | |
 | --- | --- |
 | **Microphone** | Records digital silence (RMS 0) at PipeWire *and* raw ALSA, despite `Mic1` on, boost 7, `ADC` 144/192 and `AIF1 Slot 0 Digital ADC` enabled |
-| ~~Camera~~ | **Works as of 2026-09-06** — see [Camera](#camera) below. The old entry here blamed `VIDIOC_STREAMON`; the links were never configured because nothing was configuring them |
+| ~~Camera~~ | **Works as of 2026-09-06** — see [Camera](#camera) above. The old entry here blamed `VIDIOC_STREAMON`; the links were never configured because nothing was configuring them. It still reboots the phone on the *first* launch after a boot; second and later launches are fine, and the cause is undiagnosed |
 | Audio **output** | Works |
 | Hardware video decode | `cedrus` present at `/dev/video1`, unexplored |
 

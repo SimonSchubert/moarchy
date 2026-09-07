@@ -1030,7 +1030,7 @@ silent. `moarchy.device` spent a day in exactly that state -- scp'd,
 uncommitted, live -- and the next provision would have removed it. Commit a
 plugin before you rely on it surviving.
 
-## 6i. Two surfaces, one edge
+## 6ja. Two surfaces, one edge
 
 The on-screen keyboard was replaced, and the new one landed on the **Overlay**
 layer -- the same layer as the gesture strip. Both reserve space, and the total
@@ -1546,8 +1546,9 @@ existing.
 
 The sheet was a fixed 90% of the usable height whatever it held, so an empty
 shade was two thirds blank space below the sliders and a full one was no
-bigger. `shade.md` had carried that as an open question -- **? S21**, the only
-`?` left in the file -- since the sheet was written. It is answered now: the
+bigger. `shade.md` had carried that as an open question -- **? S21** -- since
+the sheet was written. (S15 and S17 are still marked `?`; S21 was the only one
+about the sheet's geometry.) It is answered now: the
 sheet is its content's height, capped at the same 90%, and at the cap the list
 scrolls. Measured on the device: **330 logical px empty, 454 with one
 notification, 630 at the cap**, against 630 for everything before.
@@ -1722,7 +1723,7 @@ deleting anything, so they are package-owned now.
 | Display, touch, wifi, bluetooth | working |
 | Audio **output** | working — sink present, streams play |
 | **Microphone** | **not working** — records digital silence (RMS 0) at PipeWire *and* raw ALSA, despite `Mic1` on, boost 7, `ADC` 144/192 and `AIF1 Slot 0 Digital ADC` on |
-| **Camera** | sensors register (`ov5640` rear, `gc2145` front) but `VIDIOC_STREAMON` fails — pipeline links unconfigured |
+| **Camera** | **working as of 2026-09-06** via Megapixels 2.1.0 — `libmegapixels` configures the media graph, which nothing else was doing. Reboots the phone on the first launch after a boot; undiagnosed. See `docs/apps.md` |
 | Hardware video decode | `cedrus` present at `/dev/video1` |
 
 ## 8. Known-bad / open
@@ -1759,6 +1760,9 @@ deleting anything, so they are package-owned now.
   fit "worked after a reboot" and have completely different fixes. The image
   keeps `/var/log/journal` now, so `journalctl -b -1` will say which.
 
+- **`bin/moarchy-selftest`'s three standing base failures**, above, are the
+  ones to fix or teach to skip; nothing else in this list is red every run.
+
 - ~~**Browser-policy theming fails on every `omarchy-theme-set`.**~~ **Fixed
   2026-09-06** by packaging: the error was that `omarchy-theme-set-browser`
   sources `$OMARCHY_PATH/install/helpers/browser-policy.sh`, and we shipped a
@@ -1774,4 +1778,7 @@ deleting anything, so they are package-owned now.
   colour is lost. Harmless, but it prints on every theme change and looks like a
   real failure.
 
-The v3.8.4 (waybar-based) port on `main` ran stably for hours and is the fallback.
+*(That last sentence used to read "The v3.8.4 (waybar-based) port on `main` ran
+stably for hours and is the fallback." It is not a fallback and it is not on
+`main`: the 3.8.4 port was deleted when 4.x shipped and exists only in git
+history. See the README's Omarchy 4.x section.)*
