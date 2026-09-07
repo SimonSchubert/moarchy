@@ -43,7 +43,17 @@ pkgver=$_ver
 # field would not have seen either. An image installs fresh and hides that
 # completely; only a device already running the old package can tell you. Same
 # trap manifest.toml records for the keyboard.
-pkgrel=2
+# 3. The rule above turns on PUBLISHED, and until tonight 0.1.1-2 was not: it
+# sat in packages/ where no device held it, so rebuilding it under the same
+# version hid nothing. Then an image was built from that artifact and flashed,
+# and a phone now has 0.1.1-2 installed while [moarchy] still publishes -1.
+#
+# So the waiver is spent. This pkgrel carries the drawer keeping a row of apps
+# when the keyboard takes the sheet, and search no longer answering "a" with
+# four timezone continents -- and rebuilding -2 with those in it would leave
+# that phone on the old code for good, because pacman compares versions and
+# not contents.
+pkgrel=3
 pkgdesc="Omarchy's look, keybindings and theming on a PinePhone, under Sway"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'

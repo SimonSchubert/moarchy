@@ -40,7 +40,15 @@ pkgver=$_ver
 # and index-fm with no version move at all -- so a phone already holding
 # 0.1.0-1 would never have seen any of it. Then pkgver moved to 0.1.1 and this
 # went back to 1, because 0.1.1-1 is already newer than 0.1.0-2.
-pkgrel=2
+# 3, and the paragraph above is why it was 2 an hour ago rather than wrong now.
+# That reasoning turns on an artifact no device holds -- true of 0.1.1-2 while
+# it sat in packages/, and false the moment an image was built from it and
+# flashed. A phone now has 0.1.1-2 installed against a published -1, so the
+# same argument that kept this at 2 requires a 3 today.
+#
+# What rides it: moarchy-keep joining the depends line. Which is exactly the
+# failure this package is most exposed to -- its entire content IS that line.
+pkgrel=3
 pkgdesc="The moarchy package set -- install this and you have the phone"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'

@@ -50,12 +50,16 @@ version = "0.1.1"
 # ---------------------------------------------------------------------------
 [moarchy-keyboard]
 url        = "https://github.com/SimonSchubert/moarchy-keyboard"
-ref        = "aca9f511f8ae83c7e4a775da4d5b42b3300acc47"
-# Its PKGBUILD still says 0.1.0-1 at this commit, so the package version does
-# not change even though its contents do. Fine for an image, which installs
-# fresh -- but a phone already in the field will not see an upgrade, because
-# pacman compares versions and not contents. The keyboard repo has to bump
-# pkgver for that to work.
+ref        = "ced84dc8f843f400e6f462666fcd3645a42286b1"
+# Carries AC 52: the restore handle moves to Overlay while the keyboard is
+# retracted, so the drawer and Settings stop drawing over the one control that
+# brings the keyboard back.
+#
+# The note that used to sit here said the package version does not move when
+# the contents do, and that the keyboard repo has to bump for a phone in the
+# field to see an upgrade. It did -- this ref is 0.1.0-2. Keeping the shape of
+# the warning because the trap is permanent: pinning by commit here can name a
+# fix that pacman will never offer, and an image hides it by installing fresh.
 version    = "0.1.0"
 # The PKGBUILD lives in packaging/, not at the repo root.
 pkgbuilddir = "packaging"
