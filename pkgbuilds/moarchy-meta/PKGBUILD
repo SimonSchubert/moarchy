@@ -18,8 +18,10 @@ _ver=$(manifest_get moarchy version) || return 1
 
 pkgname=moarchy-meta
 pkgver=$_ver
-# 2, because the list below gained mise-bin, nodejs and npm while
-# manifest.toml's [moarchy] version stayed at 0.1.1. That is the failure this
+# 2, because the list below gained mise-bin, nodejs and npm -- and then lost
+# lisgd, in dafd34f -- while manifest.toml's [moarchy] version stayed at 0.1.1.
+# Both changes ride this one bump because 0.1.1-2 has not been built yet; if it
+# ever is, the next change to the list needs a 3. That is the failure this
 # package is most exposed to, because its entire content IS the depends line: a
 # change here that does not move the version is invisible to pacman, which
 # compares versions and not depends.
