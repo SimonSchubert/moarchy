@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- See moarchy.wifi/icon.svg for why this is a file and not a theme name.
+       Violet rather than the Bluetooth blue, so a thumb tells this apart from
+       Wi-Fi at drawer size without reading either label. -->
+  <defs>
+    <linearGradient id="btTile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9B7BF9"/>
+      <stop offset="1" stop-color="#6D28D9"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#btTile)"/>
+  <path d="M42 40 L86 80 L64 102 L64 26 L86 48 L42 88"
+        fill="none" stroke="#ffffff" stroke-width="10"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

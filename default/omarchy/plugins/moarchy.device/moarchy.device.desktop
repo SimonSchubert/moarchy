@@ -7,7 +7,12 @@ Comment=Battery, thermals, CPU, memory and storage at a glance
 # holds. Asking the shell to summon it is what makes a plugin appear in the
 # drawer and behave like any other app.
 Exec=omarchy-shell shell toggle moarchy.device
-Icon=computer-symbolic
+# An absolute path, not a themed name. AppLibrary.iconSource() returns a file
+# URL for anything starting with "/" and never consults the icon theme, which
+# is the point: the themed name resolved to a dark monochrome glyph on the
+# drawer's dark sheet, so the entry was drawn and unreadable. The file ships
+# beside the plugin it belongs to, at the path the package installs it to.
+Icon=/usr/share/moarchy/plugins/moarchy.device/icon.svg
 Terminal=false
 Categories=System;Monitor;
 Keywords=battery;temperature;cpu;memory;hardware;

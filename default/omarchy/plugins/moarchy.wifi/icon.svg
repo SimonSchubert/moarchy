@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Shipped rather than named, because a themed name is not a picture.
+       `network-wireless-symbolic` is a monochrome glyph the icon theme paints
+       near-black, and the drawer's sheet is dark: the entry was there and
+       invisible. A tile with a white glyph reads on any background the theme
+       can produce, and it does not depend on Yaru carrying a wireless icon,
+       which it does not. -->
+  <defs>
+    <linearGradient id="wifiTile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4C8DF8"/>
+      <stop offset="1" stop-color="#1D4ED8"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#wifiTile)"/>
+  <g fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round">
+    <path d="M31.5 59.5 A46 46 0 0 1 96.5 59.5"/>
+    <path d="M41.4 69.4 A32 32 0 0 1 86.6 69.4"/>
+    <path d="M51.3 79.3 A18 18 0 0 1 76.7 79.3"/>
+  </g>
+  <circle cx="64" cy="92" r="6.5" fill="#ffffff"/>
+</svg>
