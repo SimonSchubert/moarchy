@@ -102,6 +102,43 @@ arch-chroot "$ROOTDIR" systemctl enable systemd-resolved >/dev/null 2>&1 ||
   say "!! could not enable systemd-resolved -- the image will have no DNS"
 say "systemd-resolved enabled (without it the image resolves no names)"
 
+# --- the clock (I10) -------------------------------------------------------
+# Nothing in this image sets the time. Arch enables no NTP client by default,
+# and this systemd ships no /usr/lib/clock-epoch, so the only thing holding the
+# clock up is the PMIC RTC -- which reads back nonsense on a phone that has been
+# off the battery. A clock far enough out fails certificate validation on every
+# TLS handshake, and the phone can no longer install anything:
+#
+#   yay:    x509: certificate has expired or is not yet valid
+#   pacman: SSL peer certificate or SSH remote key was not OK
+#
+# Reported from a freshly flashed 0.1.1 card. It reads like a broken package
+# repo or a release that has not been published yet, and it is neither, which
+# is most of why it is worth the comment.
+#
+# NTP rather than a baked-in timestamp, because it corrects the clock in both
+# directions: a stale RTC reads into the past, a garbage one into the future,
+# and either breaks TLS. timesyncd is already installed -- it is part of the
+# systemd package -- so this enables what is there rather than adding a package.
+arch-chroot "$ROOTDIR" systemctl enable systemd-timesyncd.service >/dev/null 2>&1 ||
+  say "!! could not enable systemd-timesyncd -- the phone will have no time source"
+say "systemd-timesyncd enabled (without it TLS fails and nothing installs)"
+
+# A floor under the clock for a phone that boots with no network. timesyncd
+# steps the system clock forward to this file's mtime when it starts, so the
+# phone comes up no earlier than the day its image was built even with no wifi
+# in range -- and the certificates it has to trust were all issued before that.
+#
+# Owned by the service user because timesyncd rewrites the file as it syncs;
+# StateDirectory= chowns the directory it creates itself, but not one the image
+# put there first.
+install -d "$ROOTDIR/var/lib/systemd/timesync"
+: > "$ROOTDIR/var/lib/systemd/timesync/clock"
+arch-chroot "$ROOTDIR" chown -R systemd-timesync:systemd-timesync \
+  /var/lib/systemd/timesync >/dev/null 2>&1 ||
+  say "!! could not chown the timesync state -- timesyncd may not persist the clock"
+say "clock floored at the build date, for a first boot with no network"
+
 # --- keep the journal across reboots ---------------------------------------
 # journald's default Storage=auto writes to /run (volatile) unless
 # /var/log/journal exists, so a phone that fails to bring its session up loses

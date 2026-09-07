@@ -411,6 +411,25 @@ while the image is not ours. **Met 2026-09-06.**
 > identified the `[danctnix]` repo and the device package set, after three
 > guesses at repo URLs returned nothing.
 
+**I10** The image carries a time source. **Met:** `systemd-timesyncd` is
+enabled, and `/var/lib/systemd/timesync/clock` is seeded at build time so the
+clock has a floor before the network is up.
+
+> Found the hard way on a freshly flashed 0.1.1 card: installing anything failed
+> with `x509: certificate has expired or is not yet valid`. Nothing was wrong
+> with the package repository or the release — the phone's clock was.
+>
+> Arch enables no NTP client by default, and this systemd ships no
+> `/usr/lib/clock-epoch`, so nothing at all held the clock up except the PMIC
+> RTC, which reads back nonsense once the battery has been off. A clock far
+> enough out fails certificate validation on every TLS handshake, so `pacman`,
+> `yay` and the store all stop working at once — and each blames its own
+> endpoint, which is what makes it look like a server-side problem.
+>
+> NTP rather than a baked-in date, because it corrects the clock in both
+> directions: a stale RTC reads into the past, a garbage one into the future,
+> and either one breaks TLS.
+
 ---
 
 ## 8. Version pins and reproducibility

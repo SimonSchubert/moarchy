@@ -225,6 +225,21 @@ unit system/multi-user.target moarchy-firstboot.service
 unit system/multi-user.target moarchy-led-perms.service
 unit system/sysinit.target    moarchy-grow-rootfs.service
 unit user/default.target      moarchy-user-setup.service
+# sysinit.target, which is where systemd-timesyncd.service's own [Install]
+# section puts it -- not multi-user like the moarchy units above.
+unit system/sysinit.target    systemd-timesyncd.service
+
+# The clock (I10). An image with no NTP client enabled has no time source at
+# all: Arch enables none by default and this systemd ships no
+# /usr/lib/clock-epoch, so the clock is whatever the PMIC RTC says. Far enough
+# out and every TLS handshake fails certificate validation, which is how it
+# actually presented -- as `yay` reporting an expired certificate for the AUR on
+# a phone flashed the same day.
+if [ -f "$R/var/lib/systemd/timesync/clock" ]; then
+  ok "clock floor seeded (/var/lib/systemd/timesync/clock)"
+else
+  no "no clock floor -- an offline first boot gets whatever the RTC says"
+fi
 
 sec "credentials -- what must NOT be here"
 u=$(grep -c '^moarchy:' "$R/etc/passwd" 2>/dev/null)
