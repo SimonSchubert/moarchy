@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name=Bluetooth
+GenericName=Devices
+Comment=Pair and connect a Bluetooth device
+# A shell plugin is not a process you launch, it is a screen the shell already
+# holds. `toggle` and not `summon` so a second tap on the drawer icon puts it
+# away again, which is what every other entry here does.
+Exec=omarchy-shell shell toggle moarchy.bluetooth
+Icon=bluetooth-symbolic
+Terminal=false
+Categories=Settings;HardwareSettings;
+Keywords=bluetooth;bt;pair;pairing;headset;headphones;speaker;keyboard;mouse;
+# Ownership marker: the packaging moves entries out of the plugin directory and
+# names the plugin they belong to.
+X-Moarchy-Plugin=moarchy.bluetooth

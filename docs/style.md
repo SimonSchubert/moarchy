@@ -116,7 +116,7 @@ edge rather than centred may stay a plain `Text`.
 | --- | --- | --- |
 | bar | `Color.bar.*` | `moarchy.bar` |
 | full-screen | `Color.menu.*` | drawer, Settings, Themes, carousel |
-| popup / pull-down | `Color.popups.*` | shade, Wi-Fi |
+| popup / pull-down | `Color.popups.*` | shade, Wi-Fi, Bluetooth |
 
 **C2** Each surface declares the same six roles at the top of the file, and the
 body refers only to those — never to `Color.*` inline. The recipe:
@@ -356,6 +356,9 @@ numbers.
 | `moarchy.wifi` | header back | 38 drawn, 44 answering | ok, E2 |
 | `moarchy.wifi` | radio switch | 52 × 30 drawn, 44 tall answering | ok, E2 |
 | `moarchy.wifi` | passphrase field / reveal | fills its half; eye 44 | ok, F1–F5 |
+| `moarchy.bluetooth` | device row, Connect / Disconnect / Forget | ≥ 44 | ok |
+| `moarchy.bluetooth` | header back | 38 drawn, 44 answering | ok, E2 |
+| `moarchy.bluetooth` | radio switch | 52 × 30 drawn, 44 tall answering | ok, E2 |
 | `moarchy.device` | header back | 40 drawn, 44 answering | ok, E2 |
 
 **State.** `scripts/style-check.sh` passes: 4 checks, 0 failures. Each of the
@@ -398,6 +401,19 @@ the sheet was still animating open.
 
 *F3.* `omarchy-shell drawer searchTarget` reports `pill=10,26 340x46
 field=10,26 340x46` — the field is not merely inside the pill, it *is* the pill.
+
+*E1, on `moarchy.bluetooth`'s action strip*, 2026-09-07.
+`omarchy-shell bluetooth actionTarget` reports `actions=226,152 110x44` — 44 on
+the shorter side, read off the running surface rather than off `Style.space(44)`
+in the source, which is the distinction §I exists to make.
+
+Getting that reading is what found the bug behind it. The strip registers itself
+in `onVisibleChanged`, and the fixture used to force a row open pinned
+`isExpanded` to `true` — so the delegate was built already visible, the signal
+never fired, and the accessor answered the empty string while the strip was
+plainly on screen at the right size. Real taps never hit it, because the list is
+frozen while a row is open and no delegate is rebuilt. It is registered on
+completion as well now.
 
 *F5.* That `field=` rect is identical focused and unfocused, in every reading.
 

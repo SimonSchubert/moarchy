@@ -668,16 +668,21 @@ app you are leaving gets a picture" is satisfied the same way — Settings is on
 screen and is being rendered, which is the whole of that constraint's
 reasoning.
 
-**K11** Settings, and nothing else. The shade and the drawer stay transient
-sheets with no card: they are summoned and dismissed in one motion, Android
-gives neither a recents entry, and A7/A8 already say the strip clears them. The
-theme picker stays out too — it is a page reached from Settings that returns to
-the page it was opened from (`settings.md` B7), not a screen of its own.
+**K11** Three shell apps: **Settings**, **Wi-Fi** and **Bluetooth**, and
+nothing else. The shade and the drawer stay transient sheets with no card: they
+are summoned and dismissed in one motion, Android gives neither a recents entry,
+and A7/A8 already say the strip clears them. The theme picker stays out too — it
+is a page reached from Settings that returns to the page it was opened from
+(`settings.md` B7), not a screen of its own.
 
 Stated as a criterion because "shell app" is a mechanism, and a mechanism with
-one user looks like an oversight rather than a decision. Adding a second one is
-a decision to take deliberately, not by noticing that the machinery would allow
-it.
+one user looks like an oversight rather than a decision. Each addition is a
+decision taken deliberately, not by noticing that the machinery would allow it.
+The test is whether it is a screen you *sit in* — Wi-Fi (2026-09-06) because
+joining a network means retyping a passphrase and coming back; Bluetooth
+(`shade.md` S6d) because pairing means waiting for a device to appear, putting it
+in pairing mode, and trying again. Both are the shape of Settings and nothing
+like a sheet you dismiss in one motion.
 
 **K12** A bridged launch still puts Settings away first (`settings.md` E6) and
 leaves it running, so the terminal it opened and the Settings page behind it

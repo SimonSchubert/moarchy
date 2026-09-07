@@ -604,22 +604,20 @@ Item {
   Timer { id: historyRefresh; interval: 250; onTriggered: historyRead.running = true }
 
   // S6, S6a, S6b, S6c. Each wide tile toggles a radio and holds to open the
-  // thing that radio is for. Both are the commands the matching Settings rows
-  // run (`net.wifi`, `net.bluetooth`), so there is one picker behind two
+  // thing that radio is for. Both open the same screen the matching Settings
+  // row opens (`net.wifi`, `net.bluetooth`), so there is one picker behind two
   // entry points rather than two that drift.
   //
-  // Wi-Fi is a screen of its own now, not a terminal. nmtui-connect fits the
-  // 60x41 grid and its list and buttons are all on screen -- and none of them
-  // can be pressed, because a TUI's buttons are drawn text rather than
-  // surfaces. Driving it needs Tab, arrows and Enter, which the on-screen
-  // keyboard does not have, so you could see your network and not join it.
-  // moarchy.wifi is the same list with tap targets and a passphrase field.
-  //
-  // Bluetooth keeps bluetui for now: pairing is rarer, and the equivalent
-  // screen is not written.
-  readonly property string wifiPicker: ""
-  readonly property string btPicker:
-    "omarchy-launch-floating-terminal-with-presentation bluetui"
+  // Neither is a terminal any more, and the two lost the argument differently.
+  // nmtui-connect fits the 60x41 grid -- its list and buttons are all on
+  // screen -- and none of them can be pressed, because nmtui never asks for
+  // mouse reporting and foot's tap-to-click has nothing to deliver the tap to.
+  // bluetui does ask, and was genuinely operable; it was still a list whose
+  // rows are one terminal line, ~17 logical px against the 44 style.md E1
+  // asks for, in a window carrying its own workspace, its own carousel card
+  // and foot's palette instead of the shell's. moarchy.wifi and
+  // moarchy.bluetooth are the same two lists with tap targets
+  // (docs/shade.md S6b, S6c, S6d).
 
   // Set by `shade dryRun 1`, the way Settings does it. What the tile decided is
   // recorded either way; only the two effects that cannot be taken back -- the
@@ -628,16 +626,6 @@ Item {
   property bool dryRun: false
   property string lastLaunch: ""
   property string lastAction: ""
-
-  function openPicker(cmd) {
-    // The terminal comes up over the shade, so the shade goes away first --
-    // the same order the gear uses (S2).
-    root.dismiss()
-    root.lastAction = "picker"
-    root.lastLaunch = cmd
-    if (root.dryRun) return
-    Quickshell.execDetached(["bash", "-lc", cmd])
-  }
 
   function wifiTap() {
     if (root.airplane) {
@@ -655,17 +643,22 @@ Item {
 
   function wifiHold() { root.openWifi() }
 
-  // Its own entry point rather than openPicker's launch: this summons a plugin
-  // instead of spawning a process, so lastLaunch stays empty and lastAction
-  // records the same "picker" the tile tests assert.
-  function openWifi() {
+  // One entry point for both tiles: they summon a plugin rather than spawning
+  // a process, so lastLaunch carries the plugin id -- not a command -- and
+  // lastAction records the same "picker" the tile checks assert.
+  function openScreen(id) {
+    // The screen comes up over the shade, so the shade goes away first -- the
+    // same order the gear uses (S2).
     root.dismiss()
     root.lastAction = "picker"
-    root.lastLaunch = "moarchy.wifi"
+    root.lastLaunch = id
     if (root.dryRun) return
     if (root.shell && typeof root.shell.summon === "function")
-      root.shell.summon("moarchy.wifi", JSON.stringify({ returnTo: "moarchy.shade" }))
+      root.shell.summon(id, JSON.stringify({ returnTo: "moarchy.shade" }))
   }
+
+  function openWifi() { root.openScreen("moarchy.wifi") }
+  function openBluetooth() { root.openScreen("moarchy.bluetooth") }
 
   // S6c. The pair behaves the same way. No stranded case here: a Bluetooth
   // adapter with nothing paired in range is the normal resting state of one,
@@ -680,7 +673,7 @@ Item {
     if (!root.dryRun && root.btAdapter) root.btAdapter.enabled = !root.btAdapter.enabled
   }
 
-  function btHold() { root.openPicker(root.btPicker) }
+  function btHold() { root.openBluetooth() }
 
   function setBrightness(percent) {
     var v = Math.max(1, Math.min(100, Math.round(percent)))

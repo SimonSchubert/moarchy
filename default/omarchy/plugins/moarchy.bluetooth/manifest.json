@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "moarchy.bluetooth",
+  "name": "Bluetooth",
+  "version": "1.0.0",
+  "author": "moarchy",
+  "description": "Pair and connect a Bluetooth device, with a finger.",
+  "kinds": [
+    "overlay"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "Bluetooth.qml"
+  }
+}

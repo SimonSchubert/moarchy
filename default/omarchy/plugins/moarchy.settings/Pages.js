@@ -102,23 +102,29 @@ var PAGES = {
   // which fits the screen and could not be operated -- but for a narrower
   // reason than "a TUI cannot be touched". foot turns a tap into a left click,
   // and nmtui simply never asks for mouse reporting, so the click went
-  // nowhere. TUIs that do ask are fine by touch; see the bluetooth row.
+  // nowhere. TUIs that do ask are fine by touch, which is not the same as
+  // fine on a phone; see the bluetooth row.
   //
   // returnTo brings Back here rather than dropping you on the home screen.
   { id: "wifi", type: "action", glyph: "󱚾", label: "Wi-Fi networks",
     detailCmd: "omarchy-network-status",
     run: "omarchy-shell shell summon moarchy.wifi '{\"returnTo\":\"moarchy.settings\",\"page\":\"net\"}'",
     launch: "none" },
-  // Bluetooth keeps the TUI: pairing is rarer, and the equivalent screen is not
-  // written. That is affordable because bluetui is operable here -- it enables
-  // mouse reporting, and its own bindings (s scan, Enter connect, j/k) are all
-  // keys the on-screen keyboard has, tab and arrows included. Not impala's
-  // Bluetooth half -- and for Wi-Fi impala was
-  // wrong outright, being an iwd client on a phone running NetworkManager with
-  // iwd.service disabled but D-Bus activatable, so it would have started iwd to
-  // fight NetworkManager for wlan0.
+  // Bluetooth is a screen too now, the same pairing as Wi-Fi: this row and the
+  // shade's long press open moarchy.bluetooth (docs/shade.md S6c, S6d).
+  //
+  // It was `bluetui`, and bluetui was never the failure nmtui was -- it enables
+  // mouse reporting, so foot's tap-to-click reaches it, and its own bindings
+  // (s scan, Enter connect, j/k) are all keys the on-screen keyboard has, tab
+  // and arrows included. It was still a list whose rows are one terminal line,
+  // ~17 logical px against style.md E1's 44, in a window with its own
+  // workspace and its own palette. Not impala's Bluetooth half either -- and
+  // for Wi-Fi impala was wrong outright, being an iwd client on a phone
+  // running NetworkManager with iwd.service disabled but D-Bus activatable, so
+  // it would have started iwd to fight NetworkManager for wlan0.
   { id: "bluetooth", type: "action", glyph: "󰂯", label: "Bluetooth devices",
-    run: "bluetui", launch: "tui" },
+    run: "omarchy-shell shell summon moarchy.bluetooth '{\"returnTo\":\"moarchy.settings\",\"page\":\"net\"}'",
+    launch: "none" },
   { id: "qr", type: "action", glyph: "󰐲", label: "Wi-Fi QR code",
     when: "[[ $(omarchy-network-status) == wifi* ]]",
     run: "omarchy-shell shell summon omarchy.wifiqr", launch: "none",

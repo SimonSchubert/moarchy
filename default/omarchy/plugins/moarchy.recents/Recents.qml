@@ -332,24 +332,31 @@ Item {
   // Settings was on when the row was last rebuilt, and would keep its accent
   // border after the screen had gone.
   //
-  // Two of these now. K11 said adding a second should be a decision rather than
-  // a discovery that the machinery allows it -- Wi-Fi is that decision, taken
-  // 2026-09-06: joining a network is something you sit in, retype a passphrase
-  // in, and come back to, which is the same shape as Settings and nothing like
-  // a sheet you summon and dismiss in one motion.
+  // Three of these now. K11 said each addition should be a decision rather than
+  // a discovery that the machinery allows it -- Wi-Fi was that decision on
+  // 2026-09-06 and Bluetooth on 2026-09-07, and both pass the same test:
+  // joining a network or pairing a headset is something you sit in, wait in,
+  // and come back to, which is the shape of Settings and nothing like a sheet
+  // you summon and dismiss in one motion.
   //
-  // Still not a registry. Two named properties are honest about there being
-  // two; a registry would imply plugins can opt in, and the ordering,
+  // Still not a registry. Three named properties are honest about there being
+  // three; a registry would imply plugins can opt in, and the ordering,
   // focus and quit semantics below are not general enough for that to be true.
+  // What the third one did buy is `shellApps` and `itemForShellApp()` below:
+  // with two, the places that have to visit all of them could get away with
+  // naming both, and `hideShellApps()` quietly named only one.
   property var settingsItem: null
   property var wifiItem: null
+  property var bluetoothItem: null
 
   function resolveShellApps(): void {
     var loaders = root.shell && root.shell.panelLoaders ? root.shell.panelLoaders : null
     var s = loaders ? loaders["moarchy.settings"] : null
     var w = loaders ? loaders["moarchy.wifi"] : null
+    var b = loaders ? loaders["moarchy.bluetooth"] : null
     root.settingsItem = s && s.item ? s.item : null
     root.wifiItem = w && w.item ? w.item : null
+    root.bluetoothItem = b && b.item ? b.item : null
   }
 
   // Polled, not bound, and not resolved once at startup either. `panelLoaders`
@@ -364,6 +371,7 @@ Item {
     repeat: true
     triggeredOnStart: true
     running: root.settingsItem === null || root.wifiItem === null
+             || root.bluetoothItem === null
     onTriggered: root.resolveShellApps()
   }
 
@@ -420,10 +428,48 @@ Item {
     onActivatedChanged: root.rebuildMru()
   }
 
+  QtObject {
+    id: bluetoothApp
+
+    readonly property bool shellApp: true
+    readonly property string appId: "moarchy.bluetooth"
+    readonly property string name: "Bluetooth"
+
+    // The literal character, not an escape, for the reason Wi-Fi's note gives:
+    // JavaScript's \u takes exactly four hex digits, so "\uF00AF" is U+F00A
+    // followed by an "F". U+F00AF, md-bluetooth -- the same rune the shade's
+    // tile and the Settings row wear.
+    readonly property string glyph: "󰂯"
+
+    readonly property bool running: !!(root.bluetoothItem && root.bluetoothItem.running)
+    readonly property bool activated: !!(root.bluetoothItem && root.bluetoothItem.opened)
+
+    // The device it is on, so the card says something worth reading.
+    readonly property string title:
+      root.bluetoothItem ? String(root.bluetoothItem.pageTitle || "") : ""
+
+    onRunningChanged: root.rebuildMru()
+    onActivatedChanged: root.rebuildMru()
+  }
+
+  // The three, in the order they lead in when more than one is on screen --
+  // which cannot happen, since each hides the others on the way up, but the
+  // order has to be *some* order and this one matches shell.json.
+  readonly property var shellApps: [settingsApp, wifiApp, bluetoothApp]
+
+  // appId -> the plugin item behind it. quit() and hide() need the item, not
+  // the QtObject that mirrors it.
+  function itemForShellApp(appId) {
+    if (appId === "moarchy.wifi") return root.wifiItem
+    if (appId === "moarchy.bluetooth") return root.bluetoothItem
+    return root.settingsItem
+  }
+
   // A9/K1, asked by the gestures plugin when it needs to know whether the
   // strip has a carousel worth raising. Answered here so that "what counts as
   // an app" is decided in exactly one place.
-  readonly property bool shellAppsRunning: settingsApp.running || wifiApp.running
+  readonly property bool shellAppsRunning:
+    settingsApp.running || wifiApp.running || bluetoothApp.running
 
   // --------------------------------------------------------------- the model
   //
@@ -444,8 +490,8 @@ Item {
     var windows = ToplevelManager.toplevels ? ToplevelManager.toplevels.values : []
     var out = []
     for (var i = 0; i < windows.length; i++) out.push(windows[i])
-    if (settingsApp.running) out.push(settingsApp)
-    if (wifiApp.running) out.push(wifiApp)
+    for (var s = 0; s < root.shellApps.length; s++)
+      if (root.shellApps[s].running) out.push(root.shellApps[s])
     return out
   }
 
@@ -475,7 +521,10 @@ Item {
     // layer surface, but activeToplevel has been seen to answer with one
     // anyway, and that stale answer would put the accent on the app Settings
     // is covering rather than on Settings.
-    var active = settingsApp.activated ? settingsApp : ToplevelManager.activeToplevel
+    var active = null
+    for (var s = 0; s < root.shellApps.length; s++)
+      if (root.shellApps[s].activated) { active = root.shellApps[s]; break }
+    if (!active) active = ToplevelManager.activeToplevel
     if (!active)
       for (var k = 0; k < live.length; k++)
         if (live[k] && live[k].activated) { active = live[k]; break }
@@ -592,10 +641,16 @@ Item {
   // it is left standing. shell.hide() is the whole implementation -- it lands
   // on the plugin's close(), which is deliberately the hiding one, while
   // quit() is the closing one.
+  // All of them, which the plural in the name always claimed and the body did
+  // not do: it named Settings only, so tapping a window's card with the Wi-Fi
+  // screen up left that screen drawn over the window it had just raised --
+  // exactly the K9 failure the call site below is ordered to avoid.
   function hideShellApps(): void {
-    if (!settingsApp.running || !settingsApp.activated) return
-    if (root.shell && typeof root.shell.hide === "function")
-      root.shell.hide(settingsApp.appId)
+    if (!root.shell || typeof root.shell.hide !== "function") return
+    for (var i = 0; i < root.shellApps.length; i++) {
+      var app = root.shellApps[i]
+      if (app.running && app.activated) root.shell.hide(app.appId)
+    }
   }
 
   // close() is xdg_toplevel.close -- a close *request*, so an editor with
@@ -610,7 +665,7 @@ Item {
       // close *request* to make of our own surface and nothing it could
       // prompt about, so unlike a window this can never be refused -- which is
       // why the removal below is unconditionally right for it.
-      var item = app.appId === "moarchy.wifi" ? root.wifiItem : root.settingsItem
+      var item = root.itemForShellApp(app.appId)
       if (item && typeof item.quit === "function") item.quit()
     } else {
       app.close()

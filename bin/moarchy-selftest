@@ -199,52 +199,52 @@ fi
 # terminal that closes again, which reads as the TUI having quit.
 #
 # This check used to read one command out of each side, and stopped being true
-# when S6b turned the Wi-Fi picker into a screen. Both sides now name the plugin
-# `moarchy.wifi` and differ only in returnTo, and neither is a command: the
-# shade's `wifiPicker` is deliberately the empty string, so a sed for
-# `floating-terminal-with-presentation` fell through to the *Bluetooth* tile and
-# compared bluetui against a row that names no command at all. So: Wi-Fi is
-# checked as a plugin id, and the command-parity it used to do moves to
-# Bluetooth, which is still one TUI on both sides (S6c).
+# twice. First when S6b turned the Wi-Fi picker into a screen, which left the
+# command-parity half reading the *Bluetooth* tile and comparing bluetui
+# against a row that named no command at all. Then when S6c did the same to
+# Bluetooth, at which point neither side names a command and the sed for
+# `floating-terminal-with-presentation` matches nothing anywhere.
+#
+# So both are plugin ids now, and both are read the same way by the same loop
+# -- which is the actual fix for a check that drifted twice: there is no longer
+# a Wi-Fi shape and a Bluetooth shape to fall out of step.
+#
+# The shade side is read off the function that opens the screen rather than off
+# a `summon(` line, because both tiles go through one openScreen(id) and the
+# literal id is on the function, not on the summon.
 shade_qml="$(plugin_dir moarchy.shade)/Shade.qml"
 pages_js="$(plugin_dir moarchy.settings)/Pages.js"
 if [[ ! -f $shade_qml || ! -f $pages_js ]]; then
   no "no plugin to read the pickers out of ($shade_qml, $pages_js)" \
      "neither the package nor an override has these; S6b and S6c prove nothing"
 else
-  # S6b. Both ends summon moarchy.wifi. Read as an id, because a dotted plugin
-  # id is exactly what the old `[a-z0-9-]*` could not match.
-  shade_wifi=$(sed -n 's/.*summon("\(moarchy\.[a-z]*\)".*/\1/p' "$shade_qml" | head -1)
-  row_wifi=$(sed -n '/label: "Wi-Fi networks"/,/}/s/.*summon \(moarchy\.[a-z]*\).*/\1/p' "$pages_js" | head -1)
-  if [[ -z $shade_wifi || -z $row_wifi ]]; then
-    no "cannot read the Wi-Fi picker out of the shade (${shade_wifi:-none}) or Settings (${row_wifi:-none})" \
-       "one of the two stopped naming a plugin the way this check reads it"
-  elif [[ $shade_wifi != "$row_wifi" ]]; then
-    no "the shade summons '$shade_wifi' and Settings summons '$row_wifi'" \
-       "S6b: one picker behind both entry points"
-  elif [[ $shade_wifi != "moarchy.wifi" ]]; then
-    no "the Wi-Fi picker is '$shade_wifi', not moarchy.wifi" \
-       "S6b: the picker is a screen with tap targets, not a terminal"
-  else
-    ok "the Wi-Fi picker is moarchy.wifi from both the shade and Settings"
-  fi
-
-  # S6c. Bluetooth is the pair that is still a TUI, so it keeps the command
-  # parity and the "is it actually on PATH" half that goes with it.
-  shade_bt=$(sed -n 's/.*floating-terminal-with-presentation \([a-z0-9-]*\)".*/\1/p' "$shade_qml" | head -1)
-  row_bt=$(sed -n '/label: "Bluetooth devices"/,/}/s/.*run: "\([a-z0-9-]*\)".*/\1/p' "$pages_js" | head -1)
-  if [[ -z $shade_bt || -z $row_bt ]]; then
-    no "cannot read the Bluetooth picker out of the shade (${shade_bt:-none}) or Settings (${row_bt:-none})" \
-       "one of the two stopped naming a command the way this check reads it"
-  elif [[ $shade_bt != "$row_bt" ]]; then
-    no "the shade opens '$shade_bt' and Settings opens '$row_bt'" \
-       "S6c: one picker behind both entry points"
-  elif ! command -v "$shade_bt" >/dev/null 2>&1; then
-    no "the Bluetooth picker '$shade_bt' is not on PATH" \
-       "the long press would open a terminal that closes again"
-  else
-    ok "the Bluetooth picker is '$shade_bt' from both the shade and Settings"
-  fi
+  # S6b, S6c. Read as ids, because a dotted plugin id is exactly what the old
+  # `[a-z0-9-]*` could not match.
+  #
+  #   id | AC | the shade's opener | the Settings row's label | wanted
+  while IFS='|' read -r kind ac opener label want; do
+    [[ -n $kind ]] || continue
+    shade_id=$(sed -n "/function $opener(/s/.*openScreen(\"\([a-z.]*\)\").*/\1/p" "$shade_qml" | head -1)
+    row_id=$(sed -n "/label: \"$label\"/,/}/s/.*summon \(moarchy\.[a-z]*\).*/\1/p" "$pages_js" | head -1)
+    if [[ -z $shade_id || -z $row_id ]]; then
+      no "cannot read the $kind picker out of the shade (${shade_id:-none}) or Settings (${row_id:-none})" \
+         "one of the two stopped naming a plugin the way this check reads it"
+    elif [[ $shade_id != "$row_id" ]]; then
+      no "the shade summons '$shade_id' and Settings summons '$row_id'" \
+         "$ac: one picker behind both entry points"
+    elif [[ $shade_id != "$want" ]]; then
+      no "the $kind picker is '$shade_id', not $want" \
+         "$ac: the picker is a screen with tap targets, not a terminal"
+    elif [[ ! -d $(plugin_dir "$want") ]]; then
+      no "the $kind picker names $want, which is not installed" \
+         "$ac: both ends agree on a plugin that is not there, so the press does nothing"
+    else
+      ok "the $kind picker is $want from both the shade and Settings"
+    fi
+  done <<'ROWS'
+Wi-Fi|S6b|openWifi|Wi-Fi networks|moarchy.wifi
+Bluetooth|S6c|openBluetooth|Bluetooth devices|moarchy.bluetooth
+ROWS
 fi
 
 # --- the gesture plugin -----------------------------------------------------
@@ -334,7 +334,8 @@ fi
 # declared as a service gets two surfaces, and for the shade that means two
 # grab strips fighting over the top edge.
 for plugin in moarchy.drawer moarchy.recents moarchy.shade \
-              moarchy.themes moarchy.settings moarchy.device moarchy.wifi; do
+              moarchy.themes moarchy.settings moarchy.device moarchy.wifi \
+              moarchy.bluetooth; do
   k=$(python3 -c '
 import json, os, sys
 p = os.path.join(sys.argv[1], "manifest.json")
@@ -611,10 +612,26 @@ print(found[0] if found else "")'; }
              "a full-height band swallows the keyboard's leftmost key column"
   fi
 
+  # Does the injector actually RUN? `-x` says only that the file has the bit
+  # set. Every call below sends stderr to /dev/null -- it has to, or the noise
+  # buries the results -- so an injector that cannot start turns into a dozen
+  # "the tile does not respond" failures pointing at the UI instead of one line
+  # naming the cause. Found on the phone 2026-09-07: `python-evdev` was absent
+  # and every touch check read as a broken surface.
+  #
+  # Probed with a verb it does not have, which exercises the imports and the
+  # argument parsing and stops before /dev/uinput is opened or anything is
+  # pressed. A working injector answers `usage: ...`; a broken one answers with
+  # whatever stopped it.
+  touch_why=$("$touch_bin" selftest-probe 2>&1 || true)
   if [[ ! -x $touch_bin ]]; then
     no "moarchy-touch is missing" "cannot drive touch without it"
   elif ! sudo -n true 2>/dev/null; then
     no "passwordless sudo is unavailable" "/dev/uinput is root-only, so touch cannot be synthesised"
+  elif [[ $touch_why != usage:* ]]; then
+    no "moarchy-touch cannot run: ${touch_why:-it produced no output}" \
+       "python-evdev is an optdepend of moarchy-meta -- 'not needed to run the phone,\
+ only to test it' -- so a flashed image does not have it: pacman -S python-evdev"
   else
     # Powering the panel back on is not enough: moarchy-screen turns the
     # touch input off with it, so after an idle blank every synthetic swipe
@@ -868,10 +885,10 @@ print(found[0] if found else "")'; }
         sleep 2
         sudo -n "$touch_bin" hold "$x" "$TILE_Y" 900 >/dev/null 2>&1
         sleep 2
-        # Substring, not *" $want": the Wi-Fi tile summons a plugin now, so
-        # its lastLaunch is the bare id "moarchy.wifi" with no command before
-        # it, while Bluetooth's is still a terminal invocation ending in
-        # "bluetui". One glob has to match both shapes.
+        # Both tiles summon a plugin now, so lastLaunch is the bare id with no
+        # command in front of it. Kept as a substring match rather than an
+        # equality one so that a tile which goes back to spawning something
+        # still reports which thing, instead of just "no".
         [[ $(timeout 8 omarchy-shell shade lastLaunch 2>/dev/null) == *"$want" ]] && return 0
       done
       return 1
@@ -892,11 +909,33 @@ print(found[0] if found else "")'; }
       timeout 8 omarchy-shell wifi close >/dev/null 2>&1
     fi
 
-    if ! hold_picker $BT_X bluetui wifiHold; then
+    # S6c, checked exactly the way S6 checks Wi-Fi -- the point of the pair is
+    # that they behave alike, so anything the Wi-Fi half asserts and this half
+    # does not is a way for them to drift apart unnoticed. The recorded summon
+    # is not enough on its own: it can land nowhere and still be recorded.
+    if ! hold_picker $BT_X moarchy.bluetooth wifiHold; then
       noac S6c "a 900ms press on the Bluetooth tile launched '$(timeout 8 omarchy-shell shade lastLaunch)'" \
                "the two wide tiles are supposed to behave alike"
+    elif [[ $(shell_state shade) != "closed" ]]; then
+      noac S6c "the picker opened but the shade is $(shell_state shade)" \
+               "the Bluetooth screen comes up behind the sheet"
+    elif [[ $(shell_state bluetooth) != "open" ]]; then
+      noac S6c "the tile recorded the picker but moarchy.bluetooth is $(shell_state bluetooth)" \
+               "the summon was recorded and did not land"
     else
-      okac S6c "a long press on the Bluetooth tile opens the pairing TUI"
+      okac S6c "a long press on the Bluetooth tile opens the device picker"
+      # S6d-2 while we are here: the scan is the thing that costs battery, and
+      # it has to stop when the screen goes away.
+      scan_open=$(timeout 8 omarchy-shell bluetooth scanning 2>/dev/null)
+      timeout 8 omarchy-shell bluetooth close >/dev/null 2>&1
+      sleep 3
+      scan_shut=$(timeout 8 omarchy-shell bluetooth scanning 2>/dev/null)
+      if [[ $scan_open == "on" && $scan_shut == "off" ]]; then
+        okac S6d-2 "discovery runs only while the Bluetooth screen is up"
+      else
+        noac S6d-2 "discovery was '$scan_open' open and '$scan_shut' shut" \
+                   "a scan left running costs radio and battery for a list nobody is reading"
+      fi
     fi
 
     # The other half of S6: the hold must not also fire the tap it interrupted,

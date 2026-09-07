@@ -63,9 +63,9 @@ implementation behind two entry points.
 upstream's `apps` provider. A launcher inside Settings would repeat it.
 
 Two rows exist that upstream has no id for: **Wi-Fi networks** and **Bluetooth
-devices** (`bluetui`). The shade toggles both radios; it can now join a network
-too — the Wi-Fi row and the shade's long press open the same picker,
-`moarchy.wifi` (`docs/shade.md` S6b) — but it still cannot pair a device.
+devices**. The shade toggles both radios, and each row opens the same screen its
+tile opens on a long press — `moarchy.wifi` (`docs/shade.md` S6b) and
+`moarchy.bluetooth` (S6c, S6d). One picker behind two entry points, twice.
 
 ---
 
@@ -348,7 +348,7 @@ airplane mode, brightness, volume, silent, torch, rotate, media transport.
 → no row on any page has a `switch` whose label matches
 `^(wi-?fi|bluetooth|airplane|brightness|volume|silent|torch|rotate)`
 
-The two rows that open `moarchy.wifi` and `bluetui` are network
+The two rows that open `moarchy.wifi` and `moarchy.bluetooth` are network
 *configuration*, not radio toggles, and are named "Wi-Fi networks" and
 "Bluetooth devices".
 

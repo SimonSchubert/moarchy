@@ -102,16 +102,94 @@ security and known/connected as properties.
 `impala` was never right for either: it is an iwd client and this phone runs
 NetworkManager with `iwd.service` disabled — and iwd is D-Bus activatable, so
 running impala would start it to fight NetworkManager for `wlan0` rather than
-fail cleanly. Bluetooth keeps `bluetui`: pairing is rarer and the equivalent
-screen is not written.
+fail cleanly.
 
 **S6c** A long press on the **Bluetooth** tile does the same for pairing: the
-shade closes and `bluetui` runs. The two wide tiles behave alike — hold for the
-thing the radio is for.
+shade closes and the `moarchy.bluetooth` screen comes up. The two wide tiles
+behave alike — hold for the thing the radio is for, and both of them now hold a
+screen rather than a terminal.
 
 There is no stranded tap here to match S6a. An adapter that is on with nothing
 connected is the normal resting state of Bluetooth, not a dead end, so its tap
 stays a plain toggle.
+
+It was `bluetui`, and `bluetui` was not broken — unlike `nmtui` it enables mouse
+reporting, so foot's tap-to-click reaches it, and its bindings are keys the
+on-screen keyboard has. Three things it still could not be:
+
+- **A row you can hit.** `moarchy-launch-tui` is a 60×41 grid on a 360×720
+  logical screen, so a list row is one terminal line, roughly 17 logical px
+  against the 44 `style.md` E1 asks for. Every tap is a near miss between two
+  devices.
+- **Part of the shell.** A terminal is a *window*: it takes a workspace, it
+  gets a card in the carousel, and it is themed by foot's own palette rather
+  than by `Color.popups.*`. Holding one tile gave you a screen and holding the
+  other gave you an app.
+- **Able to say what the tile already says.** Battery level, "Connecting…",
+  which device is the audio sink — the shade knows all three and the terminal
+  could not show any of them in the shell's own type.
+
+**S6d** The picker is `moarchy.bluetooth`, an overlay plugin, the same shape as
+`moarchy.wifi`: back chevron, radio switch, one list, one row open at a time.
+Its criteria:
+
+**S6d-1** The list is the adapter's devices — connected first, then remembered,
+then whatever the scan has turned up — each group sorted by name. A device whose
+name is only its own MAC address or a bare UUID is not listed at all; a phone
+in a café otherwise shows forty of them and none of yours.
+
+**S6d-2** Discovery runs **only while the screen is on screen**, and is stopped
+on the way out. A scan left running costs radio time and battery for a list
+nobody is reading. It is retried while the screen is up, because BlueZ refuses
+`StartDiscovery` on an adapter that is still powering on, and because a scan
+times out on its own after a couple of minutes.
+
+**S6d-3** Tapping a row opens the drawer under it with the actions that apply to
+that device, one row open at a time: **Connect** or **Pair**, **Disconnect**,
+**Forget**. Nothing acts on a tap of the row itself — unlike Wi-Fi's open
+network, there is no Bluetooth device for which the intent of a tap is
+unambiguous.
+
+**S6d-4** The list holds still while a row is open or an action is in flight.
+Discovery reorders it every few seconds, and a list that reshuffles under a
+finger aiming at **Forget** is a mis-tap waiting to happen. (Wi-Fi freezes for a
+related but different reason — keeping a focused text field alive. There is no
+text field here.)
+
+**S6d-5** A device reports its battery level when BlueZ has one, as a percentage
+next to its name. This is the one thing the shade cannot show and the reason to
+open the screen when everything is already connected.
+
+**S6d-6** Pairing, connecting and forgetting go through
+`omarchy-bluetooth-device`, **not** through `BluetoothDevice.pair()`.
+
+This is the one place this screen departs from `moarchy.wifi`, which touches no
+`nmcli` at all, so it is worth being exact: quickshell registers no
+`org.bluez.Agent1`. Its `pair()` is a bare `Device1.Pair()` call, and BlueZ
+answers a pairing that needs an agent with `No agent available`, logged to the
+journal where nobody will read it. `bluetoothctl` registers one, and
+`omarchy-bluetooth-device` — which is on `PATH` from `omarchy-config`, and which
+upstream's own Bluetooth panel calls for exactly this reason — wraps it with the
+two steps a bare `Pair()` also skips: it unblocks rfkill first, because BlueZ
+will not power an adapter up underneath a soft block, and it marks the device
+trusted afterwards, without which it will not reconnect itself.
+
+Everything the screen *reads* still comes from `Quickshell.Bluetooth`
+properties. Nothing parses `bluetoothctl` output. **Disconnect** is the
+exception on the writing side and stays a native `Device1.Disconnect()`: it
+needs no agent, no power-up and no trust, which is the whole of what the
+wrapper adds.
+
+**S6d-7** An action that has not landed in 25 seconds says so on the row, and
+says only what it knows: it did not come up in time. Same wording discipline as
+Wi-Fi's join — guessing "wrong PIN" at a device that was simply switched off
+sends somebody to re-pair for no reason.
+
+**S6d-8** The header switch toggles the adapter, and **unblocks rfkill first**
+when the adapter reads blocked, waiting ~700ms before writing `enabled` — the
+same order and the same reason as S9. Without it the switch is dead for anyone
+who has been in airplane mode, because BlueZ will not power up under a block and
+drops the write silently.
 
 ## S7–S10. Small tiles
 

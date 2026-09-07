@@ -13,7 +13,7 @@ index e6202da8..ad281879 100644
            "verticalFormat": "HH\n\u2014\nmm"
          },
          {
-@@ -60,7 +60,36 @@
+@@ -60,7 +60,39 @@
            "id": "omarchy.power"
          }
        ]
@@ -37,6 +37,9 @@ index e6202da8..ad281879 100644
 +    },
 +    {
 +      "id": "moarchy.wifi"
++    },
++    {
++      "id": "moarchy.bluetooth"
 +    },
 +    {
 +      "id": "moarchy.themes"
