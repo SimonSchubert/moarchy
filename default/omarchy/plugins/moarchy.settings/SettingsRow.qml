@@ -23,6 +23,14 @@ Rectangle {
   property string detail: ""
   property bool checked: false
 
+  // `input` only. `inputText` is the value the page holds, pushed in; `edited`
+  // is the value the field holds, pushed back. Two directions and not one
+  // property, because a delegate is not where a page's state can live -- a row
+  // scrolled out of the cache buffer is destroyed with whatever was typed in it.
+  property string inputText: ""
+  property string placeholder: ""
+  property bool numeric: false
+
   // Dimming is for a row that exists but cannot act. It is deliberately NOT
   // wired to "is this tappable": an info row is not tappable and must still
   // look like ordinary text, or the About screen and the whole keybindings list
@@ -49,6 +57,10 @@ Rectangle {
   readonly property int radiusCard: Style.space(18)
 
   signal activated()
+  signal edited(string value)
+  // Not `focusChanged`: Item already has one, and shadowing it silently breaks
+  // every focus binding on the card.
+  signal focusTaken(bool has)
 
   height: Style.space(58)
   // The card radius (docs/style.md D1).
@@ -72,7 +84,27 @@ Rectangle {
       color: card.textColor
     }
 
+    // input. The placeholder is the label -- a 58px row has no room for both,
+    // and a field with a heading over it is a form, not a settings row.
+    //
+    // Behind a Loader, and that is not tidiness. This component is the delegate
+    // for every row on every page: an always-built QQC2 TextField would be a
+    // Control, a background and a validator per row on a 1.15GHz A53, and its
+    // `text` binding fires `edited` once on construction -- so every nav and
+    // switch row on the phone would write an empty string into the page's
+    // field map on its way past.
+    Loader {
+      id: fieldSlot
+      active: card.rowType === "input"
+      visible: active
+      width: parent.width - (card.glyph !== "" ? card.glyphSlot + Style.space(14) : 0)
+             - trailing.width
+      height: parent.height
+      sourceComponent: fieldComponent
+    }
+
     Column {
+      visible: card.rowType !== "input"
       anchors.verticalCenter: parent.verticalCenter
       // The trailing control and the two gaps. Exact rather than estimated now
       // that the glyph has a known width: a label that runs under the switch
@@ -104,6 +136,39 @@ Rectangle {
     }
   }
 
+  // No background and no vertical padding: the card underneath is already the
+  // field's surface, and the base type would draw a second one inside it. The
+  // Loader gives it the row's full height, so the whole width of the card takes
+  // the tap that raises the keyboard rather than just the line of text
+  // (docs/style.md F1-F3).
+  Component {
+    id: fieldComponent
+
+    Ui.TextField {
+      background: null
+      verticalPadding: 0
+      // leftPadding/rightPadding directly, not horizontalPadding: the base type
+      // adds the border width to that one, and with no background there is no
+      // border to leave room for. The glyph is already the lead-in.
+      leftPadding: 0
+      rightPadding: 0
+      verticalAlignment: TextInput.AlignVCenter
+      foreground: card.textColor
+      accent: card.accentColor
+      placeholderText: card.placeholder
+      inputMethodHints: card.numeric ? Qt.ImhDigitsOnly : Qt.ImhNone
+      validator: card.numeric ? digitsOnly : null
+      text: card.inputText
+      onTextChanged: card.edited(text)
+      onActiveFocusChanged: card.focusTaken(activeFocus)
+      // A delegate destroyed while focused never reports losing it, which would
+      // strand the surface with no bottom inset and no keyboard.
+      Component.onDestruction: if (activeFocus) card.focusTaken(false)
+
+      RegularExpressionValidator { id: digitsOnly; regularExpression: /[0-9]{0,5}/ }
+    }
+  }
+
   // ------------------------------------------------------------- trailing
   Item {
     id: trailing
@@ -115,7 +180,8 @@ Rectangle {
     // trailing element, which is the switch, and every label would be short by
     // 44px for no reason.
     width: card.rowType === "switch" ? Style.space(44)
-           : (card.rowType === "info" || card.rowType === "action") ? 0
+           : (card.rowType === "info" || card.rowType === "action"
+              || card.rowType === "input") ? 0
            : Style.space(20)
     height: parent.height
 
@@ -179,9 +245,13 @@ Rectangle {
     }
   }
 
+  // Not over an input row: a MouseArea filling the card takes the press before
+  // the field under it ever sees one, so the row would look like a text field
+  // that cannot be typed into.
   MouseArea {
     anchors.fill: parent
-    enabled: card.rowEnabled
+    visible: card.rowType !== "input"
+    enabled: card.rowEnabled && card.rowType !== "input"
     onClicked: card.activated()
   }
 }

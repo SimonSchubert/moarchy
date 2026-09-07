@@ -18,6 +18,9 @@
 #                python-evdev, and closes a window at the end.
 #   --settings   walks the Settings stack over IPC, against docs/settings.md.
 #                Flips three switches and restores them; launches nothing.
+#                Section J sets reminders and clears them, so any that were
+#                pending are gone afterwards -- a transient timer cannot be put
+#                back with the time it had left.
 #   --surfaces   checks what the gesture strip is drawn over, against
 #                docs/gestures.md I. Opens every overlay in turn and takes one
 #                grim capture per sheet; I5 also needs the touch injector.
@@ -1582,7 +1585,7 @@ if [[ ${1:-} == "--settings" ]]; then
 import re, sys, shutil
 src = open(sys.argv[1], encoding="utf-8").read()
 words = set()
-for field in ("run", "write", "read", "on", "off", "detailCmd", "reader", "list", "text"):
+for field in ("run", "write", "read", "on", "off", "detailCmd", "reader", "list", "json", "text"):
     for m in re.finditer(field + r': "((?:[^"\\]|\\.)*)"', src):
         expr = m.group(1)
         for part in re.split(r'[;|]|&&|\|\|', expr):
@@ -1693,10 +1696,14 @@ DOCTBL
   # own -- rows move -- but it should be a deliberate edit to the doc, not a
   # surprise.
   totals=$(cut -f2 <<<"$cov" | sort | uniq -c | awk '{printf "%s=%s ", $2, $1}')
-  [[ $totals == "Bridged=74 Native=65 Shade=1 " ]] \
+  # 74/65 until 2026-09-07, and wrong from `1b01e5c` onward: that commit dropped
+  # three bridged rows and left this number where it was, so G7 was red about a
+  # constant rather than about coverage. It is 68/68 since the three
+  # trigger.reminder.* ids became Native (docs/settings.md J).
+  [[ $totals == "Bridged=68 Native=68 Shade=1 " ]] \
     && ok "G7 the class totals are the ones committed to ($totals)" \
     || no "G7 the class totals moved: $totals" \
-          "expected Bridged=74 Native=65 Shade=1; update docs/settings.md if deliberate"
+          "expected Bridged=68 Native=68 Shade=1; update docs/settings.md if deliberate"
 
   grep -q '^trigger.toggle.notifications	Shade' <<<"$cov" \
     && ok "H2 the shade-owned toggle is recorded, not rendered" \
@@ -1741,9 +1748,266 @@ ICONS
     || no "I3 a property uses the reserved on<Uppercase> prefix" \
           "it reads back undefined, and undefined as a color is black: $bad"
 
+
+  # --- J. reminders ---------------------------------------------------------
+  #
+  # The one destructive block in this suite: it sets reminders and clears them,
+  # so anything pending is gone when it finishes. There is no way to put a
+  # transient systemd timer back with the time it had left, so the choice was
+  # between saying so and not testing the screen at all.
+  if ! command -v moarchy-reminders >/dev/null 2>&1; then
+    no "J moarchy-reminders is not on PATH" \
+       "every row on the Reminders page names it; check $MOARCHY_BIN"
+  else
+    # `grep -c .`, not `wc -l`: an empty string is one line to wc, so an empty
+    # list would count as one reminder and J2 would pass on the wrong evidence.
+    rrows()   { s rows | awk -F'\t' '$1 ~ /^r-/'; }
+    n_rrows() { rrows | grep -c . ; }
+    # -1 for an unreadable answer, never 0. `jq -r .count` on empty input
+    # prints nothing and exits 0, and bash reads "" as 0 inside `[[ -eq ]]` --
+    # so with omarchy-reminder missing, "no rows and no timers" would agree
+    # with itself and every count check below would pass while measuring
+    # nothing. -1 cannot equal a row count, so it fails out loud instead.
+    n_timers() {
+      local n
+      n=$(omarchy-reminder show --json 2>/dev/null | jq -r .count 2>/dev/null)
+      [[ $n =~ ^[0-9]+$ ]] || n=-1
+      echo "$n"
+    }
+
+    # Notifications posted since a marker file was touched.
+    #
+    # Three shapes were tried before this one, and the first two could not
+    # fail. `omarchy-shell shade notifications` answered zero lines on a phone
+    # whose store held ten. A count of the store does not move, because it is
+    # capped. And the newest name does not reliably move either -- the store
+    # prunes, and an entry newer than the ones kept was observed disappearing
+    # from it. `find -newer` asks the only question that matters, and survives
+    # both the cap and the pruning.
+    notes_dir="$HOME/.local/state/omarchy/notifications/history"
+    marker=$(mktemp)
+    notes_since() { find "$notes_dir" -name '*.json' -newer "$marker" 2>/dev/null | grep -c . ; }
+
+    # Ten seconds, and it is not padding. The store is written when a toast
+    # leaves the screen, not when it is posted: measured on the device, a
+    # notification sent at t=0 first appears in the history between t=4s and
+    # t=6s. At the three seconds this had, the control saw nothing and J1
+    # skipped itself every run.
+    notes_settle=10
+
+    # The control. Clearing announces itself, so a detector that sees nothing
+    # here is blind, and its silence over the page open below means nothing.
+    touch "$marker"; sleep 1
+    omarchy-reminder clear >/dev/null 2>&1
+    sleep $notes_settle
+    notes_control=$(notes_since)
+
+    touch "$marker"; sleep 1
+    s openAt tools.reminders >/dev/null; sleep $notes_settle
+    notes_opened=$(notes_since)
+
+    # J2. Empty says so.
+    if [[ $(n_rrows) -eq 0 ]] && s rows | awk -F'\t' '$2=="info"' | grep -q .; then
+      ok "J2 an empty Reminders page says there are none"
+    else
+      no "J2 the empty page has $(n_rrows) reminder row(s) and no info row" \
+         "$(s rows | tr '\t' ' ' | tr '\n' '|')"
+    fi
+
+    # J1. Opening the list announced nothing -- upstream's `show` is a
+    # notification and nothing else, which is the half of this that was broken.
+    #
+    # The clear above is the control. It posts "All reminders have been
+    # cleared", so if `newest_note` did not move across it then this detector
+    # is blind and its silence afterwards means nothing. Say so instead of
+    # passing on it.
+    if (( notes_control == 0 )); then
+      skip_ "J1 skipped: the store recorded nothing for a clear, so silence proves nothing"
+    elif (( notes_opened == 0 )); then
+      ok "J1 opening Reminders posts no notification"
+    else
+      no "J1 opening Reminders posted $notes_opened notification(s)" \
+         "the page is the list; it must not announce itself"
+    fi
+    rm -f "$marker"
+
+    # J5. Nothing to clear, so no Clear all.
+    [[ $(s guards | awk -F'\t' '$1=="clear"{print $2}') == 0 ]] \
+      && ok "J5 Clear all is hidden when there is nothing to clear" \
+      || no "J5 Clear all is offered with no reminders set" "it would be a no-op"
+
+    # Set a field and prove it took, with one retry.
+    #
+    # `s` is `timeout 5 omarchy-shell`, and on a loaded phone a call does get
+    # dropped: one lost `set message` made J9 read the previous row's command
+    # and J10 read the previous run's message, two failures that looked like
+    # bugs in rows that were fine. A check whose precondition silently did not
+    # happen is worse than one that did not run.
+    set_field() {
+      local id=$1 want=$2
+      s set "$id" "$want" >/dev/null
+      [[ $(s value "$id") == "$want" ]] && return 0
+      s set "$id" "$want" >/dev/null
+      [[ $(s value "$id") == "$want" ]]
+    }
+
+    # Same for a row: `activate` answers ok, hidden, not ready or unknown row,
+    # and only the first means the command was recorded. The answer is kept in
+    # a variable rather than re-read in the failure message, which would
+    # activate the row a second time to find out why the first one did not.
+    activate_answer=""
+    activated() { activate_answer=$(s activate "$1"); [[ $activate_answer == "ok" ]]; }
+
+    # dryRun for the next three, so a check interrupted halfway does not leave
+    # the phone holding timers nobody asked for.
+    s goto tools.reminders.new >/dev/null; sleep 2
+    s dryRun 1 >/dev/null
+
+    # J8. As the page arrives, before anything is typed. The empty state is
+    # reached by entering the screen rather than by writing "" into the field:
+    # that is the state a user actually meets, and it does not rest on the IPC
+    # being able to carry an empty argument.
+    before=$(s lastLaunch)
+    answer=$(s activate custom)
+    enabled=$(s rows | awk -F'\t' '$1=="custom"{print $7}')
+    if [[ $answer == "not ready" && $enabled == 0 && $(s lastLaunch) == "$before" ]]; then
+      ok "J8 Set reminder is inert and dimmed until a duration is typed"
+    else
+      no "J8 activate answered '$answer' with enabled=$enabled" \
+         "an empty duration must not be submittable"
+    fi
+
+    # J7/J9. What the rows would run, without running it.
+    if ! set_field message 'Check the oven' || ! set_field minutes 25; then
+      no "J7/J9 the fields would not take a value over IPC" \
+         "message=[$(s value message)] minutes=[$(s value minutes)]; nothing below was measured"
+    else
+      if ! activated custom; then
+        no "J7 activate custom answered '$activate_answer'" "with both fields set it must run"
+      else
+        [[ $(s lastLaunch) == "moarchy-reminders set '25' 'Check the oven'" ]] \
+          && ok "J7 the custom row carries both fields" \
+          || no "J7 the custom row would run: $(s lastLaunch)" \
+                "expected moarchy-reminders set '25' 'Check the oven'"
+      fi
+
+      if ! activated m15; then
+        no "J9 activate m15 answered '$activate_answer'" "the preset row must be reachable"
+      else
+        [[ $(s lastLaunch) == "moarchy-reminders set 15 'Check the oven'" ]] \
+          && ok "J9 a preset carries the typed message" \
+          || no "J9 the 15-minute row would run: $(s lastLaunch)" \
+                "expected moarchy-reminders set 15 'Check the oven'"
+      fi
+    fi
+
+    s dryRun 0 >/dev/null
+
+    # J3/J6/J10. Actually set one, from the fields.
+    if ! set_field message 'Selftest tea' || ! set_field minutes 9; then
+      no "J3/J10 the fields would not take a value over IPC" \
+         "message=[$(s value message)] minutes=[$(s value minutes)]"
+    fi
+    s activate custom >/dev/null; sleep 3
+    page=$(s page)
+    if [[ $page == tools.reminders && $(n_rrows) -eq 1 && $(s state) == open ]]; then
+      ok "J3 a reminder set on the Set screen is on the list, with Settings still up"
+    else
+      no "J3 landed on $page with $(n_rrows) row(s), state=$(s state)" \
+         "expected tools.reminders, 1 row, open"
+    fi
+
+    [[ $(s rows | awk -F'\t' '$1 ~ /^r-/{print $3}') == "Selftest tea" ]] \
+      && ok "J10 a reminder with a message is listed by its message" \
+      || no "J10 the row is labelled '$(s rows | awk -F'\t' '$1 ~ /^r-/{print $3}')'" \
+            "expected the message that was typed"
+
+    # J1. The page and the timers agree.
+    [[ $(n_rrows) -eq $(n_timers) ]] \
+      && ok "J1 the page lists exactly the live timers ($(n_timers))" \
+      || no "J1 the page shows $(n_rrows) row(s) against $(n_timers) timer(s)" \
+            "the list is read from omarchy-reminder, not remembered"
+
+    # J12. The fields did not survive the screen.
+    s goto tools.reminders.new >/dev/null; sleep 2
+    [[ -z $(s value message) && -z $(s value minutes) ]] \
+      && ok "J12 the fields start empty on every visit" \
+      || no "J12 the fields came back holding '$(s value message)' / '$(s value minutes)'" \
+            "yesterday's message must not reach today's timer"
+    s back >/dev/null; sleep 2
+
+    # J13. A reminder set from outside shows up on a refresh.
+    omarchy-reminder 11 >/dev/null 2>&1
+    s refresh >/dev/null; sleep 2
+    [[ $(n_rrows) -eq 2 ]] \
+      && ok "J13 a reminder set from a terminal appears on refresh" \
+      || no "J13 the page shows $(n_rrows) row(s) after one was set outside" \
+            "the list must be read, not remembered"
+
+    # J10 again, the other half: no message means the duration.
+    s rows | awk -F'\t' '$1 ~ /^r-/{print $3}' | grep -q '^11-min reminder$' \
+      && ok "J10 a reminder with no message is listed by its duration" \
+      || no "J10 no row is labelled '11-min reminder'" \
+            "$(s rows | awk -F'\t' '$1 ~ /^r-/{print $3}' | tr '\n' '|')"
+
+    # J4. Cancelling one asks first, and the question can be declined.
+    rid=$(s rows | awk -F'\t' '$1 ~ /^r-/{print $1; exit}')
+    s activate "$rid" >/dev/null
+    if [[ -n $(s confirmText) && $(n_timers) -eq 2 ]]; then
+      ok "J4 cancelling one reminder asks before it acts"
+    else
+      no "J4 confirmText='$(s confirmText)' with $(n_timers) timer(s) left" \
+         "the question must be asked and the timer must survive it"
+    fi
+    s back >/dev/null; sleep 1
+    [[ -z $(s confirmText) && $(n_timers) -eq 2 ]] \
+      && ok "J4 declining leaves the timer running" \
+      || no "J4 declining left confirmText='$(s confirmText)', $(n_timers) timer(s)" \
+            "back must dismiss the sheet and change nothing"
+
+    s activate "$rid" >/dev/null
+    s confirm >/dev/null; sleep 3
+    if [[ $(n_timers) -eq 1 && $(n_rrows) -eq 1 && $(s state) == open ]]; then
+      ok "J4 confirming cancels exactly that reminder"
+    else
+      no "J4 $(n_timers) timer(s) and $(n_rrows) row(s) left, state=$(s state)" \
+         "one reminder should be gone and Settings should still be up"
+    fi
+
+    # J5/J6. Clear all appears, asks, empties, and leaves the screen up.
+    [[ $(s guards | awk -F'\t' '$1=="clear"{print $2}') == 1 ]] \
+      && ok "J5 Clear all is offered once there is something to clear" \
+      || no "J5 Clear all is hidden with $(n_timers) reminder(s) set" "its guard is wrong"
+
+    launch_before=$(s lastLaunch)
+    s activate clear >/dev/null
+    if [[ -n $(s confirmText) && $(s lastLaunch) == "$launch_before" ]]; then
+      ok "J5 Clear all asks first, and runs nothing until it is answered"
+    else
+      no "J5 confirmText='$(s confirmText)', lastLaunch='$(s lastLaunch)'" \
+         "arming the question must not also run the command"
+    fi
+    s confirm >/dev/null; sleep 3
+    if [[ $(n_timers) -eq 0 && $(n_rrows) -eq 0 && $(s state) == open ]]; then
+      ok "J5 Clear all empties the list and leaves Settings up"
+    else
+      no "J5 $(n_timers) timer(s), $(n_rrows) row(s), state=$(s state)" \
+         "expected none, none, open"
+    fi
+
+    # J6. Nothing on these pages went through a terminal or a vendored picker.
+    case $(s lastLaunch) in
+    omarchy-launch-*|*omarchy.reminders*)
+      no "J6 a reminder row launched '$(s lastLaunch)'" \
+         "these pages run their commands in place" ;;
+    *)
+      ok "J6 no reminder row opened a terminal or a vendored picker" ;;
+    esac
+  fi
+
   s close >/dev/null
 
-  printf '  \033[90m%-4s\033[0m   \033[90mnot covered here: A3 A5 B5 B7 C5 C7 C8 D3 D4 D6 E2 E5 E6 E7 E8 F1 F2 F3 F4 F5 F6 F7 G4 H1 I4\033[0m\n' ""
+  printf '  \033[90m%-4s\033[0m   \033[90mnot covered here: A3 A5 B5 B7 C5 C7 C8 D3 D4 D6 E2 E5 E6 E7 E8 F1 F2 F3 F4 F5 F6 F7 G4 H1 I4 J11\033[0m\n' ""
   # A3     needs a real finger or the touch injector
   # B4     is a gesture, and --gestures proves it as K3/K4 with a real swipe
   # A5     needs every reader stubbed slow
@@ -1752,6 +2016,7 @@ ICONS
   # E2     static: Pages.js against omarchy-menu.jsonc, not a runtime question
   # F3-F7  need PATH stubs that count forks
   # I2/I4  static greps, run at build time
+  # J11    the keyboard inset needs a real focus, which needs a real finger
 fi
 
 # --- surfaces: what the strip is drawn over -------------------------------

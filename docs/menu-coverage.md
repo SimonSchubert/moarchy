@@ -31,7 +31,7 @@ Unsupported.
 `omarchy-*` scripts they name exist upstream. Because `bin/` here shadows
 `$OMARCHY_PATH/bin` by PATH order, one shim for that wrapper -- routing to
 `moarchy-launch-tui`, a foot at font size 7 -- makes the whole class work
-without reimplementing any of it. 65 of the bridged rows run a command
+without reimplementing any of it. 62 of the bridged rows run a command
 byte-identical to upstream's `action`; the selftest asserts it. The exceptions are
 the three package rows, where upstream's `xdg-terminal-exec --app-id=...` is
 replaced by that terminal, which is the entire point of bridging.
@@ -107,13 +107,13 @@ Native 2 · Bridged 6 · Unsupported 2
 
 ## Trigger (47)
 
-Native 12 · Bridged 9 · Shade 1 · Unsupported 25
+Native 15 · Bridged 6 · Shade 1 · Unsupported 25
 
 | id | label | class | lands at | note |
 | --- | --- | --- | --- | --- |
 | `trigger` | Trigger | Native | dissolved: Tools, Display, Sound, Appearance | verb-shaped container; children move next to their subject |
 | `trigger.emoji` | Emoji | Bridged | Tools > Emoji | `omarchy-shell shell toggle omarchy.emojis`, a vendored QML picker |
-| `trigger.reminder` | Reminder | Native | Tools > Reminders |  |
+| `trigger.reminder` | Reminder | Native | Tools > Reminders | the screen, and the list on it, are moarchy's; the timers underneath stay `omarchy-reminder`'s |
 | `trigger.capture` | Capture | Native | Tools | only Screenshot survives |
 | `trigger.capture.screenshot` | Screenshot | Native | Tools > Screenshot | `moarchy-capture-screenshot` (grim/slurp/satty) |
 | `trigger.capture.screenrecord.stop` | Stop Screenrecording | Bridged | Tools > Screen record | upstream `when` on the running process kept |
@@ -139,9 +139,9 @@ Native 12 · Bridged 9 · Shade 1 · Unsupported 25
 | `trigger.hardware.touchpad-haptics.mid` | mid | Unsupported | -- | `dell-xps-touchpad-haptics` is not installed |
 | `trigger.hardware.touchpad-haptics.high` | high | Unsupported | -- | `dell-xps-touchpad-haptics` is not installed |
 | `trigger.hardware.touchscreen` | Touchscreen | Unsupported | -- | `omarchy-toggle-input-device` drives hyprctl, and disabling the only input device from a touch-only UI is unrecoverable without ssh |
-| `trigger.reminder.set` | Set one | Bridged | Tools > Reminders | `omarchy-reminder -i` prompts through `omarchy-menu-input` |
-| `trigger.reminder.show` | Show all | Bridged | Tools > Reminders |  |
-| `trigger.reminder.clear` | Clear all | Bridged | Tools > Reminders |  |
+| `trigger.reminder.set` | Set one | Native | Tools > Reminders > Set a reminder | presets, a minutes field and a message field; upstream's `-i` is a keyboard-only prompt with no field |
+| `trigger.reminder.show` | Show all | Native | Tools > Reminders | the page is the list; upstream answers in a notification |
+| `trigger.reminder.clear` | Clear all | Native | Tools > Reminders | confirmed, and hidden when there is nothing to clear; still runs `omarchy-reminder clear` |
 | `trigger.share.clipboard` | Clipboard | Unsupported | -- | `omarchy-menu-share` targets localsend; not installed |
 | `trigger.share.file` | File | Unsupported | -- | `omarchy-menu-share` targets localsend; not installed |
 | `trigger.share.folder` | Folder | Unsupported | -- | `omarchy-menu-share` targets localsend; not installed |

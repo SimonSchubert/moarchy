@@ -15,7 +15,7 @@ visible.
 | **Settings** | The `moarchy.settings` overlay. One plugin, many pages. |
 | **page** | One screen in the stack, addressed by a dotted id (`appearance.bar`). |
 | **stack** | The pages currently pushed, root first. Back pops one. |
-| **row** | A line on a page. One of `nav`, `plugin`, `switch`, `choice`, `action`, `link`, `info`. |
+| **row** | A line on a page. One of `nav`, `plugin`, `switch`, `choice`, `action`, `link`, `info`, `input`. |
 | **guard** | A `when:` shell condition copied verbatim from `omarchy-menu.jsonc`. A row whose guard fails is not rendered. |
 | **reader** | The command a `switch` or `choice` page reads its state from. |
 | **bridged launch** | Running an upstream `omarchy-*` command unchanged, in a TUI terminal or the browser. |
@@ -338,8 +338,13 @@ of those Unsupported rows carries a non-empty reason
 `docs/menu-coverage.md` is empty
 
 **G7** The class totals are the ones committed to.
-→ `settings coverage | cut -f2 | sort | uniq -c` == 71 Bridged, 65 Native,
+→ `settings coverage | cut -f2 | sort | uniq -c` == 68 Bridged, 68 Native,
 1 Shade. `Unsupported` is not one of the answers -- see G3
+
+It was 71/65 until the three `trigger.reminder.*` ids stopped being bridged
+(section J). The selftest's copy of this number had said 74 since `1b01e5c`
+dropped three rows without moving it, so G7 was red for reasons unrelated to
+what it was asserting -- which is the failure mode a duplicated constant has.
 
 ## H. Not repeating the shade
 
@@ -381,6 +386,109 @@ has a page.
 → the PATH in `/proc/$(pgrep -x quickshell)/environ` lists it before
 `$OMARCHY_PATH/bin`. If upstream wins, every bridge shim opens nothing
 
+## J. Reminders
+
+Upstream's three reminder entries are a command line wearing a menu.
+`trigger.reminder.set` runs `omarchy-reminder -i`, which summons
+`omarchy.reminders`: a card with no field and no buttons that wants a number
+typed, then Return, then a message, then Return. `show` and `clear` say what
+they did in a notification and nothing else -- and an `action` row puts Settings
+away before it runs (E6), so on this phone all three were a screen vanishing and
+at most a toast flashing where it had been. Nothing was wrong with the timers
+underneath; there was no way to reach them with a thumb.
+
+All three are Native here, and this section is what they do instead.
+
+**The timers stay upstream's.** `omarchy-reminder` still sets and clears them,
+`bin/moarchy-reminders` reads them back and cancels one, and the unit naming is
+upstream's. There is no second store: a reminder set from a terminal appears on
+this screen, one set here fires through upstream's notification, and
+`omarchy-reminder clear` empties the list whoever ran it.
+
+**J1** Tools > Reminders *is* "show all". The page lists every live reminder, one
+row each, with its message and the time it fires. Nothing is announced in a
+notification.
+→ `settings openAt tools.reminders; settings rows | awk -F'\t' '$1 ~ /^r-/' |
+wc -l` == `omarchy-reminder show --json | jq .count`, and `find
+~/.local/state/omarchy/notifications/history -newer <marker>` is empty across
+the open
+
+Three detectors for that second half could not have failed, and are recorded
+here so they are not tried again. `omarchy-shell shade notifications` answered
+zero lines on a phone holding ten notifications. A count of the store does not
+move, because the store is capped. The newest filename does not reliably move
+either -- the store prunes, and an entry newer than the ones it kept was seen
+vanishing from it. `find -newer` survives both. The selftest also proves the
+detector can see a notification -- a `clear`, which does announce itself --
+before it trusts silence here.
+
+**J2** With no reminders set the page says so, rather than leaving a blank above
+Set a reminder. Clear all is not there either -- it has nothing to act on (J5) --
+so an empty screen would be one row and a gap.
+→ after `omarchy-reminder clear; settings refresh`, `settings rows` has an
+`info` row and no `r-` row
+
+**J3** A reminder set on the Set screen is on the list when that screen returns,
+without Settings being reopened.
+→ `settings goto tools.reminders.new; settings set minutes 7; settings activate
+custom` leaves `settings page` == `tools.reminders` and `settings rows` one
+`r-` row longer
+
+**J4** Tapping a listed reminder asks before cancelling it, and dismissing the
+question leaves the timer running.
+→ `settings activate <r-id>` makes `settings confirmText` non-empty while
+`systemctl --user list-timers` still lists the unit; `settings confirm` then
+drops it from both
+
+**J5** Clear all asks the same way, and is not offered when there is nothing to
+clear.
+→ with a reminder set, `settings guards` shows `clear 1`; after `settings
+activate clear; settings confirm`, it shows `clear 0`
+
+**J6** A reminder action leaves Settings on screen. Nothing on these two pages
+hides the surface, opens a terminal or summons a vendored picker -- which is the
+whole of what was wrong before.
+→ `settings state` == `open` after each of `activate custom`, `activate clear;
+confirm`, and a cancel; `settings lastLaunch` never begins `omarchy-launch-` and
+never names `omarchy.reminders`
+
+**J7** The Set screen takes any duration, not only the presets: a minutes field,
+an optional message field, and one row that consumes both.
+→ `settings goto tools.reminders.new; settings set minutes 25; settings set
+message 'Check the oven'; settings dryRun 1; settings activate custom; settings
+lastLaunch` == `moarchy-reminders set '25' 'Check the oven'`
+
+**J8** The Set row is inert until the minutes field holds a number, and it looks
+inert.
+→ on a freshly entered `tools.reminders.new`, `settings rows` shows `custom`
+with `enabled=0`, and `settings activate custom` answers `not ready` and leaves
+`lastLaunch` untouched
+
+**J9** A preset carries whatever is in the message field and asks nothing else.
+→ `settings set message Tea; settings dryRun 1; settings activate m15; settings
+lastLaunch` == `moarchy-reminders set 15 'Tea'`
+
+**J10** A reminder with a message is listed by its message; one without is listed
+by its duration.
+→ `omarchy-reminder 9 Tea; omarchy-reminder 11; settings refresh; settings rows`
+holds a row labelled `Tea` and one labelled `11-min reminder`
+
+**J11** While a field has focus the surface gives the on-screen keyboard its room:
+the negative bottom inset that lets a page draw under the gesture strip goes to
+zero, and comes back when focus leaves. This is the first text input in Settings,
+and that inset was unconditional because there had never been one.
+→ `settings geometry` shows `margin=0` while `settings focused` names a field,
+and `margin=-<strip>` when `settings focused` is empty
+
+**J12** Fields do not outlive the screen. Coming back to Set a reminder starts
+empty, so yesterday's message is never attached to today's timer.
+→ after `settings back; settings goto tools.reminders.new`, `settings value
+message` == ``
+
+**J13** The list is read at open and after every write, never remembered.
+→ a reminder set or cancelled from a terminal shows up on the next `settings
+refresh`, with no reopen
+
 ## The IPC surface
 
 These verbs exist so the ACs above are checkable without touching the screen.
@@ -400,9 +508,12 @@ omarchy-shell settings goto <pageId>        -> ok | unknown page: <id>
 omarchy-shell settings back                 -> <pageId> | closed
 omarchy-shell settings rows                 -> TSV, the open page
 omarchy-shell settings rowsOn <pageId>      -> TSV, another page
-omarchy-shell settings value <rowId>        -> on | off | <choice value> | ""
+omarchy-shell settings value <rowId>        -> on | off | <choice value> | <input text> | ""
 omarchy-shell settings set <rowId> <value>  -> ok | hidden | unknown row
-omarchy-shell settings activate <rowId>     -> ok | hidden | unknown row
+omarchy-shell settings activate <rowId>     -> ok | hidden | not ready | unknown row
+omarchy-shell settings confirmText          -> the armed question, or ""
+omarchy-shell settings confirm              -> ok | nothing to confirm
+omarchy-shell settings focused              -> the focused input's rowId, or ""
 omarchy-shell settings guards               -> TSV rowId 0|1
 omarchy-shell settings refresh              -> ok
 omarchy-shell settings dryRun <0|1>         -> ok
@@ -411,10 +522,24 @@ omarchy-shell settings coverage             -> TSV upstreamId class pageId rowId
 omarchy-shell settings geometry             -> w= h= margin= strip= gap= screen=
 ```
 
-The `rows` TSV is `rowId, type, label, visible, checked, detail`. Visibility and
-state are only real for the page that is open; `rowsOn` answers `?` for another
-page's, because its guards have not been run and `0` would read as "hidden"
-rather than "not asked".
+The `rows` TSV is `rowId, type, label, visible, checked, detail, enabled`.
+Visibility and state are only real for the page that is open; `rowsOn` answers
+`?` for another page's, because its guards have not been run and `0` would read
+as "hidden" rather than "not asked".
+
+`enabled` is the seventh column and is not `visible` restated: a row that is
+drawn but cannot act yet -- Set a reminder with no duration typed -- is visible
+and disabled, and answers `not ready` to `activate` (J8).
+
+`refresh` re-reads the whole page, provider included. It used to re-run only
+the guard batch, which on a provider page meant the Clear all row could correctly
+appear while the list above it still said "No reminders set" -- the state that
+made J13 fail on the device.
+
+`confirm` presses Continue on the sheet `confirmText` reports. Both exist so a
+destructive row can be tested from ssh at all: `activate` on a row that carries
+`confirm` arms the question and returns, and before these there was no verb that
+could answer it.
 
 `geometry` reports what the compositor granted this surface, and exists because
 nothing else can: sway's IPC does not list layer surfaces. `h` is the configure

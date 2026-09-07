@@ -33,9 +33,21 @@
 //            "zeditor" and writes "zed".
 //   action   runs `run`. `launch` picks how: "tui" a terminal at TUI size,
 //            "menu" a vendored picker that needs Settings out of the way
-//            first, "none" straight to execDetached.
+//            first, "none" straight to execDetached, "inline" in place with
+//            the screen left up and the page re-read afterwards. `back: true`
+//            pops one page when it is done. `argsFrom` names `input` rows
+//            whose text is appended, shell-quoted, in order; `requires` names
+//            one that must be non-empty or the row is dimmed and inert.
 //   link     a URL, through the omarchy-launch-webapp shim.
 //   info     read-only text.
+//   input    a text field. `placeholder` is the empty state, `numeric` asks
+//            for the digits-only keyboard. Its text is not persisted and does
+//            not outlive the page.
+//
+// A page may build rows at open instead of declaring them: `provider.list`
+// turns one value per line into `choice` rows, `provider.json` takes a JSON
+// array of whole rows, and `before: true` puts those above the declared ones
+// rather than replacing them.
 //
 // Any row may carry `when`, copied verbatim from omarchy-menu.jsonc so the
 // guard that upstream uses is the guard we use.
@@ -535,8 +547,11 @@ var PAGES = {
   { id: "emoji", type: "action", glyph: "", label: "Emoji",
     run: "omarchy-menu-emoji", launch: "none",
     covers: { "trigger.emoji": "B" } },
+  // `trigger.reminder.show` is this row, not a row on the page it opens: the
+  // page IS the list, so opening it is the whole of showing them (J1).
   { id: "reminders", type: "nav", page: "tools.reminders", glyph: "󰢌", label: "Reminders",
-    covers: { "trigger.reminder": "N" } },
+    detailCmd: "moarchy-reminders summary",
+    covers: { "trigger.reminder": "N", "trigger.reminder.show": "N" } },
   // Dropped, not guarded: omarchy-launch-screensaver opens with
   // `omarchy-cmd-missing ttfx && exit 1`, and ttfx has no aarch64 build in any
   // repo this phone uses -- so unlike gpu-screen-recorder (an optdepend that
@@ -560,16 +575,57 @@ var PAGES = {
     covers: { "trigger.capture.screenrecord.desktop-audio": "B" } }
 ]},
 
-"tools.reminders": { title: "Reminders", rows: [
-  { id: "set", type: "action", glyph: "󰢌", label: "Set a reminder",
-    run: "omarchy-reminder -i", launch: "menu",
-    covers: { "trigger.reminder.set": "B" } },
-  { id: "show", type: "action", glyph: "󰢌", label: "Show all",
-    run: "omarchy-reminder show", launch: "menu",
-    covers: { "trigger.reminder.show": "B" } },
-  { id: "clear", type: "action", glyph: "󰢌", label: "Clear all",
-    run: "omarchy-reminder clear", launch: "none",
-    covers: { "trigger.reminder.clear": "B" } }
+// The three reminder rows were bridged until 2026-09-07, and all three were
+// unusable on a phone: `-i` opens a keyboard-only prompt with no field, and
+// `show` and `clear` answer in a notification after `activate` has already put
+// Settings away. docs/settings.md J is the contract they are Native to now.
+//
+// The list comes back as rows rather than as values, because each one carries
+// its own command -- `provider.json` (Settings.qml) is that shape. `before`
+// puts them above the two static rows, so opening the page is seeing them.
+"tools.reminders": { title: "Reminders",
+  provider: { json: "moarchy-reminders rows", before: true },
+  rows: [
+  { id: "new", type: "nav", page: "tools.reminders.new", glyph: "󰐕",
+    label: "Set a reminder", covers: { "trigger.reminder.set": "N" } },
+  // Guarded on there being something to clear, so the row is not offered as a
+  // no-op (J5). `inline` because this one has no terminal and no picker to get
+  // out of the way of: it runs where it stands and the list re-reads (J6).
+  { id: "clear", type: "action", glyph: "󰅖", label: "Clear all",
+    when: "[ \"$(moarchy-reminders count)\" -gt 0 ]",
+    confirm: "Clear every reminder?",
+    run: "omarchy-reminder clear", launch: "inline",
+    covers: { "trigger.reminder.clear": "N" } }
+]},
+
+// Presets first because a thumb wants one tap, then the pair that takes any
+// duration at all. `argsFrom` appends the named inputs, shell-quoted, in that
+// order -- so every row here runs `moarchy-reminders set <minutes> <message>`
+// and the empty message arrives as an empty argument rather than not at all.
+"tools.reminders.new": { title: "Set a reminder", rows: [
+  { id: "message", type: "input", glyph: "󰭹", label: "Message",
+    placeholder: "Message (optional)" },
+  { id: "m5",   type: "action", glyph: "󰢌", label: "In 5 minutes",
+    run: "moarchy-reminders set 5",   argsFrom: ["message"], launch: "inline", back: true },
+  { id: "m10",  type: "action", glyph: "󰢌", label: "In 10 minutes",
+    run: "moarchy-reminders set 10",  argsFrom: ["message"], launch: "inline", back: true },
+  { id: "m15",  type: "action", glyph: "󰢌", label: "In 15 minutes",
+    run: "moarchy-reminders set 15",  argsFrom: ["message"], launch: "inline", back: true },
+  { id: "m30",  type: "action", glyph: "󰢌", label: "In 30 minutes",
+    run: "moarchy-reminders set 30",  argsFrom: ["message"], launch: "inline", back: true },
+  { id: "m45",  type: "action", glyph: "󰢌", label: "In 45 minutes",
+    run: "moarchy-reminders set 45",  argsFrom: ["message"], launch: "inline", back: true },
+  { id: "m60",  type: "action", glyph: "󰢌", label: "In 1 hour",
+    run: "moarchy-reminders set 60",  argsFrom: ["message"], launch: "inline", back: true },
+  { id: "m120", type: "action", glyph: "󰢌", label: "In 2 hours",
+    run: "moarchy-reminders set 120", argsFrom: ["message"], launch: "inline", back: true },
+  { id: "minutes", type: "input", glyph: "󰅐", label: "Minutes",
+    placeholder: "Minutes", numeric: true },
+  // Dimmed and inert until the field above holds something (J8). The script
+  // validates the number too -- this is the affordance, not the check.
+  { id: "custom", type: "action", glyph: "󰄬", label: "Set reminder",
+    run: "moarchy-reminders set", argsFrom: ["minutes", "message"],
+    requires: "minutes", launch: "inline", back: true }
 ]},
 
 "tools.tests": { title: "Speed tests", rows: [

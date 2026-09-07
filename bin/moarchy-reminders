@@ -1,0 +1,151 @@
+#!/bin/bash
+
+# The reminders screen's back end.
+#
+# Upstream's omarchy-reminder is a fine CLI and a poor phone UI: `-i` summons a
+# card with no field and no buttons that wants a number typed then Return, and
+# `show`/`clear` answer in a notification. docs/settings.md J is what replaced
+# it. This script is the half of that which is not QML -- the list Settings
+# renders, the guard it hides Clear all on, and the one verb upstream has no
+# equivalent for, cancelling a single reminder.
+#
+# It does NOT own any state. The timers are systemd-run transients created by
+# omarchy-reminder, named omarchy-reminder-<minutes>m-<epoch>, with the message
+# in $XDG_RUNTIME_DIR/omarchy-reminders/<unit>.message. `rows` reads them back
+# through `omarchy-reminder show --json`, which is upstream's own machine
+# interface -- the same one its bar indicator uses -- so there is exactly one
+# place that knows how a reminder is named and labelled.
+
+set -euo pipefail
+
+# Upstream's glyph for a reminder, and the only one this file draws. One
+# character (docs/settings.md I2).
+GLYPH="󰢌"
+
+reminder_dir="${XDG_RUNTIME_DIR:-/tmp}/omarchy-reminders"
+
+usage() {
+  echo "Usage: moarchy-reminders rows"
+  echo "       moarchy-reminders count"
+  echo "       moarchy-reminders summary"
+  echo "       moarchy-reminders set <minutes> [message]"
+  echo "       moarchy-reminders cancel <unit>"
+}
+
+# The units with a firing time still in the future. One jq, not one per
+# reminder: this runs from a `when:` guard and from a nav row's detail line, so
+# it is on the path of merely opening Tools.
+#
+# `next` is microseconds since the epoch, and --all is what makes an inactive
+# timer show up at all. A timer that has already fired is still listed for a
+# moment before systemd collects it, hence the comparison rather than a count
+# of lines.
+active_units() {
+  local now
+  now=$(date +%s)
+  systemctl --user list-timers --all --output=json "omarchy-reminder-*.timer" 2>/dev/null |
+    jq -r --argjson now "$now" '.[] | select((.next / 1000000) > $now) | .unit' 2>/dev/null || true
+}
+
+count_active() {
+  local units
+  units=$(active_units)
+  # `grep -c .` and not `wc -l`: an empty string is one line to wc.
+  [[ -z $units ]] && { echo 0; return; }
+  grep -c . <<<"$units"
+}
+
+# A JSON array of Settings rows, straight into the page model. An empty list is
+# an info row rather than nothing, so the screen says what is true instead of
+# looking broken (J2).
+#
+# The cancel command is built with @sh so a unit name can never be more than one
+# word, and the confirm text carries the label so the question names what it is
+# about.
+emit_rows() {
+  local json
+  if ! json=$(omarchy-reminder show --json 2>/dev/null); then
+    jq -cn --arg g "$GLYPH" \
+      '[{id:"none",type:"info",glyph:$g,label:"Reminders unavailable",
+         detail:"omarchy-reminder did not answer"}]'
+    return
+  fi
+
+  jq -c --arg g "$GLYPH" '
+    if (.reminders | length) == 0 then
+      [{id:"none", type:"info", glyph:$g, label:"No reminders set",
+        detail:"Nothing is scheduled"}]
+    else
+      [ .reminders[] | {
+          id:      ("r-" + .unit),
+          type:    "action",
+          glyph:   $g,
+          label:   .label,
+          detail:  ("in " + .remaining + " · at " + .atTime),
+          run:     ("moarchy-reminders cancel " + (.unit | @sh)),
+          launch:  "inline",
+          confirm: ("Cancel this reminder?\n" + .label + " at " + .atTime)
+        } ]
+    end' <<<"$json"
+}
+
+case ${1:-} in
+rows)
+  emit_rows
+  ;;
+
+count)
+  count_active
+  ;;
+
+# The detail line under Tools > Reminders. "None set" rather than "0
+# reminders", because a count of nothing reads as a bug.
+summary)
+  n=$(count_active)
+  case $n in
+  0) echo "None set" ;;
+  1) echo "1 reminder" ;;
+  *) echo "$n reminders" ;;
+  esac
+  ;;
+
+# Settings hands both fields over on every tap, so an empty message arrives as
+# an empty argument rather than not at all. omarchy-reminder treats "" as no
+# message but would still write an empty message file, so drop it here.
+set)
+  minutes=${2:-}
+  message=${3:-}
+  if [[ ! $minutes =~ ^[0-9]+$ ]] || ((minutes == 0)); then
+    omarchy-notification-send -g "$GLYPH" "Reminder not set" \
+      "\"$minutes\" is not a number of minutes"
+    exit 1
+  fi
+  if [[ -n $message ]]; then
+    omarchy-reminder "$minutes" "$message"
+  else
+    omarchy-reminder "$minutes"
+  fi
+  ;;
+
+# Upstream can clear all of them and nothing else. The name is checked against
+# the shape systemd-run was given rather than trusted, because this argument
+# ends up in `systemctl stop` and the row it comes from is built from a message
+# a user typed.
+cancel)
+  unit=${2:-}
+  if [[ ! $unit =~ ^omarchy-reminder-[0-9]+m-[0-9]+$ ]]; then
+    echo "not a reminder unit: $unit" >&2
+    exit 1
+  fi
+  systemctl --user stop "$unit.timer" "$unit.service" >/dev/null 2>&1 || true
+  rm -f "$reminder_dir/$unit.message"
+  # Upstream's bar indicator, which this phone does not draw. Harmless when the
+  # plugin is absent, and correct on a desktop running the same script.
+  omarchy-shell -q omarchy.indicators refresh >/dev/null 2>&1 || true
+  ;;
+
+*)
+  usage
+  exit 1
+  ;;
+esac

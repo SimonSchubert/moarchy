@@ -100,6 +100,29 @@ Item {
   property string confirmText: ""
   property var confirmRow: null
 
+  // `input` row text, keyed by row id, and which of them has the keyboard.
+  //
+  // Reassigned wholesale, never mutated in place: a `var` property holding an
+  // object emits no change on a member write, so `inputMap[id] = v` would
+  // update the field and leave every binding that reads it -- the Set row's
+  // enabled state, the command it builds -- looking at the old value.
+  //
+  // Cleared by afterPageChange, so nothing typed here outlives the screen (J12).
+  property var inputMap: ({})
+  property string focusedInput: ""
+
+  function inputValue(id) {
+    var v = root.inputMap[id]
+    return v === undefined ? "" : String(v)
+  }
+
+  function setInput(id, value) {
+    var next = ({})
+    for (var k in root.inputMap) next[k] = root.inputMap[k]
+    next[id] = String(value)
+    root.inputMap = next
+  }
+
   // Must match moarchy.gestures' own stripHeight. Duplicated rather than
   // read across plugins for the same reason the shade duplicates it: this
   // surface has to know the number even when the gestures plugin failed to
@@ -152,7 +175,12 @@ Item {
   readonly property var currentRows: {
     var p = root.pageDef
     if (!p) return []
-    return (p.provider || p.text) ? root.dynamicRows : p.rows
+    if (!p.provider && !p.text) return p.rows
+    // `before` is the reminders screen: the list it builds goes above the two
+    // rows the page declares, rather than instead of them, so opening the page
+    // is the whole of showing them (docs/settings.md J1).
+    if (p.provider && p.provider.before) return root.dynamicRows.concat(p.rows)
+    return root.dynamicRows
   }
 
   // WCAG 2.1 relative luminance and contrast, and a linear composite. `container`
@@ -193,7 +221,8 @@ Item {
       out.push([r.id, r.type, r.label,
                 live ? (root.rowVisible(r) ? "1" : "0") : "?",
                 live ? (root.rowChecked(r) ? "1" : "0") : "?",
-                live ? root.rowDetail(r) : ""].join("\t"))
+                live ? root.rowDetail(r) : "",
+                live ? (root.rowEnabled(r) ? "1" : "0") : "?"].join("\t"))
     }
     return out.join("\n")
   }
@@ -235,6 +264,16 @@ Item {
     if (!row) return false
     if (!row.when) return true
     return root.whenMap[row.id] === true
+  }
+
+  // Drawn but not yet able to act: Set a reminder before a duration is typed.
+  // Deliberately not the same question as `rowVisible` -- a row that vanishes
+  // when a field is empty and reappears when it is not would move the list
+  // under a thumb (J8).
+  function rowEnabled(row) {
+    if (!row) return false
+    if (!row.requires) return true
+    return root.inputValue(String(row.requires)) !== ""
   }
 
   function rowChecked(row) {
@@ -383,6 +422,19 @@ Item {
     root.pageValue = ""
     root.dynamicRows = []
     root.dynamicLoaded = false
+    // Fields do not outlive the screen (J12), and the surface must not be left
+    // holding a bottom inset for a keyboard whose field has just been
+    // destroyed -- a delegate torn down while focused reports no focus loss.
+    root.inputMap = ({})
+    root.focusedInput = ""
+    root.refresh()
+  }
+
+  // Re-run a page's provider. `refresh` alone will not: it runs the provider
+  // only while `dynamicLoaded` is false, which is what stops it looping.
+  function reloadDynamic() {
+    var p = root.pageDef
+    if (p && (p.provider || p.text)) root.dynamicLoaded = false
     root.refresh()
   }
 
@@ -397,7 +449,13 @@ Item {
       root.generation += 1
       dynamicProc.wanted = root.generation
       if (dynamicProc.running) dynamicProc.running = false
-      dynamicProc.command = ["bash", "-lc", p.provider ? p.provider.list : p.text]
+      // `json` or `list`, whichever the provider declares. This read
+      // `p.provider.list` unconditionally until 2026-09-07, so a json provider
+      // was handed `undefined` as its command: the page painted its declared
+      // rows and nothing else, which looks exactly like a provider that
+      // legitimately found nothing.
+      var command = p.provider ? (p.provider.json || p.provider.list) : p.text
+      dynamicProc.command = ["bash", "-lc", String(command || "")]
       dynamicProc.running = true
       return
     }
@@ -418,6 +476,28 @@ Item {
         if (dynamicProc.wanted !== root.generation) return
         var p = root.pageDef
         if (!p) return
+        // A `provider.json` answers with the rows themselves -- id, type,
+        // label, and the command each one runs -- because a reminder's row
+        // carries its own `cancel <unit>`, which one-value-per-line cannot
+        // express. JSON and not TSV: the label is a message somebody typed,
+        // and a tab in it would silently become a column.
+        if (p.provider && p.provider.json) {
+          var rows = []
+          try {
+            var parsed = JSON.parse(String(text || "[]"))
+            if (parsed && parsed.length !== undefined) rows = parsed
+          } catch (e) {
+            // Half a page is worse than an empty one: a provider that answers
+            // nothing usable says so with its own info row, and a provider
+            // that is not there at all leaves the declared rows alone.
+            rows = []
+          }
+          root.dynamicRows = rows
+          root.dynamicLoaded = true
+          Qt.callLater(root.refresh)
+          return
+        }
+
         var lines = String(text || "").split("\n")
         var built = []
         for (var i = 0; i < lines.length; i++) {
@@ -474,7 +554,14 @@ Item {
     if (row.type === "choice") return String(row.write || "")
     if (row.launch === "tui")
       return "omarchy-launch-floating-terminal-with-presentation " + String(row.run)
-    return String(row.run || "")
+    var cmd = String(row.run || "")
+    // Every named field is appended, shell-quoted, even when it is empty: the
+    // script's argument positions are fixed, and dropping an empty message
+    // would make the next argument the message.
+    if (row.argsFrom)
+      for (var i = 0; i < row.argsFrom.length; i++)
+        cmd += " " + root.shellQuote(root.inputValue(String(row.argsFrom[i])))
+    return cmd
   }
 
   function runCommand(cmd) {
@@ -511,6 +598,10 @@ Item {
   // dialog never closed and the action never ran.
   function activate(row, confirmed) {
     if (!row) return
+    // Before the confirm sheet, not after: a row that cannot act must not be
+    // able to ask a question either. The IPC form answers `not ready`, because
+    // a test has to tell "refused" from "ran and did nothing".
+    if (!root.rowEnabled(row)) return
     if (row.confirm && !confirmed) {
       root.confirmText = String(row.confirm)
       root.confirmRow = row
@@ -541,14 +632,37 @@ Item {
       return
     }
 
-    if (row.type === "info") return
+    if (row.type === "info" || row.type === "input") return
+
+    var cmd = root.commandFor(row)
+
+    // `inline` is a native action: no terminal to uncover and no vendored
+    // picker to get out from under, so the screen stays up and the page reads
+    // itself again when the command exits (J6). `back` pops first, so the tap
+    // is answered now rather than when the script finishes.
+    if (row.launch === "inline") {
+      root.lastLaunch = cmd
+      if (root.dryRun) return
+      if (inlineProc.running) inlineProc.running = false
+      inlineProc.command = ["bash", "-lc", cmd]
+      inlineProc.running = true
+      if (row.back) root.pop()
+      return
+    }
 
     // action, link. Settings goes away first so the terminal or the vendored
     // picker is not underneath a layer surface -- and so a screenshot is not
     // a screenshot of this screen.
-    var cmd = root.commandFor(row)
     if (!root.dryRun) root.hideOnly()
     root.runCommand(cmd)
+  }
+
+  // Separate from switchProc so a write and a native action cannot cancel each
+  // other: assigning a command to a Process that is already running is a no-op,
+  // and these two are started from different taps.
+  Process {
+    id: inlineProc
+    onExited: Qt.callLater(root.reloadDynamic)
   }
 
   // ------------------------------------------------------------------ IPC
@@ -629,6 +743,7 @@ Item {
       if (!row) return "unknown row"
       if (row.type === "switch") return root.rowChecked(row) ? "on" : "off"
       if (row.type === "choice") return root.pageValue
+      if (row.type === "input") return root.inputValue(rowId)
       return String(root.valueMap[rowId] || "")
     }
 
@@ -648,6 +763,12 @@ Item {
         if (!root.dryRun) Qt.callLater(root.refresh)
         return "ok"
       }
+      // The only way to put text in a field without a finger and a keyboard,
+      // which is what makes J7 to J9 checkable over ssh at all.
+      if (row.type === "input") {
+        root.setInput(rowId, value)
+        return "ok"
+      }
       return "not settable"
     }
 
@@ -655,9 +776,28 @@ Item {
       var row = root.rowById(rowId)
       if (!row) return "unknown row"
       if (!root.rowVisible(row)) return "hidden"
+      if (!root.rowEnabled(row)) return "not ready"
       root.activate(row)
       return "ok"
     }
+
+    // A row carrying `confirm` arms a question and returns; without these two
+    // there was no verb that could answer it, so no destructive row could be
+    // exercised from a terminal at all (J4, J5).
+    function confirmText(): string { return root.confirmText }
+
+    function confirm(): string {
+      var row = root.confirmRow
+      if (root.confirmText === "" && !row) return "nothing to confirm"
+      root.confirmText = ""
+      root.confirmRow = null
+      if (row) root.activate(row, true)
+      return "ok"
+    }
+
+    // Which field holds the keyboard, and therefore why the bottom inset is
+    // where it is (J11).
+    function focused(): string { return root.focusedInput }
 
     function guards(): string {
       var out = []
@@ -667,7 +807,12 @@ Item {
       return out.join("\n")
     }
 
-    function refresh(): string { root.refresh(); return "ok" }
+    // reloadDynamic, not refresh: `refresh` runs a page's provider only while
+    // `dynamicLoaded` is false, so on a provider page the plain form re-ran the
+    // guards and left the list exactly as it was. Two reminders set from a
+    // terminal and a page still reading "No reminders set", with the Clear all
+    // guard correctly flipped on above it (J13).
+    function refresh(): string { root.reloadDynamic(); return "ok" }
 
     function dryRun(on: string): string {
       root.dryRun = (on === "1" || on === "true" || on === "on")
@@ -746,10 +891,13 @@ Item {
     // margin.bottom)` with no clamping, and sway delegates to it and adds no
     // validation of its own.
     //
-    // Unconditional here: no page has a text input -- every row is
-    // nav/plugin/switch/choice/action/link/info -- so there is no keyboard
-    // case to gate on.
-    margins.bottom: -root.gestureStrip
+    // Gated on focus since Set a reminder gave Settings its first text field
+    // (J11). The inset is what lets the sheet draw under the gesture strip;
+    // while a field has the keyboard it has to go, or the field ends up behind
+    // it. Keyed on focus rather than on the keyboard being visible, because
+    // focus is the signal that arrives first -- the same arrangement the Wi-Fi
+    // passphrase field and the drawer's search field use.
+    margins.bottom: root.focusedInput !== "" ? 0 : -root.gestureStrip
     WlrLayershell.keyboardFocus: root.opened ? WlrKeyboardFocus.Exclusive
                                              : WlrKeyboardFocus.None
 
@@ -846,10 +994,23 @@ Item {
             label: modelData.label || ""
             detail: root.rowDetail(modelData)
             checked: root.rowChecked(modelData)
+            rowEnabled: root.rowEnabled(modelData)
+            placeholder: modelData.placeholder || ""
+            numeric: modelData.numeric === true
+            inputText: modelData.type === "input"
+                       ? root.inputValue(modelData.id) : ""
             textColor: root.textOnSurface
             subduedColor: root.subdued
             accentColor: root.accent
             onActivated: root.activate(modelData)
+            onEdited: function (value) { root.setInput(modelData.id, value) }
+            // The id, not a bool: two fields on this page, and clearing the
+            // flag on the one that just lost focus to the other would drop the
+            // inset for a frame and bounce the keyboard.
+            onFocusTaken: function (has) {
+              if (has) root.focusedInput = modelData.id
+              else if (root.focusedInput === modelData.id) root.focusedInput = ""
+            }
           }
         }
       }
