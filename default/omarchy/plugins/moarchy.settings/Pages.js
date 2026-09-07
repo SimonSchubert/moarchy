@@ -225,8 +225,6 @@ var PAGES = {
     detailCmd: "omarchy-font-current", covers: { "style.font": "N" } },
   { id: "bar", type: "nav", page: "appearance.bar", glyph: "󰍜", label: "Status bar",
     covers: { "style.bar": "N" } },
-  { id: "branding", type: "nav", page: "appearance.branding", glyph: "",
-    label: "Branding", covers: { "style.about": "N", "style.screensaver": "N" } },
   { id: "more", type: "nav", page: "appearance.more", glyph: "󰉉", label: "Get more",
     covers: { "install.style": "N" } }
 ]},
@@ -278,26 +276,18 @@ var PAGES = {
   // `style.bar.transparency` as Unsupported for the same reason.
 ]},
 
-"appearance.branding": { title: "Branding", rows: [
-  { id: "about-text", type: "action", glyph: "", label: "About: edit text",
-    run: "omarchy-branding-about text", launch: "tui",
-    covers: { "style.about.text": "B" } },
-  { id: "about-image", type: "action", glyph: "", label: "About: set from image",
-    run: "omarchy-branding-about image", launch: "tui",
-    covers: { "style.about.image": "B" } },
-  { id: "about-reset", type: "action", glyph: "", label: "About: restore default",
-    run: "omarchy-branding-about reset", launch: "tui",
-    covers: { "style.about.default": "B" } },
-  { id: "saver-text", type: "action", glyph: "󱄄", label: "Screensaver: edit text",
-    run: "omarchy-branding-screensaver text", launch: "tui",
-    covers: { "style.screensaver.text": "B" } },
-  { id: "saver-image", type: "action", glyph: "󱄄", label: "Screensaver: set from image",
-    run: "omarchy-branding-screensaver image", launch: "tui",
-    covers: { "style.screensaver.image": "B" } },
-  { id: "saver-reset", type: "action", glyph: "󱄄", label: "Screensaver: restore default",
-    run: "omarchy-branding-screensaver reset", launch: "tui",
-    covers: { "style.screensaver.default": "B" } }
-]},
+// There is deliberately no Branding page. Its six rows edited two files of ASCII
+// art -- ~/.config/omarchy/branding/{about,screensaver}.txt -- and on this phone
+// nothing renders either of them. omarchy-launch-about is not what About Omarchy
+// opens any more (section N), and omarchy-screensaver begins with a check for
+// ttfx, which has no aarch64 build in any repo this image uses, which is why
+// system.screensaver was already Unsupported.
+//
+// Not a rendering problem to solve, either: the art is 54 columns, and 54
+// columns across 360 logical pixels is about six pixels a character. A setting
+// whose effect cannot appear anywhere is worse than a missing one, because it
+// looks like it worked. docs/menu-coverage.md carries the eight ids as
+// Unsupported with that reason.
 
 "appearance.more": { title: "Get more", rows: [
   { id: "theme-install", type: "action", glyph: "󰸌", label: "Install a theme",

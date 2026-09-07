@@ -1818,12 +1818,13 @@ DOCTBL
   # 74/65 until 2026-09-07, and wrong from `1b01e5c` onward: that commit dropped
   # three bridged rows and left this number where it was, so G7 was red about a
   # constant rather than about coverage. 68/68 after the three trigger.reminder.*
-  # ids became Native (docs/settings.md J), and 64/72 since update.timezone, the
-  # two setup.plugin toggles and about followed them (L, M and N).
-  [[ $totals == "Bridged=64 Native=72 Shade=1 " ]] \
+  # ids became Native (docs/settings.md J), then 64/72 as update.timezone, the two
+  # setup.plugin toggles and about followed them (L, M, N), then 58/70 when the
+  # eight branding ids left for Unsupported.
+  [[ $totals == "Bridged=58 Native=70 Shade=1 " ]] \
     && ok "G7 the class totals are the ones committed to ($totals)" \
     || no "G7 the class totals moved: $totals" \
-          "expected Bridged=64 Native=72 Shade=1; update docs/settings.md if deliberate"
+          "expected Bridged=58 Native=70 Shade=1; update docs/settings.md if deliberate"
 
   grep -q '^trigger.toggle.notifications	Shade' <<<"$cov" \
     && ok "H2 the shade-owned toggle is recorded, not rendered" \

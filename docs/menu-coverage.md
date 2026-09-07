@@ -45,10 +45,10 @@ appeared and the keys did not.
 
 | Class | Entries |
 | --- | ---: |
-| Native | 72 |
-| Bridged | 64 |
+| Native | 70 |
+| Bridged | 58 |
 | Shade | 1 |
-| Unsupported | 183 |
+| Unsupported | 191 |
 | **Total** | **320** |
 
 Roughly a third of the menu survives. That is not a gap to be closed: the
@@ -174,18 +174,18 @@ Native 7 · Bridged 6 · Unsupported 8
 | `style.bar.position` | Position | Unsupported | -- | `moarchy.bar` declares `readonly property string position: "top"` |
 | `style.bar.transparency` | Transparency | Unsupported | -- | `omarchy-bar transparent` reloads the shell config, and the reload leaves upstream's `omarchy.bar` drawing in place of the phone bar; the row was removed rather than repaired |
 | `style.hyprland` | Hyprland | Unsupported | -- | edits `~/.config/hypr/looknfeel.lua`; Hyprland cannot run here |
-| `style.screensaver` | Screensaver | Native | Appearance > Branding | container; its three children are the bridged rows |
-| `style.about` | About | Native | Appearance > Branding | container; its three children are the bridged rows |
+| `style.screensaver` | Screensaver | Unsupported | -- | nothing on this phone renders the art: About Omarchy is a page of rows now (settings.md N) and `omarchy-screensaver` needs ttfx, which has no aarch64 build |
+| `style.about` | About | Unsupported | -- | nothing on this phone renders the art: About Omarchy is a page of rows now (settings.md N) and `omarchy-screensaver` needs ttfx, which has no aarch64 build |
 | `style.bar.position.top` | Top | Unsupported | -- | the bar is hard-coded to the top |
 | `style.bar.position.bottom` | Bottom | Unsupported | -- | the gesture strip owns the bottom edge |
 | `style.bar.position.left` | Left | Unsupported | -- | the back-gesture band owns the left edge |
 | `style.bar.position.right` | Right | Unsupported | -- | the bar is hard-coded to the top |
-| `style.about.text` | Edit Text | Bridged | Appearance > Branding |  |
-| `style.about.image` | Set From Image | Bridged | Appearance > Branding |  |
-| `style.about.default` | Restore Default | Bridged | Appearance > Branding |  |
-| `style.screensaver.text` | Edit Text | Bridged | Appearance > Branding |  |
-| `style.screensaver.image` | Set From Image | Bridged | Appearance > Branding |  |
-| `style.screensaver.default` | Restore Default | Bridged | Appearance > Branding |  |
+| `style.about.text` | Edit Text | Unsupported | -- | nothing on this phone renders the art: About Omarchy is a page of rows now (settings.md N) and `omarchy-screensaver` needs ttfx, which has no aarch64 build |
+| `style.about.image` | Set From Image | Unsupported | -- | nothing on this phone renders the art: About Omarchy is a page of rows now (settings.md N) and `omarchy-screensaver` needs ttfx, which has no aarch64 build |
+| `style.about.default` | Restore Default | Unsupported | -- | nothing on this phone renders the art: About Omarchy is a page of rows now (settings.md N) and `omarchy-screensaver` needs ttfx, which has no aarch64 build |
+| `style.screensaver.text` | Edit Text | Unsupported | -- | nothing on this phone renders the art: About Omarchy is a page of rows now (settings.md N) and `omarchy-screensaver` needs ttfx, which has no aarch64 build |
+| `style.screensaver.image` | Set From Image | Unsupported | -- | nothing on this phone renders the art: About Omarchy is a page of rows now (settings.md N) and `omarchy-screensaver` needs ttfx, which has no aarch64 build |
+| `style.screensaver.default` | Restore Default | Unsupported | -- | nothing on this phone renders the art: About Omarchy is a page of rows now (settings.md N) and `omarchy-screensaver` needs ttfx, which has no aarch64 build |
 
 ## Setup (62)
 

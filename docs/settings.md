@@ -391,12 +391,13 @@ of those Unsupported rows carries a non-empty reason
 `docs/menu-coverage.md` is empty
 
 **G7** The class totals are the ones committed to.
-→ `settings coverage | cut -f2 | sort | uniq -c` == 64 Bridged, 72 Native,
+→ `settings coverage | cut -f2 | sort | uniq -c` == 58 Bridged, 70 Native,
 1 Shade. `Unsupported` is not one of the answers -- see G3
 
 It was 71/65 until the three `trigger.reminder.*` ids stopped being bridged
 (section J), and 68/68 until `update.timezone`, the two `setup.plugin`
-toggles and `about` followed them (sections L, M and N). The Totals table in
+toggles and `about` followed them (sections L, M and N); the eight branding ids
+leaving for Unsupported took it to 58/70. The Totals table in
 `docs/menu-coverage.md` is the same numbers from the other side, and it stayed
 at 71/65 through the reminders change -- a summary nothing asserts drifts, so
 G7 is the copy to trust and the table is now moved with it. The selftest's copy of this number had said 74 since `1b01e5c`
@@ -771,6 +772,14 @@ parity a bash assertion rather than a promise.
   `bar.id: moarchy.bar` and every `moarchy.*` entry from `plugins[]`.
   It succeeds, then restarts into the thirteen-widget desktop bar with no drawer,
   shade or gestures.
+- **There is no Branding page.** Its six rows edited two files of ASCII art, and
+  nothing on this phone renders either. About Omarchy is a page of rows now
+  (section N), and `omarchy-screensaver` opens with a check for `ttfx`, which has
+  no aarch64 build in any repo this image uses -- which is why
+  `system.screensaver` was already Unsupported. Nor is it a rendering job going
+  begging: the art is 54 columns, and 54 columns across 360 logical pixels is
+  about six pixels a character. A setting whose effect cannot appear anywhere is
+  worse than a missing one, because it looks like it worked.
 - **No vendored popup dismisses on tap-outside.**
   `pkgbuilds/omarchy-config/port-4x.patch` stubs `HyprlandFocusGrab`, which has
   no `Quickshell.I3` counterpart. AC B5 is the compensation, not a fix.
