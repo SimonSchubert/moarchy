@@ -15,9 +15,28 @@
 // on the launcher. $mod+Alt+Space still opens the menu at its root for anyone
 // with a keyboard attached.
 //
-// So this screen is a search field and a grid, and nothing else. On a screen
-// that fits four icons across, a row of controls at the top is a row of apps
-// you cannot see.
+// So at rest this screen is a search field and a grid, and nothing else. On a
+// screen that fits four icons across, a row of controls at the top is a row of
+// apps you cannot see.
+//
+// ---------------------------------------------------------------------------
+// Why typing brings settings back
+// ---------------------------------------------------------------------------
+// At rest, and only at rest. Browsing wants the grid; already knowing the name
+// of the thing wants a field, and it is the same field either way. So once
+// there is a query, matching Settings rows appear beneath the apps
+// (docs/settings.md section O): Screenshot runs, Set a reminder opens its
+// screen, Night light opens the page it lives on.
+//
+// This is not the palette coming back and it is not a second copy of the tree.
+// The index is a walk of moarchy.settings' own PAGES, the tap goes through
+// moarchy.settings' own activate(), and there is no list of actions here to
+// fall out of date. What the drawer owns is the field and the rows it draws.
+//
+// The two imports below are the price: this plugin will not load without
+// moarchy.settings beside it. They ship in one package to one directory, so
+// that holds -- but a `~/.config/omarchy/plugins` copy of only *one* of the two
+// breaks the path, and the user directory wins. Clear both or neither.
 //
 // ---------------------------------------------------------------------------
 // Why this owns no edge of its own
@@ -45,6 +64,10 @@ import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
 import qs.Ui as Ui
+// moarchy.settings', not ours: the Settings tree flattened for search, and the
+// batched guard script its pages are read with. See the header note above.
+import "../moarchy.settings/Search.js" as Search
+import "../moarchy.settings/Guards.js" as Guards
 
 Item {
   id: root
@@ -214,6 +237,13 @@ Item {
   // the press veil is drawn at it -- the cell itself has no chrome.
   readonly property int radiusTile: Style.space(20)
 
+  // A settings result is a full-width list row, which is D1's `card` -- the
+  // same 18 the rows in moarchy.settings are drawn at, because it is the same
+  // kind of row read on a different screen. The glyph slot comes from the same
+  // place for the same reason (E5): derived from the glyph, not fixed.
+  readonly property int radiusCard: Style.space(18)
+  readonly property int glyphSlot: Math.round(Style.font.iconLarge * 1.35)
+
   // Radii are written out rather than taken from Style.cornerRadius, which
   // mirrors Hyprland's `decoration:rounding` and is pinned to 0 here by the
   // hyprctl shim -- right for tiled windows under Sway, wrong for a phone.
@@ -313,6 +343,121 @@ Item {
   Connections {
     target: root.shell ? root.shell.appLibrary : null
     function onAppsChanged() { root.appsRevision++ }
+  }
+
+  // --------------------------------------------------- settings results (O)
+  //
+  // Five, because the sheet has to stay an app grid with a tail rather than a
+  // list with some icons on top. Beyond about five the section is taller than
+  // the two rows of apps above it, and a query broad enough to return more than
+  // five settings rows is a query that was going to be narrowed anyway.
+  readonly property int settingsLimit: 5
+
+  // The whole of the matching. Everything else on this side is about which of
+  // these the guards allow on screen.
+  readonly property var settingsHits: Search.search(root.query, root.settingsLimit)
+
+  // What the last guard batch answered, keyed by `<pageId>/<rowId>`. A row with
+  // no `when:` is never in here and never needs to be.
+  property var settingsGuards: ({})
+  property int guardGeneration: 0
+
+  // O7. A guarded row is withheld until its guard says yes, rather than shown
+  // and then taken away. `when` hides only on an explicit 0 in Settings because
+  // there the page is already up and a row appearing late is the lesser fault;
+  // in a list that is being retyped every 120ms, a row that flickers in and out
+  // under the thumb is the worse one.
+  readonly property var settingsRows: {
+    var hits = root.settingsHits
+    var answers = root.settingsGuards
+    var out = []
+    for (var i = 0; i < hits.length; i++) {
+      var h = hits[i]
+      if (h.row.when && answers[h.key] !== true) continue
+      out.push(h)
+    }
+    return out
+  }
+
+  // One bash for the whole result set, the same bargain Guards.js strikes for a
+  // page: a fork on a 1.15GHz A53 costs far more than the tests inside it, and
+  // this runs on a settled keystroke rather than on a screen being opened.
+  //
+  // Guards.build answers "" when nothing carries a `when:`, and most queries
+  // are exactly that -- so most keystrokes cost no process at all (O7).
+  function readSettingsGuards() {
+    var hits = root.settingsHits
+    var rows = []
+    for (var i = 0; i < hits.length; i++) {
+      if (!hits[i].row.when) continue
+      // Guards.js keys its output by `id`, and a row id is unique only within
+      // its page. The composite key is what makes a batch that spans pages
+      // parseable at all; the parser splits on the first two colons, so the
+      // slash in it survives.
+      rows.push({ id: hits[i].key, when: hits[i].row.when })
+    }
+
+    // Bumped before the early return, not after it. A query with nothing to ask
+    // still has to invalidate a batch that is already in flight -- otherwise
+    // "record" starts one, "emoji" clears the map without moving the
+    // generation, and the first batch lands afterwards and is believed.
+    root.guardGeneration += 1
+
+    var script = Guards.build(rows, "")
+    if (!script) { root.settingsGuards = ({}); return }
+
+    guardProc.wanted = root.guardGeneration
+    if (guardProc.running) guardProc.running = false
+    guardProc.command = ["bash", "-lc", script]
+    guardProc.running = true
+  }
+
+  onSettingsHitsChanged: root.readSettingsGuards()
+
+  Process {
+    id: guardProc
+    property int wanted: 0
+    stdout: StdioCollector {
+      onStreamFinished: {
+        // A batch for a query that has already been retyped is not a late
+        // answer, it is the wrong answer.
+        if (guardProc.wanted !== root.guardGeneration) return
+        root.settingsGuards = Guards.parse(String(text || "")).when
+      }
+    }
+  }
+
+  // A tap on a settings result. The drawer decides *where* to send it and
+  // moarchy.settings decides what that means -- which is the whole reason there
+  // is no command line anywhere in this file.
+  //
+  //   nav                       open the page it points at. Set a reminder is a
+  //                             row on Reminders and a screen of its own, and
+  //                             the screen is the thing being asked for (O5).
+  //   action, link, plugin      fire it, quietly. Settings stands the page up,
+  //                             runs the row and never maps (O4).
+  //   switch, choice, info      open the page it lives on. A radio flipped from
+  //                             a search result is a value changed by something
+  //                             that never showed it to you (O6).
+  //
+  // A row that turns out to be hidden or not ready lands on its page instead of
+  // doing nothing, and that decision is Settings' too (O9).
+  function activateSetting(hit) {
+    if (!hit || !root.shell || typeof root.shell.summon !== "function") return
+
+    var payload
+    if (hit.type === "nav")
+      payload = { page: String(hit.row.page) }
+    else if (hit.type === "action" || hit.type === "link" || hit.type === "plugin")
+      payload = { page: hit.pageId, activate: hit.rowId, quiet: true }
+    else
+      payload = { page: hit.pageId }
+
+    // Settings' own open() hides this surface, the same as the shade's gear
+    // does. Dismissing first anyway is the belt to those braces: a quiet open
+    // never reaches the branch that hides anything.
+    root.dismiss()
+    root.shell.summon("moarchy.settings", JSON.stringify(payload))
   }
 
   function open(payloadJson) {
@@ -425,7 +570,15 @@ Item {
     //
     // Meaningless while the surface is closed or mid-slide: open it first.
     function geometry(): string {
-      var gap = Math.round(drawerWindow.height - grid.mapToItem(null, 0, grid.height).y + grid.bottomMargin)
+      // Measured off whatever is last on the sheet, which stopped being the
+      // grid the moment a query could put a settings section under it (O11).
+      // Read off the grid regardless, `gap` would report the distance from the
+      // bottom of the *apps* to the bottom of the surface -- a number that
+      // includes the whole settings section and is comfortably over the strip
+      // while the last result sits under the home pill.
+      var last = settingsSection.visible ? settingsSection : grid
+      var pad = settingsSection.visible ? 0 : grid.bottomMargin
+      var gap = Math.round(drawerWindow.height - last.mapToItem(null, 0, last.height).y + pad)
       return "w=" + drawerWindow.width
            + " h=" + drawerWindow.height
            + " margin=" + drawerWindow.margins.bottom
@@ -481,6 +634,57 @@ Item {
       for (var i = 0; i < rows.length; i++)
         if (rows[i] && rows[i].entry) out.push(String(rows[i].entry.id))
       return out.join("\n")
+    }
+
+    // ------------------------------------------------- settings results (O)
+    //
+    // Typing, without a finger. It writes the field rather than `root.query`
+    // directly, so what a check drives is the same path a keystroke takes --
+    // including the debounce, which is flushed here rather than waited out: a
+    // check that slept 120ms would be asserting the timer, not the results.
+    function type(text: string): string {
+      searchField.text = String(text || "")
+      queryDebounce.stop()
+      root.query = searchField.text
+      return "ok"
+    }
+
+    // What the section is showing, after the guards. `visible` is always 1 for
+    // a listed row -- a guarded row that has not answered yet is simply not
+    // here -- and it is a column rather than a promise so O7 has something to
+    // read when that changes.
+    function results(): string {
+      var rows = root.settingsRows
+      var out = []
+      for (var i = 0; i < rows.length; i++)
+        out.push([rows[i].key, rows[i].type, rows[i].label,
+                  rows[i].section, "1"].join("\t"))
+      return out.join("\n")
+    }
+
+    // Every hit the query matched, guards ignored. `results` is what is on
+    // screen; this is what the index found, and O7 is the difference between
+    // the two.
+    function matches(): string {
+      var hits = root.settingsHits
+      var out = []
+      for (var i = 0; i < hits.length; i++)
+        out.push(hits[i].key + "\t" + (hits[i].row.when ? "guarded" : "-"))
+      return out.join("\n")
+    }
+
+    // A tap on one of them, down the same function the delegate calls. Keyed by
+    // `<pageId>/<rowId>`, which is what `results` prints.
+    function activateResult(key: string): string {
+      var rows = root.settingsRows
+      for (var i = 0; i < rows.length; i++)
+        if (rows[i].key === key) { root.activateSetting(rows[i]); return "ok" }
+      // Told apart on purpose: a key the index knows but the guards withheld is
+      // O7 working, and a key nothing matched is a query that was never typed.
+      var hits = root.settingsHits
+      for (var j = 0; j < hits.length; j++)
+        if (hits[j].key === key) return "hidden"
+      return "unknown result"
     }
 
     function open(): string {
@@ -757,7 +961,7 @@ Item {
             // where that line goes. Left at the default the text renders
             // against the top of the pill.
             verticalAlignment: TextInput.AlignVCenter
-            placeholderText: "Search apps"
+            placeholderText: "Search apps and settings"
             background: null
             verticalPadding: 0
             onTextChanged: queryDebounce.restart()
@@ -778,11 +982,28 @@ Item {
           // outside the cap a grid whose apps fit becomes scrollable by exactly
           // the margin, which makes it interactive where it was not and lets it
           // swallow the close-drag (H1) the cap exists to protect.
-          height: Math.min(parent.height - y, contentHeight + bottomMargin)
+          //
+          // Minus whatever the settings section below is taking. Without that
+          // term the grid still measures itself against the whole sheet and the
+          // section is drawn off the bottom of it -- and it is the section, not
+          // the grid, that is under the thumb when a query is showing.
+          // Gated on `visible`, both terms. A Column leaves an invisible child
+          // out of its layout but the child still reports a height -- the
+          // caption and its padding, here -- so reading it unguarded would take
+          // ~30px off the grid on every screen that has no query at all.
+          height: Math.min(parent.height - y
+                           - (settingsSection.visible
+                              ? settingsSection.height + parent.spacing : 0),
+                           contentHeight + bottomMargin)
           // Scroll padding, so the last row comes to rest a strip clear of the
           // home pill now that the sheet runs under it (I4). Rows may pass
           // beneath the pill mid-scroll; none may stop there.
-          bottomMargin: root.gestureStrip
+          //
+          // It belongs to whatever is last, and with a query up that is the
+          // settings section. Kept on both and the gap is paid twice: the grid
+          // would reserve a strip in the middle of the sheet, above rows that
+          // are not near the pill at all.
+          bottomMargin: settingsSection.visible ? 0 : root.gestureStrip
           clip: true
           cellWidth: Math.floor(width / root.columns)
           cellHeight: Style.space(86)
@@ -870,6 +1091,138 @@ Item {
               onReleased: root.sheetRelease()
               onCanceled: root.sheetCancel()
               onClicked: if (!root.sheetWasDrag) root.launch(entry)
+            }
+          }
+        }
+
+        // ---------------------------------------------- settings results (O)
+        //
+        // A list and not more grid cells, for two reasons that both come down
+        // to what a cell can hold. A settings row needs to say where it lives
+        // -- "Wi-Fi" under System is a different thing from "Wi-Fi networks"
+        // under Network & internet, and the section name is the only thing that
+        // tells them apart -- and a 90px cell has no room for a second line
+        // under a label that already wraps to two. The other reason is that a
+        // glyph in a grid of app icons reads as an app.
+        //
+        // Not in `appRows` either, and that is not a layout decision: that
+        // property feeds `drawer entries` and `drawer launch`, which
+        // moarchy-store calls and the selftest asserts (L9). A settings row in
+        // there would be an id the store could be handed and would try to
+        // gtk-launch.
+        Column {
+          id: settingsSection
+          width: parent.width
+          spacing: Style.space(4)
+          visible: root.settingsRows.length > 0
+          // Belongs to whatever is last on the sheet (I4); see the grid above.
+          bottomPadding: root.gestureStrip
+
+          Text {
+            leftPadding: Style.space(6)
+            topPadding: Style.space(6)
+            bottomPadding: Style.space(2)
+            text: "SETTINGS"
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+            font.weight: root.textWeight
+            // Wide enough to read as a divider rather than as a row with a very
+            // short label. Through Style.space like every other length, so it
+            // tracks the theme's scale (docs/style.md A2).
+            font.letterSpacing: Style.space(1)
+            color: root.subdued
+          }
+
+          Repeater {
+            model: root.settingsRows
+
+            delegate: Item {
+              id: resultRow
+              required property var modelData
+
+              width: settingsSection.width
+              // The height a Settings row is (docs/style.md I), because this is
+              // one -- read here, tapped there, and a person should not be able
+              // to tell which list they are looking at by its rhythm.
+              height: Style.space(58)
+
+              // Like the app cells above: the row has no chrome of its own, so
+              // the veil is the chrome (H8). Guarded on `sheetDragging`, because
+              // this MouseArea is also the sheet's drag handle and `pressed`
+              // stays true for the whole gesture -- unguarded, a thumb dragging
+              // the sheet shut lights every row it passes over (H6).
+              PressVeil {
+                anchors.fill: parent
+                radius: root.radiusCard
+                on: resultArea.pressed && !root.sheetDragging
+              }
+
+              // Through Ui.OpticalGlyph and in a slot, exactly as the same row
+              // is drawn in moarchy.settings: a glyph centred in a box is
+              // centred on its *painted* bounds, not on the em square, and a
+              // plain Text sits visibly high in a slot (docs/style.md B5, E5).
+              // The slot is derived from the glyph, never fixed.
+              Ui.OpticalGlyph {
+                id: resultGlyph
+                // Drawn only when there is one, but the slot is kept either
+                // way: five heterogeneous rows with a ragged left edge read as
+                // five lists, and an invisible Item still holds its anchors.
+                visible: text !== ""
+                anchors.left: parent.left
+                anchors.leftMargin: Style.space(16)
+                anchors.verticalCenter: parent.verticalCenter
+                width: root.glyphSlot
+                height: root.glyphSlot
+                text: resultRow.modelData.glyph
+                fontFamily: Style.font.family
+                fontSize: Style.font.iconLarge
+                color: root.textOnSurface
+              }
+
+              Text {
+                id: resultSection
+                anchors.right: parent.right
+                anchors.rightMargin: Style.space(14)
+                anchors.verticalCenter: parent.verticalCenter
+                text: resultRow.modelData.section
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+                font.weight: root.textWeight
+                color: root.subdued
+                elide: Text.ElideRight
+                // Never more than its share: the label is what was searched
+                // for and the section is where it happens to live.
+                width: Math.min(implicitWidth, parent.width * 0.35)
+                horizontalAlignment: Text.AlignRight
+              }
+
+              Text {
+                anchors.left: resultGlyph.right
+                anchors.leftMargin: Style.space(14)
+                anchors.right: resultSection.left
+                anchors.rightMargin: Style.space(10)
+                anchors.verticalCenter: parent.verticalCenter
+                text: resultRow.modelData.label
+                font.family: Style.font.family
+                font.pixelSize: Style.font.body
+                font.weight: root.textWeight
+                color: root.textOnSurface
+                elide: Text.ElideRight
+              }
+
+              // The same four handlers the app cells carry, for the same
+              // reason: this MouseArea holds the exclusive grab for the whole
+              // gesture, so a downward drag that starts on a settings row can
+              // only close the sheet (H1) if it is this area that drags it.
+              MouseArea {
+                id: resultArea
+                anchors.fill: parent
+                onPressed: mouse => root.sheetPress(this, mouse)
+                onPositionChanged: mouse => root.sheetMove(this, mouse)
+                onReleased: root.sheetRelease()
+                onCanceled: root.sheetCancel()
+                onClicked: if (!root.sheetWasDrag) root.activateSetting(resultRow.modelData)
+              }
             }
           }
         }

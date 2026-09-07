@@ -2439,7 +2439,260 @@ ICONS
     no "N3 About does not name both versions" "they are different packages here"
   fi
 
-  printf '  \033[90m%-4s\033[0m   \033[90mnot covered here: A3 A5 B5 B7 C5 C7 C8 D3 D4 E2 E5 E6 E7 E8 F1 F2 F3 F4 F5 F6 F7 G4 H1 I4 J11\033[0m\n' ""
+
+  # --- O. search from the drawer --------------------------------------------
+  # The surface is the drawer's and the content is this file's, so the checks
+  # live here: settings.md section O owns the contract, the same way section H
+  # owns what the shade may not repeat.
+  d() { timeout 5 omarchy-shell drawer "$@" 2>/dev/null; }
+
+  # The drawer imports two files out of the Settings plugin's directory, which
+  # is a coupling between two independently-loadable plugins. Checked first and
+  # separately, because a missing import makes the whole drawer fail to load --
+  # and every check below would then blame the search for a packaging fault.
+  o_dir=$(plugin_dir moarchy.drawer)
+  o_sdir=$(plugin_dir moarchy.settings)
+  o_miss=""
+  for o_f in Search.js Guards.js Pages.js; do
+    [[ -f "$o_sdir/$o_f" ]] || o_miss="$o_miss $o_f"
+  done
+  if [[ -n $o_miss ]]; then
+    no "O the drawer's imports are missing from $o_sdir:$o_miss" \
+       "Drawer.qml imports ../moarchy.settings/{Search,Guards}.js; without them it does not load"
+  elif [[ $(dirname "$o_dir") != $(dirname "$o_sdir") ]]; then
+    no "O the two plugins are in different directories" \
+       "$o_dir and $o_sdir -- a user-dir copy of only one breaks the relative import"
+  else
+    ok "O the drawer's Settings imports are beside it in $(dirname "$o_dir")"
+  fi
+
+  if ! dstate=$(d state) || [[ -z $dstate ]]; then
+    no "O1 the drawer's IPC does not answer" \
+       "moarchy.drawer is not loaded, so nothing in section O can be checked"
+  else
+    s close >/dev/null; sleep 1
+    d open >/dev/null; sleep 2
+
+    # O1. An empty field is the drawer that was always here. `entries` is
+    # moarchy-store's contract (L9), and a settings key is the only kind with a
+    # slash in it -- so one showing up there is the concatenation this design
+    # exists not to do.
+    d type "" >/dev/null; sleep 1
+    o_rows=$(d results | grep -c .)
+    o_leak=$(d entries | grep -c '/')
+    if (( o_rows == 0 && o_leak == 0 )); then
+      ok "O1 an empty field shows no settings, and leaks none into entries"
+    else
+      no "O1 empty field: $o_rows result(s), $o_leak settings id(s) in entries" \
+         "results must be empty without a query, and must never join appRows"
+    fi
+
+    # O2. Five at most, every column filled. A row with no section is a row you
+    # cannot tell apart from the one above it.
+    d type screen >/dev/null; sleep 2
+    o_n=$(d results | grep -c .)
+    o_blank=$(d results | awk -F'\t' 'NF<5 || $1=="" || $3=="" || $4==""' | wc -l)
+    if (( o_n >= 1 && o_n <= 5 && o_blank == 0 )); then
+      ok "O2 'screen' returns $o_n result(s), all fully labelled"
+    else
+      no "O2 'screen' returned $o_n row(s), $o_blank of them incomplete" \
+         "the cap is five, and a result needs a key, a label and a section"
+    fi
+
+    # O3. The index is a walk of the model, so every key must name something
+    # Settings can stand on. A key that does not is a result that opens a page
+    # and shows nothing -- which is the failure a hand-written second list has.
+    o_bad=""
+    while IFS=$'\t' read -r o_key _; do
+      [[ -n $o_key ]] || continue
+      o_pg=${o_key%/*}; o_rw=${o_key##*/}
+      s rowsOn "$o_pg" | awk -F'\t' -v r="$o_rw" '$1==r{f=1} END{exit !f}' \
+        || o_bad="$o_bad $o_key"
+    done < <(d results)
+    [[ -z $o_bad ]] \
+      && ok "O3 every result names a page and a row that exist" \
+      || no "O3 no such row for:$o_bad" "the index and the model disagree"
+
+    # O4. An action row runs and Settings never appears. Under dryRun, so this
+    # records the command instead of taking a screenshot and firing a
+    # notification -- `lastLaunch` is what proves the row was chosen, and
+    # `running` is what proves nothing was left behind: had the surface mapped,
+    # it would still be running with a carousel card (K1).
+    s dryRun 1 >/dev/null
+    d type screenshot >/dev/null; sleep 2
+    o_act=$(d activateResult tools/screenshot); sleep 3
+    if [[ $o_act == ok && $(s state) == closed && $(s running) == stopped
+          && $(s lastLaunch) == "moarchy-capture-screenshot" ]]; then
+      ok "O4 Screenshot runs from the drawer and Settings never appears"
+    else
+      no "O4 activate=$o_act state=$(s state) running=$(s running) launch=$(s lastLaunch)" \
+         "expected ok/closed/stopped/moarchy-capture-screenshot -- the quiet path did not stay quiet"
+    fi
+    s dryRun 0 >/dev/null
+
+    # O13. Update system: a row of ours, running the plain upgrade through
+    # upstream's own presentation terminal, claiming no upstream id.
+    s dryRun 1 >/dev/null
+    s openAt system >/dev/null; sleep 2
+    if ! s rows | awk -F'\t' '$1=="update"' | grep -q .; then
+      no "O13 there is no 'update' row on the System page" \
+         "the row was dropped, and activate on a missing row records nothing"
+    else
+      s activate update >/dev/null; sleep 1
+      [[ $(s lastLaunch) == "omarchy-launch-floating-terminal-with-presentation sudo pacman -Syu" ]] \
+        && ok "O13 Update system runs the upgrade in the TUI terminal" \
+        || no "O13 lastLaunch was '$(s lastLaunch)'" \
+              "expected the presentation wrapper around 'sudo pacman -Syu'"
+    fi
+    s dryRun 0 >/dev/null
+    o_cov=$(s coverage | grep -c .)
+    [[ $o_cov -eq 137 ]] \
+      && ok "O13 coverage is still 137 lines -- Update system claims no id" \
+      || no "O13 coverage is $o_cov lines, not 137" \
+            "a row with no 'covers' must add nothing; G2 is the same number"
+
+    # O5. A nav result lands on the page it points at, not on the page it lives
+    # on. Set a reminder is a row on Reminders and a screen of its own.
+    d open >/dev/null; sleep 2
+    d type "set a reminder" >/dev/null; sleep 2
+    d activateResult tools.reminders/new >/dev/null; sleep 3
+    if [[ $(s state) == open && $(s page) == tools.reminders.new ]]; then
+      ok "O5 Set a reminder opens its own screen"
+    else
+      no "O5 landed $(s state) on $(s page)" "expected open on tools.reminders.new"
+    fi
+
+    # O9. The row at the bottom of that same screen needs a duration typed (J8).
+    # From a search result it cannot have one, so it must land on the screen
+    # that has the field rather than answer nothing at all.
+    s close >/dev/null; sleep 1
+    d open >/dev/null; sleep 2
+    d type "set reminder" >/dev/null; sleep 2
+    s dryRun 1 >/dev/null
+    o_before=$(s lastLaunch)
+    d activateResult tools.reminders.new/custom >/dev/null; sleep 3
+    if [[ $(s state) == open && $(s page) == tools.reminders.new
+          && $(s lastLaunch) == "$o_before" ]]; then
+      ok "O9 a row that is not ready opens its screen and runs nothing"
+    else
+      no "O9 landed $(s state) on $(s page), lastLaunch '$(s lastLaunch)'" \
+         "expected open on tools.reminders.new with lastLaunch untouched"
+    fi
+    s dryRun 0 >/dev/null
+
+    # O6. A switch opens the page it lives on and changes nothing. A radio
+    # flipped from a search result is a value changed by something that never
+    # showed it to you.
+    s close >/dev/null; sleep 1
+    o_nl_before=$(moarchy-toggle-nightlight --status 2>/dev/null | jq -r .enabled 2>/dev/null)
+    d open >/dev/null; sleep 2
+    d type "night light" >/dev/null; sleep 2
+    d activateResult display/nightlight >/dev/null; sleep 3
+    o_nl_after=$(moarchy-toggle-nightlight --status 2>/dev/null | jq -r .enabled 2>/dev/null)
+    if [[ $(s page) == display && $o_nl_after == "$o_nl_before" ]]; then
+      ok "O6 a switch result opens Display and leaves night light $o_nl_after"
+    else
+      no "O6 page=$(s page), night light went $o_nl_before -> $o_nl_after" \
+         "a switch must be shown, not flipped"
+    fi
+
+    # O7. A guarded row is withheld until its guard says yes. Checked against
+    # Settings' own answer for the same guard rather than against a stub: the
+    # two run the same `when:` string, so they have to agree.
+    s close >/dev/null; sleep 1
+    s openAt tools >/dev/null; sleep 3
+    o_guard=$(s guards | awk -F'\t' '$1=="record"{print $2}')
+    d open >/dev/null; sleep 2
+    d type "screen record" >/dev/null; sleep 3
+    o_listed=$(d results | grep -c '^tools/record\b')
+    o_matched=$(d matches | grep -c '^tools/record\b')
+    if [[ $o_matched -eq 1 && $o_listed -eq $o_guard ]]; then
+      ok "O7 Screen record is matched, and shown only when its guard says so (guard=$o_guard)"
+    else
+      no "O7 matched=$o_matched listed=$o_listed, Settings' guard says $o_guard" \
+         "the index must find it and the guard batch must decide it"
+    fi
+
+    # O10. Provider-built rows are not in the index, so the eleven region rows
+    # are reachable and the four hundred cities under them are not.
+    d type europe >/dev/null; sleep 2
+    o_city=$(d matches | grep -c '^system\.time\.zone\.')
+    o_region=$(d matches | grep -c '^system\.time\.zone/')
+    if (( o_region >= 1 && o_city == 0 )); then
+      ok "O10 'europe' finds the region row and none of its cities"
+    else
+      no "O10 $o_region region row(s), $o_city city row(s)" \
+         "a provider builds its rows at page open; none of them may be indexed"
+    fi
+
+    # O11. The bottom inset belongs to whatever is last, and with results up
+    # that is no longer the grid. Read off the surface, not off the source.
+    d type screen >/dev/null; sleep 2
+    o_gap=$(d geometry | tr ' ' '\n' | sed -n 's/^gap=//p')
+    o_strip=$(d geometry | tr ' ' '\n' | sed -n 's/^strip=//p')
+    if [[ -n $o_gap && -n $o_strip ]] && (( o_gap >= o_strip )); then
+      ok "O11 the last result rests clear of the home pill (gap=$o_gap strip=$o_strip)"
+    else
+      no "O11 gap=$o_gap against strip=$o_strip" \
+         "the inset moved to the settings section, and geometry must measure it there"
+    fi
+
+    # O8. A row that asks a question asks it, rather than acting quietly. Needs
+    # a reminder to clear, so it is skipped rather than run on a phone that
+    # already has some -- those are the user's.
+    if [[ $(moarchy-reminders count 2>/dev/null || echo 0) -eq 0 ]]; then
+      omarchy-reminder 9 SelftestO8 >/dev/null 2>&1; sleep 2
+      d open >/dev/null; sleep 2
+      d type "clear all" >/dev/null; sleep 3
+      d activateResult tools.reminders/clear >/dev/null; sleep 3
+      o_ask=$(s confirmText)
+      o_left=$(moarchy-reminders count 2>/dev/null || echo 0)
+      if [[ -n $o_ask && $o_left -gt 0 ]]; then
+        ok "O8 Clear all asks first, and the timer is still running"
+      else
+        no "O8 confirmText='$o_ask', $o_left reminder(s) left" \
+           "an armed question must be shown, and must not have acted"
+      fi
+      s back >/dev/null; sleep 1
+      omarchy-reminder clear >/dev/null 2>&1
+    else
+      printf '  \033[90m%-4s\033[0m   \033[90mO8 skipped: reminders are already set, and they are not ours to clear\033[0m\n' ""
+    fi
+
+    # O12. Section H keeps the shade's controls out of this tree; the index
+    # inherits that rather than restating it. What would break it is a row that
+    # *sets* one, so the check is over `switch` and `choice` -- H1's regex
+    # applied flatly catches four rows that are all correct.
+    o_h1=$(python3 - "$plug_pages" <<'PY'
+import re, sys
+src = open(sys.argv[1], encoding="utf-8").read()
+bad = []
+for m in re.finditer(r'\{\s*id:\s*"', src):
+    i = m.start(); depth = 0
+    for j in range(i, len(src)):
+        if src[j] == '{': depth += 1
+        elif src[j] == '}':
+            depth -= 1
+            if depth == 0: break
+    row = src[i:j + 1]
+    t = re.search(r'\btype:\s*"(\w+)"', row)
+    lab = re.search(r'\blabel:\s*"([^"]*)"', row)
+    if not t or not lab or t.group(1) not in ("switch", "choice"):
+        continue
+    if re.match(r'(wi-?fi|bluetooth|airplane|brightness|volume|silent|torch|rotate)',
+                lab.group(1), re.I):
+        bad.append(lab.group(1))
+print(" ".join(sorted(set(bad))))
+PY
+)
+    [[ -z $o_h1 ]] \
+      && ok "O12 no switch or choice in the index sets what the shade owns" \
+      || no "O12 searchable rows set shade controls: $o_h1" \
+            "section H keeps those in the shade; search must not bring them back"
+
+    d close >/dev/null; s close >/dev/null; sleep 1
+  fi
+  printf '  \033[90m%-4s\033[0m   \033[90mnot covered here: A3 A5 B5 B7 C5 C7 C8 D3 D4 E2 E5 E6 E7 E8 F1 F2 F3 F4 F5 F6 F7 G4 H1 I4 J11 O4a\033[0m\n' ""
   # A3     needs a real finger or the touch injector
   # B4     is a gesture, and --gestures proves it as K3/K4 with a real swipe
   # A5     needs every reader stubbed slow
@@ -2449,6 +2702,10 @@ ICONS
   # F3-F7  need PATH stubs that count forks
   # I2/I4  static greps, run at build time
   # J11    the keyboard inset needs a real focus, which needs a real finger
+  # O4a    O4's other half: that the capture does not contain a half-drawn
+  #        Settings. `state` and `running` prove the surface never mapped, which
+  #        is the cause; only a real grim with the shell running proves the
+  #        effect, and O4 here runs under dryRun so no capture is taken at all
 fi
 
 # --- surfaces: what the strip is drawn over -------------------------------

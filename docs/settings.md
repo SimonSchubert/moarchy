@@ -62,10 +62,19 @@ implementation behind two entry points.
 **`apps` leaves Settings entirely.** It is the app drawer, which already *is*
 upstream's `apps` provider. A launcher inside Settings would repeat it.
 
-Two rows exist that upstream has no id for: **Wi-Fi networks** and **Bluetooth
-devices**. The shade toggles both radios, and each row opens the same screen its
+Three rows exist that upstream has no id for. **Wi-Fi networks** and **Bluetooth
+devices**: the shade toggles both radios, and each row opens the same screen its
 tile opens on a long press — `moarchy.wifi` (`docs/shade.md` S6b) and
 `moarchy.bluetooth` (S6c, S6d). One picker behind two entry points, twice.
+
+The third is **Update system**, and it is not `update.omarchy` wearing a new
+label. That id stays Unsupported for the reason `docs/menu-coverage.md` records —
+`omarchy-update` wants pkgs.omarchy.org's aarch64 tree, which 404s, and Snapper on
+btrfs — and none of that stops `pacman -Syu`, which `docs/structure.md` R8a
+already says works here and updates the phone UI. So the row runs the plain
+upgrade in the TUI terminal, carries no `covers:`, and adds no line to
+`settings coverage`. A row that claimed the id would be promising the snapshots
+and migrations upstream's script does and delivering an upgrade.
 
 ---
 
@@ -696,6 +705,120 @@ different versions of different packages and the pair is what a bug report needs
 → `settings rowsOn about.omarchy` holds a row labelled `Omarchy` and one
 labelled `moarchy`
 
+## O. Search from the drawer
+
+Everything above is reachable by thumb, and only by thumb: pull the shade, tap
+the gear, walk the tree. That is the right shape for browsing and the wrong one
+for the case where you already know the name of the thing. So the drawer's
+search field searches this tree as well as the app catalogue, and a result is
+the row itself rather than a screen two levels above it.
+
+This runs the one-implementation rule the other way round from the departure
+above, and both directions hold. Settings still has no launcher — `apps` left
+for the drawer and stays there. What the drawer gains is not a copy of the tree:
+the index is a walk of `Pages.js`, the tap goes through Settings' own
+`activate()`, and there is no second list of actions anywhere.
+
+**The index is declared rows only.** A page may build its rows at open from a
+`provider`, and those are not in `Pages.js` to be walked — which is what keeps
+the ~420 timezone cities, every installed font, every wallpaper, every live
+reminder and every plugin out of a search for "e". It is a property of where the
+index comes from, not a filter that could be forgotten.
+
+**O1** With the field empty the drawer is what it was: no settings section, and
+the two IPC verbs the store depends on still answer apps alone.
+→ `drawer type ""; drawer results` is empty, and `drawer entries` lists only
+`.desktop` ids
+
+**O2** Typing shows at most five settings results, each carrying a glyph, a
+label and the top-level section it lives in.
+→ `drawer type screen; drawer results` has 1..5 lines and no empty field on any
+of them
+
+**O3** Every result names a page and a row that exist. The index is a walk of
+the model, so a result that cannot be reached in Settings is a result that
+should not have been offered.
+→ for every key `<pageId>/<rowId>` in `drawer results`, `settings rowsOn
+<pageId>` contains `<rowId>`
+
+**O4** An `action` row runs, and Settings never appears. Not "appears briefly":
+this is the surface `moarchy-capture-screenshot` would photograph.
+→ after `drawer type screenshot; drawer activateResult tools/screenshot`,
+`settings state` == `closed`, `settings running` == `stopped`, `settings
+lastLaunch` == `moarchy-capture-screenshot`, and `drawer state` == `closed`
+
+`running` is the load-bearing half. `state` says the surface is not up now;
+`running` says it never was, because a Settings that had mapped would still be
+running with a carousel card behind it (K1). The other half of this AC is the
+effect rather than the cause -- that the PNG holds a wallpaper or an app and not
+a half-drawn sheet -- and no IPC can answer it: it needs a real `grim` against a
+running shell, which is why the selftest runs O4 under `dryRun` and takes no
+capture at all.
+
+**O5** A `nav` row lands on the page it points at, not on the page it lives on.
+Set a reminder is a row on `tools.reminders` and a screen of its own, and the
+screen is the thing being asked for.
+→ `drawer activateResult tools.reminders/new`: `settings state` == `open` and
+`settings page` == `tools.reminders.new`
+
+**O6** A `switch` or a `choice` opens the screen it lives on and changes
+nothing. A radio flipped from a search result is a setting changed by something
+that never showed you its current value.
+→ `drawer activateResult display/nightlight`: `settings page` == `display`, and
+`moarchy-toggle-nightlight --status | jq -r .enabled` is what it was before
+
+**O7** A row whose guard fails is not offered, and a query whose hits carry no
+guard forks nothing. F3 and F5 exist because a fork on this SoC costs more than
+the test inside it, and a search field runs on every keystroke.
+→ with `omarchy-cmd-present` off PATH no guarded row appears in `drawer
+results`; with `bash` wrapped in a counting stub, `drawer type screenshot`
+leaves the count at 0 and `drawer type qr` raises it by exactly 1
+
+**O8** A row carrying `confirm` shows Settings with the question armed rather
+than acting on it. The quiet path is for rows that were going to run anyway, and
+a row that asks was never one of those.
+→ `drawer activateResult tools.reminders/clear`: `settings confirmText` is
+non-empty and `systemctl --user list-timers` still lists the unit
+
+**O9** A row that cannot act yet opens its page instead of failing silently.
+J8's Set a reminder needs a duration typed, and the field it needs is on the
+screen the drawer has just been asked to skip.
+→ `drawer activateResult tools.reminders.new/custom` with nothing typed:
+`settings state` == `open`, `settings page` == `tools.reminders.new`, and
+`settings lastLaunch` is untouched
+
+**O10** Provider-built rows are not indexed.
+→ no key in `drawer results` names a timezone city, a font, a wallpaper or a
+live reminder, for any query; `drawer type europe` answers the region `nav` row
+and nothing under it
+
+**O11** The second section does not cost the first its geometry. The bottom
+inset that keeps the last content pixel clear of the home pill belongs to
+whatever is last, and that is no longer the grid.
+→ with results showing, `drawer geometry`'s `gap` is >= its `strip`
+
+**O12** Search does not become a second shade. Section H keeps the radios,
+brightness and volume out of Settings; a field that searched them back in would
+undo it from the other end. The index inherits H1 rather than restating it --
+what is not in the tree cannot be found in the tree -- so the check is that the
+inheritance holds.
+
+The row types matter, and H1's own regex applied flatly does not work here: it
+catches four rows that are all correct. "Wi-Fi networks" and "Bluetooth devices"
+are the two configuration screens H1 already exempts, "Wi-Fi QR code" is a
+screen, and `system.hardware`'s Wi-Fi and Bluetooth restart an adapter. None of
+them is a radio. What would break H1 is a row that *sets* one, and those are
+`switch` and `choice`.
+→ no `switch` or `choice` row in the index has a label matching
+`^(wi-?fi|bluetooth|airplane|brightness|volume|silent|torch|rotate)`
+
+**O13** Update system is a row on System, runs the plain upgrade through
+upstream's own presentation terminal, and claims no upstream id.
+→ `settings rowsOn system` holds `update`; with `dryRun 1`, `settings activate
+update` leaves `settings lastLaunch` ==
+`omarchy-launch-floating-terminal-with-presentation sudo pacman -Syu`; and
+`settings coverage` is still 137 lines
+
 ## The IPC surface
 
 These verbs exist so the ACs above are checkable without touching the screen.
@@ -728,7 +851,31 @@ omarchy-shell settings dryRunState         -> 0 | 1
 omarchy-shell settings lastLaunch           -> the command line of the last launch
 omarchy-shell settings coverage             -> TSV upstreamId class pageId rowId
 omarchy-shell settings geometry             -> w= h= margin= strip= gap= screen=
+omarchy-shell settings runRow <page> <row>  -> ok | unknown page: <id> | unknown row
 ```
+
+Section O adds three verbs to the drawer's own handler and one here.
+
+```
+omarchy-shell drawer type <text>            -> ok      (sets the field, flushes the debounce)
+omarchy-shell drawer results                -> TSV key type label section visible
+omarchy-shell drawer matches                -> TSV key guarded|-
+omarchy-shell drawer activateResult <key>   -> ok | unknown result | hidden
+```
+
+`results` is what the section is drawing; `matches` is what the index found
+before the guards were asked. O7 is the difference between the two, and with one
+verb it would not be checkable: a row missing from a one-verb answer could
+equally mean its guard said no, its guard has not answered yet, or the query
+never matched it.
+
+`runRow` is the quiet path a drawer result takes: stand the stack up on `page`,
+run that page's guard batch, then activate `row` -- and show the surface only if
+the row asks a question, refuses, or is one of the kinds that has a screen to
+show. It answers on dispatch, because the guards are a `bash -lc` away; what
+happened is read afterwards from `state`, `page` and `lastLaunch`. `activate`
+cannot stand in for it: `rowById` resolves against the page that is open, so the
+row has to be standing before it can be named.
 
 The `rows` TSV is `rowId, type, label, visible, checked, detail, enabled`.
 Visibility and state are only real for the page that is open; `rowsOn` answers

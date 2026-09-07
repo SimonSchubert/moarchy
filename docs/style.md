@@ -438,6 +438,7 @@ numbers.
 | `moarchy.shade` | media prev / play / next | `tapSlot` ≥ 44 | ok, E4 E5 |
 | `moarchy.shade` | Clear all | 44 tall | ok, E2 |
 | `moarchy.drawer` | app cell | 90 × 86 | ok |
+| `moarchy.drawer` | settings result row | 58 full-width | ok |
 | `moarchy.drawer` | search field | fills its pill | ok, F1–F5 |
 | `moarchy.themes` | theme cell | half-width grid cell | ok |
 | `moarchy.themes` | header back | 38 drawn, 44 answering | ok, E2 |

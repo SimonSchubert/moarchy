@@ -65,6 +65,29 @@ Item {
 
   property string returnTo: ""
 
+  // ---------------------------------------------------------- the quiet open
+  // docs/settings.md O4. A drawer search result names a page and a row, and
+  // `activate` cannot take it: `rowById` resolves against the page that is
+  // open, so the row has to be standing before it can be named. Standing it up
+  // the ordinary way means opening this surface -- and the first row anyone
+  // tries from a search is Screenshot, which would then photograph it.
+  //
+  // So a payload carrying `activate` stands the stack up without mapping
+  // anything, waits for that page's guard batch, and fires the row through the
+  // same activate() a tap goes through. Only then does it decide whether there
+  // is a screen worth showing: a pushed page, an armed question, a switch whose
+  // value you came to read -- yes; a command already running in a terminal --
+  // no.
+  //
+  // `quietWasRunning` and `quietStack` are put back on the way out. A quiet
+  // open that never showed anything must leave Settings exactly as it found it,
+  // or taking a screenshot from the drawer throws away a Settings sitting in the
+  // carousel on some other page (K1, K5).
+  property string pendingRow: ""
+  property bool quietOpen: false
+  property bool quietWasRunning: false
+  property var quietStack: ["root"]
+
   // The page stack, root first. currentPage is its top.
   property var stack: ["root"]
   readonly property string currentPage: root.stack.length
@@ -358,15 +381,28 @@ Item {
     root.returnTo = ""
     var start = "root"
     var resume = false
+    var pending = ""
+    var quiet = false
     try {
       var payload = JSON.parse(String(payloadJson || "{}"))
       if (payload.returnTo) root.returnTo = String(payload.returnTo)
       if (payload.page && Pages.exists(String(payload.page)))
         start = String(payload.page)
       resume = payload.resume === true
+      if (payload.activate) pending = String(payload.activate)
+      // `quiet` without a row to fire is a surface that would never map and
+      // never do anything, so the two are one option.
+      quiet = payload.quiet === true && pending !== ""
     } catch (e) {
       // A malformed payload is not worth refusing to open over.
     }
+
+    // Read before the stack is rebuilt below, so the way back is the state this
+    // open found rather than the one it made.
+    root.quietWasRunning = root.running
+    root.quietStack = root.stack
+    root.quietOpen = quiet
+    root.pendingRow = pending
 
     // K5. A resume is the carousel handing the screen back to a Settings that
     // was hidden rather than closed, so it comes back on the page it left.
@@ -391,9 +427,92 @@ Item {
     root.resetReadState()
     root.confirmText = ""
     root.running = true
-    root.opened = true
+    root.opened = !quiet
+    if (quiet) quietTimeout.restart(); else quietTimeout.stop()
     // Deferred, always. See note 1 in the header.
     Qt.callLater(root.refresh)
+  }
+
+  // ---------------------------------------------------- ending a quiet open
+  //
+  // There is something to look at after all: the row pushed a page, armed a
+  // question, or is a kind whose whole answer is the screen it lives on.
+  function showQuiet() {
+    if (!root.quietOpen) return
+    root.quietOpen = false
+    root.opened = true
+  }
+
+  // Nothing to look at: the row is already running somewhere else. Put back
+  // what the open found -- `running` and the stack both -- and hand the surface
+  // back to the host, which is the half that keeps `openPanelIds` honest.
+  function dropQuiet() {
+    if (!root.quietOpen) return
+    root.quietOpen = false
+    root.running = root.quietWasRunning
+    root.stack = root.quietStack
+    root.resetReadState()
+    root.resetFields()
+    root.hideOnly()
+  }
+
+  // After activating this row from a quiet open, is there a screen worth
+  // showing? Derived from the row rather than from what activate() did, because
+  // under `dryRun` it does nothing and the answer must be the same either way.
+  //
+  // `inline` counts as nothing to show even though it keeps the screen up
+  // normally (J6): what it keeps up is the page you were standing on, and from a
+  // quiet open you were not standing anywhere. The command is running and the
+  // notification is the feedback.
+  function quietLeavesNothing(row) {
+    if (!row) return false
+    if (row.type === "plugin") return true
+    return row.type === "action" || row.type === "link"
+  }
+
+  // A quiet open holds a surface the host thinks is mapped and the user cannot
+  // see. Every path out of settlePending() ends it, but a guard batch that
+  // never answers is a path out of nothing -- and the symptom would be a drawer
+  // tap that appears to do nothing while Settings sits in openPanelIds
+  // invisible, which is worse than either outcome it is choosing between. So
+  // the wait has a floor: give up and show the page.
+  Timer {
+    id: quietTimeout
+    interval: 3000
+    onTriggered: {
+      if (!root.quietOpen) return
+      root.pendingRow = ""
+      root.showQuiet()
+    }
+  }
+
+  // O4-O9. Called once the page the row lives on has answered its guards, from
+  // every path that ends a refresh: the batch's own handler, and the early
+  // return refresh() takes on a page with nothing to ask.
+  function settlePending() {
+    if (!root.pendingRow) return
+    quietTimeout.stop()
+    var id = root.pendingRow
+    root.pendingRow = ""
+
+    var row = root.rowById(id)
+    // Gone, hidden by its guard, or not ready. The drawer offered it, so doing
+    // nothing at all would be exactly the silent failure O9 exists to stop:
+    // show the page and let the screen explain itself.
+    if (!row || !root.rowVisible(row) || !root.rowEnabled(row)) {
+      root.showQuiet()
+      return
+    }
+
+    root.activate(row)
+
+    // A question was armed rather than answered. Arming one is only worth
+    // anything if somebody sees it (O8).
+    if (root.confirmText !== "") { root.showQuiet(); return }
+
+    if (root.quietLeavesNothing(row)) { root.dropQuiet(); return }
+
+    root.showQuiet()
   }
 
   // Hidden, not closed. Every hide in this shell lands here -- shell.hide()
@@ -516,7 +635,10 @@ Item {
       return
     }
     var script = Guards.build(root.currentRows, p.reader || "")
-    if (!script) return
+    // A page with no guard and no reader asks nothing and runs no process, so
+    // there is no batch to wait for -- but a quiet open is still waiting on one
+    // (O4). Settle it here rather than leave the row hanging.
+    if (!script) { Qt.callLater(root.settlePending); return }
     root.generation += 1
     guardProc.wanted = root.generation
     if (guardProc.running) guardProc.running = false
@@ -605,6 +727,9 @@ Item {
         root.valueMap = parsed.value
         root.pageValue = parsed.value["__page"] !== undefined
                          ? String(parsed.value["__page"]) : ""
+        // The page is now standing with its guards answered, which is the
+        // moment a quiet open has been waiting for (O4, O7).
+        root.settlePending()
       }
     }
   }
@@ -777,6 +902,30 @@ Item {
     }
 
     function close(): string { root.dismiss(); return "ok" }
+
+    // O4-O9, and the verb the drawer's results are checked through. Stand the
+    // stack up on `page`, wait for that page's guards, then fire `row` through
+    // the same activate() a tap goes through -- without ever mapping the
+    // surface unless there turns out to be something to show.
+    //
+    // It answers on dispatch, because the guards are a `bash -lc` away. What
+    // happened is read afterwards from `state`, `page` and `lastLaunch`.
+    //
+    // The row is looked up in the page's *declared* rows, which is the same set
+    // the drawer's index walks. A provider-built row is not in either, and
+    // answering `unknown row` for one is the honest reply.
+    function runRow(page: string, rowId: string): string {
+      if (!Pages.exists(page)) return "unknown page: " + page
+      var rows = Pages.page(page).rows || []
+      var found = false
+      for (var i = 0; i < rows.length; i++)
+        if (String(rows[i].id) === rowId) { found = true; break }
+      if (!found) return "unknown row"
+      if (root.shell)
+        root.shell.summon(root.pluginId, JSON.stringify({
+          page: page, activate: rowId, quiet: true }))
+      return "ok"
+    }
 
     function toggle(): string {
       if (root.shell) root.shell.toggle(root.pluginId, "{}")

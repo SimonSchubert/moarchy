@@ -56,6 +56,14 @@ dropped two thirds are Steam and Battle.net, twenty language runtimes behind
 `mise`, six desktop browsers with no aarch64 build, and Hyprland's own
 configuration files.
 
+Three rows in the tree carry no upstream id at all and so appear in none of
+these numbers: **Wi-Fi networks**, **Bluetooth devices** and **Update system**.
+The last is not `update.omarchy` renamed -- that id stays Unsupported for the
+reason its row below gives, and this one runs `sudo pacman -Syu`, which
+`docs/structure.md` R8a says works on this image and cannot move the frozen
+device stack. `docs/settings.md` records why claiming the id would be a
+promise the row does not keep.
+
 Where an entry lands is written with `>` for one level down, e.g.
 `Appearance > Status bar > Battery percentage`. A container row that dissolves
 into several screens says so.

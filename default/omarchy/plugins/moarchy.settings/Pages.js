@@ -52,6 +52,11 @@
 // Any row may carry `when`, copied verbatim from omarchy-menu.jsonc so the
 // guard that upstream uses is the guard we use.
 //
+// Any row may also carry `keywords`: extra words the drawer's search matches on
+// (docs/settings.md section O), for the cases where the word a person types is
+// not in the label -- "timer" for Reminders, "capture" for Screenshot. It is a
+// handful of rows and not a discipline; a label that says what it is needs none.
+//
 // `covers` maps an upstream menu id to its class, N(ative) or B(ridged). It is
 // what `omarchy-shell settings coverage` emits, which is what makes the table
 // in docs/menu-coverage.md checkable rather than aspirational.
@@ -119,6 +124,7 @@ var PAGES = {
   //
   // returnTo brings Back here rather than dropping you on the home screen.
   { id: "wifi", type: "action", glyph: "󱚾", label: "Wi-Fi networks",
+    keywords: "wlan wireless internet connect",
     // One field of omarchy-network-status, which answers a whole record (I6).
     // A script and not an inline pipeline: E3 resolves the first word of every
     // row's command on PATH, and an awk one-liner puts `else` there.
@@ -138,6 +144,7 @@ var PAGES = {
   // running NetworkManager with iwd.service disabled but D-Bus activatable, so
   // it would have started iwd to fight NetworkManager for wlan0.
   { id: "bluetooth", type: "action", glyph: "󰂯", label: "Bluetooth devices",
+    keywords: "pair headset",
     run: "omarchy-shell shell summon moarchy.bluetooth '{\"returnTo\":\"moarchy.settings\",\"page\":\"net\"}'",
     launch: "none" },
   { id: "qr", type: "action", glyph: "󰐲", label: "Wi-Fi QR code",
@@ -335,7 +342,8 @@ var PAGES = {
     covers: { "setup.default": "N" } },
   { id: "webapps", type: "nav", page: "apps.webapps", glyph: "", label: "Web apps" },
   { id: "tuis", type: "nav", page: "apps.tuis", glyph: "", label: "Terminal apps" },
-  { id: "packages", type: "nav", page: "apps.packages", glyph: "󰣇", label: "Packages" }
+  { id: "packages", type: "nav", page: "apps.packages", glyph: "󰣇",
+    keywords: "install remove software pacman", label: "Packages" }
 ]},
 
 "apps.default": { title: "Default apps", rows: [
@@ -586,6 +594,7 @@ var PAGES = {
 // -------------------------------------------------------------------- tools
 "tools": { title: "Tools", rows: [
   { id: "screenshot", type: "action", glyph: "", label: "Screenshot",
+    keywords: "capture grab screen",
     run: "moarchy-capture-screenshot", launch: "none",
     covers: { "trigger.capture.screenshot": "N", "trigger.capture": "N" } },
   { id: "record", type: "nav", page: "tools.record", glyph: "", label: "Screen record",
@@ -597,6 +606,7 @@ var PAGES = {
   // `trigger.reminder.show` is this row, not a row on the page it opens: the
   // page IS the list, so opening it is the whole of showing them (J1).
   { id: "reminders", type: "nav", page: "tools.reminders", glyph: "󰢌", label: "Reminders",
+    keywords: "timer alarm",
     detailCmd: "moarchy-reminders summary",
     covers: { "trigger.reminder": "N", "trigger.reminder.show": "N" } },
   // Dropped, not guarded: omarchy-launch-screensaver opens with
@@ -689,6 +699,17 @@ var PAGES = {
   { id: "time", type: "nav", page: "system.time", glyph: "", label: "Date & time" },
   { id: "hardware", type: "nav", page: "system.hardware", glyph: "󰇅",
     label: "Restart hardware", covers: { "update.hardware": "N" } },
+  // No `covers`. This is not upstream's `update.omarchy` under another label --
+  // that one wants pkgs.omarchy.org's aarch64 tree, which 404s, and Snapper on
+  // btrfs, and it stays Unsupported. This is the plain upgrade, which
+  // structure.md R8a says works on this image and cannot move the device stack:
+  // linux-megi, uboot-pinephone and the rest are foreign packages from a repo
+  // the phone is not configured for, frozen at flash time. A row claiming the id
+  // would be promising the snapshots and migrations upstream's script does and
+  // delivering an upgrade. docs/settings.md says the same from the other side.
+  { id: "update", type: "action", glyph: "󰚰", label: "Update system",
+    detail: "pacman -Syu in a terminal", keywords: "upgrade pacman packages",
+    run: "sudo pacman -Syu", launch: "tui" },
   { id: "power", type: "nav", page: "system.power", glyph: "󰐥", label: "Power" }
 ]},
 
