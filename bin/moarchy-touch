@@ -13,9 +13,9 @@ touchscreen rather than a touchpad -- which matters, because a touchpad would
 produce the pointer gestures Sway's `bindgesture` wants and a touchscreen
 produces the raw touch the plugin actually listens for.
 
-Coordinates are PANEL pixels (720x1440), not Sway's 360x720 logical space, the
-same convention bin/moarchy-gestures used for lisgd. So the home drawer
-sits at roughly y=1420, not y=710.
+Coordinates are PANEL pixels (720x1440), not Sway's 360x720 logical space,
+because /dev/uinput is below the compositor and never sees the scale. So the
+home drawer sits at roughly y=1420, not y=710.
 
 Needs root, because /dev/uinput is root-only:
 

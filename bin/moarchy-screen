@@ -56,9 +56,17 @@ case "${1:-toggle}" in
   lock)   lock ;;
   unlock) unlock ;;
   toggle) if [[ -e $FLAG ]]; then unlock; else lock; fi ;;
-  # swayidle's resume hook. Any input wakes the panel, but while we are locked
-  # the only input that should is the power button, which unlocks in its own
-  # right -- so resume must not light the screen behind our back.
+  # Dark panel, live touchscreen, no flag. What an idle timeout and a plain
+  # "turn the display off" both mean -- neither of them means lock, and routing
+  # either through lock() would set the flag and then `wake` would refuse to
+  # undo it, which is an idle timeout that bricks the screen until the power
+  # button is found (docs/refactor.md D1, D3).
+  blank)  swaymsg 'output * power off' >/dev/null ;;
+  # swayidle's resume hook, and the one way back on. Any input wakes the panel,
+  # but while we are locked the only input that should is the power button,
+  # which unlocks in its own right -- so resume must not light the screen
+  # behind our back. Every caller that means "display on" comes here rather
+  # than to swaymsg, so the flag is the single gate (D1).
   wake)   [[ -e $FLAG ]] || swaymsg 'output * power on' >/dev/null ;;
-  *)      echo "usage: ${0##*/} [lock|unlock|toggle|wake]" >&2; exit 1 ;;
+  *)      echo "usage: ${0##*/} [lock|unlock|toggle|blank|wake]" >&2; exit 1 ;;
 esac

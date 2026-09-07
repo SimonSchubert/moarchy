@@ -89,13 +89,24 @@ def tiled_window_ids(workspace):
 
 def first_free_workspace():
     """Lowest unused positive number, so closing an app reopens its slot and the
-    swipe order stays contiguous rather than climbing forever."""
+    swipe order stays contiguous rather than climbing forever.
+
+    One rule, two implementations (docs/refactor.md C1, C3): the gesture plugin
+    picks the same slot for its home swipe, in QML, at
+    default/omarchy/plugins/moarchy.gestures/Service.qml. They are a matched
+    pair -- change one and change the other -- and the comment there carries
+    the two ways they had already drifted apart.
+
+    Keyed on `num`, not `int(name)`. Sway numbers "3:web" as 3 while `int()`
+    raises on it, so a named workspace that was plainly taken was read as free
+    and the next window was sent on top of what was already there. `num` is -1
+    for a workspace whose name carries no number, which the `> 0` drops.
+    """
     used = set()
     for workspace in swaymsg("get_workspaces") or []:
-        try:
-            used.add(int(workspace["name"]))
-        except (ValueError, KeyError):
-            pass  # named workspaces do not take part in the numbering
+        num = workspace.get("num")
+        if isinstance(num, int) and num > 0:
+            used.add(num)
     number = 1
     while number in used:
         number += 1
@@ -129,6 +140,14 @@ def on_new_window(container):
 
 
 def main():
+    # `--free` prints the slot this daemon would pick and exits, so the selftest
+    # can hold it against the gesture plugin's own answer (docs/refactor.md C3).
+    # It calls the function the daemon calls -- a check that reimplemented the
+    # rule to test it would be a third copy of the thing being tested.
+    if "--free" in sys.argv[1:]:
+        print(first_free_workspace())
+        return 0
+
     proc = subprocess.Popen(
         ["swaymsg", "-t", "subscribe", "-m", '["window"]'],
         stdout=subprocess.PIPE,

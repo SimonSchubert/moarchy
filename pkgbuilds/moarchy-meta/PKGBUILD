@@ -36,12 +36,14 @@ url='https://github.com/SimonSchubert/moarchy'
 license=('MIT')
 
 depends=(
-  # The aarch64 package set. Most of it is Arch Linux ARM; lisgd, mmsd-tng and
+  # The aarch64 package set. Most of it is Arch Linux ARM; mmsd-tng and
   # portfolio-file-manager come from [danctnix]
   # (archmobile.mirror.danctnix.org), which the DanctNIX image's pacman.conf
   # carries and a bare ALARM install does not. The list this replaced claimed
   # at the top that every entry was on archlinuxarm.org, which was not true of
-  # those three -- `pacman -U --print` in a bare container is what found it.
+  # those two -- `pacman -U --print` in a bare container is what found it.
+  # It was three until lisgd left with bin/moarchy-gestures; the repo stays,
+  # because the other two still need it.
   #
   # Packages Omarchy installs that are x86_64-only are listed at the bottom as
   # comments, with the reason.
@@ -116,10 +118,11 @@ depends=(
   # Qt client and needs it to make its panel a layer surface.
   'layer-shell-qt'
 
-  # lisgd is no longer started (default/omarchy/plugins/moarchy.gestures
-  # replaced it) but bin/moarchy-gestures still needs it for anyone who
-  # wants the old edge-swipe bindings back.
-  'lisgd'
+  # lisgd is gone with bin/moarchy-gestures (docs/refactor.md A1, A2). It was
+  # kept for one release after moarchy.gestures replaced it, on the reading
+  # that the old edge-swipe bindings were worth a way back to; nothing started
+  # the script, so what the dependency actually bought was a [danctnix] package
+  # in the image to support a file git history already holds.
 
   # --- Hardware ---------------------------------------------------------------
   'brightnessctl'

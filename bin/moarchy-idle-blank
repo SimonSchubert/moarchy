@@ -12,4 +12,8 @@
 STATE_FILE="$HOME/.local/state/omarchy/indicators/stay-awake"
 [[ -f $STATE_FILE ]] && exit 0
 
-exec swaymsg "output * power off"
+# Through moarchy-screen, not straight to swaymsg: it is the one place that
+# knows what powering the panel means here (docs/refactor.md D1, D3). `blank`
+# and not `lock` -- an idle timeout must not set the lock flag, or the resume
+# hook that shares this script's swayidle line would refuse to undo it.
+exec moarchy-screen blank

@@ -225,19 +225,50 @@ Item {
   // fell straight through to closing the *app behind it* -- with the sheet
   // still on screen, so nothing looked wrong until you dismissed it and found
   // the app gone. Adding a screen must not mean remembering two lists.
+  //
+  // Shell apps come last, in K11's order, because this is dismissal order: a
+  // sheet over an app is put away before the app under it.
   readonly property var overlayIds: [
     "moarchy.shade",
     "moarchy.drawer",
     "moarchy.recents",
-    "moarchy.themes",
-    "moarchy.settings"
-  ]
+    "moarchy.themes"
+  ].concat(root.shellAppIds)
 
   // K11. The shell's own screens that are apps rather than sheets: they get a
-  // carousel card and the strip hides them instead of clearing them. One, and
-  // deliberately so -- adding a second is a decision, not a discovery.
+  // carousel card and the strip hides them instead of clearing them.
+  //
+  // Three, matching docs/gestures.md K11 and moarchy.recents' own `shellApps`,
+  // in the same order. This said `moarchy.settings` and nothing else for a
+  // release after Wi-Fi and Bluetooth became shell apps, under a comment
+  // reading "One, and deliberately so" -- so the file that implements K11
+  // disagreed with K11, and the comment made that read as the decision rather
+  // than as the omission it was (docs/refactor.md B3).
+  //
+  // What the omission actually cost was the back gesture. Neither id was in
+  // overlayIds either, so topmostOverlay() could not return them,
+  // backTopmostOverlay() never reached the quit() both plugins define, and a
+  // back swipe over Wi-Fi fell all the way through to `kill` -- closing the
+  // app *behind* the sheet while the sheet stayed on screen. Word for word the
+  // failure the overlayIds comment above records, reappearing in the two
+  // surfaces added after that list was written (docs/refactor.md B4).
+  readonly property var shellAppIds: [
+    "moarchy.settings",
+    "moarchy.wifi",
+    "moarchy.bluetooth"
+  ]
+
   function isShellApp(id: string): bool {
-    return id === "moarchy.settings"
+    return root.shellAppIds.indexOf(id) >= 0
+  }
+
+  // Whichever shell app is up, or "" for none. Only one can be: each hides the
+  // others on the way up, which is the invariant moarchy.recents' shellApps
+  // comment records from the other side.
+  function openShellApp(): string {
+    for (var i = 0; i < root.shellAppIds.length; i++)
+      if (root.isOpen(root.shellAppIds[i])) return root.shellAppIds[i]
+    return ""
   }
 
   // A7, A8. The surfaces an up-swipe *clears* rather than switches away from.
@@ -380,19 +411,46 @@ Item {
   //
   // Existence does not go stale the same way: Sway destroys an empty
   // workspace as soon as it loses focus, so a number that is not in the list
-  // is one that has nothing on it. Same rule
-  // bin/moarchy-one-app-per-workspace uses to pick a slot, and it keeps
-  // the sideways swipe order contiguous.
+  // is one that has nothing on it. It keeps the sideways swipe order
+  // contiguous.
   //
   // `number` is the visible workspace number. `id` is an internal Sway handle,
   // and dispatching against it switches somewhere else, silently.
+  //
+  // ---------------------------------------------------------------------
+  // One rule, two implementations (docs/refactor.md C1, C3)
+  // ---------------------------------------------------------------------
+  // bin/moarchy-one-app-per-workspace picks a slot by the same rule, in
+  // Python, and the two are a matched pair: change one and change the other.
+  // They stay separate because this one runs inside a gesture and the
+  // alternative is forking `swaymsg` and parsing its JSON before `home` can
+  // dispatch -- which the same constraint that keeps `dragTarget` a direct
+  // object reference rules out.
+  //
+  // They had drifted, in both directions:
+  //
+  //   the cap    This returned 10 once 1..10 were taken -- an *occupied*
+  //              workspace, so home landed on an app. Exactly the failure the
+  //              paragraph above records, from a different cause. There is no
+  //              ceiling now: sway's bindings stop at 10 but this is not a
+  //              binding, and Python never had one.
+  //   named      Python keyed on `int(name)`, so "3:web" raised ValueError and
+  //              was skipped while sway reported it as number 3 -- a taken
+  //              number read as free. Both key on the number now, and both
+  //              ignore the -1 sway gives a workspace whose name carries none.
+  //
+  // `omarchy-shell gestures status` publishes this answer so the selftest can
+  // compare the two rather than trust that they still agree.
   function firstFreeWorkspace(): int {
     var taken = ({})
     var list = I3.workspaces ? I3.workspaces.values : []
-    for (var i = 0; i < list.length; i++)
-      if (list[i]) taken[list[i].number] = true
-    for (var n = 1; n <= 10; n++) if (!taken[n]) return n
-    return 10
+    for (var i = 0; i < list.length; i++) {
+      var n = list[i] ? Number(list[i].number) : -1
+      if (n > 0) taken[n] = true
+    }
+    var free = 1
+    while (taken[free]) free++
+    return free
   }
 
   // ------------------------------------------------------ driving an overlay
@@ -426,11 +484,15 @@ Item {
     if (root.dragMode !== "recents" || !root.dragTarget) return
     if (!root.dragTarget.armPreview) return
     if (root.isOpen("moarchy.recents")) return
-    // K10. Settings is an app and gets the shrink too. It is on screen and is
-    // being rendered, which is the whole of J10's reasoning -- but it holds
+    // K10. A shell app is an app and gets the shrink too. It is on screen and
+    // is being rendered, which is the whole of J10's reasoning -- but it holds
     // the keyboard, so every window under it reads deactivated and
     // focusedToplevel() alone would refuse to arm here.
-    if (!root.focusedToplevel() && !root.isOpen("moarchy.settings")) return
+    //
+    // All three of them, not Settings alone: Wi-Fi and Bluetooth hold the
+    // keyboard the same way and are on screen the same way, so naming one was
+    // the difference between a card that shrinks and a card that snaps.
+    if (!root.focusedToplevel() && !root.openShellApp()) return
     root.dragTarget.armPreview()
   }
 
@@ -523,26 +585,30 @@ Item {
       // already warns about.
       root.hideKeyboard()
 
-      // K4. Settings goes where the app goes: off screen, still running, its
+      // K4. A shell app goes where an app goes: off screen, still running, its
       // card still in the carousel. Hidden through the host so openPanelIds
       // cannot drift, and hidden *before* the switch, because a full-screen
       // sheet left standing over a home screen is the exact state this
       // gesture exists to get out of.
-      var settingsWasUp = root.isOpen("moarchy.settings")
-      if (settingsWasUp && root.shell) root.shell.hide("moarchy.settings")
+      //
+      // Any of the three, not Settings alone. Home from Wi-Fi used to switch
+      // the workspace underneath and leave Wi-Fi covering the home screen it
+      // had just gone to -- a home gesture that visibly did nothing.
+      var shellAppWasUp = root.openShellApp()
+      if (shellAppWasUp && root.shell) root.shell.hide(shellAppWasUp)
 
       // Already on a home screen: no toplevel is activated when focus is on an
       // empty workspace, which makes this the one reliable "is this workspace
       // empty" question available here. Without it, home from home would hop
       // to a *different* empty workspace and churn the numbering for nothing.
       //
-      // K4a. That question is unanswerable while Settings is up, and this is
-      // the concession. Sway gives an exclusive-focus layer surface the
+      // K4a. That question is unanswerable while a shell app is up, and this
+      // is the concession. Sway gives an exclusive-focus layer surface the
       // keyboard and deactivates the window beneath it -- the same fact the
       // drawer's keyboardFocus note records as sway "handing focus back to a
       // window" -- so for that whole time every toplevel reads unfocused and
       // an app under the sheet is indistinguishable from a bare home screen
-      // under it. Hiding Settings a line above does not fix it either: the
+      // under it. Hiding the sheet a line above does not fix it either: the
       // surface unmaps and sway re-picks a focus on a later frame, long after
       // this returns.
       //
@@ -551,7 +617,7 @@ Item {
       // hops to another empty one and costs a workspace number, which F1 makes
       // contiguous again on the next pass. Not switching when it was occupied
       // would leave a *home* gesture looking at the app it was meant to leave.
-      if (settingsWasUp ? root.hasWindows() : !!root.focusedToplevel())
+      if (shellAppWasUp ? root.hasWindows() : !!root.focusedToplevel())
         root.dispatch("workspace number " + root.firstFreeWorkspace())
     }
     else if (action === "clear") root.hideTopmostOverlay()
@@ -730,9 +796,13 @@ Item {
 
     function status(): string {
       var tl = root.focusedToplevel()
+      // C3. `free` is the answer bin/moarchy-one-app-per-workspace computes
+      // independently for the same phone, and publishing it is the only way
+      // the selftest can hold the two implementations against each other.
       var focus = " focus=" + (tl ? (tl.appId || "?") : "none")
                   + " apps=" + (ToplevelManager.toplevels
                                 ? ToplevelManager.toplevels.values.length : 0)
+                  + " free=" + root.firstFreeWorkspace()
       if (!root.tracking) return "idle" + focus
       return "tracking mode=" + root.dragMode
              + " pull=" + Math.round(root.pull * 100)

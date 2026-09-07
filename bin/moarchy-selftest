@@ -133,13 +133,10 @@ else
   no "one-app-per-workspace is not running" "new windows will tile at ~180px instead of taking a workspace"
 fi
 
-# lisgd bound the same bottom edge as the gesture plugin, so both fired on one
-# swipe: the menu opened and the keyboard toggled at the same time.
-if pgrep -x lisgd >/dev/null; then
-  no "lisgd is running" "it double-binds the bottom edge against the gesture plugin; kill it"
-else
-  ok "lisgd is not running (no double-bound edge)"
-fi
+# A check that lisgd is not running lived here. lisgd bound the same bottom edge
+# as the gesture plugin, so both fired on one swipe -- but the package is gone
+# with bin/moarchy-gestures (docs/refactor.md A1-A3), and a check for a daemon
+# nothing can install is a check that passes for the wrong reason.
 
 # --- the shell can reach the things it shells out to ------------------------
 head_ "shell environment"
@@ -278,6 +275,32 @@ if status=$(timeout 5 omarchy-shell gestures status 2>/dev/null) && [[ -n $statu
   ok "gestures IPC answers ($status)"
 else
   no "gestures IPC does not answer" "the plugin is not loaded; check shell.json plugins[]"
+fi
+
+# docs/refactor.md C3. "The lowest workspace number sway does not have" is
+# implemented twice -- in the gestures plugin for the home swipe, and in
+# bin/moarchy-one-app-per-workspace for a new window -- and they cannot be one
+# implementation, because the gesture cannot fork swaymsg mid-drag. So they are
+# held against each other instead.
+#
+# They had drifted both ways before this check existed: the QML capped at 10 and
+# returned an occupied workspace once 1..10 were taken, and the Python keyed on
+# int(name) so a workspace named "3:web" read as free while sway called it 3.
+# Neither is visible from one side alone, which is why this compares rather than
+# asserting a number.
+#
+# `--free` calls the daemon's own function rather than restating the rule here:
+# a check that reimplements what it is checking passes against itself.
+free_qml=$(sed -n 's/.* free=\([0-9]*\).*/\1/p' <<<"${status:-}")
+free_py=$(timeout 8 moarchy-one-app-per-workspace --free 2>/dev/null)
+if [[ -z $free_qml || -z $free_py ]]; then
+  no "cannot compare the two free-workspace implementations" \
+     "gestures status carries no free= field, or --free did not answer"
+elif [[ $free_qml == "$free_py" ]]; then
+  ok "both free-workspace implementations answer $free_qml"
+else
+  no "free-workspace implementations disagree (gestures=$free_qml, one-app=$free_py)" \
+     "home and a new window will pick different workspaces; they are a matched pair"
 fi
 
 # Declared as a service the plugin was mounted twice and drew two stacked pills.
@@ -682,8 +705,12 @@ print(found[0] if found else "")'; }
     # touch input off with it, so after an idle blank every synthetic swipe
     # lands nowhere and the whole suite fails for a reason that has nothing to
     # do with gestures.
-    swaymsg "output * power on" >/dev/null 2>&1
-    swaymsg "input type:touch events enabled" >/dev/null 2>&1
+    #
+    # `unlock` rather than the two swaymsg lines this used to run
+    # (docs/refactor.md D1). It does both of them and clears the lock flag as
+    # well, which those two did not -- so the rig could end up with a lit panel
+    # and a flag still saying locked, and the next `wake` would refuse.
+    moarchy-screen unlock >/dev/null 2>&1
 
     # Start from a bare screen. Anything left open changes what the strip's
     # up-drag *means* -- with the shade down it correctly means "put that away"

@@ -11,11 +11,20 @@ step="${1:-+5%}"
 device="$(ls -1 /sys/class/backlight 2>/dev/null | head -n1)"
 [[ -n $device ]] || exit 0
 
+# Both through moarchy-screen (docs/refactor.md D1, D2). These two branches
+# talked to swaymsg directly, which meant `on` lit the panel while the power
+# button had the screen locked -- the one state the lock exists to hold. Our
+# own bindings only ever pass +5%/5%-, so it was upstream Omarchy's callers of
+# `off`/`on` that could reach it: exactly what a shim is here to catch.
+#
+# `blank`, not `lock`: "turn the display off" is not "lock the phone", and
+# pairing blank with wake keeps `off` then `on` behaving the way its caller
+# expects while still refusing to undo a real lock.
 if [[ $step == "off" ]]; then
-  swaymsg "output * power off" >/dev/null 2>&1
+  moarchy-screen blank >/dev/null 2>&1
   exit 0
 elif [[ $step == "on" ]]; then
-  swaymsg "output * power on" >/dev/null 2>&1
+  moarchy-screen wake >/dev/null 2>&1
   exit 0
 fi
 

@@ -287,7 +287,9 @@ flashed phone never gets it.
 > `uboot-pinephone`, `eg25-manager`, `megapixels`, `lisgd`, `mmsd-tng` and
 > `portfolio-file-manager` are installed from a repo the phone is not
 > configured for, so they are frozen at flash time and `pacman -Qm` lists them
-> as foreign.
+> as foreign. (`lisgd` has since left the set — `refactor.md` A2 — so a phone
+> flashed after that carries six of these, and one flashed before keeps a
+> seventh nothing runs.)
 >
 > Six lines in `image/configure.sh` beside the `[moarchy]` block would fix it,
 > and `danctnix-keyring` is already pacstrapped so `SigLevel = Required` would
@@ -625,6 +627,10 @@ same manifest now agree.
 > by `pacman -U --print` failing to resolve in a bare ALARM container, and
 > settled by reading `/etc/pacman.conf` out of the shipped image rather than
 > guessing repo URLs.
+>
+> Two of them today: `lisgd` left with `bin/moarchy-gestures`
+> (`refactor.md` A2). The finding stands as written — the repo is still needed,
+> by one package fewer.
 >
 > Verified in the container: the whole set resolves as **one transaction of 564
 > packages**; `omarchy-config` and `moarchy` install together with no file

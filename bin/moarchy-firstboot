@@ -22,9 +22,11 @@ if [[ -z $USER_NAME ]]; then
 fi
 say "setting up for $USER_NAME"
 
-# lisgd and bin/moarchy-touch read /dev/input/event* directly, which needs the
-# `input` group. Sway's own bindgesture only sees libinput gesture events, which
-# come from touchpads and never from a touchscreen.
+# bin/moarchy-touch reads /dev/input/event* directly, which needs the `input`
+# group. Sway's own bindgesture only sees libinput gesture events, which come
+# from touchpads and never from a touchscreen -- which is why the gestures are
+# a shell plugin and why lisgd, the daemon that used to read this node, is
+# gone (docs/refactor.md A2).
 #
 # The trade: anything running as this user can then read every input device,
 # keyboard included. On a single-user phone that is the accepted cost, and it is
