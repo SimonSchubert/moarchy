@@ -126,6 +126,32 @@ version = "4.7.1-2"
 ref     = "6a643ecb56b91b3ef5f54f4fbfd69c9745b8437c"
 version = "1.4.2-1"
 
+# mise, and the reason a coding agent is a tap rather than a research project.
+#
+# The agent machinery is already on the phone: omarchy-config ships upstream's
+# whole bin/ to /usr/bin, so omarchy-agent, omarchy-default-agent and
+# omarchy-mise-install are all there, and moarchy.settings already draws
+# Apps > AI agent. Every one of those paths runs on mise:
+#
+#   grok) agent="grok"; agent_package="npm:@xai-official/grok"
+#   ...
+#   if ! mise use -g "$agent_package"; then
+#
+# and mise is the single piece Arch Linux ARM does not have. aarch64/extra.db
+# carries nodejs 26.8.1 and npm 12.0.2 and no mise at all, which is why this is
+# a pin here rather than a name in moarchy-meta alone. Upstream Omarchy
+# installs this same AUR package (install/omarchy-base.packages:80).
+#
+# A -bin package, and legitimately so, the same way lcl-gui-bin is: the PKGBUILD
+# declares arch=('x86_64' 'aarch64') and fetches
+# mise-v$pkgver-linux-arm64.tar.xz with its own sha256, so it satisfies P10 like
+# any other source= entry. Its package() runs the arm64 binary to generate shell
+# completions -- fine in a native arm64 builder, which is what [builder] is
+# pinned to be, and a reason not to move that pin to an emulated one.
+[aur.mise-bin]
+ref     = "733c4928246d5930eca189271203330ffd4d955a"
+version = "2026.9.1-1"
+
 # ---------------------------------------------------------------------------
 # Where published packages live, and the key that signs them.
 #

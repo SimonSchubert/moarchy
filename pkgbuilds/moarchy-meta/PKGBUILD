@@ -18,15 +18,18 @@ _ver=$(manifest_get moarchy version) || return 1
 
 pkgname=moarchy-meta
 pkgver=$_ver
-# Back to 1, because pkgver moved: 0.1.1-1 is newer than the 0.1.0-2 this was.
+# 2, because the list below gained mise-bin, nodejs and npm while
+# manifest.toml's [moarchy] version stayed at 0.1.1. That is the failure this
+# package is most exposed to, because its entire content IS the depends line: a
+# change here that does not move the version is invisible to pacman, which
+# compares versions and not depends.
 #
-# It was 2 for one release. The list below gained gnome-contacts, geary,
-# alligator, amberol, secrets and songrec and lost kclock and index-fm, and the
-# version did not move -- so a phone already holding 0.1.0-1 would never have
-# seen any of it. That is the failure this package is most exposed to, because
-# its entire content IS the depends line: a change here that does not move the
-# version is invisible to pacman, which compares versions and not depends.
-pkgrel=1
+# It has been here before. It was 2 for 0.1.0 as well, after the list gained
+# gnome-contacts, geary, alligator, amberol, secrets and songrec and lost kclock
+# and index-fm with no version move at all -- so a phone already holding
+# 0.1.0-1 would never have seen any of it. Then pkgver moved to 0.1.1 and this
+# went back to 1, because 0.1.1-1 is already newer than 0.1.0-2.
+pkgrel=2
 pkgdesc="The moarchy package set -- install this and you have the phone"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
@@ -155,6 +158,32 @@ depends=(
   'tmux'
   'unzip'
   'zoxide'
+
+  # --- Coding agents ----------------------------------------------------------
+  # None of these is an agent. They are what turns "install Grok" from a
+  # research project into a row in Settings.
+  #
+  # Everything else is already here: omarchy-config ships upstream's whole bin/
+  # to /usr/bin, so omarchy-agent, omarchy-default-agent and omarchy-mise-install
+  # are on PATH, and moarchy.settings already draws Apps > AI agent with a row
+  # per agent. All of it is built on mise, and mise is the one name Arch Linux
+  # ARM has not got -- aarch64's extra.db carries nodejs and npm and no mise at
+  # all. Built from the pin in manifest.toml like yay and the rest of the AUR
+  # half.
+  'mise-bin'
+  #
+  # Node, from the repos rather than from mise. Upstream never installs it with
+  # pacman -- install/user/mise-work.sh runs `mise use -g node@latest`, and its
+  # offline path unpacks a bundled node-v*-linux-x64.tar.gz, which is x86_64 by
+  # filename. Taking the ALARM build instead costs ~50 MB in the image and means
+  # the first run of an agent downloads the agent, not a language runtime as
+  # well, over whatever connection a phone happens to have.
+  #
+  # npm is a separate package here, and it is needed rather than incidental:
+  # mise's npm: backend shells out to it, and npm:@xai-official/grok is exactly
+  # what omarchy-default-agent asks mise for.
+  'nodejs'
+  'npm'
 
   # --- Telephony -------------------------------------------------------------
   # Calls and SMS on the Quectel EG25-G. eg25-manager (modem power/GPIO) and the
