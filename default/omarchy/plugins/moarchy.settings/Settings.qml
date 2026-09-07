@@ -343,7 +343,18 @@ Item {
     // rebuilds the stack instead of resuming a page nobody is standing on.
     // docs/settings.md A6 is untouched by this: reopening a *closed* Settings
     // still lands on the root.
-    if (!resume || !root.running) root.stack = root.stackFor(start)
+    // A rebuilt stack is a different screen, so the fields on the old one go
+    // with it; a resume is the same screen coming back and keeps what was typed.
+    if (!resume || !root.running) {
+      root.stack = root.stackFor(start)
+      root.resetFields()
+    }
+    // Always, and this is the half that open() was missing: `refresh()` runs a
+    // provider only while `dynamicLoaded` is false, so an open onto a provider
+    // page painted the rows the *last* provider page built -- "No reminders set"
+    // under a "Font" header. push() and pop() have always had this through
+    // afterPageChange(); open() reached refresh() without it.
+    root.resetReadState()
     root.confirmText = ""
     root.running = true
     root.opened = true
@@ -416,17 +427,28 @@ Item {
     return root.pop()
   }
 
-  function afterPageChange() {
+  // What a page answered: its guards, its reader, and the rows a provider built
+  // for it. Every arrival on a page clears this, because keeping any of it is
+  // showing the page you came from.
+  function resetReadState() {
     root.whenMap = ({})
     root.valueMap = ({})
     root.pageValue = ""
     root.dynamicRows = []
     root.dynamicLoaded = false
-    // Fields do not outlive the screen (J12), and the surface must not be left
-    // holding a bottom inset for a keyboard whose field has just been
-    // destroyed -- a delegate torn down while focused reports no focus loss.
+  }
+
+  // Fields do not outlive the screen (J12), and the surface must not be left
+  // holding a bottom inset for a keyboard whose field has just been
+  // destroyed -- a delegate torn down while focused reports no focus loss.
+  function resetFields() {
     root.inputMap = ({})
     root.focusedInput = ""
+  }
+
+  function afterPageChange() {
+    root.resetReadState()
+    root.resetFields()
     root.refresh()
   }
 
@@ -512,8 +534,16 @@ Item {
                          detail: (parts[1] || "").trim() })
           } else {
             var value = line.trim()
-            var label = p.provider.label === "basename"
-                        ? value.replace(/^.*\//, "") : value
+            var label = value
+            if (p.provider.label === "basename")
+              label = value.replace(/^.*\//, "")
+            // The same transform omarchy-theme-bg-current applies, so the row
+            // that ticks reads the way the Appearance detail line above it does:
+            // "Quattro", not "1-quattro.jpg".
+            else if (p.provider.label === "background")
+              label = value.replace(/^.*\//, "").replace(/\.[^.]+$/, "")
+                           .replace(/^\d+-/, "").replace(/-/g, " ")
+                           .replace(/\b\w/g, function (c) { return c.toUpperCase() })
             built.push({ id: "p" + i, type: "choice", label: label, value: value,
                          write: p.write + " " + root.shellQuote(value) })
           }
@@ -818,6 +848,14 @@ Item {
       root.dryRun = (on === "1" || on === "true" || on === "on")
       return "ok"
     }
+
+    // Readable, because the selftest's most delicate block rests on it. `dryRun`
+    // is the precondition for every check that activates a row without wanting
+    // it to happen, and a dropped call left the run *really* activating things:
+    // the row ran, `back: true` popped the page, and the next `activate`
+    // answered "unknown row" -- a red J9 that said nothing about J9. A verb that
+    // can only be written cannot be asserted before it is relied on.
+    function dryRunState(): string { return root.dryRun ? "1" : "0" }
 
     function lastLaunch(): string { return root.lastLaunch }
 

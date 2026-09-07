@@ -1478,6 +1478,96 @@ if [[ ${1:-} == "--settings" ]]; then
     && ok "B8 Default apps has $vis visible row(s)" \
     || no "B8 every row on apps.default is hidden" "its parent row should hide too"
 
+  # --- F8. and the row that opens it hides with it ---------------------------
+  # B8 above says a page of hidden rows is unreachable; this is the other half,
+  # on the page where it was false. Every AI agent row guards on a binary none
+  # of which ships, so without a guard of its own the row opened a blank screen.
+  s openAt apps.default >/dev/null; sleep 2
+  agent_vis=$(s rows | awk -F'\t' '$1=="agent" {print $4}')
+  agent_have=no
+  for a in claude codex copilot crush gemini grok omp opencode pi; do
+    omarchy-cmd-present "$a" && { agent_have=yes; break; }
+  done
+  if [[ $agent_have == yes ]]; then
+    [[ $agent_vis == 1 ]] \
+      && ok "F8 an agent is installed and the AI agent row is shown" \
+      || no "F8 an agent is installed but the AI agent row is hidden" \
+            "the row's guard is the disjunction of its page's nine guards"
+  else
+    [[ $agent_vis == 0 ]] \
+      && ok "F8 no agent is installed and the AI agent row hides with its page" \
+      || no "F8 the AI agent row is visible with no agent installed" \
+            "it opens a page whose every row is guarded on a binary that is absent"
+  fi
+
+  # --- B9. opening *at* a page does not paint the last page's rows -----------
+  # push() and pop() clear the read state through afterPageChange(); open() did
+  # not, so an openAt onto a provider page showed whatever the previous provider
+  # page had built. Reminders first, because it is the provider page that was
+  # showing up under other headers.
+  s openAt tools.reminders >/dev/null; sleep 2
+  s close >/dev/null; sleep 1
+  s openAt appearance.font >/dev/null; sleep 2
+  b9_rows=$(s rows | awk -F'\t' '{print $1}' | tr '\n' ' ')
+  if [[ $b9_rows == *none* ]]; then
+    no "B9 openAt appearance.font painted the reminders page's rows" \
+       "rows: $b9_rows -- open() must clear dynamicRows/dynamicLoaded"
+  else
+    ok "B9 openAt onto a provider page reads that page's own provider"
+  fi
+
+  # --- D7. a provider page ticks its current value ---------------------------
+  # The rows are paths, so the reader has to answer a path. It answered a
+  # prettified name, matched nothing, and the page showed every wallpaper with
+  # none of them current -- D2 correct, and useless.
+  s openAt appearance.background >/dev/null; sleep 2
+  bg_checked=$(s rows | awk -F'\t' '$5=="1"' | wc -l)
+  [[ $bg_checked -eq 1 ]] \
+    && ok "D7 the wallpaper page ticks exactly one row" \
+    || no "D7 the wallpaper page ticks $bg_checked rows" \
+          "the reader answers $(s value); the rows carry paths"
+
+  # The other half: a reader may name something the provider's list omits, and
+  # the font in use is exactly that -- fc-match falls back to a family
+  # fc-list :spacing=100 does not report.
+  s openAt appearance.font >/dev/null; sleep 2
+  want_font=$(omarchy-font-current)
+  s rows | awk -F'\t' -v f="$want_font" '$3==f' | grep -q . \
+    && ok "D7 the font page lists the font actually in use ($want_font)" \
+    || no "D7 the font page does not list $want_font" \
+          "omarchy-font-list omits it, so the page must carry the current value"
+
+  # --- I6. a detail line is one value ---------------------------------------
+  # omarchy-network-status answers four tab-separated fields. Unsplit, they all
+  # landed in the detail *and* shifted every column of this very TSV after it.
+  i6_bad=""
+  for pg in net root appearance apps.default system.time tools; do
+    s openAt "$pg" >/dev/null; sleep 1.5
+    while IFS= read -r line; do
+      [[ $(awk -F'\t' '{print NF}' <<<"$line") -gt 7 ]] && i6_bad="$i6_bad $pg/$(cut -f1 <<<"$line")"
+    done < <(s rows)
+  done
+  [[ -z $i6_bad ]] \
+    && ok "I6 every detail line is a single value" \
+    || no "I6 a detail carries tabs:$i6_bad" \
+          "a detailCmd that prints a record puts the whole record in the row"
+
+  # --- E9. a bridged command that resolves and still does nothing ------------
+  # E3 checks the first word is on PATH. These two were, and neither worked:
+  # omarchy-version reads `pacman -Q omarchy` on an image that installs
+  # omarchy-config, and omarchy-theme-bg-install ends in nautilus.
+  if ver=$(omarchy-version 2>/dev/null) && [[ -n $ver ]]; then
+    ok "E9 omarchy-version answers on this image ($ver)"
+  else
+    no "E9 omarchy-version prints nothing" \
+       "About phone's headline row is blank; the image installs omarchy-config"
+  fi
+  bg_install=$(command -v omarchy-theme-bg-install 2>/dev/null || true)
+  [[ $bg_install == "$MOARCHY_BIN"/* ]] \
+    && ok "E9 omarchy-theme-bg-install is shimmed, not upstream's nautilus" \
+    || no "E9 omarchy-theme-bg-install resolves to ${bg_install:-nothing}" \
+          "upstream's ends in nautilus, which is not in the base set"
+
   # --- C. switches ----------------------------------------------------------
   s openAt appearance.bar >/dev/null; sleep 2
   live=$(s value show)
@@ -1687,10 +1777,18 @@ DOCTBL
   n_cov=$(wc -l <<<"$covered")
   # Anchored to an entry row -- a bare '| Unsupported |' also matches the
   # totals table at the top of the doc, which counted 179 of 178.
-  n_unsup=$(grep -cE '^\| `[^`]+` \|.*\| Unsupported \|' "$doc" 2>/dev/null || echo 0)
-  (( n_cov + n_unsup == n_up )) \
-    && ok "G5 all $n_up upstream entries are accounted for ($n_cov live, $n_unsup dropped)" \
-    || no "G5 $n_cov live + $n_unsup dropped != $n_up upstream" "something is unclassified"
+  # And skipped off a checkout for the same reason G6 is: the Unsupported half of
+  # the answer lives only in the doc, so on a device this counted 137 + 0 against
+  # 320 and was red every run. A check that cannot pass where it runs teaches
+  # people to read past red.
+  if [[ -f $doc ]]; then
+    n_unsup=$(grep -cE '^\| `[^`]+` \|.*\| Unsupported \|' "$doc" 2>/dev/null || echo 0)
+    (( n_cov + n_unsup == n_up )) \
+      && ok "G5 all $n_up upstream entries are accounted for ($n_cov live, $n_unsup dropped)" \
+      || no "G5 $n_cov live + $n_unsup dropped != $n_up upstream" "something is unclassified"
+  else
+    skip_ "G5 skipped: the Unsupported entries live in $doc, which is not packaged"
+  fi
 
   # G7. The split the design committed to. A drift here is not a failure on its
   # own -- rows move -- but it should be a deliberate edit to the doc, not a
@@ -1859,49 +1957,63 @@ ICONS
     activated() { activate_answer=$(s activate "$1"); [[ $activate_answer == "ok" ]]; }
 
     # dryRun for the next three, so a check interrupted halfway does not leave
-    # the phone holding timers nobody asked for.
+    # the phone holding timers nobody asked for -- and read back, because when
+    # this call is the one that gets dropped the run does the opposite of what
+    # it says: the rows really fire, `back: true` pops the page, and the next
+    # `activate` answers "unknown row". That was a red J9 that had nothing to do
+    # with J9.
     s goto tools.reminders.new >/dev/null; sleep 2
-    s dryRun 1 >/dev/null
-
-    # J8. As the page arrives, before anything is typed. The empty state is
-    # reached by entering the screen rather than by writing "" into the field:
-    # that is the state a user actually meets, and it does not rest on the IPC
-    # being able to carry an empty argument.
-    before=$(s lastLaunch)
-    answer=$(s activate custom)
-    enabled=$(s rows | awk -F'\t' '$1=="custom"{print $7}')
-    if [[ $answer == "not ready" && $enabled == 0 && $(s lastLaunch) == "$before" ]]; then
-      ok "J8 Set reminder is inert and dimmed until a duration is typed"
+    set_dry() {
+      s dryRun "$1" >/dev/null
+      [[ $(s dryRunState) == "$1" ]] && return 0
+      s dryRun "$1" >/dev/null
+      [[ $(s dryRunState) == "$1" ]]
+    }
+    if ! set_dry 1; then
+      no "J7/J8/J9 dry run would not turn on" \
+         "dryRunState=[$(s dryRunState)]; the three checks below would have set real timers"
     else
-      no "J8 activate answered '$answer' with enabled=$enabled" \
-         "an empty duration must not be submittable"
-    fi
-
-    # J7/J9. What the rows would run, without running it.
-    if ! set_field message 'Check the oven' || ! set_field minutes 25; then
-      no "J7/J9 the fields would not take a value over IPC" \
-         "message=[$(s value message)] minutes=[$(s value minutes)]; nothing below was measured"
-    else
-      if ! activated custom; then
-        no "J7 activate custom answered '$activate_answer'" "with both fields set it must run"
+      # J8. As the page arrives, before anything is typed. The empty state is
+      # reached by entering the screen rather than by writing "" into the field:
+      # that is the state a user actually meets, and it does not rest on the IPC
+      # being able to carry an empty argument.
+      before=$(s lastLaunch)
+      answer=$(s activate custom)
+      enabled=$(s rows | awk -F'\t' '$1=="custom"{print $7}')
+      if [[ $answer == "not ready" && $enabled == 0 && $(s lastLaunch) == "$before" ]]; then
+        ok "J8 Set reminder is inert and dimmed until a duration is typed"
       else
-        [[ $(s lastLaunch) == "moarchy-reminders set '25' 'Check the oven'" ]] \
-          && ok "J7 the custom row carries both fields" \
-          || no "J7 the custom row would run: $(s lastLaunch)" \
-                "expected moarchy-reminders set '25' 'Check the oven'"
+        no "J8 activate answered '$answer' with enabled=$enabled" \
+           "an empty duration must not be submittable"
       fi
 
-      if ! activated m15; then
-        no "J9 activate m15 answered '$activate_answer'" "the preset row must be reachable"
+      # J7/J9. What the rows would run, without running it.
+      if ! set_field message 'Check the oven' || ! set_field minutes 25; then
+        no "J7/J9 the fields would not take a value over IPC" \
+           "message=[$(s value message)] minutes=[$(s value minutes)]; nothing below was measured"
       else
-        [[ $(s lastLaunch) == "moarchy-reminders set 15 'Check the oven'" ]] \
-          && ok "J9 a preset carries the typed message" \
-          || no "J9 the 15-minute row would run: $(s lastLaunch)" \
-                "expected moarchy-reminders set 15 'Check the oven'"
+        if ! activated custom; then
+          no "J7 activate custom answered '$activate_answer'" "with both fields set it must run"
+        else
+          [[ $(s lastLaunch) == "moarchy-reminders set '25' 'Check the oven'" ]] \
+            && ok "J7 the custom row carries both fields" \
+            || no "J7 the custom row would run: $(s lastLaunch)" \
+                  "expected moarchy-reminders set '25' 'Check the oven'"
+        fi
+
+        if ! activated m15; then
+          no "J9 activate m15 answered '$activate_answer'" "the preset row must be reachable"
+        else
+          [[ $(s lastLaunch) == "moarchy-reminders set 15 'Check the oven'" ]] \
+            && ok "J9 a preset carries the typed message" \
+            || no "J9 the 15-minute row would run: $(s lastLaunch)" \
+                  "expected moarchy-reminders set 15 'Check the oven'"
+        fi
       fi
+
     fi
 
-    s dryRun 0 >/dev/null
+    set_dry 0 || s dryRun 0 >/dev/null
 
     # J3/J6/J10. Actually set one, from the fields.
     if ! set_field message 'Selftest tea' || ! set_field minutes 9; then
@@ -2007,12 +2119,12 @@ ICONS
 
   s close >/dev/null
 
-  printf '  \033[90m%-4s\033[0m   \033[90mnot covered here: A3 A5 B5 B7 C5 C7 C8 D3 D4 D6 E2 E5 E6 E7 E8 F1 F2 F3 F4 F5 F6 F7 G4 H1 I4 J11\033[0m\n' ""
+  printf '  \033[90m%-4s\033[0m   \033[90mnot covered here: A3 A5 B5 B7 C5 C7 C8 D3 D4 E2 E5 E6 E7 E8 F1 F2 F3 F4 F5 F6 F7 G4 H1 I4 J11\033[0m\n' ""
   # A3     needs a real finger or the touch injector
   # B4     is a gesture, and --gestures proves it as K3/K4 with a real swipe
   # A5     needs every reader stubbed slow
   # C5/C7/C8  need a blank, a systemd unit and an sshd flip
-  # D3/D6  Zed and the font provider are absent on a base install
+  # D3     Zed is absent on a base install; D6/D7 are checked above
   # E2     static: Pages.js against omarchy-menu.jsonc, not a runtime question
   # F3-F7  need PATH stubs that count forks
   # I2/I4  static greps, run at build time

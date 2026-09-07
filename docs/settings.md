@@ -154,6 +154,20 @@ bound.
 open it is not rendered.
 → on a base install, `settings rowsOn apps.default` shows `browser` with `visible=0`
 
+**B9** Opening *at* a page clears what the last page answered. Guard answers,
+the reader's value and any provider-built rows are per-page state, and `open()`
+rebuilds the stack without going through `push` -- so it reached `refresh()`
+without the reset `afterPageChange()` does. A provider page then painted the rows
+the *previous* provider page built, since `refresh()` re-runs a provider only
+while `dynamicLoaded` is false. On screen that was "No reminders set" under a
+"Font" header, and it survived a close and reopen.
+
+A resume (K5) keeps what was typed, because that is the same screen coming back;
+a rebuilt stack drops it, because those fields belong to pages nobody is standing
+on any more (J12).
+→ `settings openAt tools.reminders; settings close; settings openAt
+appearance.font; settings rows` lists fonts, not `No reminders set`
+
 ## C. Switches
 
 **C1** Every `switch` reads its state from a command at page-open, never from a
@@ -224,6 +238,22 @@ Unsupported here, so the mechanism is asserted on the row that uses it
 **D6** The font page is populated from the provider, not a hard-coded list.
 → `settings rowsOn appearance.font | wc -l` == `omarchy-font-list | wc -l`
 
+**D7** A provider page's reader answers in the shape its rows carry. The rows are
+whatever the provider printed -- paths, for a directory listing -- so a reader
+that prettifies one ticks nothing at all. That is D2 behaving correctly and it is
+still a page of eight wallpapers with no current one, which is why the reader is
+the raw path and the *label* carries the prettifying instead.
+→ on `appearance.background`, `settings value` equals `readlink -f
+~/.local/state/omarchy/current/background`, exactly one row is `checked=1`, and
+its label is the name the `background` row on `appearance` shows as its detail
+
+A reader may also answer something the provider's list genuinely omits, which is
+not the same fault. `omarchy-font-list` enumerates `fc-list :spacing=100`, and
+with no font configured `fc-match` falls back to a family fontconfig does not tag
+that way -- so the font in use was real, current, and not on its own page. The
+list carries the current value when it lacks it.
+→ `settings rowsOn appearance.font` contains `$(omarchy-font-current)`
+
 ## E. Bridged launches
 
 **E1** In dry-run, a bridged row records the command it would run and runs nothing.
@@ -274,6 +304,18 @@ shows `omarchy.menu` open within 2 s
 and vanish.
 → the window survives 5 s after the wrapped command exits
 
+**E9** A bridged command works on *this* image, not merely on its PATH. E3 checks
+the first word resolves; these two resolved and still did nothing.
+`omarchy-version` reads `pacman -Q omarchy`, and this image installs Omarchy as
+`omarchy-config`, so it exited 1 and About's headline row was blank.
+`omarchy-theme-bg-install` ends in `nautilus`, which is deliberately not in the
+base set at 2-3 GB of RAM, so Install a wallpaper exited 127 into a detached
+process and looked like a file manager opening somewhere out of sight. Both are
+shimmed in `bin/`, upstream's own behaviour kept ahead of the fallback.
+→ `omarchy-version` exits 0 and prints a version; `command -v
+omarchy-theme-bg-install` starts with `$MOARCHY_PATH/bin`; the `version` row on
+`about` has a non-empty detail
+
 ## F. Hidden when unsupported
 
 **F1** No id classified Unsupported is reachable as a row anywhere.
@@ -304,6 +346,17 @@ visible, and nothing crashes
 
 **F7** A page paints before its guards answer, and each row settles exactly once.
 → `settings rows <page>` sampled every 50 ms shows at most one transition per row
+
+**F8** A container row whose page is guarded row by row carries the same guard.
+F2 is not automatic -- a `nav` row's visibility is its own `when:`, and Settings
+cannot ask the page it points at without running that page's guards from the
+parent, which F3 forbids. So a page whose every row is guarded on a binary needs
+the disjunction of those guards on the row that opens it, duplicated in the model
+because a `when:` is a shell string and cannot see the page it names. AI agent had
+no such guard, and all nine of its rows guard on an agent none of which ships: the
+row was always visible and always opened an empty screen.
+→ with no agent installed, `settings goto apps.default` then `settings rows` shows
+`agent` with `visible=0`
 
 ## G. Coverage parity
 
@@ -385,6 +438,13 @@ has a page.
 **I5** `$MOARCHY_PATH/bin` comes first on the shell's PATH.
 → the PATH in `/proc/$(pgrep -x quickshell)/environ` lists it before
 `$OMARCHY_PATH/bin`. If upstream wins, every bridge shim opens nothing
+
+**I6** A detail line is one value. A `detailCmd` may name a command that prints a
+whole record -- `omarchy-network-status` answers `<kind>\t<name>\t<signal>\t<freq>`
+for a bar widget that lays those out itself -- and unsplit the row read "wifi
+Paradise2 65 2462.0". Worse than ugly: the tabs shifted every column of the `rows`
+TSV after it, so `enabled` came back as an SSID.
+→ no row's detail contains a tab, on any page
 
 ## J. Reminders
 
@@ -517,6 +577,7 @@ omarchy-shell settings focused              -> the focused input's rowId, or ""
 omarchy-shell settings guards               -> TSV rowId 0|1
 omarchy-shell settings refresh              -> ok
 omarchy-shell settings dryRun <0|1>         -> ok
+omarchy-shell settings dryRunState         -> 0 | 1
 omarchy-shell settings lastLaunch           -> the command line of the last launch
 omarchy-shell settings coverage             -> TSV upstreamId class pageId rowId
 omarchy-shell settings geometry             -> w= h= margin= strip= gap= screen=
@@ -535,6 +596,14 @@ and disabled, and answers `not ready` to `activate` (J8).
 the guard batch, which on a provider page meant the Clear all row could correctly
 appear while the list above it still said "No reminders set" -- the state that
 made J13 fail on the device.
+
+`dryRunState` reads back what `dryRun` set, and exists because the selftest's
+most delicate block rests on it. Every check that activates a row without wanting
+it to happen has dry run as its precondition, and when *that* call was the one
+dropped the run did the opposite of what it said: the rows really fired, `back`
+popped the page, and the next `activate` answered `unknown row` -- a red J9 that
+had nothing to do with J9. A verb that can only be written cannot be asserted
+before it is relied on.
 
 `confirm` presses Continue on the sheet `confirmText` reports. Both exist so a
 destructive row can be tested from ssh at all: `activate` on a row that carries

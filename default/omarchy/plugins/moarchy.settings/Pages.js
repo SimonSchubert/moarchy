@@ -119,7 +119,10 @@ var PAGES = {
   //
   // returnTo brings Back here rather than dropping you on the home screen.
   { id: "wifi", type: "action", glyph: "󱚾", label: "Wi-Fi networks",
-    detailCmd: "omarchy-network-status",
+    // One field of omarchy-network-status, which answers a whole record (I6).
+    // A script and not an inline pipeline: E3 resolves the first word of every
+    // row's command on PATH, and an awk one-liner puts `else` there.
+    detailCmd: "moarchy-network-name",
     run: "omarchy-shell shell summon moarchy.wifi '{\"returnTo\":\"moarchy.settings\",\"page\":\"net\"}'",
     launch: "none" },
   // Bluetooth is a screen too now, the same pairing as Wi-Fi: this row and the
@@ -204,15 +207,27 @@ var PAGES = {
 ]},
 
 // Provider pages build their rows at open from a command, one value per line.
+// The reader answers a path, not a name, because the rows are paths: the
+// provider lists the directory and a choice row ticks when its value equals the
+// page's reader (D1). omarchy-theme-bg-current prettifies -- "1-quattro.jpg"
+// comes back as "Quattro" -- so against a list of paths it matched nothing and
+// the page showed eight wallpapers with none of them current. That name is
+// still what the Appearance row shows as its detail; `label: "background"`
+// applies the same transform here, so the two agree.
 "appearance.background": { title: "Wallpaper",
-  reader: "omarchy-theme-bg-current",
-  provider: { list: "ls -1 \"$HOME/.local/state/omarchy/current/theme/backgrounds\"/* 2>/dev/null", label: "basename" },
+  reader: "readlink -f \"$HOME/.local/state/omarchy/current/background\"",
+  provider: { list: "ls -1 \"$HOME/.local/state/omarchy/current/theme/backgrounds\"/* 2>/dev/null", label: "background" },
   write: "omarchy-theme-bg-set",
   rows: [] },
 
+// omarchy-font-list enumerates `fc-list :spacing=100`, and the font actually in
+// use need not be in it: with nothing configured, fc-match falls back to Noto
+// Sans Mono, whose family fontconfig here does not tag spacing=100. Ticking
+// nothing was correct (D2) and still told the user nothing about what they were
+// reading, so the current font joins the list when the list omits it.
 "appearance.font": { title: "Font",
   reader: "omarchy-font-current",
-  provider: { list: "omarchy-font-list", label: "identity" },
+  provider: { list: "{ omarchy-font-list; omarchy-font-current; } | awk 'NF' | sort -u", label: "identity" },
   write: "omarchy-font-set",
   rows: [] },
 
@@ -264,7 +279,9 @@ var PAGES = {
     run: "omarchy-launch-floating-terminal-with-presentation omarchy-theme-install",
     launch: "none", covers: { "install.style.theme": "B" } },
   { id: "bg-install", type: "action", glyph: "", label: "Install a wallpaper",
-    run: "omarchy-theme-bg-install", launch: "menu",
+    // `launch: "none"`, not "menu": this opens a file manager, not a vendored
+    // picker, so there is nothing for Settings to get out of the way of.
+    run: "omarchy-theme-bg-install", launch: "none",
     covers: { "install.style.background": "B" } },
   { id: "font-install", type: "nav", page: "appearance.more.font", glyph: "",
     label: "Install a font", covers: { "install.style.font": "N" } },
@@ -313,7 +330,13 @@ var PAGES = {
     detailCmd: "omarchy-default-terminal", covers: { "setup.default.terminal": "N" } },
   { id: "editor", type: "nav", page: "apps.default.editor", glyph: "", label: "Editor",
     detailCmd: "omarchy-default-editor", covers: { "setup.default.editor": "N" } },
+  // Guarded on the same nine binaries the page's own rows are guarded on,
+  // because none of them ships in the base set: without this the row was
+  // always visible and always opened a screen with nothing on it (F2, B8).
+  // The list is duplicated rather than derived -- a `when:` is a shell string
+  // and cannot see the page it points at -- so it moves when those rows do.
   { id: "agent", type: "nav", page: "apps.default.agent", glyph: "󰚩", label: "AI agent",
+    when: "for a in claude codex copilot crush gemini grok omp opencode pi; do omarchy-cmd-present \"$a\" && break; done",
     detailCmd: "omarchy-default-agent", covers: { "setup.default.agent": "N" } }
 ]},
 

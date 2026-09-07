@@ -1,0 +1,18 @@
+#!/bin/bash
+# Sway/phone override. Upstream's omarchy-theme-bg-install ends in `nautilus`,
+# which moarchy deliberately does not ship -- moarchy-launch-files' own comment
+# says why: it is heavy for 2-3 GB of RAM. So the row ran, exited 127 into a
+# detached process nobody was reading, and looked exactly like a file manager
+# that had opened somewhere behind Settings.
+#
+# Same folder, whatever file manager the phone actually has. moarchy-launch-files
+# already resolves that: a GUI one if the user installed one, otherwise a TUI one
+# in a terminal sized for this panel.
+set -euo pipefail
+
+theme=$(cat "$HOME/.local/state/omarchy/current/theme.name")
+dir="$HOME/.config/omarchy/backgrounds/$theme"
+
+mkdir -p "$dir"
+
+exec setsid moarchy-launch-files "$dir"

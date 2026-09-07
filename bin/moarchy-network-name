@@ -1,0 +1,20 @@
+#!/bin/bash
+# The one field of omarchy-network-status a detail line wants: what you are on.
+#
+# omarchy-network-status answers a record -- `<kind>\t<name>\t<signal>\t<freq>` --
+# for the bar widget, which lays those out itself. A Settings row's detail is one
+# value (docs/settings.md I6), and unsplit the whole record landed in it: the
+# Wi-Fi row read "wifi Paradise2 65 2462.0", and its tabs shifted every column of
+# the `rows` TSV after it, so `enabled` came back as an SSID.
+#
+# A script rather than an inline pipeline in Pages.js, because E3 resolves the
+# first word of every row's command on PATH -- an awk one-liner puts `else` there.
+set -uo pipefail
+
+IFS=$'\t' read -r kind name _ _ < <(omarchy-network-status 2>/dev/null)
+
+case "$kind" in
+  wifi)     echo "${name:-Wi-Fi}" ;;
+  ethernet) echo "Ethernet" ;;
+  *)        echo "Not connected" ;;
+esac

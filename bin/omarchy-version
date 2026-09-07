@@ -1,0 +1,28 @@
+#!/bin/bash
+# Sway/phone override. Upstream reads `pacman -Q omarchy` (or omarchy-dev on the
+# edge channel) and exits 1 when neither is installed. This image installs
+# Omarchy as `omarchy-config` -- the config and shell without the Hyprland
+# desktop -- so upstream's version command printed nothing and exited 1, and
+# About phone's headline row was blank.
+#
+# Upstream's own two package names are still tried first and in upstream's order,
+# so this answers identically on a machine that has them.
+set -uo pipefail
+
+omarchy_path=${OMARCHY_PATH:-/usr/share/omarchy}
+omarchy_path=${omarchy_path%/}
+
+if [[ $omarchy_path != "/usr/share/omarchy" ]]; then
+  hash=$(git -C "$omarchy_path" rev-parse --short HEAD 2>/dev/null || true)
+  [[ -n $hash ]] && echo "dev ($hash)" || echo "dev"
+  exit 0
+fi
+
+for package in omarchy-dev omarchy omarchy-config; do
+  version=$(pacman -Q "$package" 2>/dev/null | awk '{ print $2 }')
+  [[ -n $version ]] && break
+done
+
+[[ -n $version ]] || exit 1
+
+echo "$version"
