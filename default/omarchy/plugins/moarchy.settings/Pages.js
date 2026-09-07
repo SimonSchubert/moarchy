@@ -859,8 +859,14 @@ var TZ_REGIONS = ["Africa", "America", "Antarctica", "Arctic", "Asia", "Atlantic
 for (var _t = 0; _t < TZ_REGIONS.length; _t++) {
     var _region = TZ_REGIONS[_t];
     PAGES["system.time.zone"].rows.push(
+        // `unlisted`, so the drawer's search does not answer "a" with Asia,
+        // Africa, Arctic and America. The page each of these opens is built by
+        // the provider below, and provider rows are not in the search index by
+        // design (Search.js, O10) -- so these lead only where search cannot
+        // follow. Findable by walking Settings, which is how a region was ever
+        // meant to be reached.
         { id: "r" + _t, type: "nav", page: "system.time.zone." + _region,
-          glyph: "󰗰", label: _region });
+          glyph: "󰗰", label: _region, unlisted: true });
     // `label: "city"` keeps the whole zone as the row's value -- what
     // timedatectl takes and what the reader answers -- while showing the half
     // a person is looking for.

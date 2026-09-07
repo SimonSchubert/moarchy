@@ -43,6 +43,21 @@
 // tap *does* with it is decided in the drawer (O4-O6, O9), not here.
 var SKIP_TYPES = { "input": true };
 
+// A row may also opt out by declaring `unlisted: true`, which the walk honours
+// below. It exists for one shape: a nav row whose only destination is a page
+// built by a `provider`.
+//
+// The paragraph above about providers says the ~420 timezone cities cannot
+// reach this index because there is nothing here to walk. True -- but the
+// eleven region rows that lead to them are declared, so they were indexed, and
+// the result was that typing "a" answered Asia, Africa, Arctic and America:
+// four of five slots spent on buckets whose contents are deliberately
+// unsearchable. A row that can only take you to a list search cannot see is
+// not a search result, it is scaffolding.
+//
+// Declared on the row rather than listed by page id here, because a page id in
+// this file would be exactly the second list the essay at the top refuses.
+
 // A row that needs a field filled in before it can act is findable but never
 // first. "set reminder" matches both `tools.reminders.new/custom` -- the row at
 // the bottom of the Set screen, inert until a duration is typed (J8) -- and
@@ -121,6 +136,7 @@ function index() {
             var r = rows[i];
             if (!r || !r.label) continue;
             if (SKIP_TYPES[r.type]) continue;
+            if (r.unlisted) continue;
             var label = String(r.label);
             out.push({
                 key: pid + "/" + r.id,
