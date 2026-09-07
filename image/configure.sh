@@ -128,7 +128,20 @@ if [ -n "$_repo_name" ] && [ -n "$_repo_server" ]; then
   # does not say whether the release URL 404s, the proxy refused, or the chroot
   # has no DNS. It was the third for a long time, and the message read the same
   # for all three.
-  if _sy_err=$(arch-chroot "$ROOTDIR" pacman -Sy 2>&1 >/dev/null); then
+  # --disable-sandbox, because this pacman runs in the chroot and the chroot has
+  # its own /etc/pacman.conf. image/Dockerfile puts DisableSandbox in the
+  # *builder's* copy, which is why pacstrap works and this did not:
+  #
+  #   error: restricting filesystem access failed because Landlock is not
+  #          supported by the kernel!
+  #   error: switching to sandbox user 'alpm' failed!
+  #   error: failed to synchronize all databases (failed to retrieve some files)
+  #
+  # Docker Desktop's VM kernel has no Landlock. The flag rather than the config
+  # line on purpose: the phone's kernel does support it -- `pacman -Sy` sandboxes
+  # fine on the device -- so DisableSandbox must not end up in the shipped
+  # pacman.conf just to get past a build host's limitation.
+  if _sy_err=$(arch-chroot "$ROOTDIR" pacman -Sy --disable-sandbox 2>&1 >/dev/null); then
     say "package databases refreshed against [$_repo_name] (the .db.sig is in the image)"
   else
     say "!! could not refresh the package databases -- the phone will need one"
