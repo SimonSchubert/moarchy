@@ -2444,7 +2444,16 @@ ICONS
   # The surface is the drawer's and the content is this file's, so the checks
   # live here: settings.md section O owns the contract, the same way section H
   # owns what the shade may not repeat.
-  d() { timeout 5 omarchy-shell drawer "$@" 2>/dev/null; }
+  d() { timeout 10 omarchy-shell drawer "$@" 2>/dev/null; }
+
+  # `s` with a budget that fits what these checks make Settings do. An
+  # activation from a result is a summon, a page rebuild, a guard batch and
+  # sometimes a provider -- and on the first run of this section three checks
+  # read back the empty string because five seconds ran out mid-answer. Empty is
+  # the one answer that looks like every failure at once: O5 and O9 reported
+  # landing "on ", and O7 compared a guard that never arrived against 0 and
+  # called itself green.
+  so() { timeout 15 omarchy-shell settings "$@" 2>/dev/null; }
 
   # The drawer imports two files out of the Settings plugin's directory, which
   # is a coupling between two independently-loadable plugins. Checked first and
@@ -2545,21 +2554,25 @@ ICONS
               "expected the presentation wrapper around 'sudo pacman -Syu'"
     fi
     s dryRun 0 >/dev/null
+    # 129 = G7's 58 Bridged + 70 Native + 1 Shade, and the two are the same fact
+    # counted from opposite ends -- so this must move only when that does.
     o_cov=$(s coverage | grep -c .)
-    [[ $o_cov -eq 137 ]] \
-      && ok "O13 coverage is still 137 lines -- Update system claims no id" \
-      || no "O13 coverage is $o_cov lines, not 137" \
-            "a row with no 'covers' must add nothing; G2 is the same number"
+    [[ $o_cov -eq 129 ]] \
+      && ok "O13 coverage is still 129 lines -- Update system claims no id" \
+      || no "O13 coverage is $o_cov lines, not 129" \
+            "a row with no 'covers' must add nothing; G7's totals are the same number"
 
     # O5. A nav result lands on the page it points at, not on the page it lives
     # on. Set a reminder is a row on Reminders and a screen of its own.
     d open >/dev/null; sleep 2
     d type "set a reminder" >/dev/null; sleep 2
     d activateResult tools.reminders/new >/dev/null; sleep 3
-    if [[ $(s state) == open && $(s page) == tools.reminders.new ]]; then
+    o_state=$(so state); o_page=$(so page)
+    if [[ $o_state == open && $o_page == tools.reminders.new ]]; then
       ok "O5 Set a reminder opens its own screen"
     else
-      no "O5 landed $(s state) on $(s page)" "expected open on tools.reminders.new"
+      no "O5 landed '$o_state' on '$o_page'" \
+         "expected open on tools.reminders.new; an empty pair is the read timing out"
     fi
 
     # O9. The row at the bottom of that same screen needs a duration typed (J8).
@@ -2569,13 +2582,14 @@ ICONS
     d open >/dev/null; sleep 2
     d type "set reminder" >/dev/null; sleep 2
     s dryRun 1 >/dev/null
-    o_before=$(s lastLaunch)
+    o_before=$(so lastLaunch)
     d activateResult tools.reminders.new/custom >/dev/null; sleep 3
-    if [[ $(s state) == open && $(s page) == tools.reminders.new
-          && $(s lastLaunch) == "$o_before" ]]; then
+    o_state=$(so state); o_page=$(so page); o_after=$(so lastLaunch)
+    if [[ $o_state == open && $o_page == tools.reminders.new
+          && $o_after == "$o_before" ]]; then
       ok "O9 a row that is not ready opens its screen and runs nothing"
     else
-      no "O9 landed $(s state) on $(s page), lastLaunch '$(s lastLaunch)'" \
+      no "O9 landed '$o_state' on '$o_page', lastLaunch '$o_after'" \
          "expected open on tools.reminders.new with lastLaunch untouched"
     fi
     s dryRun 0 >/dev/null
@@ -2589,10 +2603,11 @@ ICONS
     d type "night light" >/dev/null; sleep 2
     d activateResult display/nightlight >/dev/null; sleep 3
     o_nl_after=$(moarchy-toggle-nightlight --status 2>/dev/null | jq -r .enabled 2>/dev/null)
-    if [[ $(s page) == display && $o_nl_after == "$o_nl_before" ]]; then
+    o_page=$(so page)
+    if [[ $o_page == display && $o_nl_after == "$o_nl_before" ]]; then
       ok "O6 a switch result opens Display and leaves night light $o_nl_after"
     else
-      no "O6 page=$(s page), night light went $o_nl_before -> $o_nl_after" \
+      no "O6 page='$o_page', night light went $o_nl_before -> $o_nl_after" \
          "a switch must be shown, not flipped"
     fi
 
@@ -2601,12 +2616,19 @@ ICONS
     # two run the same `when:` string, so they have to agree.
     s close >/dev/null; sleep 1
     s openAt tools >/dev/null; sleep 3
-    o_guard=$(s guards | awk -F'\t' '$1=="record"{print $2}')
+    o_guard=$(so guards | awk -F'\t' '$1=="record"{print $2}')
     d open >/dev/null; sleep 2
     d type "screen record" >/dev/null; sleep 3
     o_listed=$(d results | grep -c '^tools/record\b')
     o_matched=$(d matches | grep -c '^tools/record\b')
-    if [[ $o_matched -eq 1 && $o_listed -eq $o_guard ]]; then
+    # The empty string is refused rather than coerced. `[[ 0 -eq "" ]]` is true
+    # inside [[ ]], so a `guards` read that timed out used to make this pass by
+    # comparing "no result listed" against "no answer at all" -- green for the
+    # one reason that proves nothing.
+    if [[ ! $o_guard =~ ^[01]$ ]]; then
+      no "O7 Settings' guard for 'record' read '$o_guard'" \
+         "expected 0 or 1; an empty answer is the read timing out, not a guard saying no"
+    elif [[ $o_matched -eq 1 && $o_listed -eq $o_guard ]]; then
       ok "O7 Screen record is matched, and shown only when its guard says so (guard=$o_guard)"
     else
       no "O7 matched=$o_matched listed=$o_listed, Settings' guard says $o_guard" \

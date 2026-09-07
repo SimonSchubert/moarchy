@@ -378,9 +378,17 @@ is empty
 
 **G2** Every id appears exactly once.
 → `settings coverage | cut -f1 | sort | uniq -d` is empty; the line count is
-`137`, one per id a row or page names, plus `apps` (the drawer) and the one
+`129`, one per id a row or page names, plus `apps` (the drawer) and the one
 Shade id. It is not `320`: an id with no row cannot be emitted by a map built
 out of rows
+
+It said `137` until 2026-09-07, and had done since the eight branding ids left
+for Unsupported: G7's totals were moved 66/70 to 58/70 and this number was not,
+so the two halves of one fact disagreed by exactly those eight. Nothing caught
+it because nothing asserted it -- G2's check tests for duplicates and never
+counted the lines. O13 counts them now, which is what turned the drift up. The
+same shape as the G7 note below, and the same lesson: a constant written in two
+places drifts in one of them.
 
 **G3** Every class is one of the three *renderable* words.
 → `settings coverage | cut -f2 | sort -u` == `Bridged Native Shade`.
@@ -820,7 +828,7 @@ upstream's own presentation terminal, and claims no upstream id.
 → `settings rowsOn system` holds `update`; with `dryRun 1`, `settings activate
 update` leaves `settings lastLaunch` ==
 `omarchy-launch-floating-terminal-with-presentation sudo pacman -Syu`; and
-`settings coverage` is still 137 lines
+`settings coverage` is still 129 lines
 
 ## The IPC surface
 
