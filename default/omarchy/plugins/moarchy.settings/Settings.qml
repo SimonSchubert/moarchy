@@ -823,6 +823,12 @@ Item {
     if (row.type === "switch") { root.setSwitch(row, !root.rowChecked(row)); return }
 
     if (row.type === "choice") {
+      // `hides` is for the choice rows whose write ends in a terminal rather
+      // than in a file -- the AI agent rows, where picking one installs it
+      // through mise and then opens it. It is the same reason the action branch
+      // below hides: a foot window mapped under a full-screen layer surface is
+      // indistinguishable from a tap that did nothing.
+      if (row.hides && !root.dryRun) root.hideOnly()
       root.runCommand(root.commandFor(row))
       // Re-read rather than assume: the reader is the truth, and a write that
       // did not take must not leave the tick moved.

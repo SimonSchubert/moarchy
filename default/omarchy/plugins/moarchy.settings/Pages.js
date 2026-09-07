@@ -30,7 +30,12 @@
 //            `readValue` is what to compare (defaults to `value`), and `write`
 //            is what to run. Those are separate fields because upstream has a
 //            case where they differ -- setup.default.editor.zed reads
-//            "zeditor" and writes "zed".
+//            "zeditor" and writes "zed". `hides` takes Settings off screen
+//            before the write, for the rows whose write ends in a terminal
+//            rather than in a file: the AI agent rows, where choosing one
+//            installs it and then opens it. Without it the terminal comes up
+//            under a full-screen layer surface, which looks exactly like a tap
+//            that did nothing.
 //   action   runs `run`. `launch` picks how: "tui" a terminal at TUI size,
 //            "menu" a vendored picker that needs Settings out of the way
 //            first, "none" straight to execDetached, "inline" in place with
@@ -353,13 +358,16 @@ var PAGES = {
     detailCmd: "omarchy-default-terminal", covers: { "setup.default.terminal": "N" } },
   { id: "editor", type: "nav", page: "apps.default.editor", glyph: "", label: "Editor",
     detailCmd: "omarchy-default-editor", covers: { "setup.default.editor": "N" } },
-  // Guarded on the same nine binaries the page's own rows are guarded on,
-  // because none of them ships in the base set: without this the row was
-  // always visible and always opened a screen with nothing on it (F2, B8).
-  // The list is duplicated rather than derived -- a `when:` is a shell string
-  // and cannot see the page it points at -- so it moves when those rows do.
+  // Unguarded, deliberately, and it was guarded until mise arrived.
+  //
+  // The old `when:` was the disjunction of the page's own nine guards, because
+  // none of those agents ships in the base set and the row opened an empty
+  // screen (F2, B8). What that made was a picker of agents already installed --
+  // and with nothing on the phone to install one, a page that could never be
+  // reached at all. Upstream ships these rows unguarded because the page IS the
+  // installer: `omarchy-default-agent <name>` installs through mise and then
+  // launches, so a row for an absent agent is the only row worth having.
   { id: "agent", type: "nav", page: "apps.default.agent", glyph: "󰚩", label: "AI agent",
-    when: "for a in claude codex copilot crush gemini grok omp opencode pi; do omarchy-cmd-present \"$a\" && break; done",
     detailCmd: "omarchy-default-agent", covers: { "setup.default.agent": "N" } }
 ]},
 
@@ -406,33 +414,60 @@ var PAGES = {
     covers: { "setup.default.editor.vim": "B" } }
 ]},
 
+// The page that installs an agent, not the page that lists the installed ones.
+//
+// Every row here carried `when: omarchy-cmd-present <bin>` until mise arrived,
+// and with no agent on the phone that hid all nine -- and, through the guard on
+// the row above, the page itself. Upstream ships the identical rows unguarded, and
+// the loop is why: the write asks mise where the agent is, installs it in a
+// terminal that shows the download when it is not there, writes
+// ~/.config/omarchy/defaults/agent, and execs it. A row for an agent that is
+// absent is the one row that does something.
+//
+// The write is `moarchy-agent open <name>` rather than `omarchy-default-agent
+// <name>` for one reason: it writes the drawer entry first. An agent reachable
+// only from here is four taps deep and invisible in the app grid; after this it
+// is an icon like any other app, and the icon runs this same command.
+//
+// `hides` on all nine because every tap ends in a terminal either way -- the
+// presentation terminal on the way in, omarchy-agent's own on the way out.
+//
+// All nine are listed, as upstream lists them, rather than the subset proven to
+// run here. Verified as having a linux-arm64 artifact on npm: claude, codex,
+// gemini, copilot, opencode and grok. Not verified: crush, omp and pi -- and
+// none of the six through mise's own backend, which resolves most of these
+// names through aqua rather than npm. A row that cannot install says so in a
+// terminal with the reason on screen, which is a better answer than a page that
+// hides the question.
 "apps.default.agent": { title: "AI agent", reader: "omarchy-default-agent", rows: [
-  { id: "claude", type: "choice", label: "Claude", value: "claude",
-    when: "omarchy-cmd-present claude", write: "omarchy-default-agent claude",
+  { id: "how", type: "info", glyph: "󰚩", label: "Tap one to install it",
+    detail: "The first run downloads the agent, then opens it" },
+  { id: "claude", type: "choice", label: "Claude", value: "claude", hides: true,
+    write: "moarchy-agent open claude",
     covers: { "setup.default.agent.claude": "N" } },
-  { id: "codex", type: "choice", label: "Codex", value: "codex",
-    when: "omarchy-cmd-present codex", write: "omarchy-default-agent codex",
+  { id: "codex", type: "choice", label: "Codex", value: "codex", hides: true,
+    write: "moarchy-agent open codex",
     covers: { "setup.default.agent.codex": "N" } },
-  { id: "copilot", type: "choice", label: "Copilot", value: "copilot",
-    when: "omarchy-cmd-present copilot", write: "omarchy-default-agent copilot",
+  { id: "copilot", type: "choice", label: "Copilot", value: "copilot", hides: true,
+    write: "moarchy-agent open copilot",
     covers: { "setup.default.agent.copilot": "N" } },
-  { id: "crush", type: "choice", label: "Crush", value: "crush",
-    when: "omarchy-cmd-present crush", write: "omarchy-default-agent crush",
+  { id: "crush", type: "choice", label: "Crush", value: "crush", hides: true,
+    write: "moarchy-agent open crush",
     covers: { "setup.default.agent.crush": "N" } },
-  { id: "gemini", type: "choice", label: "Gemini", value: "gemini",
-    when: "omarchy-cmd-present gemini", write: "omarchy-default-agent gemini",
+  { id: "gemini", type: "choice", label: "Gemini", value: "gemini", hides: true,
+    write: "moarchy-agent open gemini",
     covers: { "setup.default.agent.gemini": "N" } },
-  { id: "grok", type: "choice", label: "Grok", value: "grok",
-    when: "omarchy-cmd-present grok", write: "omarchy-default-agent grok",
+  { id: "grok", type: "choice", label: "Grok", value: "grok", hides: true,
+    write: "moarchy-agent open grok",
     covers: { "setup.default.agent.grok": "N" } },
-  { id: "omp", type: "choice", label: "omp", value: "omp",
-    when: "omarchy-cmd-present omp", write: "omarchy-default-agent omp",
+  { id: "omp", type: "choice", label: "omp", value: "omp", hides: true,
+    write: "moarchy-agent open omp",
     covers: { "setup.default.agent.omp": "N" } },
-  { id: "opencode", type: "choice", label: "OpenCode", value: "opencode",
-    when: "omarchy-cmd-present opencode", write: "omarchy-default-agent opencode",
+  { id: "opencode", type: "choice", label: "OpenCode", value: "opencode", hides: true,
+    write: "moarchy-agent open opencode",
     covers: { "setup.default.agent.opencode": "N" } },
-  { id: "pi", type: "choice", label: "Pi", value: "pi",
-    when: "omarchy-cmd-present pi", write: "omarchy-default-agent pi",
+  { id: "pi", type: "choice", label: "Pi", value: "pi", hides: true,
+    write: "moarchy-agent open pi",
     covers: { "setup.default.agent.pi": "N" } }
 ]},
 

@@ -259,6 +259,18 @@ the raw path and the *label* carries the prettifying instead.
 ~/.local/state/omarchy/current/background`, exactly one row is `checked=1`, and
 its label is the name the `background` row on `appearance` shows as its detail
 
+**D8** A choice row whose write ends in a terminal takes Settings off screen
+first. Choosing is normally instant and writes a file, so a choice row leaves the
+screen up and re-reads -- which is right for DNS and wrong for AI agent, where
+the write is `moarchy-agent open <name>`: it writes the drawer entry, then hands
+off to `omarchy-default-agent`, which installs through mise in a presentation
+terminal and execs the agent. Both ends of that are a foot window, and a foot
+window mapped under a full-screen layer surface is indistinguishable from a tap
+that did nothing. `hides: true` on the row is what the action branch does by
+default; it is not the page's property, because a page may hold both kinds.
+→ every row on `apps.default.agent` carries `hides`, and no other choice row in
+the model does
+
 A reader may also answer something the provider's list genuinely omits, which is
 not the same fault. `omarchy-font-list` enumerates `fc-list :spacing=100`, and
 with no font configured `fc-match` falls back to a family fontconfig does not tag
@@ -364,11 +376,19 @@ F2 is not automatic -- a `nav` row's visibility is its own `when:`, and Settings
 cannot ask the page it points at without running that page's guards from the
 parent, which F3 forbids. So a page whose every row is guarded on a binary needs
 the disjunction of those guards on the row that opens it, duplicated in the model
-because a `when:` is a shell string and cannot see the page it names. AI agent had
-no such guard, and all nine of its rows guard on an agent none of which ships: the
-row was always visible and always opened an empty screen.
-→ with no agent installed, `settings goto apps.default` then `settings rows` shows
-`agent` with `visible=0`
+because a `when:` is a shell string and cannot see the page it names.
+
+AI agent was the instance, and is deliberately no longer one. Its nine rows
+guarded on nine agents none of which shipped, so the row was always visible and
+always opened an empty screen; the fix then was to give the row the disjunction
+of those nine guards. mise makes that fix wrong. The page installs what it
+lists, so a guard on "is it installed" hides the only screen that could install
+one -- the loop D8 describes. Both guards are gone and no page in the model is
+guarded row by row any more, so the principle stands with nothing to point at.
+The check is therefore the one that notices the guard coming back, not one that
+watches it work.
+→ no `when:` on any row of `apps.default.agent`, and none on the `agent` row of
+`apps.default`, in the shipped `Pages.js` rather than the source tree
 
 ## G. Coverage parity
 

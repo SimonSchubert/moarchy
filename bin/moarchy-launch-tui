@@ -17,8 +17,20 @@
 # Override with MOARCHY_TUI_FONT_SIZE if you want a different trade-off.
 FONT_SIZE="${MOARCHY_TUI_FONT_SIZE:-7}"
 
-[[ $# -gt 0 ]] || { echo "usage: moarchy-launch-tui <command> [args...]" >&2; exit 1; }
+# --app-id=, because upstream's omarchy-launch-tui takes one and omarchy-agent
+# passes it: every agent window shares org.omarchy.agent so a window rule or a
+# theme can single them out. bin/omarchy-launch-tui forwards here, so this is
+# where the flag has to be understood. No sway rule keys on moa-tui today
+# (default/sway/pinephone.conf says why the one that did is gone), so a
+# different id costs nothing.
+APP_ID=moa-tui
+if [[ ${1:-} == --app-id=* ]]; then
+  APP_ID="${1#--app-id=}"
+  shift
+fi
 
-exec foot --app-id=moa-tui \
+[[ $# -gt 0 ]] || { echo "usage: moarchy-launch-tui [--app-id=<id>] <command> [args...]" >&2; exit 1; }
+
+exec foot --app-id="$APP_ID" \
   --font="JetBrainsMono Nerd Font:size=$FONT_SIZE" \
   "$@"

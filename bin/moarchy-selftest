@@ -1637,26 +1637,53 @@ if [[ ${1:-} == "--settings" ]]; then
     || no "B8 every row on apps.default is hidden" "its parent row should hide too"
 
   # --- F8. and the row that opens it hides with it ---------------------------
-  # B8 above says a page of hidden rows is unreachable; this is the other half,
-  # on the page where it was false. Every AI agent row guards on a binary none
-  # of which ships, so without a guard of its own the row opened a blank screen.
-  s openAt apps.default >/dev/null; sleep 2
-  agent_vis=$(s rows | awk -F'\t' '$1=="agent" {print $4}')
-  agent_have=no
-  for a in claude codex copilot crush gemini grok omp opencode pi; do
-    omarchy-cmd-present "$a" && { agent_have=yes; break; }
-  done
-  if [[ $agent_have == yes ]]; then
-    [[ $agent_vis == 1 ]] \
-      && ok "F8 an agent is installed and the AI agent row is shown" \
-      || no "F8 an agent is installed but the AI agent row is hidden" \
-            "the row's guard is the disjunction of its page's nine guards"
-  else
-    [[ $agent_vis == 0 ]] \
-      && ok "F8 no agent is installed and the AI agent row hides with its page" \
-      || no "F8 the AI agent row is visible with no agent installed" \
-            "it opens a page whose every row is guarded on a binary that is absent"
-  fi
+  # B8 above says a page of hidden rows is unreachable. F8 is the other half,
+  # and the page it was written for has stopped being an instance of it: AI
+  # agent's nine rows guarded on nine agents none of which shipped, so the row
+  # carried the disjunction of those nine guards -- and that hid the only screen
+  # that can install one. Both guards are gone (docs/settings.md D8, F8).
+  #
+  # So the check is static, and it has to be. A runtime read cannot tell an
+  # absent guard from a guard that happens to pass, and with ~/.local/bin/grok
+  # written by moarchy-user-setup it always passes -- the old check would go
+  # green on the guard's return, which is the one thing it is now here to catch.
+  f8_bad=$(python3 - "$(plugin_dir moarchy.settings)/Pages.js" <<'F8PY'
+import sys
+
+lines = open(sys.argv[1], encoding="utf-8").read().splitlines()
+bad = []
+
+# The page: from its declaration to the `]},` that closes it.
+start = next((i for i, l in enumerate(lines)
+              if l.startswith('"apps.default.agent": {')), None)
+if start is None:
+    bad.append("no apps.default.agent page in Pages.js")
+else:
+    end = next(i for i in range(start, len(lines)) if lines[i].startswith("]},"))
+    guarded = [i + 1 for i in range(start, end) if "when:" in lines[i]]
+    if guarded:
+        bad.append("apps.default.agent is guarded again at line(s) "
+                   + ", ".join(map(str, guarded)))
+
+# The nav row: line-based, because `covers: { ... }` closes a brace of its own
+# and a non-greedy match for the row's end stops inside it.
+nav = next((i for i, l in enumerate(lines)
+            if 'id: "agent", type: "nav"' in l), None)
+if nav is None:
+    bad.append("no agent nav row in Pages.js")
+else:
+    tail = next(i for i in range(nav, len(lines))
+                if '"setup.default.agent"' in lines[i])
+    if any("when:" in l for l in lines[nav:tail + 1]):
+        bad.append("the agent nav row is guarded again")
+
+print("; ".join(bad))
+F8PY
+)
+  [[ -z $f8_bad ]] \
+    && ok "F8 the AI agent page and the row that opens it carry no presence guard" \
+    || no "F8 $f8_bad" \
+          "guarding an installer on what it installs hides the only screen that could install it"
 
   # --- B9. opening *at* a page does not paint the last page's rows -----------
   # push() and pop() clear the read state through afterPageChange(); open() did
@@ -1790,6 +1817,45 @@ if [[ ${1:-} == "--settings" ]]; then
   [[ $(s rows | awk -F'\t' '$1=="dns"{print $6}') == "$current" ]] \
     && ok "D5 the parent row shows the current value" \
     || no "D5 the DNS row's detail is not the current value" "expected $current"
+
+  # --- D8. a choice whose write opens a terminal hides Settings first --------
+  # Static, and for a harder reason than F8's: proving it at runtime means
+  # activating an agent row for real, and that installs an agent. `hides` is a
+  # row property rather than a page one, so the check is both halves -- every
+  # agent row carries it, and no other choice row in the model does, because a
+  # choice that writes a file has nothing to uncover and should stay on screen.
+  d8_bad=$(python3 - "$(plugin_dir moarchy.settings)/Pages.js" <<'D8PY'
+import re, sys
+
+lines = open(sys.argv[1], encoding="utf-8").read().splitlines()
+bad = []
+
+start = next((i for i, l in enumerate(lines)
+              if l.startswith('"apps.default.agent": {')), None)
+if start is None:
+    bad.append("no apps.default.agent page in Pages.js")
+    end = -1
+else:
+    end = next(i for i in range(start, len(lines)) if lines[i].startswith("]},"))
+    missing = [re.search(r'id: "([^"]+)"', l).group(1)
+               for l in lines[start:end]
+               if 'type: "choice"' in l and "hides:" not in l]
+    if missing:
+        bad.append("agent rows with no hides: " + " ".join(missing))
+
+stray = [re.search(r'id: "([^"]+)"', l).group(1)
+         for i, l in enumerate(lines)
+         if 'type: "choice"' in l and "hides:" in l and not (start <= i < end)]
+if stray:
+    bad.append("hides on a choice row off the agent page: " + " ".join(stray))
+
+print("; ".join(bad))
+D8PY
+)
+  [[ -z $d8_bad ]] \
+    && ok "D8 every agent row hides Settings before its write, and no other choice does" \
+    || no "D8 $d8_bad" \
+          "a terminal mapped under a full-screen layer surface looks like a tap that did nothing"
 
   # --- E. bridged launches --------------------------------------------------
   plug_pages="$(plugin_dir moarchy.settings)/Pages.js"

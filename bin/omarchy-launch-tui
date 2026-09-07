@@ -1,0 +1,26 @@
+#!/bin/bash
+# Sway/phone override. Upstream's is one line:
+#
+#   exec setsid uwsm-app -- xdg-terminal-exec --app-id=$APP_ID -e "$1" "${@:2}"
+#
+# and xdg-terminal-exec HANGS on this phone. There is no
+# ~/.config/xdg-terminals.list and no /etc/xdg/xdg-terminals.list, so it never
+# resolves a terminal and never returns. Measured on the device 2026-09-07, from
+# inside the session rather than over ssh:
+#
+#   timeout 15 xdg-terminal-exec --app-id=moa-test -e echo hi   ->  rc=124, no output
+#
+# Nothing is printed and no window is mapped, which is this phone's usual
+# failure rather than a crash: `omarchy-agent` looked exactly like a tap that
+# did nothing. It is also why upstream's omarchy-tui-install writes
+# `Exec=xdg-terminal-exec ...` into a .desktop file that can never launch here.
+#
+# moarchy-launch-tui is the terminal that works: foot at font size 7, the ~60
+# columns a TUI needs on a 360px screen. --app-id is forwarded rather than
+# dropped, because omarchy-agent passes org.omarchy.agent so every agent window
+# carries one class.
+#
+# This is the same trick as omarchy-launch-floating-terminal-with-presentation:
+# /usr/lib/moarchy/bin comes before /usr/bin on PATH, so replacing the wrapper
+# fixes every caller without touching one of them.
+exec moarchy-launch-tui "$@"

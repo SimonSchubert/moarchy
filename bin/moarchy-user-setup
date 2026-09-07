@@ -32,9 +32,19 @@ say() { printf '==> %s\n' "$*"; }
 # omarchy-theme-set-templates globs "$HOME/.config/omarchy/themed"/*.tpl ahead
 # of the system directory. Create it empty so that glob has a directory to fail
 # to match in rather than a missing path.
+#
+# ~/.local/share/applications is here for a subtler reason than the rest, and it
+# is the one directory that has to exist before the SHELL starts rather than
+# before this script ends. Quickshell's DesktopEntries watches it, and a watch
+# cannot be placed on a directory that is not there -- so a shell that came up
+# first never noticed the directory being created and showed no user .desktop
+# file for the life of the session. Measured on the device 2026-09-07: the Grok
+# entry written at 18:47 was invisible to a shell started at 18:40 and appeared
+# within three seconds of a restart, after which a second entry showed up live.
 mkdir -p "$HOME/.config/omarchy/themed" \
          "$HOME/.local/state/omarchy/current" \
          "$HOME/.config/sway/config.d" \
+         "$HOME/.local/share/applications" \
          "$HOME/.local/state/moarchy"
 
 # Upstream's app configs. Copied only when absent -- this runs once, and a user
@@ -96,6 +106,14 @@ if ! omarchy-mise-install npm:@xai-official/grok grok; then
   # Not fatal, and deliberately not an exit. It costs the AI agent page; the
   # theme below is what decides whether the phone has colours at all.
   echo "!! could not write ~/.local/bin/grok -- Settings > Apps > AI agent will be empty" >&2
+fi
+
+# And the drawer entry, so Grok is an icon in the app grid rather than four taps
+# into Settings. Nothing is downloaded by this either: the entry runs
+# `moarchy-agent open grok`, which installs on the first tap and launches on
+# every one after it -- the same command the Settings row runs.
+if ! moarchy-agent entry grok; then
+  echo "!! could not write the Grok drawer entry -- Settings > Apps > AI agent still reaches it" >&2
 fi
 
 # The starting theme, which also generates

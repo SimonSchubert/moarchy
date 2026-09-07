@@ -217,16 +217,16 @@ Native 25 · Bridged 14 · Unsupported 23
 | `setup.network.dns.custom` | Custom | Bridged | Network > Private DNS | bridged write inside a native radio group; the tick still comes from `omarchy-dns` |
 | `setup.network.qr` | QR Code | Bridged | Network & internet > Wi-Fi QR code | `omarchy-shell shell summon omarchy.wifiqr`; upstream `when` kept |
 | `setup.default` | Defaults | Native | Apps & defaults > Default apps |  |
-| `setup.default.agent` | Agent | Native | Default apps > AI agent | we add `when: omarchy-cmd-present <bin>`; upstream ships these unguarded. `moarchy-user-setup` writes `~/.local/bin/grok`, so the guard passes on a fresh phone and the page is reachable |
-| `setup.default.agent.claude` | Claude | Native | Default apps > AI agent | radio row; presence-guarded, so the page hides when no agent is installed |
-| `setup.default.agent.codex` | Codex | Native | Default apps > AI agent | radio row; presence-guarded, so the page hides when no agent is installed |
-| `setup.default.agent.copilot` | Copilot | Native | Default apps > AI agent | radio row; presence-guarded, so the page hides when no agent is installed |
-| `setup.default.agent.crush` | Crush | Native | Default apps > AI agent | radio row; presence-guarded, so the page hides when no agent is installed |
-| `setup.default.agent.gemini` | Gemini | Native | Default apps > AI agent | radio row; presence-guarded, so the page hides when no agent is installed |
-| `setup.default.agent.grok` | Grok | Native | Default apps > AI agent | radio row, and the only one present on a fresh phone: `omarchy-mise-install npm:@xai-official/grok grok` writes the wrapper, `omarchy-default-agent grok` does the real `mise use -g` when tapped |
-| `setup.default.agent.omp` | omp | Native | Default apps > AI agent | radio row; presence-guarded, so the page hides when no agent is installed |
-| `setup.default.agent.opencode` | OpenCode | Native | Default apps > AI agent | radio row; presence-guarded, so the page hides when no agent is installed |
-| `setup.default.agent.pi` | Pi | Native | Default apps > AI agent | radio row; presence-guarded, so the page hides when no agent is installed |
+| `setup.default.agent` | Agent | Native | Default apps > AI agent | unguarded, like upstream. It was guarded on the disjunction of the page's nine, which hid the only screen that installs one (`docs/settings.md` F8) |
+| `setup.default.agent.claude` | Claude | Native | Default apps > AI agent | radio row and installer: the tap runs `moarchy-agent open <name>`, which writes the drawer entry and hands off to `omarchy-default-agent` |
+| `setup.default.agent.codex` | Codex | Native | Default apps > AI agent | radio row and installer: the tap runs `moarchy-agent open <name>`, which writes the drawer entry and hands off to `omarchy-default-agent` |
+| `setup.default.agent.copilot` | Copilot | Native | Default apps > AI agent | radio row and installer: the tap runs `moarchy-agent open <name>`, which writes the drawer entry and hands off to `omarchy-default-agent` |
+| `setup.default.agent.crush` | Crush | Native | Default apps > AI agent | radio row and installer: the tap runs `moarchy-agent open <name>`, which writes the drawer entry and hands off to `omarchy-default-agent` |
+| `setup.default.agent.gemini` | Gemini | Native | Default apps > AI agent | radio row and installer: the tap runs `moarchy-agent open <name>`, which writes the drawer entry and hands off to `omarchy-default-agent` |
+| `setup.default.agent.grok` | Grok | Native | Default apps > AI agent | radio row and installer; the one agent on PATH and in the drawer from first boot, because `moarchy-user-setup` writes both the `~/.local/bin/grok` wrapper and its drawer entry |
+| `setup.default.agent.omp` | omp | Native | Default apps > AI agent | radio row and installer: the tap runs `moarchy-agent open <name>`, which writes the drawer entry and hands off to `omarchy-default-agent` |
+| `setup.default.agent.opencode` | OpenCode | Native | Default apps > AI agent | radio row and installer: the tap runs `moarchy-agent open <name>`, which writes the drawer entry and hands off to `omarchy-default-agent` |
+| `setup.default.agent.pi` | Pi | Native | Default apps > AI agent | radio row and installer: the tap runs `moarchy-agent open <name>`, which writes the drawer entry and hands off to `omarchy-default-agent` |
 | `setup.default.browser` | Browser | Native | Default apps > Browser | empty on a base install, so the parent row hides |
 | `setup.default.browser.chromium` | Chromium | Bridged | Default apps > Browser | extras-only, aarch64-verified; presence-guarded |
 | `setup.default.browser.chrome` | Chrome | Unsupported | -- | x86_64-only |

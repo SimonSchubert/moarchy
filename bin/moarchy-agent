@@ -1,0 +1,117 @@
+#!/bin/bash
+# A coding agent as an app in the drawer, not only a row in Settings.
+#
+# Upstream reaches an agent two ways, and neither puts it in an app grid: the
+# Default Agent menu (SUPER+SPACE, a dmenu) and a keybinding. A phone has
+# neither, so an installed agent was reachable only by walking
+# Settings > Apps & defaults > Default apps > AI agent -- four taps to open the
+# thing you use every day, and nothing in the drawer to say it is there at all.
+#
+# So installing one writes a .desktop file. The drawer is upstream's apps
+# provider over the XDG dirs, ~/.local/share/applications included, so an entry
+# appearing there is an icon in the grid with no drawer change at all.
+#
+#   moarchy-agent entry <name>   write the drawer entry, install nothing
+#   moarchy-agent open  <name>   write it, then install and launch through
+#                                omarchy-default-agent
+#
+# `open` is what both the Settings row and the drawer entry run, and it is
+# idempotent on purpose: the first tap installs, every tap after it launches,
+# and the entry is rewritten either way so a hand-edited or half-written file
+# heals itself.
+set -uo pipefail
+
+APPS="$HOME/.local/share/applications"
+
+# Upstream's own names, from omarchy-default-agent's case statement. Duplicated
+# rather than parsed out of it: that script maps a name to a mise package and
+# exits, so there is nothing to ask it for, and a label is not worth sourcing a
+# script that ends in `exec`.
+agent_name() {
+  case "$1" in
+    claude)   echo "Claude Code" ;;
+    codex)    echo "Codex" ;;
+    copilot)  echo "GitHub Copilot" ;;
+    crush)    echo "Crush" ;;
+    gemini)   echo "Gemini" ;;
+    grok)     echo "Grok" ;;
+    omp)      echo "Oh My Pi" ;;
+    opencode) echo "OpenCode" ;;
+    pi)       echo "Pi" ;;
+    *)        return 1 ;;
+  esac
+}
+
+write_entry() {
+  local agent=$1 label
+  label=$(agent_name "$agent") || {
+    echo "moarchy-agent: unknown agent '$agent'" >&2; return 1; }
+
+  mkdir -p "$APPS"
+
+  # system-run, and the two names it is not are both worth writing down, because
+  # `find /usr/share/icons -name <name>.*` answers yes for all three and the
+  # drawer draws only one of them.
+  #
+  # utilities-terminal was first and was wrong on sight: Terminal and Foot
+  # already draw it, so Grok arrived in the grid as a third identical icon with
+  # a different word under it. applications-development was second and was
+  # worse -- the slot came up EMPTY. It exists, at
+  # breeze/categories/{22,32}/applications-development.svg, and a categories/
+  # icon is not one the drawer's lookup finds; a blank tile is worse than a
+  # duplicate one.
+  #
+  # So the candidates were probed on the device rather than reasoned about:
+  # three throwaway .desktop entries, one capture of the real drawer, and
+  # accessories-dictionary (AdwaitaLegacy PNG) and text-x-script (breeze
+  # mimetypes) both came up blank as well. system-run draws, and looks like
+  # neither terminal already in the grid.
+  #
+  # No agent has an icon of its own in Adwaita, breeze or hicolor, which is the
+  # whole reason this is a stock name and not a brand.
+  #
+  # Exec is this script rather than the agent binary, so the drawer entry and
+  # the Settings row take the same path -- including the install, for an entry
+  # written before the agent was ever downloaded.
+  cat >"$APPS/moarchy-agent-$agent.desktop" <<EOF
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=$label
+Comment=Coding agent in a terminal
+Exec=moarchy-agent open $agent
+Icon=system-run
+Terminal=false
+StartupNotify=true
+Categories=Development;Utility;
+EOF
+  chmod +x "$APPS/moarchy-agent-$agent.desktop"
+
+  # What omarchy-refresh-applications ends with, for the same reason: the
+  # mimeinfo cache in that directory is stale the moment a .desktop lands in it.
+  # The drawer does not need it -- Quickshell's DesktopEntries watches the
+  # directory and a new entry shows up within seconds -- but everything else
+  # that resolves a handler does.
+  update-desktop-database "$APPS" 2>/dev/null || true
+}
+
+case "${1:-}" in
+  entry)
+    [[ -n ${2:-} ]] || { echo "usage: moarchy-agent entry <name>" >&2; exit 2; }
+    write_entry "$2"
+    ;;
+  open)
+    [[ -n ${2:-} ]] || { echo "usage: moarchy-agent open <name>" >&2; exit 2; }
+    # Not fatal if the entry cannot be written: the point of the tap is to open
+    # the agent, and an unwritable ~/.local/share costs an icon, not a session.
+    write_entry "$2" || echo "moarchy-agent: could not write the drawer entry" >&2
+    # omarchy-default-agent installs through mise when it has to, writes
+    # ~/.config/omarchy/defaults/agent, and execs omarchy-agent. exec, so this
+    # script is not left holding a process for the life of the session.
+    exec omarchy-default-agent "$2"
+    ;;
+  *)
+    echo "usage: moarchy-agent {entry|open} <name>" >&2
+    exit 2
+    ;;
+esac
