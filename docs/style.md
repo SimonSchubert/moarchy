@@ -310,8 +310,10 @@ next tone up, in whichever direction the theme's ink runs, and no surface has to
 know which fill it is over. It needs no seventh colour role (C2): the ink is one
 the control already draws with.
 → the veil is culled at rest rather than drawn transparent: `visible: color.a > 0`.
-Nothing in the scene graph culls an alpha-0 rectangle, and the shade's veils come
-to ~336k panel px against a 1.04M px panel.
+Nothing in the scene graph culls an alpha-0 rectangle, and the shade alone carries
+thirteen of them — two tiles at 328×128 panel px, four at 212×124, two sliders at
+672×100, and the rest — which is about a third of a 720×1440 panel left blended
+into every frame, forever, to say nothing.
 
 **H3** The veil's two ends are one colour at two alphas — `Util.alpha(ink, 0.12)`
 and `Util.alpha(ink, 0)` — never `"transparent"`. `"transparent"` is `#00000000`
@@ -452,6 +454,48 @@ numbers.
 **State.** `scripts/style-check.sh` passes: 5 checks, 0 failures. Each of the
 eight rules it enforces has been broken on a copy of the tree and seen to fail, so
 the green is a measurement rather than an absence.
+
+§H holds across all 28 controls. One of them had a press state before it was
+written — `moarchy.device`'s back chevron, which snapped between `container` and
+`"transparent"` with no fade and is now the same veil as everything else.
+
+**§H verified on glass**, 2026-09-07, on the PinePhone. Method: `grim` a full
+frame with nothing pressed, another with `moarchy-touch hold` on the control, and
+diff the two — the bounding box of what changed *is* the highlight, so it needs no
+accessor to say where it should be. Panel px throughout; the synthetic finger
+lands 2.6s after launch, which is worth knowing before timing a capture against
+it.
+
+| control | changed region | logical | drawn at |
+| --- | --- | --- | --- |
+| shade gear (`RoundButton`) | 72 × 73 | **36 × 36.5** | 36, answering over 44 |
+| shade Silent (`SmallTile`) | 212 × 124 | **106 × 62** | tile height 62 |
+| Settings row (`SettingsRow`) | 672 × 116 | **336 × 58** | row height 58 |
+
+*H8 and E2, in one measurement.* The gear answers over 44 and is drawn at 36, and
+what changed is 36 — the pixel 4px outside the circle is byte-identical pressed
+and unpressed. The drawing did not grow; only the answering did.
+
+*H1, both halves.* The gear's rect is byte-identical before the press and after
+the press-and-release, so nothing is left lit. A check that only proves the veil
+appears passes a stuck press state.
+
+*H2 and H4, and the direction.* On an unlit control the fill lifts, `(38,39,52)`
+→ `(54,55,72)`. On a *lit* one it goes the other way — the Silent tile switched on
+reads `(122,162,247)` and `(110,145,222)` under a thumb — because H4 veils toward
+the control's own ink and an accent tile's ink is `textOnAccent`, which is the
+dark background. Both directions are "pressed" on this theme, and neither had to
+be written per control.
+
+*H6, in one gesture.* A slow 100px drag begun on a tile, sampled twice. Counting
+pixels of the pressed fill: 43 with nothing pressed, 10,288 with the finger down
+and still inside the 10px slop, 4 once the drag latched. The tile lights the
+instant the finger lands and lets go the instant the gesture becomes the sheet's.
+
+*What the diff also settled.* Nothing else on the screen moves. The Settings row
+press changed 336 × 58 and the row above it was byte-identical, so a veil does not
+leak into a neighbour — which is E3's failure one layer up, and the reason the
+Wi-Fi and Bluetooth row veils are sized to the head rather than to the delegate.
 
 §E and §F are written and hold across every surface. §A–§D were brought into
 line at the same time, and five things moved:

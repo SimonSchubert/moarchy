@@ -1634,6 +1634,87 @@ content=602 scrolls=1`. The second half is the part no screenshot could make --
 now that the sheet clips, content that overflowed *into a scrolling list* and
 content that fell off the bottom of the sheet look identical from outside.
 
+## 6r. Twenty-eight controls and one of them answered (2026-09-07)
+
+Every tappable thing in this shell drew the same picture whether a tap landed or
+missed. Of the 34 `MouseArea`s, exactly one had a press state — `Device.qml`'s
+back chevron, snapping between `container` and `"transparent"` with no fade — and
+the file it lived in is the one that had already been caught claiming in a comment
+to mirror screens it did not match. Everywhere else the only acknowledgement was
+the consequence: a screen that changed, a radio that came up, an app that
+launched. That is `style.md` §E's failure one step later. §E spends a section on
+targets that are not the shape they look; this is a target that *is* the right
+shape and still says nothing, and it had no rule to point at, which is how 33
+controls shipped without one.
+
+So §E got a companion. New §H, eight ACs, and §H/§I re-lettered to §I/§J to make
+room. Two of the eight are readable from the source and are in
+`scripts/style-check.sh` now — a control is a `MouseArea` that answers
+`onClicked`, it must name itself and that name must reach a press state, or carry
+a comment saying which of the four non-controls it is. Running it before writing
+any QML printed the list: **28 controls, 26 of them silent**.
+
+**Three things that look right and are not.** The first draft of the rule was
+`Qt.tint(fill, alpha(ink, 0.12))`, which is elegant and wrong. Qt's tint lerps
+`tint.rgb·a + base.rgb·(1−a)`, weighting the base's RGB *without* its alpha, so
+over `"transparent"` — `#00000000`, which carries black — it returns 12% grey
+rather than 12% ink. On a dark theme a press would have *darkened*, and only on
+the controls that had no chrome, which is most of the interesting ones. It happens
+to be right over `container` purely because base and tint share an RGB there. The
+same arithmetic rules out `"transparent"` as the resting colour of the veil: a
+`ColorAnimation` to it interpolates that black alongside the alpha, so the fade
+detours through grey. Both ends are one ink at two alphas.
+
+The second is the duration. A symmetric 120ms fade reaches 67% of the veil on an
+80ms tap and peaks *after* the finger has left, because Qt restarts a `Behavior`
+at its full duration from wherever the value is rather than shortening it — the
+strongest frame of the acknowledgement is one nobody is touching. It wants to be
+instant in and 120 out, and the obvious `enabled: !ma.pressed` cannot do it:
+`enabled` and `color` are then two bindings on one notify signal, and QML runs
+them in the order the notifier list was built, which is the reverse of the order
+they are written. `enabled: veil.color.a > 0` sidesteps the question — a
+`Behavior` reads `enabled` at the moment of the write, when the property still
+holds the *old* colour, so it is false arriving and true leaving with nothing to
+order against.
+
+The third is that `MouseArea.pressed` stays true through a drag. On the shade and
+the drawer the tiles *are* the sheet's drag handle, so an unguarded veil would
+light every tile a scrolling thumb crossed. Inside a `Flickable` no guard is
+needed — `QQuickMouseArea::ungrabMouse()` clears `pressed` before it emits
+`canceled` — but the shade's own drag protocol only sets a flag, so those eight
+bind `pressed && !root.sheetDragging`.
+
+**Measured on glass.** The method that worked needs no accessor at all: `grim` a
+frame with nothing pressed, another with `moarchy-touch hold` on the control, and
+diff them — the bounding box of what changed *is* the highlight, so there is
+nothing to ask the shell and nothing to confirm itself with. The gear answers over
+44 and is drawn at 36; what changed was **72 × 73 panel px, 36 logical**, with the
+pixel 4px outside the circle byte-identical. A settings row changed **336 × 58**
+and the row above it did not change at all. The gear's rect is byte-identical
+before the press and after it, so nothing is left lit — a check that only proves
+the veil appears passes a stuck press state.
+
+The drag guard took one gesture and a pixel count: **43** pixels of the pressed
+fill with nothing pressed, **10,288** with the finger down and still inside the
+10px slop, **4** once the drag latched.
+
+**Two things this cost that are worth writing down.** The synthetic finger lands
+**2.6s** after the command is launched — 2s of settle plus python and evdev
+starting — and three captures were thrown away before that was measured rather
+than assumed; a frame taken at 2.25s is a frame before the touch. And the
+detector had to be re-derived once: a lit tile veils toward `textOnAccent`, which
+is the dark background, so pressing an accent tile *darkens* it, and a pixel
+constant taken from an unlit tile silently reads "nothing pressed" on a lit one.
+Both failures looked exactly like the feature not working.
+
+Installing found something else. `pacman -U` refused with eleven files that
+"exist in filesystem" and are owned by no package — the Bluetooth plugin, eight
+`moarchy-*` helpers and a desktop file, hand-copied onto the phone by an earlier
+session. That is precisely what `structure.md` D2 rules out, and it had been
+sitting there invisibly because nothing reinstalls a package it has already got.
+`--overwrite` scoped to those three directories took ownership rather than
+deleting anything, so they are package-owned now.
+
 ## 7. Hardware status
 
 | | |
