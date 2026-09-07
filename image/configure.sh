@@ -123,11 +123,17 @@ say "systemd-resolved enabled (without it the image resolves no names)"
 # about rather than fatal: a build machine behind a proxy that cannot reach the
 # release URL still produces a usable image, one `pacman -Sy` away.
 if [ -n "$_repo_name" ] && [ -n "$_repo_server" ]; then
-  if arch-chroot "$ROOTDIR" pacman -Sy >/dev/null 2>&1; then
+  # Keeping stderr: this failing is the difference between an image that can
+  # install something and one that cannot, and "could not refresh" on its own
+  # does not say whether the release URL 404s, the proxy refused, or the chroot
+  # has no DNS. It was the third for a long time, and the message read the same
+  # for all three.
+  if _sy_err=$(arch-chroot "$ROOTDIR" pacman -Sy 2>&1 >/dev/null); then
     say "package databases refreshed against [$_repo_name] (the .db.sig is in the image)"
   else
     say "!! could not refresh the package databases -- the phone will need one"
     say "   \`sudo pacman -Sy\` before it can install anything"
+    printf '%s\n' "$_sy_err" | sed 's/^/       /' >&2
   fi
 fi
 

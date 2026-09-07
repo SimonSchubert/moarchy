@@ -218,7 +218,24 @@ info "rootfs: $(du -sh "$ROOTDIR" | cut -f1)"
 
 # ---------------------------------------------------------------------------
 say "kernel, initramfs and boot script"
-cp /etc/resolv.conf "$ROOTDIR/etc/resolv.conf" 2>/dev/null || true
+# The rootfs ships /etc/resolv.conf as a symlink to systemd-resolved's stub --
+# `filesystem` owns it -- and in a chroot nothing is running to create
+# /run/systemd/resolve. So `cp` followed the symlink, tried to write through it
+# into a directory that is not there, and failed; the `2>/dev/null || true`
+# that used to be on this line then hid it.
+#
+# What that cost: the chroot had no DNS at all, which is invisible until
+# something inside it wants the network. The one thing that does is the
+# database refresh in configure.sh, whose entire job is to leave a *signed*
+# moarchy.db in the image -- so it failed on every build, and the image it
+# produced was the one where nothing installs until somebody runs `pacman -Sy`
+# by hand. That is the exact failure 4ad66d1 was written to end.
+#
+# Replace the symlink rather than write through it, and say so if even that
+# does not work.
+rm -f "$ROOTDIR/etc/resolv.conf"
+cp /etc/resolv.conf "$ROOTDIR/etc/resolv.conf" ||
+  say "!! no resolv.conf for the chroot -- anything in it that needs DNS fails"
 
 # mkinitcpio prints "ERROR: failed to detect root filesystem" here, twice, and
 # it is benign -- but it looks exactly like a build that just produced an
@@ -258,6 +275,12 @@ say "trim the rootfs"
 # download for no reason. The first `pacman -Syu` refills it as needed.
 rm -rf "${ROOTDIR:?}/var/cache/pacman/pkg/"*
 rm -f  "$ROOTDIR/etc/resolv.conf"          # the builder's, not the phone's
+# Put back the symlink `filesystem` ships, rather than handing over an image
+# with a packaged file missing. Nothing resolves through it -- nsswitch sends
+# lookups to resolved directly, which is why this went unnoticed -- but
+# `pacman -Qk filesystem` reports it, and a phone that reinstalls that package
+# silently gets it back anyway.
+ln -sf ../run/systemd/resolve/stub-resolv.conf "$ROOTDIR/etc/resolv.conf"
 info "after trim: $(du -sh "$ROOTDIR" | cut -f1)"
 
 # ---------------------------------------------------------------------------
