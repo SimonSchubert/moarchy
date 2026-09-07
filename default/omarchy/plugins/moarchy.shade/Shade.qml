@@ -212,6 +212,34 @@ Item {
   readonly property color subdued: root.readableOn(root.subduedBase,
                                                    Color.popups.text, 0.55, 4.5)
 
+  // ------------------------------------------------------- press (style.md H)
+  //
+  // One blended quad the size of the chrome, the control's own ink at 12%
+  // composited over whatever the resting fill is -- so a control whose colour
+  // already says something keeps saying it while pressed (H2).
+  //
+  // Both ends are one ink at two alphas, never "transparent". That is
+  // #00000000 and it carries black: a ColorAnimation to it would fade through
+  // a grey wash, and Qt.tint over it returns 12% grey rather than 12% ink (H3).
+  //
+  // Instant in, 120 out (H5). A Behavior reads `enabled` at the moment of the
+  // write, when the property still holds the *old* colour -- so this is false
+  // arriving and true leaving, with no second binding to order against.
+  //
+  // Culled at rest rather than drawn transparent: nothing in the scene graph
+  // culls an alpha-0 rectangle, and this is a Mali-400.
+  component PressVeil: Rectangle {
+    id: pv
+    property color ink: root.textOnSurface
+    property bool on: false
+    visible: pv.color.a > 0
+    color: Util.alpha(pv.ink, pv.on ? 0.12 : 0)
+    Behavior on color {
+      enabled: pv.color.a > 0
+      ColorAnimation { duration: 120 }
+    }
+  }
+
   // WCAG 2.1 relative luminance and contrast, and a linear composite, so the
   // secondary text colour can be computed per theme instead of guessed.
   //
@@ -904,6 +932,21 @@ Item {
     color: tile.on ? root.accent : root.container
     Behavior on color { ColorAnimation { duration: 140 } }
 
+    // Its own 120 rather than the 140 above (docs/style.md H5, G1): a tile
+    // lighting up and a tile acknowledging a thumb are two different state
+    // changes, and one property cannot carry two durations. Veiled toward
+    // whichever ink the tile is carrying, so a lit one still reads as lit (H4).
+    //
+    // Guarded on the drag (H6): these tiles *are* the sheet's drag handle, so
+    // `pressed` stays true for the whole gesture and an unguarded veil would
+    // light every tile a scrolling thumb crossed.
+    PressVeil {
+      anchors.fill: parent
+      radius: parent.radius
+      ink: tile.on ? root.textOnAccent : root.textOnSurface
+      on: tileArea.pressed && !root.sheetDragging
+    }
+
     Row {
       anchors.fill: parent
       anchors.leftMargin: Style.space(12)
@@ -956,6 +999,7 @@ Item {
     }
 
     MouseArea {
+      id: tileArea
       anchors.fill: parent
       onPressed: mouse => {
         root.sheetPress(this, mouse)
@@ -988,6 +1032,16 @@ Item {
     color: small.on ? root.accent : root.container
     Behavior on color { ColorAnimation { duration: 140 } }
 
+    // As WideTile. Rotate is the one instance pinned `on: false` -- a momentary
+    // action wearing a toggle's chrome -- so until now a tap on it drew nothing
+    // at all, and this is the only response it has.
+    PressVeil {
+      anchors.fill: parent
+      radius: parent.radius
+      ink: small.on ? root.textOnAccent : root.textOnSurface
+      on: smallArea.pressed && !root.sheetDragging
+    }
+
     Column {
       anchors.centerIn: parent
       spacing: Style.space(3)
@@ -1012,6 +1066,7 @@ Item {
     }
 
     MouseArea {
+      id: smallArea
       anchors.fill: parent
       onPressed: mouse => root.sheetPress(this, mouse)
       onPositionChanged: mouse => root.sheetMove(this, mouse)
@@ -1059,6 +1114,18 @@ Item {
         }
       }
 
+      // Over the track and the fill together, so it says "engaged" without
+      // saying anything about the value. This looks like the one control that
+      // does not need a press state -- the fill follows the thumb -- but that
+      // fails at exactly one point: tap a slider at its current value and
+      // nothing whatever happens. Guarded on the handover rather than on
+      // sheetDragging, because this one hands the gesture over itself (H6).
+      PressVeil {
+        anchors.fill: parent
+        radius: parent.radius
+        on: sliderArea.pressed && !sliderArea.handedOver
+      }
+
       // Positioned by where the glyph's centre should land, not by where its
       // box starts: the brightness sun is 3px wider than the speaker, so two
       // sliders given the same left margin had their glyphs on different
@@ -1083,6 +1150,7 @@ Item {
     // the value back, which for a live slider means undoing a commit it has
     // already sent.
     MouseArea {
+      id: sliderArea
       anchors.fill: parent
       property real preValue: 0
       property real pressX: 0
@@ -1142,6 +1210,13 @@ Item {
     radius: width / 2
     color: root.container
 
+    // 36 drawn, 44 answering: the veil takes the 36 (docs/style.md H8, E2).
+    PressVeil {
+      anchors.fill: parent
+      radius: parent.radius
+      on: rbArea.pressed && !root.sheetDragging
+    }
+
     // Centred on the ink, because neither of the two obvious ways gets there.
     //
     // This used to be a filled Text with AlignHCenter, on the reasoning that it
@@ -1169,6 +1244,7 @@ Item {
     // one eating the earlier one's edge (E3) -- and 4 is exactly what 36 needs.
     // Vertically it fills the 44px header the pair is centred in.
     MouseArea {
+      id: rbArea
       anchors.fill: parent
       anchors.margins: -Style.space(4)
       onPressed: mouse => root.sheetPress(this, mouse)
@@ -1252,6 +1328,8 @@ Item {
       // it on a canned 220ms ramp. Holding it live until the sheet is all the
       // way down keeps the gesture intact.
       MouseArea {
+        // no press state (style.md H7): a dismiss scrim. Lighting the whole
+        // screen is not feedback, and the shade leaving is what answers.
         anchors.fill: parent
         enabled: root.progress > 0
         onPressed: mouse => root.sheetPress(this, mouse)
@@ -1300,6 +1378,8 @@ Item {
       // Declared before the Column so it sits under it: later siblings take
       // input first, so this only sees what nothing else claimed.
       MouseArea {
+        // no press state (style.md H7): a drag catcher under the content, not
+        // a control.
         anchors.fill: parent
         onPressed: mouse => root.sheetPress(this, mouse)
         onPositionChanged: mouse => root.sheetMove(this, mouse)
@@ -1525,6 +1605,19 @@ Item {
                   width: root.tapSlot
                   height: root.tapSlot
 
+                  // These have never had chrome, so the veil is the chrome
+                  // (docs/style.md H8) -- and it is drawn at tapSlot minus the
+                  // Row gap E4 moved *inside* the target, not at the full
+                  // tapSlot, which would butt three circles edge to edge and
+                  // undo what E4 bought.
+                  PressVeil {
+                    anchors.centerIn: parent
+                    width: root.tapSlot - Style.space(10)
+                    height: width
+                    radius: width / 2
+                    on: mediaArea.pressed && !root.sheetDragging
+                  }
+
                   Ui.OpticalGlyph {
                     anchors.centerIn: parent
                     width: root.glyphSlot
@@ -1536,6 +1629,7 @@ Item {
                   }
 
                   MouseArea {
+                    id: mediaArea
                     anchors.fill: parent
                     onPressed: mouse => root.sheetPress(this, mouse)
                     onPositionChanged: mouse => root.sheetMove(this, mouse)
@@ -1577,7 +1671,21 @@ Item {
             color: root.subdued
           }
 
+          // A sibling of the label rather than a child, because the label is
+          // this control's only chrome and a veil inside it would be under the
+          // words rather than behind them (docs/style.md H8). Veiled toward
+          // accent, which the label already is (H4). The 6px is a pill around
+          // the word, not the 10px target the MouseArea grew to (E2).
+          PressVeil {
+            anchors.fill: clearAll
+            anchors.margins: -Style.space(6)
+            radius: height / 2
+            ink: root.accent
+            on: clearArea.pressed && !root.sheetDragging
+          }
+
           Text {
+            id: clearAll
             anchors.right: parent.right
             anchors.rightMargin: Style.space(4)
             anchors.verticalCenter: parent.verticalCenter
@@ -1587,6 +1695,7 @@ Item {
             font.weight: root.textWeight
             color: root.accent
             MouseArea {
+              id: clearArea
               anchors.fill: parent
               anchors.margins: -Style.space(10)
               onPressed: mouse => root.sheetPress(this, mouse)
@@ -1695,6 +1804,8 @@ Item {
               // is the objection this file used to raise against a swipe here
               // -- the answer is to claim one axis rather than the gesture.
               MouseArea {
+                // no press state (style.md H7): a swipe area with no
+                // onClicked. The card follows the finger; that is the feedback.
                 anchors.fill: parent
                 drag.target: sheetCard
                 drag.axis: Drag.XAxis

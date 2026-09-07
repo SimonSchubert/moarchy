@@ -51,6 +51,34 @@ Item {
   readonly property color subdued: (typeof Color !== "undefined" && Color.onSurfaceVariant) ? Color.onSurfaceVariant : "#787c99"
   readonly property color accent: (typeof Color !== "undefined" && Color.primary) ? Color.primary : "#7aa2f7"
 
+  // ------------------------------------------------------- press (style.md H)
+  //
+  // One blended quad the size of the chrome, the control's own ink at 12%
+  // composited over whatever the resting fill is -- so a control whose colour
+  // already says something keeps saying it while pressed (H2).
+  //
+  // Both ends are one ink at two alphas, never "transparent". That is
+  // #00000000 and it carries black: a ColorAnimation to it would fade through
+  // a grey wash, and Qt.tint over it returns 12% grey rather than 12% ink (H3).
+  //
+  // Instant in, 120 out (H5). A Behavior reads `enabled` at the moment of the
+  // write, when the property still holds the *old* colour -- so this is false
+  // arriving and true leaving, with no second binding to order against.
+  //
+  // Culled at rest rather than drawn transparent: nothing in the scene graph
+  // culls an alpha-0 rectangle, and this is a Mali-400.
+  component PressVeil: Rectangle {
+    id: pv
+    property color ink: root.textOnSurface
+    property bool on: false
+    visible: pv.color.a > 0
+    color: Util.alpha(pv.ink, pv.on ? 0.12 : 0)
+    Behavior on color {
+      enabled: pv.color.a > 0
+      ColorAnimation { duration: 120 }
+    }
+  }
+
   // The weight the bar and every other screen in this shell run at. This file
   // used to say `font.bold` on two lines and nothing on the rest, which is how
   // it came to be the one screen that did not match (docs/style.md B3).
@@ -237,9 +265,18 @@ Item {
           Layout.fillWidth: true
           spacing: Style.space(10)
 
-          Rectangle {
-            width: Style.space(40); height: width; radius: width / 2
-            color: backArea.pressed ? root.container : "transparent"
+          Item {
+            width: Style.space(40); height: width
+
+            // 40 drawn, 44 answering, so the veil takes the 40 (docs/style.md
+            // H8, E2). This replaces the one hand-rolled press state in the
+            // shell -- container against "transparent", snapping with no fade,
+            // and fading *from* "transparent" is the grey wash H3 rules out.
+            PressVeil {
+              anchors.fill: parent
+              radius: width / 2
+              on: backArea.pressed
+            }
 
             // Centred on the ink rather than on the advance, for the reason
             // the Settings header's own back button spells out: a Nerd Font

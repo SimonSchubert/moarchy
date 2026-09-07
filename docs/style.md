@@ -5,12 +5,12 @@ archaeology of *why* lives in [build-log.md](build-log.md); the gestures are
 [gestures.md](gestures.md); this file is the contract for what things look like
 and how big they are.
 
-It covers the shell plugins in `default/omarchy/plugins/`, and — through §H —
+It covers the shell plugins in `default/omarchy/plugins/`, and — through §I —
 the surfaces that are not in this repo at all: the on-screen keyboard and the
 store. A phone whose keyboard is themed by one rule and whose settings screen is
 themed by another is two phones, and the user is holding both.
 
-Each AC is checkable, and §A–§D are checkable without the phone:
+Each AC is checkable, and §A–§D and §H are checkable without the phone:
 
 ```
 scripts/style-check.sh
@@ -287,13 +287,101 @@ and the finger loses by one frame, every frame.
 
 ---
 
-## H. Surfaces outside this repo
+## H. Feedback
+
+§E makes the target the right shape. This section makes the shape say it was hit,
+because those two failures are one step apart and identical from the outside: the
+tap landed, nothing moved, and the only way to learn whether it worked is to wait
+for the consequence. Twenty-eight controls in this shell. One of them answered.
+
+**H1** Every control shows a pressed state for as long as the finger is on it. A
+control is a `MouseArea` that answers `onClicked`.
+→ every `MouseArea` block containing `onClicked` declares an `id`, and that id's
+`.pressed` is read somewhere in the same file
+
+**H2** The pressed state is one blended quad the size of the chrome: the control's
+own ink at 12%, composited over the resting fill rather than replacing it. Not a
+pressed variant of each fill — half of these controls already carry a state
+expression as their colour (`on ? accent : container`, `isExpanded ? containerHigh
+: container`, `ready ? accent : containerHigh`), and a second one per state is two
+expressions to keep in step instead of one layer over both. Composited, 12% lands
+`container` (0.08) at 0.19 and `containerHigh` (0.14) at 0.24 — a step past the
+next tone up, in whichever direction the theme's ink runs, and no surface has to
+know which fill it is over. It needs no seventh colour role (C2): the ink is one
+the control already draws with.
+→ the veil is culled at rest rather than drawn transparent: `visible: color.a > 0`.
+Nothing in the scene graph culls an alpha-0 rectangle, and the shade's veils come
+to ~336k panel px against a 1.04M px panel.
+
+**H3** The veil's two ends are one colour at two alphas — `Util.alpha(ink, 0.12)`
+and `Util.alpha(ink, 0)` — never `"transparent"`. `"transparent"` is `#00000000`
+and it carries black, so a `ColorAnimation` to it interpolates that black alongside
+the alpha and the fade detours through a grey wash. The same arithmetic rules out
+the tidier-looking `Qt.tint(fill, Util.alpha(ink, 0.12))`: tint lerps
+`tint.rgb·a + base.rgb·(1−a)`, weighting the base's RGB *without* its alpha, so
+over a transparent base it returns 12% grey rather than 12% ink — a press that
+darkens on a dark theme. It is right over `container` only because base and tint
+happen to share an RGB there.
+→ no press state names `"transparent"` at either end
+
+**H4** The ink is the control's own foreground, not the surface's. A lit tile veils
+toward `textOnAccent`; a theme cell painted in the theme it names veils toward its
+own `modelData.foreground`; Clear all veils toward `accent`, which its label
+already is. A surface-wide ink over a control drawn from another palette is a wash
+of the wrong colour, and on the themes grid that is half the screen. It is also
+the only thing that stops a theme whose accent equals its text from having a press
+state that does nothing.
+
+**H5** Instant in, 120 out (G1). A symmetric 120 reaches 67% of the veil on an 80ms
+tap and peaks *after* the finger has left — Qt restarts a `Behavior` at its full
+duration from wherever the value is, it does not shorten it — so the strongest
+frame of the acknowledgement is one nobody is touching. The asymmetry is read off
+the value being *replaced* rather than off `pressed`: `QQmlBehavior::write()`
+evaluates `enabled` at the moment of the write, when the property still holds the
+old colour, so `enabled: veil.color.a > 0` is false arriving and true leaving.
+Gating on `pressed` cannot work — `enabled` and `color` are then two bindings on
+one notify signal, and QML runs them in the order the notifier list was built,
+which is the reverse of the order they are written in.
+
+**H6** A press that becomes a drag is not a press. On the shade and the drawer the
+tiles *are* the sheet's drag handle (E6), so `MouseArea.pressed` stays true for the
+whole gesture and a scrolling thumb would light every tile it crossed. Those bind
+`pressed && !root.sheetDragging`. A `MouseArea` inside a `Flickable` needs no
+guard: the grab is stolen, `QQuickMouseArea::ungrabMouse()` clears `pressed`
+*before* it emits `canceled()`, and the state leaves by itself. One with a
+`drag.target` of its own guards on `drag.active`.
+→ in `Shade.qml` and `Drawer.qml`, no `.pressed` is read on a line that does not
+also name the guard
+
+**H7** Four kinds of `MouseArea` are not controls, and each says which it is where
+it sits: a drag catcher under the content, a scrim that dismisses, a tap swallower
+behind a modal, a swipe area with no `onClicked`. Each carries
+`// no press state (style.md H7): <what it is>` — spelled with the filename,
+because a bare `(H7)` in `Shade.qml` or `Drawer.qml` already means `gestures.md`.
+The exemption is a comment and not an absence, because an absence is exactly what
+a forgotten control looks like.
+→ the comment is *inside* the `MouseArea` block, which is where the check reads
+and where the next person does
+
+**H8** The veil sits over the fill and under the content. Over the content it is a
+12% contrast loss on the one line of text the control has; under the fill it is
+invisible. In practice that is a `Rectangle` declared as the chrome's first child,
+which also leaves E6's ordering intact — the veil takes no input, and every
+`MouseArea` stays the last sibling. It is sized to the **chrome** and never to the
+grown target (E2): a 36px circle answering over 44 highlights 36. Where a control
+has no chrome at all, one is drawn at the size the control was always meant to
+look rather than at the size of its hit area — the shade's three transport buttons
+highlight `tapSlot − 10`, handing back the gap E4 moved inside them.
+
+---
+
+## I. Surfaces outside this repo
 
 Three programs draw this phone's UI and only one of them is here. They cannot
 share code — one is a quickshell plugin set, one is a standalone Qt app, one is
 Python and GTK4 — so what they share is this file and the palette underneath it.
 
-**H1 One palette, three readers.** The source of truth is the active theme's
+**I1 One palette, three readers.** The source of truth is the active theme's
 `colors.toml`, staged by `omarchy-theme-set` at
 `~/.local/state/omarchy/current/theme/`. Following the staged copy means a theme
 switch is picked up with no knowledge of where themes are installed.
@@ -304,12 +392,12 @@ switch is picked up with no knowledge of where themes are installed.
 | keyboard | [`moarchy-keyboard`](https://github.com/SimonSchubert/moarchy-keyboard) | Qt / QML, standalone | its own theme load; `scripts/fetch-themes.sh` |
 | store | [`moarchy-store`](https://github.com/SimonSchubert/moarchy-store) | Python / GTK4 / libadwaita | `moarchy_store/theme.py` reads `colors.toml` and injects a stylesheet |
 
-**H2** Every surface degrades to its toolkit's own defaults when the palette is
+**I2** Every surface degrades to its toolkit's own defaults when the palette is
 absent — a desktop with no Omarchy, a theme with no `colors.toml`, a malformed
 one. Themed by the file's presence, never broken by its absence. `theme.py`'s
 docstring is the statement of this and the behaviour to copy.
 
-**H3** §A–§G bind every surface, restated in toolkit-neutral terms, because a
+**I3** §A–§H bind every surface, restated in toolkit-neutral terms, because a
 GTK app has no `Style.space()` and a standalone QML app has no `qs.Commons`:
 
 - The **44 floor** (E1–E3) applies to a GTK button and a `KeyCap` exactly as it
@@ -326,13 +414,13 @@ GTK app has no `Style.space()` and a standalone QML app has no `qs.Commons`:
 - The **radii** (D1) are four names, and 360 logical px is the width every
   surface is designed at first rather than scaled down to.
 
-**H4** A new surface joins by linking to this file from its own spec and saying
-which of §A–§G it cannot meet and why. "It is a different toolkit" is not one of
+**I4** A new surface joins by linking to this file from its own spec and saying
+which of §A–§H it cannot meet and why. "It is a different toolkit" is not one of
 the answers — all three of these already are.
 
 ---
 
-## I. Conformance
+## J. Conformance
 
 Where the shell stands against the above, measured off the source. Sizes are
 logical px; `Style.space()` is scale 1.0 today, so they are also the drawn
@@ -361,8 +449,8 @@ numbers.
 | `moarchy.bluetooth` | radio switch | 52 × 30 drawn, 44 tall answering | ok, E2 |
 | `moarchy.device` | header back | 40 drawn, 44 answering | ok, E2 |
 
-**State.** `scripts/style-check.sh` passes: 4 checks, 0 failures. Each of the
-six rules it enforces has been broken on a copy of the tree and seen to fail, so
+**State.** `scripts/style-check.sh` passes: 5 checks, 0 failures. Each of the
+eight rules it enforces has been broken on a copy of the tree and seen to fail, so
 the green is a measurement rather than an absence.
 
 §E and §F are written and hold across every surface. §A–§D were brought into
@@ -405,7 +493,7 @@ field=10,26 340x46` — the field is not merely inside the pill, it *is* the pil
 *E1, on `moarchy.bluetooth`'s action strip*, 2026-09-07.
 `omarchy-shell bluetooth actionTarget` reports `actions=226,152 110x44` — 44 on
 the shorter side, read off the running surface rather than off `Style.space(44)`
-in the source, which is the distinction §I exists to make.
+in the source, which is the distinction §J exists to make.
 
 Getting that reading is what found the bug behind it. The strip registers itself
 in `onVisibleChanged`, and the fixture used to force a row open pinned

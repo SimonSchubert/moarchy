@@ -127,6 +127,34 @@ Item {
   readonly property color subdued: root.readableOn(root.subduedBase,
                                                    Color.popups.text, 0.55, 4.5)
 
+  // ------------------------------------------------------- press (style.md H)
+  //
+  // One blended quad the size of the chrome, the control's own ink at 12%
+  // composited over whatever the resting fill is -- so a control whose colour
+  // already says something keeps saying it while pressed (H2).
+  //
+  // Both ends are one ink at two alphas, never "transparent". That is
+  // #00000000 and it carries black: a ColorAnimation to it would fade through
+  // a grey wash, and Qt.tint over it returns 12% grey rather than 12% ink (H3).
+  //
+  // Instant in, 120 out (H5). A Behavior reads `enabled` at the moment of the
+  // write, when the property still holds the *old* colour -- so this is false
+  // arriving and true leaving, with no second binding to order against.
+  //
+  // Culled at rest rather than drawn transparent: nothing in the scene graph
+  // culls an alpha-0 rectangle, and this is a Mali-400.
+  component PressVeil: Rectangle {
+    id: pv
+    property color ink: root.textOnSurface
+    property bool on: false
+    visible: pv.color.a > 0
+    color: Util.alpha(pv.ink, pv.on ? 0.12 : 0)
+    Behavior on color {
+      enabled: pv.color.a > 0
+      ColorAnimation { duration: 120 }
+    }
+  }
+
   function luminance(c) {
     function chan(v) { return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4) }
     return 0.2126 * chan(c.r) + 0.7152 * chan(c.g) + 0.0722 * chan(c.b)
@@ -635,6 +663,8 @@ Item {
             radius: width / 2
             color: root.container
 
+            PressVeil { anchors.fill: parent; radius: parent.radius; on: backArea.pressed }
+
             Ui.OpticalGlyph {
               anchors.fill: parent
               text: ""
@@ -645,6 +675,7 @@ Item {
             // 38 drawn, 44 answering -- the same 3px as the Settings header,
             // and for the same reasons (docs/style.md E1, E2).
             MouseArea {
+              id: backArea
               anchors.fill: parent
               anchors.margins: -Style.space(3)
               onClicked: root.dismiss()
@@ -678,6 +709,17 @@ Item {
             color: root.adapter && root.adapter.enabled ? root.accent : root.containerHigh
             Behavior on color { ColorAnimation { duration: 120 } }
 
+            // Veiled toward whichever ink the track is carrying (docs/style.md
+            // H4): on a theme whose accent is close to its text, one fixed ink
+            // would show nothing in one of the two states.
+            PressVeil {
+              anchors.fill: parent
+              radius: parent.radius
+              ink: root.adapter && root.adapter.enabled ? root.textOnAccent
+                                                        : root.textOnSurface
+              on: radioArea.pressed
+            }
+
             Rectangle {
               width: parent.height - Style.space(6)
               height: width
@@ -694,6 +736,7 @@ Item {
             // the 44px header it sits in and reaches past both ends of the
             // track; the only thing to its left is the title, which is text.
             MouseArea {
+              id: radioArea
               anchors.fill: parent
               anchors.margins: -Style.space(7)
               enabled: root.adapter !== null
@@ -752,6 +795,19 @@ Item {
               id: rowHead
               width: parent.width
               height: Style.space(58)
+
+              // Sized to the head and not to the delegate (docs/style.md H8):
+              // the MouseArea is the head, and an expanded row is up to 148
+              // tall, so veiling the card would say "you pressed the card"
+              // while the finger is about to collapse it. D2's squaring
+              // rectangle is not available here -- two translucent quads stack
+              // to 0.23 where they overlap -- so while expanded the veil's
+              // bottom corners round inward, invisibly at this alpha.
+              PressVeil {
+                anchors.fill: parent
+                radius: root.radiusCard
+                on: headArea.pressed
+              }
 
               Text {
                 id: kindGlyph
@@ -817,6 +873,7 @@ Item {
               }
 
               MouseArea {
+                id: headArea
                 anchors.fill: parent
                 onClicked: root.rowTapped(rowItem.modelData)
               }
@@ -883,6 +940,12 @@ Item {
                                               && root.busyAddress === ""
                 color: ready ? root.accent : root.containerHigh
                 opacity: ready ? 1 : 0.6
+                PressVeil {
+                  anchors.fill: parent
+                  radius: parent.radius
+                  ink: parent.ready ? root.textOnAccent : root.textOnSurface
+                  on: connectArea.pressed
+                }
                 Text {
                   anchors.centerIn: parent
                   text: rowItem.modelData.known ? "Connect" : "Pair"
@@ -892,6 +955,7 @@ Item {
                   color: parent.ready ? root.textOnAccent : root.subdued
                 }
                 MouseArea {
+                  id: connectArea
                   anchors.fill: parent
                   enabled: parent.ready
                   onClicked: root.connectRow(rowItem.modelData)
@@ -904,6 +968,7 @@ Item {
                 height: parent.height
                 radius: height / 2
                 color: root.containerHigh
+                PressVeil { anchors.fill: parent; radius: parent.radius; on: disconnectArea.pressed }
                 Text {
                   anchors.centerIn: parent
                   text: "Disconnect"
@@ -913,6 +978,7 @@ Item {
                   color: root.textOnSurface
                 }
                 MouseArea {
+                  id: disconnectArea
                   anchors.fill: parent
                   onClicked: root.disconnectRow(rowItem.modelData)
                 }
@@ -924,6 +990,7 @@ Item {
                 height: parent.height
                 radius: height / 2
                 color: root.containerHigh
+                PressVeil { anchors.fill: parent; radius: parent.radius; on: forgetArea.pressed }
                 Text {
                   anchors.centerIn: parent
                   text: "Forget"
@@ -933,6 +1000,7 @@ Item {
                   color: root.textOnSurface
                 }
                 MouseArea {
+                  id: forgetArea
                   anchors.fill: parent
                   onClicked: root.forgetRow(rowItem.modelData)
                 }

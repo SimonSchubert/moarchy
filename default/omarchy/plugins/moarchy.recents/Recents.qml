@@ -270,6 +270,34 @@ Item {
   readonly property color subdued: root.readableOn(root.cardSurface,
                                                    Color.menu.text, 0.55, 4.5)
 
+  // ------------------------------------------------------- press (style.md H)
+  //
+  // One blended quad the size of the chrome, the control's own ink at 12%
+  // composited over whatever the resting fill is -- so a control whose colour
+  // already says something keeps saying it while pressed (H2).
+  //
+  // Both ends are one ink at two alphas, never "transparent". That is
+  // #00000000 and it carries black: a ColorAnimation to it would fade through
+  // a grey wash, and Qt.tint over it returns 12% grey rather than 12% ink (H3).
+  //
+  // Instant in, 120 out (H5). A Behavior reads `enabled` at the moment of the
+  // write, when the property still holds the *old* colour -- so this is false
+  // arriving and true leaving, with no second binding to order against.
+  //
+  // Culled at rest rather than drawn transparent: nothing in the scene graph
+  // culls an alpha-0 rectangle, and this is a Mali-400.
+  component PressVeil: Rectangle {
+    id: pv
+    property color ink: root.textOnSurface
+    property bool on: false
+    visible: pv.color.a > 0
+    color: Util.alpha(pv.ink, pv.on ? 0.12 : 0)
+    Behavior on color {
+      enabled: pv.color.a > 0
+      ColorAnimation { duration: 120 }
+    }
+  }
+
   // WCAG 2.1 relative luminance and contrast, and a linear composite, so the
   // secondary text colour can be computed per theme instead of guessed.
   //
@@ -871,6 +899,8 @@ Item {
     // leaves the app you came from focused, the way tapping outside any sheet
     // does.
     MouseArea {
+      // no press state (style.md H7): a dismiss scrim. Lighting the whole
+      // screen is not feedback, and the carousel leaving is what answers.
       anchors.fill: parent
       onClicked: root.dismiss()
     }
@@ -958,6 +988,16 @@ Item {
                                                            : Math.max(1, Style.space(1))
             border.color: modelData && modelData.activated
               ? Color.accent : Util.alpha(root.textOnSurface, 0.22)
+
+            // A child of the card and not of the slot, so it takes the card's
+            // width rather than the row pitch (docs/style.md H8, E2). Guarded
+            // on the drag: once the card is following the finger, the movement
+            // is the feedback and a lit card on its way off screen is noise.
+            PressVeil {
+              anchors.fill: parent
+              radius: parent.radius
+              on: dismissArea.pressed && !dismissArea.drag.active
+            }
 
             Column {
               anchors.centerIn: parent

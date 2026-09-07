@@ -99,6 +99,34 @@ Item {
   readonly property color subdued: root.readableOn(root.surface, Color.menu.text,
                                                    0.55, 4.5)
 
+  // ------------------------------------------------------- press (style.md H)
+  //
+  // One blended quad the size of the chrome, the control's own ink at 12%
+  // composited over whatever the resting fill is -- so a control whose colour
+  // already says something keeps saying it while pressed (H2).
+  //
+  // Both ends are one ink at two alphas, never "transparent". That is
+  // #00000000 and it carries black: a ColorAnimation to it would fade through
+  // a grey wash, and Qt.tint over it returns 12% grey rather than 12% ink (H3).
+  //
+  // Instant in, 120 out (H5). A Behavior reads `enabled` at the moment of the
+  // write, when the property still holds the *old* colour -- so this is false
+  // arriving and true leaving, with no second binding to order against.
+  //
+  // Culled at rest rather than drawn transparent: nothing in the scene graph
+  // culls an alpha-0 rectangle, and this is a Mali-400.
+  component PressVeil: Rectangle {
+    id: pv
+    property color ink: root.textOnSurface
+    property bool on: false
+    visible: pv.color.a > 0
+    color: Util.alpha(pv.ink, pv.on ? 0.12 : 0)
+    Behavior on color {
+      enabled: pv.color.a > 0
+      ColorAnimation { duration: 120 }
+    }
+  }
+
   // Matches the bar and the Settings list. See moarchy.bar's textWeight
   // for the ink measurements behind DemiBold.
   readonly property int textWeight: Font.DemiBold
@@ -361,6 +389,8 @@ Item {
             radius: width / 2
             color: root.container
 
+            PressVeil { anchors.fill: parent; radius: parent.radius; on: backArea.pressed }
+
             // fa-angle-left, optically centred -- the same treatment, and the
             // same reasons, as the Settings header's back button.
             Ui.OpticalGlyph {
@@ -373,6 +403,7 @@ Item {
             // 38 drawn, 44 answering -- the same 3px as the Settings header,
             // and for the same reasons (docs/style.md E1, E2).
             MouseArea {
+              id: backArea
               anchors.fill: parent
               anchors.margins: -Style.space(3)
               onClicked: root.dismiss()
@@ -443,6 +474,17 @@ Item {
               opacity: root.pendingSlug !== "" && !cell.isPending ? 0.45 : 1
               Behavior on opacity { NumberAnimation { duration: 140 } }
 
+              // Veiled toward the card's *own* foreground, not the menu's
+              // (docs/style.md H4). The card is painted in the theme it names,
+              // so a menu-palette wash here would be the wrong colour on every
+              // cell that is not the current theme -- half the screen.
+              PressVeil {
+                anchors.fill: parent
+                radius: parent.radius
+                ink: cell.modelData.foreground
+                on: cellArea.pressed
+              }
+
               Column {
                 anchors.left: parent.left
                 anchors.right: parent.right
@@ -492,6 +534,7 @@ Item {
               }
 
               MouseArea {
+                id: cellArea
                 anchors.fill: parent
                 // Nothing is queued while one is applying: omarchy-theme-set
                 // takes a lock and a second call would sit behind it for

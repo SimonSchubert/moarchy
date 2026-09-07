@@ -210,6 +210,10 @@ Item {
   // numbers are the same number rather than two that happen to match.
   readonly property int radiusSheet: Style.space(28)
 
+  // An app cell is a grid thing you tap as a unit, which is D1's `tile`. Only
+  // the press veil is drawn at it -- the cell itself has no chrome.
+  readonly property int radiusTile: Style.space(20)
+
   // Radii are written out rather than taken from Style.cornerRadius, which
   // mirrors Hyprland's `decoration:rounding` and is pinned to 0 here by the
   // hyprctl shim -- right for tiled windows under Sway, wrong for a phone.
@@ -227,6 +231,34 @@ Item {
     Qt.rgba(root.surface.r, root.surface.g, root.surface.b, 1), Color.menu.text, 0.08)
   readonly property color subdued: root.readableOn(root.subduedBase,
                                                    Color.menu.text, 0.55, 4.5)
+
+  // ------------------------------------------------------- press (style.md H)
+  //
+  // One blended quad the size of the chrome, the control's own ink at 12%
+  // composited over whatever the resting fill is -- so a control whose colour
+  // already says something keeps saying it while pressed (H2).
+  //
+  // Both ends are one ink at two alphas, never "transparent". That is
+  // #00000000 and it carries black: a ColorAnimation to it would fade through
+  // a grey wash, and Qt.tint over it returns 12% grey rather than 12% ink (H3).
+  //
+  // Instant in, 120 out (H5). A Behavior reads `enabled` at the moment of the
+  // write, when the property still holds the *old* colour -- so this is false
+  // arriving and true leaving, with no second binding to order against.
+  //
+  // Culled at rest rather than drawn transparent: nothing in the scene graph
+  // culls an alpha-0 rectangle, and this is a Mali-400.
+  component PressVeil: Rectangle {
+    id: pv
+    property color ink: root.textOnSurface
+    property bool on: false
+    visible: pv.color.a > 0
+    color: Util.alpha(pv.ink, pv.on ? 0.12 : 0)
+    Behavior on color {
+      enabled: pv.color.a > 0
+      ColorAnimation { duration: 120 }
+    }
+  }
 
   // WCAG 2.1 relative luminance and contrast, and a linear composite, so the
   // secondary text colour can be computed per theme instead of guessed.
@@ -576,6 +608,8 @@ Item {
       // later siblings take input first, so this only ever sees touches
       // nothing else claimed.
       MouseArea {
+        // no press state (style.md H7): a drag catcher under the content, not
+        // a control.
         anchors.fill: parent
         onPressed: mouse => root.sheetPress(this, mouse)
         onPositionChanged: mouse => root.sheetMove(this, mouse)
@@ -776,6 +810,17 @@ Item {
             width: grid.cellWidth
             height: grid.cellHeight
 
+            // The cell has never had chrome -- it is an icon and a label on
+            // the bare sheet -- so the veil is the chrome (docs/style.md H8),
+            // drawn at the size a cell looks rather than at the 90x86 the
+            // delegate spans. The 3px inset keeps two neighbours from touching.
+            PressVeil {
+              anchors.fill: parent
+              anchors.margins: Style.space(3)
+              radius: root.radiusTile
+              on: cellArea.pressed && !root.sheetDragging
+            }
+
             Column {
               anchors.centerIn: parent
               width: parent.width - Style.space(6)
@@ -818,6 +863,7 @@ Item {
             // travels is a launch, one that goes down past the slop drags the
             // sheet.
             MouseArea {
+              id: cellArea
               anchors.fill: parent
               onPressed: mouse => root.sheetPress(this, mouse)
               onPositionChanged: mouse => root.sheetMove(this, mouse)

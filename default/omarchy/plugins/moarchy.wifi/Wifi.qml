@@ -103,6 +103,34 @@ Item {
   readonly property color subdued: Util.alpha(Color.popups.text, 0.62)
   readonly property color danger: Color.popups.text
 
+  // ------------------------------------------------------- press (style.md H)
+  //
+  // One blended quad the size of the chrome, the control's own ink at 12%
+  // composited over whatever the resting fill is -- so a control whose colour
+  // already says something keeps saying it while pressed (H2).
+  //
+  // Both ends are one ink at two alphas, never "transparent". That is
+  // #00000000 and it carries black: a ColorAnimation to it would fade through
+  // a grey wash, and Qt.tint over it returns 12% grey rather than 12% ink (H3).
+  //
+  // Instant in, 120 out (H5). A Behavior reads `enabled` at the moment of the
+  // write, when the property still holds the *old* colour -- so this is false
+  // arriving and true leaving, with no second binding to order against.
+  //
+  // Culled at rest rather than drawn transparent: nothing in the scene graph
+  // culls an alpha-0 rectangle, and this is a Mali-400.
+  component PressVeil: Rectangle {
+    id: pv
+    property color ink: root.textOnSurface
+    property bool on: false
+    visible: pv.color.a > 0
+    color: Util.alpha(pv.ink, pv.on ? 0.12 : 0)
+    Behavior on color {
+      enabled: pv.color.a > 0
+      ColorAnimation { duration: 120 }
+    }
+  }
+
   // ------------------------------------------------------------------ data
   readonly property var wifiDevice: {
     var devices = Networking.devices ? Networking.devices.values : []
@@ -487,6 +515,8 @@ Item {
             radius: width / 2
             color: root.container
 
+            PressVeil { anchors.fill: parent; radius: parent.radius; on: backArea.pressed }
+
             Ui.OpticalGlyph {
               anchors.fill: parent
               text: ""
@@ -497,6 +527,7 @@ Item {
             // 38 drawn, 44 answering -- the same 3px as the Settings header,
             // and for the same reasons (docs/style.md E1, E2).
             MouseArea {
+              id: backArea
               anchors.fill: parent
               anchors.margins: -Style.space(3)
               onClicked: root.dismiss()
@@ -527,6 +558,16 @@ Item {
             color: Networking.wifiEnabled ? root.accent : root.containerHigh
             Behavior on color { ColorAnimation { duration: 120 } }
 
+            // Veiled toward whichever ink the track is carrying (docs/style.md
+            // H4): on a theme whose accent is close to its text, one fixed ink
+            // would show nothing in one of the two states.
+            PressVeil {
+              anchors.fill: parent
+              radius: parent.radius
+              ink: Networking.wifiEnabled ? root.textOnAccent : root.textOnSurface
+              on: radioArea.pressed
+            }
+
             Rectangle {
               width: parent.height - Style.space(6)
               height: width
@@ -541,6 +582,7 @@ Item {
             // the 44px header it sits in and reaches past both ends of the
             // track; the only thing to its left is the title, which is text.
             MouseArea {
+              id: radioArea
               anchors.fill: parent
               anchors.margins: -Style.space(7)
               onClicked: Networking.wifiEnabled = !Networking.wifiEnabled
@@ -598,6 +640,19 @@ Item {
               width: parent.width
               height: Style.space(58)
 
+              // Sized to the head and not to the delegate (docs/style.md H8):
+              // the MouseArea is the head, and an expanded row is up to 170
+              // tall, so veiling the card would say "you pressed the card"
+              // while the finger is about to collapse it. D2's squaring
+              // rectangle is not available here -- two translucent quads stack
+              // to 0.23 where they overlap -- so while expanded the veil's
+              // bottom corners round inward, invisibly at this alpha.
+              PressVeil {
+                anchors.fill: parent
+                radius: root.radiusCard
+                on: headArea.pressed
+              }
+
               Text {
                 id: sig
                 anchors.left: parent.left
@@ -654,6 +709,7 @@ Item {
               }
 
               MouseArea {
+                id: headArea
                 anchors.fill: parent
                 onClicked: root.rowTapped(rowItem.modelData)
               }
@@ -750,14 +806,16 @@ Item {
 
                 // Reveal. Square on the field's height so the tap target is the
                 // whole end of the pill rather than the glyph.
-                Rectangle {
+                Item {
                   id: revealButton
                   anchors.right: parent.right
                   anchors.verticalCenter: parent.verticalCenter
                   width: Style.space(44)
                   height: width
-                  radius: width / 2
-                  color: "transparent"
+
+                  // This drew nothing at all until now, so the veil is the
+                  // chrome (docs/style.md H8) rather than a layer over it.
+                  PressVeil { anchors.fill: parent; radius: width / 2; on: eyeArea.pressed }
                   // A glyph centred in a slot goes through Ui.OpticalGlyph, which
                   // measures the painted bounds and shifts by the difference
                   // (docs/style.md B5). anchors.centerIn centres the box the font
@@ -771,6 +829,7 @@ Item {
                     color: root.showPassphrase ? root.accent : root.subdued
                   }
                   MouseArea {
+                    id: eyeArea
                     anchors.fill: parent
                     onClicked: root.showPassphrase = !root.showPassphrase
                   }
@@ -796,6 +855,12 @@ Item {
                     || root.passphrase.length >= 8
                   color: ready ? root.accent : root.containerHigh
                   opacity: ready ? 1 : 0.6
+                  PressVeil {
+                    anchors.fill: parent
+                    radius: parent.radius
+                    ink: parent.ready ? root.textOnAccent : root.textOnSurface
+                    on: joinArea.pressed
+                  }
                   Text {
                     anchors.centerIn: parent
                     text: "Join"
@@ -805,6 +870,7 @@ Item {
                     color: parent.ready ? root.textOnAccent : root.subdued
                   }
                   MouseArea {
+                    id: joinArea
                     anchors.fill: parent
                     enabled: parent.ready
                     onClicked: root.joinRow(rowItem.modelData)
@@ -817,6 +883,7 @@ Item {
                   height: parent.height
                   radius: height / 2
                   color: root.containerHigh
+                  PressVeil { anchors.fill: parent; radius: parent.radius; on: disconnectArea.pressed }
                   Text {
                     anchors.centerIn: parent
                     text: "Disconnect"
@@ -826,6 +893,7 @@ Item {
                     color: root.textOnSurface
                   }
                   MouseArea {
+                    id: disconnectArea
                     anchors.fill: parent
                     onClicked: root.disconnectSsid(rowItem.modelData.ssid)
                   }
@@ -837,6 +905,7 @@ Item {
                   height: parent.height
                   radius: height / 2
                   color: root.containerHigh
+                  PressVeil { anchors.fill: parent; radius: parent.radius; on: forgetArea.pressed }
                   Text {
                     anchors.centerIn: parent
                     text: "Forget"
@@ -846,6 +915,7 @@ Item {
                     color: root.textOnSurface
                   }
                   MouseArea {
+                    id: forgetArea
                     anchors.fill: parent
                     onClicked: root.forgetSsid(rowItem.modelData.ssid)
                   }

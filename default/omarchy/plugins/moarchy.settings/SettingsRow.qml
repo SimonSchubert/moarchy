@@ -41,6 +41,34 @@ Rectangle {
   property color subduedColor: "grey"
   property color accentColor: "white"
 
+  // ------------------------------------------------------- press (style.md H)
+  //
+  // One blended quad the size of the chrome, the control's own ink at 12%
+  // composited over whatever the resting fill is -- so a control whose colour
+  // already says something keeps saying it while pressed (H2).
+  //
+  // Both ends are one ink at two alphas, never "transparent". That is
+  // #00000000 and it carries black: a ColorAnimation to it would fade through
+  // a grey wash, and Qt.tint over it returns 12% grey rather than 12% ink (H3).
+  //
+  // Instant in, 120 out (H5). A Behavior reads `enabled` at the moment of the
+  // write, when the property still holds the *old* colour -- so this is false
+  // arriving and true leaving, with no second binding to order against.
+  //
+  // Culled at rest rather than drawn transparent: nothing in the scene graph
+  // culls an alpha-0 rectangle, and this is a Mali-400.
+  component PressVeil: Rectangle {
+    id: pv
+    property color ink: card.textColor
+    property bool on: false
+    visible: pv.color.a > 0
+    color: Util.alpha(pv.ink, pv.on ? 0.12 : 0)
+    Behavior on color {
+      enabled: pv.color.a > 0
+      ColorAnimation { duration: 120 }
+    }
+  }
+
   // Matches the bar. Light text on a dark surface reads thinner than it
   // measures, and a settings list next to a DemiBold status bar looked like
   // two different phones. moarchy.bar's textWeight carries the ink
@@ -66,6 +94,18 @@ Rectangle {
   // The card radius (docs/style.md D1).
   radius: card.radiusCard
   opacity: card.rowEnabled ? 1 : 0.45
+
+  // The card's first child, so it sits over the fill and under everything the
+  // row draws (docs/style.md H8). `card.color` is pushed in from the page and
+  // is untouched by this -- which is what keeps the switch knob, which reads
+  // `card.color` back so it looks like the card showing through, still looking
+  // like the card showing through: the track and the knob are both translucent
+  // and both above the veil, so it composites through them.
+  PressVeil {
+    anchors.fill: parent
+    radius: card.radiusCard
+    on: rowArea.pressed
+  }
 
   Row {
     anchors.fill: parent
@@ -249,6 +289,7 @@ Rectangle {
   // the field under it ever sees one, so the row would look like a text field
   // that cannot be typed into.
   MouseArea {
+    id: rowArea
     anchors.fill: parent
     visible: card.rowType !== "input"
     enabled: card.rowEnabled && card.rowType !== "input"

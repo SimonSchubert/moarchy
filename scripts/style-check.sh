@@ -8,12 +8,13 @@
 # all while every comment in it claimed to mirror the others.
 #
 # Covers: A1/A2/A3 (no literals), B1 (family), B3 (weight), B5 (glyph slots),
-# C4 (no stray hex), D1 (four named radii).
+# C4 (no stray hex), D1 (four named radii), H1/H6 (a pressed state on every
+# control, guarded where the control is also a drag handle).
 #
 # Does NOT cover E (touch targets) or F (text inputs): a hit area is a runtime
 # rectangle, and the accessors that answer for it -- `omarchy-shell drawer
 # searchTarget`, `omarchy-shell wifi passTarget` -- need the phone. See
-# docs/style.md §I.
+# docs/style.md §J.
 #
 #   scripts/style-check.sh            # from anywhere
 set -uo pipefail
@@ -102,6 +103,39 @@ for path in sorted(pathlib.Path(sys.argv[1]).glob("*/*.qml")):
             if "typeof Color" not in window:
                 problems.append(f"{path}:{n}  literal hex colour (C4)")
 
+    # ------------------------------------------------------------- H1, H6
+    # A control is a MouseArea that answers a tap. It has to name itself, and
+    # that name has to reach a press state -- or say in a comment which of the
+    # four non-controls it is. The exemption is a comment and not an absence,
+    # because an absence is what a forgotten control looks like (H7).
+    #
+    # Spelled `style.md H7` and not `H7`: a bare (H7) in Shade.qml or
+    # Drawer.qml already means gestures.md, and both files have one.
+    whole = "\n".join(lines)
+    for start, _kind, block in blocks(lines, r"MouseArea"):
+        if "onClicked" not in block:
+            continue
+        if re.search(r"//\s*no press state \(style\.md H7\)", block):
+            continue
+        m = re.search(r"^\s*id:\s*(\w+)\s*$", block, re.M)
+        if not m:
+            problems.append(f"{path}:{start}  MouseArea answers onClicked with "
+                            "no id, so nothing can bind to its press (H1)")
+            continue
+        if not re.search(r"\b%s\.pressed\b" % re.escape(m.group(1)), whole):
+            problems.append(f"{path}:{start}  {m.group(1)}.pressed is read "
+                            "nowhere: this control has no press state (H1)")
+
+    # H6. On the two surfaces whose controls are also the sheet's drag handle,
+    # `pressed` stays true for the whole drag -- so an unguarded read lights
+    # every tile a scrolling thumb crosses.
+    if path.name in ("Shade.qml", "Drawer.qml"):
+        for n, line in enumerate(lines, 1):
+            if (re.search(r"\w+\.pressed\b", line)
+                    and not re.search(r"sheetDragging|handedOver", line)):
+                problems.append(f"{path}:{n}  press state on a sheet-drag "
+                                "MouseArea with no drag guard (H6)")
+
 print("\n".join(problems))
 PY
 )
@@ -109,6 +143,7 @@ if [[ -z $report ]]; then
   ok "every Text names its family and weight; glyphs in slots use OpticalGlyph (B1, B3, B5)"
   ok "hex only as a pre-theme fallback (C4)"
   ok "every radius is sheet, tile, card, pill or circle (D1)"
+  ok "every control that answers a tap shows a pressed state (H1, H6)"
 else
   no "style violations" "$report"
 fi
