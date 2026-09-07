@@ -40,15 +40,15 @@ pkgver=$_ver
 # and index-fm with no version move at all -- so a phone already holding
 # 0.1.0-1 would never have seen any of it. Then pkgver moved to 0.1.1 and this
 # went back to 1, because 0.1.1-1 is already newer than 0.1.0-2.
-# 3, and the paragraph above is why it was 2 an hour ago rather than wrong now.
-# That reasoning turns on an artifact no device holds -- true of 0.1.1-2 while
-# it sat in packages/, and false the moment an image was built from it and
-# flashed. A phone now has 0.1.1-2 installed against a published -1, so the
-# same argument that kept this at 2 requires a 3 today.
+# Back to 1 for 0.2.0, the same way it went back to 1 at 0.1.1: 0.2.0-1 is
+# already newer than the 0.1.1-3 in packages/ and the 0.1.1-1 the repo
+# publishes, so the reset hides nothing from any device.
 #
-# What rides it: moarchy-keep joining the depends line. Which is exactly the
-# failure this package is most exposed to -- its entire content IS that line.
-pkgrel=3
+# What this line gained since that published 0.1.1-1, which is the diff a phone
+# in the field actually sees: mise-bin, nodejs and npm; the ten packages
+# makepkg shells out to, so an AUR build gets past fakeroot; moarchy-keep. And
+# lisgd left with the gestures daemon nothing started.
+pkgrel=1
 pkgdesc="The moarchy package set -- install this and you have the phone"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
