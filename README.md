@@ -261,6 +261,21 @@ Do not publish either. The PSK is a secret; the key is not, but an
 `authorized_keys` in a public image would have every phone that flashes it trust
 one person's key. `./scripts/verify-image.sh` fails an image carrying either.
 
+### Getting back in after a reflash
+
+A reflash wipes `/home/moarchy/.ssh`, and the account has no password, so a
+published image locks you out of your own phone until a key is authorised
+again. Rather than pulling the SD card, type one line on the phone:
+
+```bash
+curl -sL https://raw.githubusercontent.com/SimonSchubert/moarchy/main/scripts/authorize-ssh.sh | sh -s <github-user>
+```
+
+That authorises every public key on `https://github.com/<github-user>.keys`,
+enables `sshd`, and prints the phone's address and host-key fingerprint. The
+username is required and has no default, for the same reason a published image
+carries no `authorized_keys`.
+
 ### Developing against a phone you already have
 
 ```bash
