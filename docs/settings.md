@@ -55,8 +55,8 @@ pair is ever visible. Two trees to show one row each is a dmenu artifact.
 
 **`trigger.toggle.*` dissolves.** Upstream groups those nine rows by *mechanism* —
 they are together because they are all toggles. A phone groups by *subject*: the
-status bar switch lives with the status bar, night light with Display, crash
-capture with notifications. "Toggles" is a category nobody looks for.
+battery percentage switch lives with the status bar, night light with Display,
+crash capture with notifications. "Toggles" is a category nobody looks for.
 
 **Power leaves the root.** The shade already has a power glyph. It now deep-links
 to `system.power` here rather than summoning `omarchy.menu`, so there is one
@@ -185,22 +185,50 @@ appearance.font; settings rows` lists fonts, not `No reminders set`
 **C1** Every `switch` reads its state from a command at page-open, never from a
 remembered value.
 → with the switch's page open, `settings value <rowId>` matches its reader run
-directly. The id is the bare one (`show`, not `appearance.bar.show`): rows are
-resolved against the open page, not by path
+directly. The id is the bare one (`battery`, not `appearance.bar.battery`): rows
+are resolved against the open page, not by path
 
-**C2** The four negative-polarity flags render inverted: a present flag file means
-the feature is **off**.
-→ `settings openAt appearance.bar; omarchy-toggle bar-off on; settings refresh;
-settings value show` == `off`
+**C2** The negative-polarity flags render inverted: a present flag file means the
+feature is **off**.
+→ `settings openAt appearance.bar; omarchy-toggle battery-percentage-off on;
+settings refresh; settings value battery` == `off`
 
 **C3** Writing a switch re-reads it; the row shows the new value without the page
 being reopened.
-→ on `appearance.bar`: `settings set show on; settings value show` == `on`, and
-`omarchy-toggle-enabled bar-off` exits non-zero
+→ on `appearance.bar`: `settings set battery on; settings value battery` ==
+`on`, and `omarchy-toggle-enabled battery-percentage-off` exits non-zero
 
-**C4** Turning the status bar off does not restart or kill the shell.
-→ the `quickshell` pid is unchanged across `settings set show off`, and
-`settings state` is still `open`
+**C4** A switch whose write has to be told to the shell names a target the shell
+answers to, and the screen changes, not only the flag.
+
+The battery percentage row wrote `omarchy-shell -q bar syncFlags` as
+`omarchy-shell -q omarchy.bar syncHidden` until 2026-09-08. Both halves were
+wrong and neither could say so: `omarchy.bar` is *upstream's* plugin id, and
+upstream's bar is the one this phone replaces, so the call answered "Target not
+found"; `syncHidden` was a plain function on the root item and never declared to
+the `IpcHandler`, so fixing only the target answered "Function not found". `-q`
+turns both into exit 0. The flag flipped, the switch moved, and the bar went on
+drawing what it had read at startup -- a setting that works only across a shell
+restart looks exactly like one that does nothing.
+
+Two paths in now, because either alone has a hole: a `FileView` watch on the
+toggles directory catches every writer -- this row, the CLI, a hand-run
+`omarchy-toggle` over ssh -- and `syncFlags` is the nudge for when that watch
+stops delivering. Upstream's own bar carries the same pair, for the same reason.
+→ `settings set battery off` and `omarchy-shell bar metrics` reports `pct=off`;
+`settings set battery on` and it reports `pct=on`; and `omarchy-toggle
+battery-percentage-off on` with no IPC call at all reaches the bar too
+
+**C4a** Nothing in Settings hides the status bar. The **Show status bar** switch
+was removed on 2026-09-08 rather than repaired: it had the same dead IPC call as
+C4, and behind it a feature worth less on this phone than on a desktop. The
+shade's grab strip owns the top edge whatever the bar does (`docs/shade.md`), so
+hiding the bar leaves the 26px still swallowing drags, with nothing drawn to say
+why -- and the way back was a switch inside the screen it had just made harder to
+reach. The `bar-off` flag is no longer read at all, so a phone left with it set
+comes back with its bar.
+→ `appearance.bar` lists no `show` row, `moarchy.bar` reads no `bar-off`, and
+neither `moarchy-toggle-bar` nor a keybinding for it exists
 
 **C5** Stay awake actually stops the panel blanking, not just the row.
 → `omarchy-toggle-idle status | jq .enabled` == `true`, and the swayidle timeout
@@ -1091,3 +1119,10 @@ parity a bash assertion rather than a promise.
 - **No vendored popup dismisses on tap-outside.**
   `pkgbuilds/omarchy-config/port-4x.patch` stubs `HyprlandFocusGrab`, which has
   no `Quickshell.I3` counterpart. AC B5 is the compensation, not a fix.
+- **The status bar cannot be hidden, from here or from anywhere.** The switch
+  existed and never worked (C4a), and the phone reads the top edge differently
+  from a desktop: the shade's grab strip is a separate Overlay surface, so
+  hiding the bar takes away what the strip is drawn against and leaves 26px that
+  still swallows a downward drag. `trigger.toggle.top-bar` and both
+  `style.bar.position.*` ids are Unsupported together, for one reason -- this
+  bar is where it is.

@@ -18,7 +18,7 @@
 
 # --- environment -----------------------------------------------------------
 # moarchy's Sway counterparts go ahead of upstream Omarchy's Hyprland scripts.
-# 19 names are shared -- omarchy-toggle-bar, omarchy-system-lock,
+# 21 names are shared -- omarchy-toggle-nightlight, omarchy-system-lock,
 # omarchy-launch-browser and the rest -- and two packages cannot own one path in
 # /usr/bin, so ours live in their own directory and win by PATH order instead.
 MOARCHY_PATH=/usr/share/moarchy

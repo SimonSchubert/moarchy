@@ -2353,29 +2353,66 @@ F8PY
 
   # --- C. switches ----------------------------------------------------------
   s openAt appearance.bar >/dev/null; sleep 2
-  live=$(s value show)
-  flag_now() { omarchy-toggle-enabled bar-off && echo off || echo on; }
+  live=$(s value battery)
+  flag_now() { omarchy-toggle-enabled battery-percentage-off && echo off || echo on; }
   [[ $live == "$(flag_now)" ]] \
-    && ok "C1/C2 the bar switch reads the flag, inverted correctly" \
+    && ok "C1/C2 the battery switch reads the flag, inverted correctly" \
     || no "C1/C2 switch says '$live', flag says '$(flag_now)'" \
-          "bar-off is negative polarity: the file existing means the bar is OFF"
+          "battery-percentage-off is negative polarity: the file existing means the percentage is OFF"
 
-  # C4 is the one that used to take the whole shell down.
-  pid_before=$(pgrep -x quickshell | head -1)
-  s set show off >/dev/null; sleep 3
-  pid_after=$(pgrep -x quickshell | head -1)
-  if [[ -n $pid_after && $pid_before == "$pid_after" ]]; then
-    ok "C4 hiding the status bar does not restart the shell"
-  else
-    no "C4 the shell restarted or died on a bar toggle" \
-       "quickshell $pid_before -> ${pid_after:-gone}; toggle-bar must not pkill it"
-  fi
-  [[ $(s value show) == off ]] \
+  # C4. The half nobody was checking. Both of this page's switches wrote their
+  # flag and then told `omarchy.bar` -- upstream's plugin id, not the bar this
+  # phone loads -- to re-read it, behind a `-q` that turns "Target not found"
+  # into exit 0. Every check that read the flag or the row was green while the
+  # screen never changed, which is why this one asks the bar what it is drawing.
+  s set battery off >/dev/null; sleep 3
+  pct_off=$(timeout 5 omarchy-shell bar metrics 2>/dev/null | sed -n 's/.*pct=\([a-z]*\).*/\1/p')
+  [[ $(s value battery) == off ]] \
     && ok "C3 the switch re-reads itself after a write" \
-    || no "C3 the switch did not follow its own write" "value=$(s value show)"
-  s set show on >/dev/null; sleep 3          # restore
-  [[ $(s value show) == on ]] && ok "C3 the bar came back" \
-                             || no "C3 the bar did not come back" "value=$(s value show)"
+    || no "C3 the switch did not follow its own write" "value=$(s value battery)"
+  s set battery on >/dev/null; sleep 3       # restore
+  pct_on=$(timeout 5 omarchy-shell bar metrics 2>/dev/null | sed -n 's/.*pct=\([a-z]*\).*/\1/p')
+  [[ $(s value battery) == on ]] && ok "C3 the percentage came back" \
+                                || no "C3 the switch did not come back" "value=$(s value battery)"
+  if [[ $pct_off == off && $pct_on == on ]]; then
+    ok "C4 the switch reaches the bar, not just the flag"
+  else
+    no "C4 the bar drew pct=${pct_off:-?} with the switch off and pct=${pct_on:-?} with it on" \
+       "the write must name a target the shell answers to: omarchy-shell -q bar syncFlags"
+  fi
+
+  # C4, the other path. The bar watches the toggles directory as well, so a flag
+  # flipped by anything at all lands without an IPC call -- which is what keeps
+  # this working if the nudge is ever misnamed again.
+  omarchy-toggle battery-percentage-off on; sleep 3
+  pct_watch=$(timeout 5 omarchy-shell bar metrics 2>/dev/null | sed -n 's/.*pct=\([a-z]*\).*/\1/p')
+  omarchy-toggle battery-percentage-off off; sleep 3
+  [[ $pct_watch == off ]] \
+    && ok "C4 the toggles-directory watch applies a flag nobody announced" \
+    || no "C4 a flag flipped by omarchy-toggle alone left the bar at pct=${pct_watch:-?}" \
+          "the FileView on the toggles dir is the path that does not depend on the caller"
+
+  # C4a. The Show status bar row and everything behind it. Three absences, and
+  # each one on its own would leave the feature half alive: the row could come
+  # back, the bar could go on reading a flag no UI writes, or the keybinding
+  # could hide a bar with no switch to bring it back.
+  barqml="$(plugin_dir moarchy.bar)/Bar.qml"
+  c4a=""
+  s rows | awk -F'\t' '$1=="show"' | grep -q . && c4a="$c4a a 'show' row"
+  if [[ -f $barqml ]]; then
+    # Comments stripped first, the way D8 does it below: this file explains at
+    # length why the flag is not read any more, and a check that counted its own
+    # explanation would fail on the sentence describing the absence.
+    grep -vE '^[[:space:]]*//' "$barqml" | grep -q 'bar-off' \
+      && c4a="$c4a a bar-off read in Bar.qml"
+  else
+    c4a="$c4a no Bar.qml at $barqml"
+  fi
+  command -v moarchy-toggle-bar >/dev/null 2>&1 && c4a="$c4a moarchy-toggle-bar on PATH"
+  [[ -z $c4a ]] \
+    && ok "C4a nothing hides the status bar: no row, no flag read, no command" \
+    || no "C4a the bar is still hideable --$c4a" \
+          "it never worked and the shade owns the top edge either way; settings.md C4a"
 
   # C6. Both halves of the transparency switch have to stay gone: the row that
   # wrote the flag, and the bar function that shelled out to `omarchy-bar`. That
@@ -2462,7 +2499,7 @@ D8PY
   # omarchy-launch-screensaver opens with `omarchy-cmd-missing ttfx && exit 1`
   # and ttfx has no aarch64 build. `activate` on a row that is not there does
   # nothing at all, so lastLaunch kept whatever block C left in it and E1 failed
-  # reading `moarchy-toggle-bar on` -- a deleted row and a broken activate with
+  # reading a command block C had run -- a deleted row and a broken activate with
   # the same symptom. Hence the existence test first: it separates the two, and
   # without it this check reports on the wrong one.
   s dryRun 1 >/dev/null
@@ -2621,11 +2658,12 @@ DOCTBL
   # constant rather than about coverage. 68/68 after the three trigger.reminder.*
   # ids became Native (docs/settings.md J), then 64/72 as update.timezone, the two
   # setup.plugin toggles and about followed them (L, M, N), then 58/70 when the
-  # eight branding ids left for Unsupported.
-  [[ $totals == "Bridged=58 Native=70 Shade=1 " ]] \
+  # eight branding ids left for Unsupported, then 58/69 when trigger.toggle.top-bar
+  # followed them: the Show status bar row is gone (docs/settings.md C4a).
+  [[ $totals == "Bridged=58 Native=69 Shade=1 " ]] \
     && ok "G7 the class totals are the ones committed to ($totals)" \
     || no "G7 the class totals moved: $totals" \
-          "expected Bridged=58 Native=70 Shade=1; update docs/settings.md if deliberate"
+          "expected Bridged=58 Native=69 Shade=1; update docs/settings.md if deliberate"
 
   grep -q '^trigger.toggle.notifications	Shade' <<<"$cov" \
     && ok "H2 the shade-owned toggle is recorded, not rendered" \
@@ -3245,12 +3283,14 @@ ICONS
               "expected the presentation wrapper around 'sudo pacman -Syu'"
     fi
     s dryRun 0 >/dev/null
-    # 129 = G7's 58 Bridged + 70 Native + 1 Shade, and the two are the same fact
-    # counted from opposite ends -- so this must move only when that does.
+    # 128 = G7's 58 Bridged + 69 Native + 1 Shade, and the two are the same fact
+    # counted from opposite ends -- so this must move only when that does. 129
+    # until 2026-09-08, when the Show status bar row took trigger.toggle.top-bar
+    # to Unsupported with it (docs/settings.md C4a).
     o_cov=$(s coverage | grep -c .)
-    [[ $o_cov -eq 129 ]] \
-      && ok "O13 coverage is still 129 lines -- Update system claims no id" \
-      || no "O13 coverage is $o_cov lines, not 129" \
+    [[ $o_cov -eq 128 ]] \
+      && ok "O13 coverage is still 128 lines -- Update system claims no id" \
+      || no "O13 coverage is $o_cov lines, not 128" \
             "a row with no 'covers' must add nothing; G7's totals are the same number"
 
     # O5. A nav result lands on the page it points at, not on the page it lives

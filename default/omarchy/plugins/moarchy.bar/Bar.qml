@@ -76,13 +76,28 @@ Item {
   // Deliberately absent, so `omarchy-shell shell toggleBarTransparency` answers
   // "no-bar" and stops there:
   //   toggleTransparency                                  omarchy-shell IPC
-  // Ours, not upstream's, called by bin/moarchy-toggle-bar and by the
-  // Settings battery-percentage switch:
-  //   syncHidden                                          re-read the toggle flags
+  // Ours, not upstream's, called by the Settings battery-percentage switch
+  // through `omarchy-shell -q bar syncFlags`:
+  //   syncFlags                                           re-read the toggle flags
   readonly property int barSize: Style.bar.sizeHorizontal
-  property bool barHidden: false
   readonly property string position: "top"
   readonly property string fontFamily: Style.font.family
+
+  // Constant, and readonly to keep it that way. `bar-off` was a Settings switch
+  // and a $mod+Shift+space binding until 2026-09-08, and neither ever moved the
+  // bar: both flipped the flag and then told `omarchy.bar` -- upstream's plugin
+  // id, and upstream's bar is the one this phone replaces -- to re-read it, so
+  // every attempt answered "Target not found" behind a `-q`. The row went rather
+  // than the name being fixed: the shade's grab strip owns the top edge whether
+  // or not this draws, so a hidden bar leaves 26px still eating drags with
+  // nothing on screen to say why, and the switch that undid it lived inside the
+  // screen it had just made harder to reach. docs/settings.md C4a.
+  //
+  // Reading no flag also means a phone left with `bar-off` set comes back with
+  // its bar. The property stays because the shell.bar contract is read by name:
+  // notifications/Service.qml drops toasts to the top of the screen when it is
+  // true, and a bar that omits it is a bar with no toast offset.
+  readonly property bool barHidden: false
 
   // This bar hosts no widgets at all, so every widget-routing call has exactly
   // one honest answer. Returning false (rather than omitting the function) is
@@ -93,37 +108,47 @@ Item {
   function panelWidgetIdAt(section: string, index: string): string { return "" }
   function debugBarGeometry(): var { return [] }
 
-  // barHidden is what the shell.bar contract exposes and what the exclusive zone
-  // and top margin read, and until now nothing ever set it. `omarchy-toggle
-  // bar-off` flips a flag file; this is how the bar learns a flag moved.
+  // `omarchy-toggle battery-percentage-off` flips a flag file, and this is how
+  // the bar learns it moved. Two ways in, because either alone has a hole:
   //
-  // Both flags come back from one bash rather than two, because a fork on this
-  // SoC costs more than either test.
+  //   The directory watch catches every writer -- the Settings row, the CLI, a
+  //   hand-run `omarchy-toggle` over ssh -- without anybody having to know this
+  //   plugin exists. The parent directory, not the file: FileView cannot watch a
+  //   path that does not exist yet, and a flag file is created and deleted
+  //   rather than edited.
   //
-  // Read as file tests rather than through omarchy-toggle-enabled so a shell
+  //   syncFlags is the nudge for when it misses one. Upstream's own bar carries
+  //   the same pair for the same reason: flag changes landing in quick
+  //   succession can stop the watch delivering, and there the symptom was a bar
+  //   stranded off screen until the shell restarted.
+  //
+  // Read as a file test rather than through omarchy-toggle-enabled so a shell
   // started with a short PATH answers from an actual test rather than from a
   // 127 that looks exactly the same.
   property bool batteryPercentShown: true
 
-  function syncHidden(): string {
-    flagProbe.running = true
-    return "ok"
-  }
+  readonly property string togglesDir:
+    (Quickshell.env("XDG_STATE_HOME") || (Quickshell.env("HOME") + "/.local/state"))
+    + "/omarchy/toggles"
 
   Process {
     id: flagProbe
     running: true
     command: ["bash", "-c",
-      "d=\"${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/toggles\"; " +
-      "[[ -f \"$d/bar-off\" ]] && echo bar=hidden || echo bar=shown; " +
-      "[[ -f \"$d/battery-percentage-off\" ]] && echo pct=off || echo pct=on"]
+      "[[ -f \"${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/toggles/battery-percentage-off\" ]] " +
+      "&& echo pct=off || echo pct=on"]
     stdout: StdioCollector {
-      onStreamFinished: {
-        var out = String(text || "")
-        root.barHidden = out.indexOf("bar=hidden") >= 0
-        root.batteryPercentShown = out.indexOf("pct=on") >= 0
-      }
+      onStreamFinished: root.batteryPercentShown = String(text || "").indexOf("pct=on") >= 0
     }
+  }
+
+  // printErrors off because the directory is absent on a phone that has never
+  // toggled anything, and that is not a fault worth a line in the journal.
+  FileView {
+    path: root.togglesDir
+    watchChanges: true
+    printErrors: false
+    onFileChanged: flagProbe.running = true
   }
 
   // ------------------------------------------------------------- appearance
@@ -339,13 +364,30 @@ Item {
   IpcHandler {
     target: "bar"
 
+    // `pct` rather than `hidden`: the bar cannot be hidden any more, and this
+    // is the one thing about it a setting still changes -- so it is the one
+    // thing worth being able to ask about from outside. docs/settings.md C4
+    // checks the switch against this string.
     function metrics(): string {
       return "height=" + root.barSize
            + " icon=" + root.iconSize
            + " slot=" + root.glyphSlot
            + " gap=" + root.glyphGap
            + " weight=" + root.textWeight
-           + " hidden=" + (root.barHidden ? "yes" : "no")
+           + " pct=" + (root.batteryPercentShown ? "on" : "off")
+    }
+
+    // Declared here, not just on the root item: a function the root happens to
+    // own is not reachable over IPC, and `omarchy-shell bar <it>` answers
+    // "Function not found" -- which behind the `-q` a settings row uses is
+    // indistinguishable from success. That was half of the bug this replaced.
+    //
+    // Start rather than restart, as upstream does: a probe already in flight
+    // was launched by the directory watch after the same flag moved, so its
+    // answer is current, and killing it here can swallow the result entirely.
+    function syncFlags(): string {
+      flagProbe.running = true
+      return "ok"
     }
   }
 
@@ -375,9 +417,10 @@ Item {
 
         // Reserved, not floating: an app that draws under the status bar has
         // its first line of text hidden, and on a phone that is usually the
-        // only heading on screen.
-        exclusionMode: root.barHidden ? ExclusionMode.Ignore : ExclusionMode.Auto
-        margins.top: root.barHidden ? -root.barSize : 0
+        // only heading on screen. Unconditional since the bar stopped being
+        // hideable (barHidden, above) -- there is no state in which this
+        // surface is on screen and not reserving its own height.
+        exclusionMode: ExclusionMode.Auto
 
         // ---------------------------------------------------------- left
         Row {
@@ -460,8 +503,8 @@ Item {
             // Shown unless turned off, so this changes nothing until asked.
             // The flag is `battery-percentage-off` rather than
             // `battery-percentage` for that reason -- same negative polarity as
-            // bar-off, screensaver-off and suspend-off, where the file existing
-            // means the feature is off. Upstream's own row for this drives a
+            // screensaver-off and suspend-off, where the file existing means
+            // the feature is off. Upstream's own row for this drives a
             // desktop-bar widget we never instantiate.
             Text {
               anchors.verticalCenter: parent.verticalCenter

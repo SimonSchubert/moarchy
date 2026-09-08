@@ -267,18 +267,32 @@ var PAGES = {
   rows: [] },
 
 "appearance.bar": { title: "Status bar", rows: [
-  // Negative polarity: the flag existing means the bar is OFF.
-  { id: "show", type: "switch", glyph: "󰍜", label: "Show status bar",
-    read: "omarchy-toggle-enabled bar-off && echo true || echo false", invert: true,
-    on: "moarchy-toggle-bar on", off: "moarchy-toggle-bar off",
-    covers: { "trigger.toggle.top-bar": "N" } },
-  // Negative polarity again, so the bar looks the same until this is touched.
+  // Negative polarity: the flag existing means the percentage is OFF, so the
+  // bar looks the same until this is touched.
+  //
+  // `bar` is the IpcHandler target moarchy.bar declares, and `syncFlags` is a
+  // function that handler exports. Both words matter, and both were wrong here
+  // until 2026-09-08: this row wrote `omarchy-shell -q omarchy.bar syncHidden`,
+  // copied from upstream's own omarchy-toggle-bar, where `omarchy.bar` is the
+  // plugin *this phone replaces*. That call answered "Target not found", and
+  // `-q` turned it into exit 0 -- so the flag flipped, the switch moved, and
+  // the bar went on drawing the percentage it read at startup. docs/settings.md
+  // C4.
   { id: "battery", type: "switch", glyph: "󰁹", label: "Battery percentage",
     read: "omarchy-toggle-enabled battery-percentage-off && echo true || echo false",
     invert: true,
-    on: "omarchy-toggle battery-percentage-off off && omarchy-shell -q omarchy.bar syncHidden",
-    off: "omarchy-toggle battery-percentage-off on && omarchy-shell -q omarchy.bar syncHidden",
+    on: "omarchy-toggle battery-percentage-off off && omarchy-shell -q bar syncFlags",
+    off: "omarchy-toggle battery-percentage-off on && omarchy-shell -q bar syncFlags",
     covers: { "trigger.toggle.battery-percentage": "N" } }
+  // There is deliberately no "Show status bar" row. It had the same dead IPC
+  // call as the row above, and unlike that one it was not worth the repair: the
+  // shade's grab strip owns the top 26px whether or not the bar draws, so a
+  // hidden bar leaves the edge still swallowing drags with nothing on screen to
+  // explain it -- and the switch that undid it lived inside the screen it had
+  // just made harder to reach. Removed on 2026-09-08 along with the flag read,
+  // the keybinding and moarchy-toggle-bar; docs/settings.md C4a, and
+  // docs/menu-coverage.md carries `trigger.toggle.top-bar` as Unsupported.
+  //
   // There is deliberately no transparency row. The flag can only be written
   // through `omarchy-bar transparent`, which ends by asking the shell to reload
   // its config -- and that reload lands on shell.qml's fallback: the phone bar

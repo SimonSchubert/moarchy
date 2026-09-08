@@ -49,10 +49,10 @@ appeared and the keys did not.
 
 | Class | Entries |
 | --- | ---: |
-| Native | 70 |
+| Native | 69 |
 | Bridged | 58 |
 | Shade | 1 |
-| Unsupported | 191 |
+| Unsupported | 192 |
 | **Total** | **320** |
 
 Roughly a third of the menu survives. That is not a gap to be closed: the
@@ -122,7 +122,7 @@ Native 2 · Bridged 6 · Unsupported 2
 
 ## Trigger (47)
 
-Native 15 · Bridged 6 · Shade 1 · Unsupported 25
+Native 14 · Bridged 6 · Shade 1 · Unsupported 26
 
 | id | label | class | lands at | note |
 | --- | --- | --- | --- | --- |
@@ -166,8 +166,8 @@ Native 15 · Bridged 6 · Shade 1 · Unsupported 25
 | `trigger.toggle.crash-capture` | Crash Capture | Native | Sound & notifications > Crash capture | switch; negative-polarity flag `crash-capture-off` |
 | `trigger.toggle.screensaver` | Screensaver | Unsupported | -- | the `screensaver-off` flag gates Omarchy's idle screensaver; the phone's swayidle blanks the panel instead |
 | `trigger.toggle.nightlight` | Nightlight | Native | Display > Night light | switch; needs a wlsunset-backed `moarchy-toggle-nightlight` keeping the `--status` JSON shape |
-| `trigger.toggle.top-bar` | Menu Bar | Native | Appearance > Status bar > Show status bar | switch; `omarchy-toggle bar-off` + `syncHidden()`, NOT today's shell-killing `moarchy-toggle-bar` |
-| `trigger.toggle.battery-percentage` | Battery Percentage | Native | Appearance > Status bar > Battery percentage | upstream targets a desktop-bar widget we never instantiate; new flag read by Bar.qml |
+| `trigger.toggle.top-bar` | Menu Bar | Unsupported | -- | was a Show status bar switch until 2026-09-08. It nudged `omarchy.bar`, upstream's plugin id, so it never moved this phone's bar; and the shade's grab strip owns the top edge whether the bar draws or not, so hiding it leaves 26px eating drags with nothing on screen to explain them. `docs/settings.md` C4a |
+| `trigger.toggle.battery-percentage` | Battery Percentage | Native | Appearance > Status bar > Battery percentage | upstream targets a desktop-bar widget we never instantiate; new flag read by Bar.qml, applied through the toggles-directory watch and `omarchy-shell bar syncFlags` |
 | `trigger.toggle.workspace-layout` | Workspace Layout | Unsupported | -- | `omarchy-hyprland-workspace-layout-toggle` switches Hyprland dwindle/master |
 | `trigger.toggle.window-gaps` | Window Gaps | Unsupported | -- | Hyprland-only; one app per workspace means gaps only inset a single fullscreen window |
 | `trigger.toggle.one-window-ratio` | 1-Window Ratio | Unsupported | -- | Hyprland-only and meaningless at 360px |

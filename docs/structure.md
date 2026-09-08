@@ -648,18 +648,22 @@ same manifest now agree.
 > the two places that answer it, and a third copy is the divergence P5 exists to
 > prevent.
 
-> **The collision the old installer hid.** `moarchy` ships 19 scripts whose
-> names upstream Omarchy also uses — `omarchy-toggle-bar`, `omarchy-system-lock`,
-> `omarchy-launch-browser` and the rest. On the phone they won by PATH order,
-> because both were checkouts in `$HOME`. As packages they cannot both own
-> `/usr/bin/omarchy-toggle-bar`, and pacman refuses the transaction.
+> **The collision the old installer hid.** `moarchy` ships 21 scripts whose
+> names upstream Omarchy also uses — `omarchy-toggle-nightlight`,
+> `omarchy-system-lock`, `omarchy-launch-browser` and the rest. On the phone they
+> won by PATH order, because both were checkouts in `$HOME`. As packages they
+> cannot both own `/usr/bin/omarchy-toggle-nightlight`, and pacman refuses the
+> transaction. (22 until 2026-09-08: `omarchy-toggle-bar` went with the bar's
+> Show switch, docs/settings.md C4a. The number is `ls bin/omarchy-*` against
+> upstream's `/usr/bin`, not a constant anything checks.)
 >
 > So upstream's `bin/` goes to `/usr/bin`, where its own package puts it and
 > where its `sudoers.d` entries name it by absolute path, and ours goes to
 > `/usr/lib/moarchy/bin` with `/etc/profile.d/zz-moarchy.sh` putting that
 > ahead of it. The shadowing is unchanged; only where it is written down is.
 > Verified by installing both packages together and asking a login shell:
-> `omarchy-toggle-bar` resolves to ours, `omarchy-theme-set` to upstream's.
+> `omarchy-toggle-nightlight` resolves to ours, `omarchy-theme-set` to
+> upstream's.
 >
 > This also fixes a known-bad entry for free. `omarchy-theme-set-browser-policy`
 > failed on every theme change because its `sudoers.d` entry names
