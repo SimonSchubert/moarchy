@@ -43,19 +43,19 @@ pkgver=$_ver
 # field would not have seen either. An image installs fresh and hides that
 # completely; only a device already running the old package can tell you. Same
 # trap manifest.toml records for the keyboard.
-# Back to 1 for 0.2.0, and the paragraphs above are why that is safe rather
-# than a reset that loses something. 0.2.0-1 is newer than every number this
-# package has carried -- the published 0.1.1-1, the 0.1.1-2 a flashed phone
-# holds, and the 0.1.1-3 that never left packages/ -- so pacman offers it to
-# all three. The counter starts over; the rule does not.
+# Back to 1 at a pkgver bump, and the paragraphs above are why that is safe
+# rather than a reset that loses something. It went back to 1 for 0.2.0 the
+# same way, off 0.1.1.
 #
-# 2 for the drawer's app detail sheet (docs/gestures.md L): bin/ gains
-# moarchy-app-remove, default/ gains the sheet, and depends= gains foot and
-# polkit-gnome. 0.2.0-1 is published and a phone is holding it, so this is
-# content that has changed since the last artifact that shipped -- which is
-# exactly the case the paragraphs above say the number moves for. The depends
-# change alone would be reason enough: pacman compares versions, not depends.
-pkgrel=2
+# 1 for 0.2.1. 0.2.1-1 is newer than every number this package has carried:
+# the 0.2.0-1 that packages/ built and the [moarchy] repo publishes, and the
+# 0.2.0-2 this line said for a day. That 2 is worth a sentence, because it is
+# the shape of thing the reset could lose. It was taken for the drawer's app
+# detail sheet and the three undeclared depends, it was correct, and no
+# artifact ever wore it -- packages/ holds a 0.2.0-1 and nothing else. So there
+# is no device in the field on a 2, and 0.2.1-1 is offered to every phone
+# whatever it holds. The counter starts over; the rule does not.
+pkgrel=1
 pkgdesc="Omarchy's look, keybindings and theming on a PinePhone, under Sway"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'

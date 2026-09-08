@@ -40,22 +40,18 @@ pkgver=$_ver
 # and index-fm with no version move at all -- so a phone already holding
 # 0.1.0-1 would never have seen any of it. Then pkgver moved to 0.1.1 and this
 # went back to 1, because 0.1.1-1 is already newer than 0.1.0-2.
-# Back to 1 for 0.2.0, the same way it went back to 1 at 0.1.1: 0.2.0-1 is
-# already newer than the 0.1.1-3 in packages/ and the 0.1.1-1 the repo
-# publishes, so the reset hides nothing from any device.
+# Back to 1 for 0.2.1, the same way it went back to 1 at 0.1.1 and at 0.2.0:
+# 0.2.1-1 is already newer than the 0.2.0-1 the repo publishes and than the
+# 0.2.0-2 this line said for a day, so the reset hides nothing from any device.
+# No artifact was ever built at that 2 -- packages/ holds a 0.2.0-1 -- so there
+# is nothing in the field on a number the reset walks past.
 #
-# What this line gained since that published 0.1.1-1, which is the diff a phone
-# in the field actually sees: mise-bin, nodejs and npm; the ten packages
-# makepkg shells out to, so an AUR build gets past fakeroot; moarchy-keep. And
-# lisgd left with the gestures daemon nothing started.
-#
-# 2 for dropping alacritty and qmlkonsole (docs/apps.md T1). 0.2.0-1 is
-# published and a phone is holding it, so this is the case the paragraphs above
-# say the number moves for -- and it moves for a REMOVAL, which is the half
-# that is easy to forget: pacman compares versions, and a depends line that
-# loses two names under an unchanged version leaves both packages installed on
-# every device that already has them.
-pkgrel=2
+# What this line lost since that published 0.2.0-1, which is the diff a phone
+# in the field actually sees: alacritty and qmlkonsole (docs/apps.md T1). That
+# it moves for a REMOVAL is the half that is easy to forget -- pacman compares
+# versions, and a depends line that loses two names under an unchanged version
+# leaves both packages installed on every device that already has them.
+pkgrel=1
 pkgdesc="The moarchy package set -- install this and you have the phone"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'

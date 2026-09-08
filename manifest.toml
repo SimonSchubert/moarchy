@@ -38,7 +38,7 @@ version = "v4.0.2"
 # Nothing else in the repo states a version.
 # ---------------------------------------------------------------------------
 [moarchy]
-version = "0.2.0"
+version = "0.2.1"
 
 # ---------------------------------------------------------------------------
 # Our own components. Separate repos, consumed as built packages and never as
@@ -50,16 +50,29 @@ version = "0.2.0"
 # ---------------------------------------------------------------------------
 [moarchy-keyboard]
 url        = "https://github.com/SimonSchubert/moarchy-keyboard"
-ref        = "ced84dc8f843f400e6f462666fcd3645a42286b1"
-# Carries AC 52: the restore handle moves to Overlay while the keyboard is
-# retracted, so the drawer and Settings stop drawing over the one control that
-# brings the keyboard back.
+ref        = "f1f2dda18f96c5ae087336410bc4178f405cba6f"
+# Carries AC 53: deactivate arms a 350 ms timer instead of retracting, so a
+# focus change between two windows that both want a keyboard stops taking the
+# 200px exclusive zone away and giving it back -- which relaid out every window
+# on the screen twice. --retract-delay changes it on the device.
 #
-# The note that used to sit here said the package version does not move when
-# the contents do, and that the keyboard repo has to bump for a phone in the
-# field to see an upgrade. It did -- this ref is 0.1.0-2. Keeping the shape of
-# the warning because the trap is permanent: pinning by commit here can name a
-# fix that pacman will never offer, and an image hides it by installing fresh.
+# And AC 52 before it: the restore handle moves to Overlay while the keyboard
+# is retracted, so the drawer and Settings stop drawing over the one control
+# that brings the keyboard back.
+#
+# This ref is 0.1.0-3. The keyboard's own PKGBUILD moved its pkgrel for it, and
+# that is the half this pin cannot do: pinning by commit here can name a fix
+# that pacman will never offer, because a phone holding 0.1.0-2 compares
+# versions and not contents, and an image hides it completely by installing
+# fresh. The trap is permanent, so the warning stays whether or not the bump
+# was remembered this time.
+#
+# Shipping with one half unverified, stated because the repo states it: the
+# timing checks -- that the retract is delayed rather than merely conditional,
+# and that it hides exactly once -- are written as an AC 53 section in that
+# repo's tests/acceptance.sh and have not been run. What was measured on the
+# phone is the wire: 0 set_exclusive_zone calls across a foot-to-foot switch,
+# against (0) then (224) with --retract-delay 0.
 version    = "0.1.0"
 # The PKGBUILD lives in packaging/, not at the repo root.
 pkgbuilddir = "packaging"
