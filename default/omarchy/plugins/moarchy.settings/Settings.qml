@@ -18,8 +18,8 @@
 // 1. open() does no reading. It sets the page and returns; the guard batch runs
 //    from Qt.callLater. open() is called inside the IPC handler for
 //    `omarchy-shell shell summon`, and anything that spins a nested event loop
-//    there leaves it unfinished -- which maps a layer surface that never paints:
-//    a black rectangle over the whole screen, logged nowhere. Same trap
+//    there leaves it unfinished -- which maps a window that never paints: a
+//    black rectangle over the whole screen, logged nowhere. Same trap
 //    port-4x.sh documents on the launcher's FileView.
 //
 // 2. Row visibility is a property looked up per row, not a filter over the
@@ -32,9 +32,9 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import Quickshell.Wayland
 import qs.Commons
 import qs.Ui as Ui
+import "../moarchy.common" as Shared
 import "Pages.js" as Pages
 import "Guards.js" as Guards
 
@@ -55,13 +55,20 @@ Item {
 
   readonly property string pluginId: "moarchy.settings"
 
-  property bool opened: false
+  // Whether the window is mapped, read back off the window rather than driven
+  // into it (docs/gestures.md K1, and the note in moarchy.common/AppWindow.qml
+  // about why this direction and not the other).
+  //
+  // There is no second `running` alongside this any more. That property existed
+  // because a layer surface had to stand for "off screen but still an app"
+  // itself; a window has a workspace for that, and the two states collapsed
+  // into one the day the surface became a window.
+  readonly property bool opened: settingsWindow.visible
 
-  // K1. Summoned and not yet closed, which is a longer life than `opened`:
-  // the strip's up-swipe, a bridged launch and handing off to the theme picker
-  // all put this surface away without ending it. The carousel keeps a card for
-  // exactly this span, and the page stack below survives it.
-  property bool running: false
+  // What the carousel reads to decide whether the window is this plugin's, and
+  // what the back gesture walks the page stack through (moarchy.common/
+  // ShellApps.js).
+  readonly property var appWindow: settingsWindow
 
   property string returnTo: ""
 
@@ -79,13 +86,13 @@ Item {
   // value you came to read -- yes; a command already running in a terminal --
   // no.
   //
-  // `quietWasRunning` and `quietStack` are put back on the way out. A quiet
-  // open that never showed anything must leave Settings exactly as it found it,
-  // or taking a screenshot from the drawer throws away a Settings sitting in the
-  // carousel on some other page (K1, K5).
+  // `quietWasMapped` and `quietStack` are put back on the way out. A quiet open
+  // that never showed anything must leave Settings exactly as it found it, or
+  // taking a screenshot from the drawer throws away a Settings sitting in the
+  // carousel on some other page (K4).
   property string pendingRow: ""
   property bool quietOpen: false
-  property bool quietWasRunning: false
+  property bool quietWasMapped: false
   property var quietStack: ["root"]
 
   // The page stack, root first. currentPage is its top.
@@ -134,38 +141,36 @@ Item {
   property var inputMap: ({})
   property string focusedInput: ""
 
-  // What the on-screen keyboard reserves at the bottom. Duplicated from
-  // moarchy.gestures for the reason gestureStrip below is, and deliberately not
-  // through Style.space: it is moarchy-keyboard's panel and that client never
-  // sees this theme's spacing scale. Only ever half of a threshold (I5e), so it
-  // has to be nowhere near either cluster rather than exact.
-  readonly property int keyboardPanelHeight: 200
-
-  // I5e. Is the keyboard up? Asked of the compositor's configure, because
-  // `focusedInput` answers a different question -- see the inset binding below.
-  // False while the surface is down, so a stale height from before the last
-  // unmap cannot drop the inset on the first frame of the next open.
-  readonly property bool keyboardUp:
-    settingsWindow.visible && settingsWindow.screen
-    && settingsWindow.height < settingsWindow.screen.height - root.keyboardPanelHeight / 2
-
-  // I5d. Put the keyboard away on the way out. This surface holds the seat's
-  // keyboard while it is up, so sway re-activates the window underneath on the
-  // unmap and its text input brings the keyboard back -- measured 3 of 3 with
-  // an app focused underneath, against 0 of 3 for the shade, which takes no
-  // keyboard. Fire-and-forget for F3's reason: the answer is not needed and a
-  // dismissal must not wait on a round trip.
+  // I5, and all that is left of it here. The keyboard's own inset is the
+  // compositor's business now: squeekboard is a layer surface with an exclusive
+  // zone, so sway resizes this *window* around it and the page reflows with no
+  // arithmetic of its own. The layer surface had to compute that itself,
+  // because a zero-exclusive-zone surface is arranged over the whole output
+  // whatever else is on it -- hence the negative bottom margin, the duplicated
+  // keyboard panel height and the height-versus-screen probe that stood in for
+  // asking whether the keyboard was up. All three are gone.
+  //
+  // I5d. Put the keyboard away on the way out. Kept, because the failure it
+  // names is not about layers: closing a screen hands the text input back to
+  // whatever sway focuses next, and that client can raise the keyboard with
+  // nothing focused here at all. Fire-and-forget for F3's reason: the answer is
+  // not needed and a dismissal must not wait on a round trip.
   function hideKeyboard(): void {
     Quickshell.execDetached(["busctl", "--user", "call", "sm.puri.OSK0",
                              "/sm/puri/OSK0", "sm.puri.OSK0", "SetVisible",
                              "b", "false"])
   }
 
-  // Set for the length of a dismissal that exists to open something else --
-  // hideOnly()'s callers, and dismiss() when it has somewhere to go back to --
-  // and cleared by the close() it guards. Every one of those is about to stand
-  // something up that may want the keyboard, and a screenshot or a terminal is
-  // not improved by racing a SetVisible against it.
+  // Set for the length of a dismissal that exists to open something else, and
+  // cleared by the unmap it guards. Two callers left, and both really do unmap:
+  // dismiss() when it has somewhere to go back to, and dropQuiet(), which is
+  // putting away a surface that never mapped in the first place.
+  //
+  // It used to be set by every bridged launch as well, because a launch used to
+  // hide this screen. Nothing here hides any more (K8), so setting it on a
+  // launch would leave it standing until the next real close -- which would
+  // then skip the keyboard hide that close exists to do (I5d). A flag consumed
+  // by an event has to be set only by the paths that cause the event.
   property bool handingOff: false
 
   function inputValue(id) {
@@ -179,17 +184,6 @@ Item {
     next[id] = String(value)
     root.inputMap = next
   }
-
-  // Must match moarchy.gestures' own stripHeight. Duplicated rather than
-  // read across plugins for the same reason the shade duplicates it: this
-  // surface has to know the number even when the gestures plugin failed to
-  // load, and a sheet that ran off the bottom of the screen in that case would
-  // be worse than one that leaves the band unused.
-  //
-  // Not 20 pixels. Style.space rounds a *scaled* value and the scale comes from
-  // the theme's shell.toml, so this is nearer 23 at the default ~1.15 -- which
-  // is why nothing here or in the selftest writes the number down.
-  readonly property int gestureStrip: Style.space(20)
 
   readonly property int radiusCard: Style.space(18)
 
@@ -418,13 +412,16 @@ Item {
     root.handingOff = false
     var start = "root"
     var resume = false
+    var named = false
     var pending = ""
     var quiet = false
     try {
       var payload = JSON.parse(String(payloadJson || "{}"))
       if (payload.returnTo) root.returnTo = String(payload.returnTo)
-      if (payload.page && Pages.exists(String(payload.page)))
+      if (payload.page && Pages.exists(String(payload.page))) {
         start = String(payload.page)
+        named = true
+      }
       resume = payload.resume === true
       if (payload.activate) pending = String(payload.activate)
       // `quiet` without a row to fire is a surface that would never map and
@@ -436,23 +433,26 @@ Item {
 
     // Read before the stack is rebuilt below, so the way back is the state this
     // open found rather than the one it made.
-    root.quietWasRunning = root.running
+    root.quietWasMapped = root.opened
     root.quietStack = root.stack
     root.quietOpen = quiet
     root.pendingRow = pending
 
-    // K5. A resume is the carousel handing the screen back to a Settings that
-    // was hidden rather than closed, so it comes back on the page it left.
+    // K12, `settings.md` A7. A summon that names no page and finds the window
+    // already mapped is somebody asking for the screen they were on -- the
+    // shade's gear tapped from another workspace, a drawer result, a second
+    // press of a keybinding -- and an app answers that by coming back where it
+    // was, not by throwing away where you were. Explicit is still explicit:
+    // `openAt system.power` navigates whether or not the window is up, which is
+    // what the shade's power glyph depends on.
     //
-    // `running` is read before it is set, and that ordering is the whole
-    // guard: after a close (K6) it is false, so a stale `{resume:true}` --
-    // from a card that outlived its screen, or a hand-typed IPC call --
-    // rebuilds the stack instead of resuming a page nobody is standing on.
-    // docs/settings.md A6 is untouched by this: reopening a *closed* Settings
-    // still lands on the root.
+    // `opened` is read before anything below maps, so a close (K6) makes this
+    // false and the next open rebuilds at the root -- which is `settings.md` A6
+    // unchanged, and why that criterion says *closing* and reopening.
+    //
     // A rebuilt stack is a different screen, so the fields on the old one go
-    // with it; a resume is the same screen coming back and keeps what was typed.
-    if (!resume || !root.running) {
+    // with it; coming back to the same screen keeps what was typed.
+    if (named || !(resume || root.opened)) {
       root.stack = root.stackFor(start)
       root.resetFields()
     }
@@ -463,8 +463,9 @@ Item {
     // afterPageChange(); open() reached refresh() without it.
     root.resetReadState()
     root.confirmText = ""
-    root.running = true
-    root.opened = !quiet
+    // K12. show() focuses the window when it is already mapped, rather than
+    // leaving a summon from another workspace looking like it did nothing.
+    if (!quiet) settingsWindow.show()
     if (quiet) quietTimeout.restart(); else quietTimeout.stop()
     // Deferred, always. See note 1 in the header.
     Qt.callLater(root.refresh)
@@ -477,19 +478,20 @@ Item {
   function showQuiet() {
     if (!root.quietOpen) return
     root.quietOpen = false
-    root.opened = true
+    settingsWindow.show()
   }
 
-  // Nothing to look at: the row is already running somewhere else. Put back
-  // what the open found -- `running` and the stack both -- and hand the surface
-  // back to the host, which is the half that keeps `openPanelIds` honest.
+  // Nothing to look at: the row is already running somewhere else. Put back the
+  // stack the open found, and leave the window exactly as mapped or unmapped as
+  // it was -- a quiet open fired from the drawer must not close a Settings that
+  // was sitting on another workspace (K4).
   function dropQuiet() {
     if (!root.quietOpen) return
     root.quietOpen = false
-    root.running = root.quietWasRunning
     root.stack = root.quietStack
     root.resetReadState()
     root.resetFields()
+    if (root.quietWasMapped) return
     // A quiet open never mapped and so never took the keyboard: there is no
     // handback to undo, and firing the hide here would put away a keyboard this
     // screen was never over (I5d).
@@ -556,36 +558,33 @@ Item {
     root.showQuiet()
   }
 
-  // Hidden, not closed. Every hide in this shell lands here -- shell.hide()
-  // calls it -- so `running` deliberately survives: the card stays in the
-  // carousel and the stack stays standing for K5 to resume.
+  // K6. Unmapping the window is closing the app, and there is no longer a
+  // second, gentler thing it could mean. Every hide in this shell lands here --
+  // shell.hide() calls it -- and the callers that used to mean "get off the
+  // screen for a moment" do not call it any more: they change workspace, or
+  // they leave the window alone because a terminal now maps above it (K8).
   //
-  // Which is exactly why the keyboard hide belongs here and not in dismiss():
-  // the gestures that put this screen away (the back swipe, the up-flick, going
-  // home) never reach dismiss() at all, and they are the ones that leave a
-  // keyboard standing (I5d).
+  // The keyboard hide belongs here and not in dismiss(), because the paths that
+  // end this screen without going through dismiss() -- the card flick, the
+  // host's own hide -- are the ones that leave a keyboard standing (I5d).
+  // The reset itself is on the unmap and not here, because here is not the only
+  // way out: the carousel's card flick sends xdg_toplevel.close and Qt takes the
+  // window down without anything in this file being called (K6, E3).
   function close() {
-    if (!root.handingOff) root.hideKeyboard()
-    root.opened = false
+    settingsWindow.hide()
   }
 
-  // K6. Closed for good: the card leaves the carousel and the next opening is
-  // a fresh one at the root. Exactly two gestures reach this -- flicking the
-  // card away (E3) and back on the root page (B3) -- and nothing else may, or
-  // a screen that was merely put away comes back having forgotten where it
-  // was.
+  // K6. Kept as a name because the carousel and the back gesture both ask for
+  // it by name, and because "quit" is what the two of them mean. It is close()
+  // with nothing added: hiding and closing stopped being different acts when
+  // the surface became a window.
   function quit(): void {
-    root.running = false
-    root.stack = ["root"]
-    root.confirmText = ""
-    root.confirmRow = null
-    root.hideOnly()
+    root.close()
   }
 
-  // Put the surface away without going anywhere. Handing off to another plugin
-  // and launching a command both need this: dismiss() would additionally summon
-  // whatever opened us, so tapping Screenshot from the shade's gear would take a
-  // screenshot of the shade coming back.
+  // Put the window away without going anywhere. dismiss() would additionally
+  // summon whatever opened us, which is the wrong half for the quiet open that
+  // is the only caller left.
   function hideOnly() {
     if (root.shell && typeof root.shell.hide === "function") root.shell.hide(root.pluginId)
     else root.close()
@@ -865,27 +864,29 @@ Item {
     if (row.type === "plugin") {
       var target = String(row.plugin)
       var here = root.currentPage
-      // A hand-off: Wi-Fi and Bluetooth both stand up a passphrase field, and
-      // forcing the keyboard down here would race it (I5d).
-      root.handingOff = true
-      root.hideOnly()
+      // Nothing is put away. Wi-Fi and Bluetooth are windows of their own now
+      // (K1, K10) and go to their own workspace; the theme picker is still a
+      // sheet and draws over this window the way it draws over any app. What
+      // used to happen here -- hide Settings, then summon -- would close it.
+      //
+      // And `handingOff` is not set either, which it was. That flag exists to
+      // silence the keyboard hide on an unmap this screen is about to be
+      // replaced through, and it is consumed by the unmap. With nothing here
+      // unmapping, setting it would leave it standing until the *next* close --
+      // which would then skip the hide it is there to do, and leave a keyboard
+      // up over whatever came after (I5d).
       if (root.shell && typeof root.shell.summon === "function")
         root.shell.summon(target, JSON.stringify({ returnTo: root.pluginId,
                                                    page: here }))
       return
     }
 
-    if (row.type === "switch") { root.setSwitch(row, !root.rowChecked(row)); return }
+    if (row.type === "switch") {
+      root.setSwitch(row, !root.rowChecked(row))
+      return
+    }
 
     if (row.type === "choice") {
-      // `hides` is for the choice rows whose write ends in a terminal rather
-      // than in a file -- the AI agent rows, where picking one installs it
-      // through mise and then opens it. It is the same reason the action branch
-      // below hides: a foot window mapped under a full-screen layer surface is
-      // indistinguishable from a tap that did nothing.
-      // The command being run is the thing that gets to ask for a keyboard --
-      // this row exists to open a terminal (I5d).
-      if (row.hides && !root.dryRun) { root.handingOff = true; root.hideOnly() }
       root.runCommand(root.commandFor(row))
       // Re-read rather than assume: the reader is the truth, and a write that
       // did not take must not leave the tick moved.
@@ -911,10 +912,20 @@ Item {
       return
     }
 
-    // action, link. Settings goes away first so the terminal or the vendored
-    // picker is not underneath a layer surface -- and so a screenshot is not
-    // a screenshot of this screen.
-    if (!root.dryRun) { root.handingOff = true; root.hideOnly() }
+    // action, link. Settings stays exactly where it is (K8, `settings.md` C9,
+    // D8, E6). A tiled terminal is moved to a free workspace and focused by
+    // bin/moarchy-one-app-per-workspace; a floating one maps above this window;
+    // a vendored picker is a layer surface and draws over it. Every one of them
+    // is on screen, which is the whole of what the hide here used to buy -- and
+    // it bought it by closing the screen you launched from.
+    //
+    // Screenshot is the one row that reads differently now: it captures what is
+    // on screen, and what is on screen is this. That is the honest outcome of a
+    // window taking a picture of its own output, and the alternative -- hiding
+    // first -- photographed the empty workspace Settings had been given.
+    //
+    // No `handingOff` here either, for the reason the plugin branch above
+    // gives: it guards an unmap, and there is no longer one to guard.
     root.runCommand(cmd)
   }
 
@@ -930,19 +941,33 @@ Item {
   IpcHandler {
     target: "settings"
 
+    // Whether the window is mapped. `open` survives a workspace switch now, so
+    // this and `running` below are the same question -- which is the point of
+    // docs/gestures.md K and why the vocabulary in settings.md lost "hidden".
     function state(): string { return root.opened ? "open" : "closed" }
 
-    // K1/K6. `state` answers whether the surface is on screen, which stopped
-    // being the same question once a hidden Settings kept its card. Both
-    // verbs below are here so a test can tell the two apart without reading
-    // the carousel's list and inferring.
-    function running(): string { return root.running ? "running" : "stopped" }
+    // Kept as a verb because the selftest and the docs both cite it, and
+    // because it still answers something worth asking on its own terms: is
+    // there a Settings to come back to. It just cannot disagree with `state`
+    // any more.
+    function running(): string { return root.opened ? "running" : "stopped" }
 
-    // Hide without closing -- what the strip's up-swipe does (K4), reachable
-    // without a finger. `close` remains the one that quits.
-    function hide(): string { root.hideOnly(); return "ok" }
+    // K1, K9. What the carousel resolves this window by, and the one thing a
+    // test can read that says whether the toplevel handle was found at all --
+    // a card with no icon and a back gesture that closes the app underneath are
+    // both this answering `none`.
+    function window(): string {
+      return (settingsWindow.visible ? "mapped" : "unmapped")
+           + " title=" + settingsWindow.title
+           + " toplevel=" + (settingsWindow.toplevel
+               ? (settingsWindow.toplevel.appId + " "
+                  + (settingsWindow.toplevel.activated ? "active" : "inactive"))
+               : "none")
+    }
 
-    // K5. What tapping the card does: come back on the page it was hidden on.
+    // K12. Focus the window rather than open a second one. Named `resume`
+    // because that is what the carousel's card tap used to send and what the
+    // docs cite; it is a plain focus now.
     function resume(): string {
       if (root.shell)
         root.shell.summon(root.pluginId, JSON.stringify({ resume: true }))
@@ -1125,17 +1150,18 @@ Item {
     // is telling the truth (docs/gestures.md I2).
     //
     // `gap` is how far the last content pixel comes to rest above the bottom of
-    // the surface. It must never fall below `strip`, or a row settles under the
-    // home pill where it cannot be tapped (I4, I5).
+    // the window. Sway sizes this one around the bar, the strip and the
+    // keyboard, so `h` short of `screen` by the bar and the strip is the window
+    // being arranged correctly rather than a margin being computed correctly.
     //
-    // Meaningless while the surface is closed or mid-slide: open it first.
+    // Meaningless while the window is closed: open it first.
     function geometry(): string {
-      var gap = Math.round(settingsWindow.height - rowList.mapToItem(null, 0, rowList.height).y + rowList.bottomMargin)
+      var gap = Math.round(settingsWindow.height - rowList.mapToItem(null, 0, rowList.height).y)
       return "w=" + settingsWindow.width
            + " h=" + settingsWindow.height
-           + " margin=" + settingsWindow.margins.bottom
-           + " strip=" + root.gestureStrip
            + " gap=" + gap
+           + " title=" + settingsWindow.title
+           + " toplevel=" + (settingsWindow.toplevel ? "yes" : "no")
            + " screen=" + (settingsWindow.screen
                ? settingsWindow.screen.width + "x" + settingsWindow.screen.height : "?")
     }
@@ -1176,71 +1202,45 @@ Item {
     onTriggered: root.hideKeyboard()
   }
 
-  // --------------------------------------------------------------- surface
-  PanelWindow {
+  // ---------------------------------------------------------------- window
+  //
+  // docs/gestures.md K. An ordinary toplevel: sway tiles it, gives it a
+  // workspace of its own, and the sideways swipe walks past it and back to it
+  // like any other app. Everything the layer-shell version had to arrange for
+  // itself -- the workspace, the keyboard inset, the strip inset, the card in
+  // the carousel -- is the compositor's now.
+  Shared.AppWindow {
     id: settingsWindow
 
-    visible: root.opened
-    anchors { top: true; bottom: true; left: true; right: true }
-    color: "transparent"
+    shell: root.shell
+    appName: "Settings"
+    pageTitle: root.pageTitle === "Settings" ? "" : root.pageTitle
+    pluginId: root.pluginId
+    // K5. One character of a Nerd Font, invisible in an editor that has no such
+    // font: U+E615, nf-seti-config -- the gear the shade opens this by.
+    glyph: ""
+    color: root.surface
 
     // I5d. The unmap is the event that raises the keyboard, so it is also the
     // event that has to put it away. `handingOff` is consumed here rather than
-    // in close(): for the drawer close() runs a whole animation before the
-    // surface goes, and a flag cleared at the top of it would be gone by the
-    // time this ran.
-    onVisibleChanged: {
-      if (visible) return
+    // in close(): a hand-off may run a whole animation before the window goes,
+    // and a flag cleared at the top of it would be gone by the time this ran.
+    //
+    // A6, K6. The page stack resets here too, and here is the only place it can:
+    // the card flick closes this window through xdg_toplevel.close, which Qt
+    // answers by hiding it without calling anything in this file.
+    onUnmapped: {
       if (!root.handingOff) keyboardRetreat.restart()
       root.handingOff = false
+      root.stack = ["root"]
+      root.confirmText = ""
+      root.confirmRow = null
+      root.resetFields()
     }
-
-
-    WlrLayershell.namespace: "moarchy-settings"
-    WlrLayershell.layer: WlrLayer.Top
-
-    exclusionMode: ExclusionMode.Normal
-    exclusiveZone: 0
-
-    // Extend past the bottom of the usable area, under the gesture strip. A
-    // zero exclusive zone means sway arranges this *into* what the exclusive
-    // surfaces left, so without this the sheet stops at the top of the strip
-    // and a band of wallpaper -- or of the app behind -- shows under it with
-    // the pill drawn on it (docs/gestures.md I1).
-    //
-    // The exclusion mode is deliberately untouched. The strip still reserves
-    // its band off every window and this surface is still arranged around the
-    // on-screen keyboard, because a margin moves only this surface's own bottom
-    // edge. Reserving and drawing-under are separate questions.
-    //
-    // Negative is legal, not a trick: wlroots stores layer-shell margins as
-    // int32_t and computes `box.height = bounds.height - (margin.top +
-    // margin.bottom)` with no clamping, and sway delegates to it and adds no
-    // validation of its own.
-    //
-    // Gated on focus since Set a reminder gave Settings its first text field
-    // (J11). The inset is what lets the sheet draw under the gesture strip;
-    // while a field has the keyboard it has to go, or the field ends up behind
-    // it. Focus is the signal that arrives first -- the same arrangement the
-    // Wi-Fi passphrase field and the drawer's search field use.
-    //
-    // But focus alone answers only for a keyboard *this* surface raised, and
-    // I5d is the proof that is not the only kind: closing an overlay hands the
-    // window underneath its text input back and the keyboard comes up with
-    // nothing here focused at all. `keyboardUp` covers that gap, read off the
-    // compositor's configure. OR, so this can only drop the inset in more cases
-    // than before and never in fewer. See the drawer's copy for the measured
-    // clusters the threshold sits between (I5e).
-    margins.bottom: (root.focusedInput !== "" || root.keyboardUp)
-                    ? 0 : -root.gestureStrip
-    WlrLayershell.keyboardFocus: root.opened ? WlrKeyboardFocus.Exclusive
-                                             : WlrKeyboardFocus.None
 
     Rectangle {
       anchors.fill: parent
       color: root.surface
-      opacity: root.opened ? 1 : 0
-      Behavior on opacity { NumberAnimation { duration: 140 } }
 
       focus: true
       Keys.onEscapePressed: { if (!root.goBack()) root.dismiss() }
@@ -1313,9 +1313,6 @@ Item {
           height: Math.max(0, parent.height - y)
           clip: true
           spacing: Style.space(6)
-          // Scroll padding, so the last row rests a strip clear of the home
-          // pill now that the page runs under it (docs/gestures.md I4).
-          bottomMargin: root.gestureStrip
           model: root.currentRows
           boundsBehavior: Flickable.StopAtBounds
           interactive: contentHeight > height

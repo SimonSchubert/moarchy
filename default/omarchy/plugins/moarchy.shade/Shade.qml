@@ -696,9 +696,19 @@ Item {
   // (docs/shade.md S6b, S6c, S6d).
 
   // Set by `shade dryRun 1`, the way Settings does it. What the tile decided is
-  // recorded either way; only the two effects that cannot be taken back -- the
-  // radio write and the launch -- are held back. Without this a check of S6a
-  // would have to switch the radio off on a phone reached over that radio.
+  // recorded either way; only the effect that cannot be taken back -- the radio
+  // write -- is held back. Without this a check of S6a would have to switch the
+  // radio off on a phone reached over that radio.
+  //
+  // Summoning a picker is deliberately NOT held back, and used to be. The
+  // sentence above said "the radio write and the launch", and the launch it
+  // meant was `nmtui-connect` in a terminal, from before S6b made the picker a
+  // screen. A screen can be closed again, which is the whole test dryRun
+  // applies; holding it back made S6 and S6c unpassable by construction --
+  // they assert that the picker is on screen, and the setup that let them run
+  // was what stopped it opening. Both failed for two releases, reported each
+  // time as "the summon was recorded and did not land", which is exactly what
+  // was happening and exactly what was being asked for.
   property bool dryRun: false
   property string lastLaunch: ""
   property string lastAction: ""
@@ -723,12 +733,13 @@ Item {
   // a process, so lastLaunch carries the plugin id -- not a command -- and
   // lastAction records the same "picker" the tile checks assert.
   function openScreen(id) {
-    // The screen comes up over the shade, so the shade goes away first -- the
-    // same order the gear uses (S2).
+    // The shade goes away first -- the same order the gear uses (S2). It is a
+    // sheet over whatever workspace this is, and the screen it summons is a
+    // window on another one (docs/gestures.md K1), so leaving it up would put
+    // the sheet over the workspace the summon just left.
     root.dismiss()
     root.lastAction = "picker"
     root.lastLaunch = id
-    if (root.dryRun) return
     if (root.shell && typeof root.shell.summon === "function")
       root.shell.summon(id, JSON.stringify({ returnTo: "moarchy.shade" }))
   }

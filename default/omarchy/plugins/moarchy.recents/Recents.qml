@@ -54,6 +54,7 @@ import Quickshell.Wayland
 import qs.Commons
 import qs.Ui as Ui
 import "../moarchy.common/Theme.js" as Theme
+import "../moarchy.common/ShellApps.js" as ShellApps
 import "../moarchy.common" as Shared
 
 Item {
@@ -285,157 +286,25 @@ Item {
 
   // ----------------------------------------------------------- K. shell apps
   //
-  // Settings is a screen you spend time in rather than a sheet you summon and
-  // dismiss in one motion, so it gets a card (docs/gestures.md K). It is not a
-  // Wayland toplevel and cannot be made into one -- it is a layer surface this
-  // same process draws -- so it enters the model as a stand-in that answers
-  // the questions a card asks of a window: appId, title, activated, and now
-  // whether it is a window at all.
+  // Settings, Wi-Fi and Bluetooth are windows (docs/gestures.md K1), so they
+  // arrive here through ToplevelManager like `foot` does and every branch that
+  // used to exist for them is gone: the model, the MRU, the accent border,
+  // focusing, closing and the empty-carousel check are one code path again.
   //
-  // A QtObject and not a plain JS record, deliberately. `title` and
-  // `activated` are read straight out of delegate bindings, and a plain
-  // object's fields do not notify: the card would show whichever page
-  // Settings was on when the row was last rebuilt, and would keep its accent
-  // border after the screen had gone.
+  // What is left is decoration. Their app id is "org.quickshell" -- the shell
+  // process's own, and Qt has no per-window override (K9) -- so there is no
+  // desktop entry to look an icon or a name up in. The plugin that draws the
+  // window is asked instead, and it is asked by *handle*: ShellApps.forToplevel
+  // compares the toplevel object against each plugin's appWindow.toplevel,
+  // which the window itself resolved once when it mapped.
   //
-  // Three of these now. K11 said each addition should be a decision rather than
-  // a discovery that the machinery allows it -- Wi-Fi was that decision on
-  // 2026-09-06 and Bluetooth on 2026-09-07, and both pass the same test:
-  // joining a network or pairing a headset is something you sit in, wait in,
-  // and come back to, which is the shape of Settings and nothing like a sheet
-  // you summon and dismiss in one motion.
-  //
-  // Still not a registry. Three named properties are honest about there being
-  // three; a registry would imply plugins can opt in, and the ordering,
-  // focus and quit semantics below are not general enough for that to be true.
-  // What the third one did buy is `shellApps` and `itemForShellApp()` below:
-  // with two, the places that have to visit all of them could get away with
-  // naming both, and `hideShellApps()` quietly named only one.
-  property var settingsItem: null
-  property var wifiItem: null
-  property var bluetoothItem: null
-
-  function resolveShellApps(): void {
-    var loaders = root.shell && root.shell.panelLoaders ? root.shell.panelLoaders : null
-    var s = loaders ? loaders["moarchy.settings"] : null
-    var w = loaders ? loaders["moarchy.wifi"] : null
-    var b = loaders ? loaders["moarchy.bluetooth"] : null
-    root.settingsItem = s && s.item ? s.item : null
-    root.wifiItem = w && w.item ? w.item : null
-    root.bluetoothItem = b && b.item ? b.item : null
+  // This used to be three QtObjects standing in for the three screens, plus a
+  // polling Timer to find the plugins, plus a hide-them-all function, plus a
+  // `shellAppsRunning` the gestures plugin asked before raising the carousel.
+  // All of it existed to answer questions the compositor now answers.
+  function shellAppFor(app) {
+    return ShellApps.forToplevel(root.shell, app)
   }
-
-  // Polled, not bound, and not resolved once at startup either. `panelLoaders`
-  // is a plain map, so indexing it inside a binding takes a dependency on the
-  // map and none at all on a key that appears later -- and Settings does
-  // appear later: plugins are constructed in shell.json order and it is listed
-  // after this one. The `running` binding stops the timer the moment it
-  // resolves, and starts it again if the plugin is ever unloaded.
-  Timer {
-    id: settingsProbe
-    interval: 250
-    repeat: true
-    triggeredOnStart: true
-    running: root.settingsItem === null || root.wifiItem === null
-             || root.bluetoothItem === null
-    onTriggered: root.resolveShellApps()
-  }
-
-  QtObject {
-    id: settingsApp
-
-    readonly property bool shellApp: true
-    readonly property string appId: "moarchy.settings"
-    readonly property string name: "Settings"
-
-    // K2. The same gear the shade's button that opens it wears. One character
-    // of a Nerd Font, invisible in an editor that has no such font: U+E615,
-    // nf-seti-config.
-    readonly property string glyph: ""
-
-    // K1. Summoned and not yet closed, which outlives any number of hides.
-    readonly property bool running: !!(root.settingsItem && root.settingsItem.running)
-
-    // What puts the accent border on this card, and what makes it lead.
-    // Settings takes exclusive keyboard focus while it is up, so sway
-    // deactivates the window underneath and nothing competes for the mark.
-    readonly property bool activated: !!(root.settingsItem && root.settingsItem.opened)
-
-    // K2, K5. The page it will come back to. At the root this is "Settings",
-    // which the delegate already suppresses for being the card's own name.
-    readonly property string title:
-      root.settingsItem ? String(root.settingsItem.pageTitle || "") : ""
-
-    onRunningChanged: root.rebuildMru()
-    onActivatedChanged: root.rebuildMru()
-  }
-
-  QtObject {
-    id: wifiApp
-
-    readonly property bool shellApp: true
-    readonly property string appId: "moarchy.wifi"
-    readonly property string name: "Wi-Fi"
-
-    // The literal character, not an escape. "\uF092F" is \uF092 followed by an
-    // "F" -- JavaScript's \u takes exactly four hex digits -- and U+F092 is the
-    // GitHub octocat, which is what the card drew. Settings embeds its glyph
-    // literally for the same reason.
-    readonly property string glyph: "󰤯"
-
-    readonly property bool running: !!(root.wifiItem && root.wifiItem.running)
-    readonly property bool activated: !!(root.wifiItem && root.wifiItem.opened)
-
-    // The network it is on, so the card says something worth reading.
-    readonly property string title:
-      root.wifiItem ? String(root.wifiItem.pageTitle || "") : ""
-
-    onRunningChanged: root.rebuildMru()
-    onActivatedChanged: root.rebuildMru()
-  }
-
-  QtObject {
-    id: bluetoothApp
-
-    readonly property bool shellApp: true
-    readonly property string appId: "moarchy.bluetooth"
-    readonly property string name: "Bluetooth"
-
-    // The literal character, not an escape, for the reason Wi-Fi's note gives:
-    // JavaScript's \u takes exactly four hex digits, so "\uF00AF" is U+F00A
-    // followed by an "F". U+F00AF, md-bluetooth -- the same rune the shade's
-    // tile and the Settings row wear.
-    readonly property string glyph: "󰂯"
-
-    readonly property bool running: !!(root.bluetoothItem && root.bluetoothItem.running)
-    readonly property bool activated: !!(root.bluetoothItem && root.bluetoothItem.opened)
-
-    // The device it is on, so the card says something worth reading.
-    readonly property string title:
-      root.bluetoothItem ? String(root.bluetoothItem.pageTitle || "") : ""
-
-    onRunningChanged: root.rebuildMru()
-    onActivatedChanged: root.rebuildMru()
-  }
-
-  // The three, in the order they lead in when more than one is on screen --
-  // which cannot happen, since each hides the others on the way up, but the
-  // order has to be *some* order and this one matches shell.json.
-  readonly property var shellApps: [settingsApp, wifiApp, bluetoothApp]
-
-  // appId -> the plugin item behind it. quit() and hide() need the item, not
-  // the QtObject that mirrors it.
-  function itemForShellApp(appId) {
-    if (appId === "moarchy.wifi") return root.wifiItem
-    if (appId === "moarchy.bluetooth") return root.bluetoothItem
-    return root.settingsItem
-  }
-
-  // A9/K1, asked by the gestures plugin when it needs to know whether the
-  // strip has a carousel worth raising. Answered here so that "what counts as
-  // an app" is decided in exactly one place.
-  readonly property bool shellAppsRunning:
-    settingsApp.running || wifiApp.running || bluetoothApp.running
 
   // --------------------------------------------------------------- the model
   //
@@ -449,15 +318,13 @@ Item {
     return -1
   }
 
-  // Everything the carousel can show: the compositor's windows, and any shell
-  // app that is running (K1). One list, so nothing below needs to know which
-  // kind of thing it is ranking.
+  // Everything the carousel can show: the compositor's windows, which since
+  // K1 includes this shell's own three screens. One list, and no longer two
+  // concatenated.
   function liveApps() {
     var windows = ToplevelManager.toplevels ? ToplevelManager.toplevels.values : []
     var out = []
     for (var i = 0; i < windows.length; i++) out.push(windows[i])
-    for (var s = 0; s < root.shellApps.length; s++)
-      if (root.shellApps[s].running) out.push(root.shellApps[s])
     return out
   }
 
@@ -482,15 +349,9 @@ Item {
     // it -- so fall back to the per-toplevel `activated` flag, which is what
     // marks the card below and does track focus.
     //
-    // A shell app on screen leads, and is asked before the singleton rather
-    // than after it: sway deactivates the window under an exclusive-focus
-    // layer surface, but activeToplevel has been seen to answer with one
-    // anyway, and that stale answer would put the accent on the app Settings
-    // is covering rather than on Settings.
-    var active = null
-    for (var s = 0; s < root.shellApps.length; s++)
-      if (root.shellApps[s].activated) { active = root.shellApps[s]; break }
-    if (!active) active = ToplevelManager.activeToplevel
+    // The shell-app branch that used to come first is gone with the stand-ins:
+    // a focused Settings is a focused toplevel and answers both of these.
+    var active = ToplevelManager.activeToplevel
     if (!active)
       for (var k = 0; k < live.length; k++)
         if (live[k] && live[k].activated) { active = live[k]; break }
@@ -548,10 +409,7 @@ Item {
     function onAppsChanged() { root.appsRevision++; root.buildIndex() }
   }
 
-  onShellChanged: {
-    root.buildIndex()
-    root.resolveShellApps()
-  }
+  onShellChanged: root.buildIndex()
 
   function entryFor(appId) {
     if (!appId) return null
@@ -567,13 +425,32 @@ Item {
 
   function nameFor(app) {
     if (!app) return ""
-    // K2. A shell app names itself: there is no desktop entry to look it up
-    // in, because there is no .desktop file -- it is a surface we draw.
-    if (app.shellApp) return String(app.name || "")
+    // K5. A shell app names itself: there is no desktop entry to look it up
+    // in, because its app id is the shell process's own (K9).
+    var own = root.shellAppFor(app)
+    if (own) return String(own.appWindow.appName || "")
     var entry = root.entryFor(app.appId)
     if (entry && root.shell && root.shell.appLibrary)
       return root.shell.appLibrary.entryName(entry)
     return app.appId || app.title || "Window"
+  }
+
+  // K5. The third line: the page a shell app is on, which its own window
+  // already carries, and the window title for anything else. A shell app's
+  // title is "<name> — <page>", so reading it off the window rather than off
+  // the toplevel is what keeps the card from repeating its own name.
+  function titleFor(app) {
+    if (!app) return ""
+    var own = root.shellAppFor(app)
+    if (own) return String(own.appWindow.pageTitle || "")
+    return String(app.title || "")
+  }
+
+  // K5. The glyph a shell app's card wears in place of an icon, or "" for a
+  // window, which has a desktop entry to take one from.
+  function glyphFor(app) {
+    var own = root.shellAppFor(app)
+    return own ? String(own.appWindow.glyph || "") : ""
   }
 
   // ------------------------------------------------------------------ actions
@@ -581,61 +458,31 @@ Item {
   // activate() is the foreign-toplevel request, which Sway answers by focusing
   // the window and switching to whatever workspace holds it. There is no
   // con_id to dispatch against here and no need for one.
+  // One line, for every card. A shell app is a toplevel, so focusing it is
+  // whatever focusing any other card is -- which is a sway dispatch and not the
+  // foreign-toplevel activate() this used to send. That request does nothing on
+  // this compositor, for `foot` as much as for one of this shell's own windows,
+  // and had been doing nothing for as long as the carousel has existed; the
+  // measurement and the reasoning are in moarchy.gestures' focusToplevel().
+  //
+  // Nothing is hidden on the way. That used to be an ordering this comment
+  // spent a paragraph on -- hide the shell app *before* activating, because
+  // dropping an exclusive-focus layer surface made sway re-pick a focus and
+  // take the keyboard back off the window just raised. There is no layer
+  // surface to drop and no focus to re-pick: switching workspace is all of it.
   function focusApp(app): void {
     if (!app) return
-
-    if (app.shellApp) {
-      // K5. Resume rather than reopen: the page it was hidden on is the page
-      // it comes back to. A plain summon would rebuild the stack at the root.
-      if (root.shell && typeof root.shell.summon === "function")
-        root.shell.summon(app.appId, JSON.stringify({ resume: true }))
-      root.dismiss()
-      return
-    }
-
-    // K9, and in this order. A card that focuses a window must not hand it
-    // over with a full-screen sheet still drawn on top -- and hiding *after*
-    // the activate() would take keyboard focus back off the window we had
-    // just raised, because dropping an exclusive-focus layer surface makes
-    // sway re-pick a target.
-    root.hideShellApps()
-    app.activate()
+    ShellApps.focusToplevel(root.shell, app)
     root.dismiss()
-  }
-
-  // K4, K9. Off screen, still running: the card stays and the page stack below
-  // it is left standing. shell.hide() is the whole implementation -- it lands
-  // on the plugin's close(), which is deliberately the hiding one, while
-  // quit() is the closing one.
-  // All of them, which the plural in the name always claimed and the body did
-  // not do: it named Settings only, so tapping a window's card with the Wi-Fi
-  // screen up left that screen drawn over the window it had just raised --
-  // exactly the K9 failure the call site below is ordered to avoid.
-  function hideShellApps(): void {
-    if (!root.shell || typeof root.shell.hide !== "function") return
-    for (var i = 0; i < root.shellApps.length; i++) {
-      var app = root.shellApps[i]
-      if (app.running && app.activated) root.shell.hide(app.appId)
-    }
   }
 
   // close() is xdg_toplevel.close -- a close *request*, so an editor with
   // unsaved work prompts rather than dies. That is what makes firing it from a
-  // flick acceptable.
+  // flick acceptable, and a shell app takes it like any other window: Qt hides
+  // the window and the plugin's own onUnmapped resets its state (K6).
   function closeApp(app): void {
     if (!app) return
-
-    if (app.shellApp) {
-      // K6. quit(), not the hide() above: the card goes and the page stack
-      // resets, so the next opening is a fresh one at the root. There is no
-      // close *request* to make of our own surface and nothing it could
-      // prompt about, so unlike a window this can never be refused -- which is
-      // why the removal below is unconditionally right for it.
-      var item = root.itemForShellApp(app.appId)
-      if (item && typeof item.quit === "function") item.quit()
-    } else {
-      app.close()
-    }
+    app.close()
 
     // Drop it from the order immediately rather than waiting for closed(): an
     // app that refuses to quit would otherwise leave a card that has already
@@ -730,15 +577,20 @@ Item {
     // cannot see a 300ms gesture; this is the record it left behind.
     function dragTrace(): string { return root.dragTrace.join(" ") }
 
-    // One line per card, so a dismissal is assertable by counting. A shell
-    // app prints its plugin id and the page it is on (K1, K2), which is what
-    // makes "the card is still there after going home" checkable without a
-    // finger.
+    // One line per card, so a dismissal is assertable by counting.
+    //
+    // A shell app prints its plugin id rather than its app id, and that is
+    // deliberate: all three carry "org.quickshell" (K9), so the app id names
+    // the shell process and not the screen. The plugin id is what every check
+    // in the suite greps for and what a person reading the list expects.
     function list(): string {
       var out = []
       for (var i = 0; i < root.mru.length; i++) {
         var app = root.mru[i]
-        if (app) out.push((app.appId || "?") + " " + (app.title || ""))
+        if (!app) continue
+        var own = root.shellAppFor(app)
+        out.push((own ? own.pluginId : (app.appId || "?"))
+                 + " " + (own ? root.titleFor(app) : (app.title || "")))
       }
       return out.join("\n")
     }
@@ -901,10 +753,11 @@ Item {
           id: cardSlot
           required property var modelData
 
-          // K. A card is either a compositor window or one of this shell's own
-          // screens. Read once here rather than tested in each binding below.
-          readonly property bool shellApp:
-            !!(cardSlot.modelData && cardSlot.modelData.shellApp)
+          // K5. A card is a window either way; what differs is where its icon
+          // and name come from. Non-empty exactly for this shell's own three
+          // screens, which have no desktop entry to look one up in (K9).
+          readonly property string glyph: root.glyphFor(cardSlot.modelData)
+          readonly property bool shellApp: cardSlot.glyph !== ""
 
           width: cards.pitch
           height: cards.height
@@ -948,13 +801,13 @@ Item {
                 height: root.iconSize
 
                 // A window's icon comes from its desktop entry. A shell app
-                // has none to come from -- there is no .desktop file for a
-                // surface this process draws -- so it carries its own glyph,
-                // and K2 makes it the same one the control that opens it
-                // wears. Two items rather than one Image with a fallback: an
-                // Image source that resolves to nothing and a glyph are
-                // different kinds of thing, and `visible` on each keeps the
-                // one that is wrong from painting at all.
+                // has none to come from -- its app id is the shell process's
+                // own (K9) -- so it carries its own glyph, and K5 makes it the
+                // same one the control that opens it wears. Two items rather
+                // than one Image with a fallback: an Image source that resolves
+                // to nothing and a glyph are different kinds of thing, and
+                // `visible` on each keeps the one that is wrong from painting
+                // at all.
                 Image {
                   anchors.fill: parent
                   visible: !cardSlot.shellApp
@@ -976,8 +829,7 @@ Item {
                 Ui.OpticalGlyph {
                   anchors.fill: parent
                   visible: cardSlot.shellApp
-                  text: cardSlot.shellApp && cardSlot.modelData
-                    ? String(cardSlot.modelData.glyph || "") : ""
+                  text: cardSlot.glyph
                   fontFamily: Style.font.family
                   // The slot, not a font step. It sits beside 56px app icons
                   // and has to read as one of them; a glyph's ink fills less
@@ -1003,7 +855,7 @@ Item {
               Text {
                 width: parent.width
                 horizontalAlignment: Text.AlignHCenter
-                text: modelData ? (modelData.title || "") : ""
+                text: root.titleFor(modelData)
                 font.family: Style.font.family
                 font.pixelSize: Style.font.caption
                 font.weight: root.textWeight

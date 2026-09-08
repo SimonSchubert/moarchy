@@ -16,7 +16,7 @@ cites these ids, so an AC with no test is visible.
 | **strip** | The reserved 20px band at the very bottom holding the home pill. Owned by `moarchy.gestures`. |
 | **home screen** | A sway workspace with no windows on it: wallpaper, bar, pill. One app per workspace, so an empty workspace *is* the home screen. |
 | **app** | A workspace with a window on it, or Settings, which is treated as one (K). |
-| **shell app** | A screen this shell draws itself that behaves like an app: it has a carousel card and the strip hides it. Three of them: Settings, Wi-Fi and Bluetooth (K11). |
+| **shell app** | A screen this shell draws itself and maps as an ordinary window, so every criterion about apps applies to it. Three of them: Settings, Wi-Fi and Bluetooth (K). |
 | **carousel** | The recent-apps switcher (`moarchy.recents`). |
 | **drawer** | The searchable app grid (`moarchy.drawer`). |
 | **shade** | The pull-down from the top edge (`moarchy.shade`). |
@@ -57,24 +57,29 @@ does nothing else. Whatever is covering the screen, this gesture clears it.
 
 "Whatever" is now every sheet this shell can put over an app, and no longer
 just those two. Settings comes *out* of it — it is an app (K), so the strip
-raises the carousel over it (K3) and hides it on the way home (K4) — and the
-theme picker goes *in*, which it had never actually been: the gate named the
+raises the carousel over it and leaves it running on its workspace when the
+drag goes home (K4) — and the theme picker goes *in*, which it had never
+actually been: the gate named the
 shade and the drawer by hand, so a swipe from the theme picker fell through to
 the carousel whenever a window happened to be open. It is a page reached from
-Settings and returned to it (K11), not a screen of its own, so clearing it is
+Settings and returned to it (K10), not a screen of its own, so clearing it is
 what this criterion always meant.
 
 The list is derived from the one the back gesture already walks, minus the
 carousel — which a second drag continues rather than clears (A6) — and minus
-the shell apps. Three hand-kept lists of overlay ids is how Settings and Themes
-came to be missing from the back gesture, and this is the third one not being
-written.
+the shell apps — which are not overlays at all any more, and are excluded by
+being windows rather than by being named (K1). Three hand-kept lists of overlay
+ids is how Settings and Themes came to be missing from the back gesture, and
+this is the third one not being written.
 
 **A9** With nothing open anywhere, an up-swipe from the strip does nothing. An
 empty switcher is a dead end you would only have to dismiss.
 
-*Nothing* means no windows **and** no shell app: a phone whose only running
-thing is Settings has one card, so the strip has a carousel worth raising (K1).
+*Nothing* means no windows, and a shell app is a window (K1): a phone whose
+only running thing is Settings has one card, so the strip has a carousel worth
+raising. This used to be two questions and one of them was asked of the
+carousel, because a shell app was not a toplevel and `ToplevelManager` could not
+see it.
 
 With E6, this means **the carousel has no empty state**: it can never be on
 screen with zero cards, so that state is not built. `Recents.qml` had a
@@ -91,12 +96,12 @@ direction dominates, and does not fall through to doing nothing.
 
 **B3** The swipe lands on a workspace with nothing of the shell's drawn over
 it. The shade, the drawer, the carousel and the theme picker are put away on
-the way, the way an up-swipe puts them away (A7, A8). A shell app needs no
-clause here — it is on its own workspace (K13) and the switch leaves it — but
-is hidden a beat early all the same, for the reason K9 already records: sway
-re-picks a focus when an exclusive-focus layer surface goes, so a hide that
-lands *after* the dispatch takes the keyboard off the app the swipe had just
-reached.
+the way, the way an up-swipe puts them away (A7, A8).
+
+Sheets only. A shell app is a window (K1), so the swipe passes it the way it
+passes `foot` — it stays mapped on the workspace it is on, and the swipe back
+returns to it (K2). Sweeping it here is what the previous design did, and doing
+so is exactly what made a shell app impossible to swipe back to.
 
 Until 2026-09-08 this gesture consulted nothing at all. It dispatched
 `workspace next_on_output` and left every one of those surfaces exactly where
@@ -155,17 +160,18 @@ workspace and the top edge still opens the shade.
 ## E. The carousel
 
 **E1** One card per open app, most recent first, with the app you just left
-leading and marked. Each running shell app — Settings, Wi-Fi, Bluetooth (K11) —
-has a card here on the same terms as a window (K1); everything E says about a
-card applies to it unchanged.
-→ `omarchy-shell recents list` has one line per open window, plus one per shell
-app that is running
+leading and marked. A shell app — Settings, Wi-Fi, Bluetooth (K10) — is a window
+and has a card on exactly those terms, with no branch of its own anywhere in the
+carousel (K1).
+→ `omarchy-shell recents list` has one line per open window, and a shell app's
+line names its plugin id
 
 **E2** Tapping a card focuses that app and closes the carousel.
 → focused workspace holds that window; `recents state` == `closed`
 
 **E3** Swiping a card up closes that app, and its card leaves the row. On the
-Settings card that is a close and not a hide, so the page stack resets (K6).
+Settings card that is `xdg_toplevel.close` like any other, so the page stack
+resets with the window (K6).
 → `recents list` is one line shorter
 
 **E4** Swiping sideways pages the row. The next card is partly visible, so it is
@@ -190,28 +196,20 @@ hold-to-close it removed in C, it has no undo.
 **F1** Home is the lowest-numbered workspace with nothing on it, so the sideways
 swipe order stays contiguous.
 
-**Known defect, recorded and deliberately not fixed.** `firstFreeWorkspace()`
-scans 1..10 and then falls through to `return 10` — a number `taken` has just
-recorded as occupied — so once ten workspaces exist, going home lands on an app
-instead of a home screen.
+**Fixed defect, kept because of how it read.** `firstFreeWorkspace()` used to
+scan 1..10 and then fall through to `return 10` — a number `taken` had just
+recorded as occupied — so once ten workspaces existed, going home landed on an
+app instead of a home screen.
 
-It is worth writing down because it does not look like one bug. A4 and K4 both
-end in that fall-through, so the two trade an intermittent failure between them
-depending on how many workspaces happen to be occupied, and on a phone shared
-between sessions that is luck. Measured, same build, minutes apart: K4 failed
-with `workspace 10 holding 'V[moa-selftest]'` while A4 passed, then A4 failed
-with the identical message while K4 passed. Both sessions working on this
-suite read it as churn for a day. Confirmed at the mechanism rather than
-inferred from runs — filling workspaces 1-12 and going home from an occupied
-one leaves you where you were, with Settings open and with it closed alike, so
-it is F1's implementation and has nothing to do with K4a.
-
-Not patched here on purpose. What home should do when nothing is free is a
-question about F1 itself: raising the ceiling past ten only moves the wall,
-since one app per workspace will exhaust any ceiling, and dropping the "with
-nothing on it" clause makes home land on an app, which is not what a home
-screen is. That is a decision about the spec, not a constant to change quietly
-on the way past.
+It is worth writing down because it did not look like one bug. A4 and the home
+criterion in K both end in that call, so the two traded an intermittent failure
+between them depending on how many workspaces happened to be occupied, and on a
+phone shared between sessions that is luck. Measured, same build, minutes apart:
+one failed with `workspace 10 holding 'V[moa-selftest]'` while the other passed,
+then the other failed with the identical message. Both sessions working on this
+suite read it as churn for a day. The ceiling is gone: sway's *bindings* stop at
+ten and this is not a binding, and `bin/moarchy-one-app-per-workspace` — the
+same rule in Python, the pair this must not drift from — never had one.
 
 **F2** Going home never closes anything. Every app is still in the carousel
 afterwards.
@@ -404,14 +402,20 @@ shade from depending on a gesture nobody told you about.
 
 ## I. What the strip is drawn over
 
-The strip reserves its band off every *window*. The shell's own full-screen
-surfaces are not windows, and until this section they were treated as if they
-were: the drawer, Settings and the theme picker are Top with a zero exclusive
-zone, so sway arranges them into the usable area and each stopped short of the
-bottom edge, leaving a band of wallpaper with the pill drawn on it. The keyboard
-stopped there too. They now extend under the strip. Nothing about what the strip
-*reserves* changes -- that half is what keeps the keyboard from burying the pill,
-and it stays exactly as it was.
+The strip reserves its band off every *window*. The shell's own sheets are not
+windows, and until this section they were treated as if they were: the drawer
+and the theme picker are Top with a zero exclusive zone, so sway arranges them
+into the usable area and each stopped short of the bottom edge, leaving a band
+of wallpaper with the pill drawn on it. The keyboard stopped there too. They now
+extend under the strip. Nothing about what the strip *reserves* changes -- that
+half is what keeps the keyboard from burying the pill, and it stays exactly as
+it was.
+
+Settings used to be in that list and is not any more. It is a window now (K1),
+so it cannot extend under anything: sway arranges a window into what the
+exclusive surfaces left, which is the whole point of the strip reserving. I1a is
+what replaces it, and it is a better answer than the one it replaces — the band
+under `foot` was wallpaper too, and always had been.
 
 Sizes are never written as numbers here. `Style.space(20)` rounds a *scaled*
 value, and the scale comes from the theme's `shell.toml`: measured 20 on the
@@ -428,11 +432,52 @@ result this asks for is the same.
 → one `grim` capture: the pixel a strip-height above the last row equals the
 pixel in the last row, sampled left of the centred pill
 
-**I2** Each of the three sheets is exactly one strip taller than a Top surface
+**I1a** Behind a window, the band the strip reserves is filled with the theme's
+background instead of the wallpaper. Every window, not only this shell's own
+screens: what I1 does for a sheet by extending it, this does for an app by
+filling in underneath it.
+
+Filled from the Bottom layer, and that is what makes it cost nothing anywhere
+else. Bottom is below every window, so the fill can only be seen in the band no
+window is drawn in; and it is below every sheet, so the drawer, the shade, the
+carousel and the theme picker draw over it exactly as they did. Filling the band
+from the *strip* instead — the obvious place, since the strip is what reserves
+it — would have painted over all four.
+
+Only the band, and not the whole surface underneath. A workspace with gaps
+turned on, or two windows tiled side by side, leaves gutters where the wallpaper
+is meant to show.
+
+Two states keep the wallpaper, and each is a case where the wallpaper is the
+answer:
+
+- **an empty workspace**, which *is* the home screen (vocabulary, D). Asked as
+  "is any window focused", which is the question `run("home")` already trusts
+  for this and which K1 made honest: the shell's own screens are windows and
+  answer it themselves.
+- **the keyboard up**, when the band sits under the keyboard rather than under
+  the app.
+
+Whether the keyboard is up is read off the `moarchy-home` surface's own height
+rather than from `sm.puri.OSK0`. Sway resolves exclusive zones from Overlay
+down, so a Bottom surface is arranged after the keyboard's Top zone has been
+subtracted and shrinks with it — measured 694 with the keyboard down and 494
+with it up, on a 720 screen. The bus property is the wrong instrument twice
+over: it is stale between back gestures, and I5d records it reading `Visible
+true` with nothing drawn.
+→ with an app focused and the keyboard down, the pixel in the last row left of
+the pill is the theme's `background`; on an empty workspace it is not, and
+`gestures geometry` reports `band=0`
+
+**I2** Each sheet that extends is exactly one strip taller than a Top surface
 with the same zero exclusive zone and no margin. That is the negative margin
 having taken effect, and it is the only way to know it did: sway's IPC does not
 list layer surfaces, so this cannot be read from the compositor.
-→ `omarchy-shell {drawer,settings,themes} geometry` each report `h` equal to
+
+Two of them since Settings became a window: the drawer and the theme picker. The
+`moarchy-home` surface takes the same margin for I1a, and is not asserted here —
+it has no content to keep clear of the pill and nothing to compare against.
+→ `omarchy-shell {drawer,themes} geometry` each report `h` equal to
 `omarchy-shell device geometry`'s `h` plus `strip`
 
 `moarchy.device` is the control, and is deliberately left unchanged for
@@ -451,7 +496,12 @@ every window and the bar still takes its own off the top, with any sheet open.
 content pixel settles at least one strip above the bottom of the surface,
 however its list is scrolled. Content may *pass* under the pill mid-scroll; it
 may not stop there.
-→ `... geometry` reports `gap` >= `strip` on all three
+
+Settings is out of this one too, and by construction rather than by padding: a
+window stops at the top of the strip, so nothing it draws can reach under the
+pill at all. It used to carry a strip of scroll padding for exactly this, and
+that padding is gone with the inset that made it necessary.
+→ `... geometry` reports `gap` >= `strip` on both sheets
 
 **I5** The drawer still reflows above the on-screen keyboard -- the reason its
 exclusive zone is zero in the first place. Raising the keyboard shortens the
@@ -679,156 +729,150 @@ nothing to capture -- see the constraint.
 ## K. Settings is an app
 
 Settings is a screen you spend time in — ten pages deep in places, with a stack
-you navigate — and until this section the shell treated it as a sheet you
-summon and dismiss in one motion, like the shade. That produced a gesture that
-did two different things depending on what else happened to be running: with
-nothing else open the strip's up-swipe cleared it (A8), and with an app open
-the same swipe raised the carousel *over* it and left it there, so it was still
-on screen when the carousel went away. The two cases were disagreeing about
-whether Settings is an app. This section answers that it is.
+you navigate — so it has to behave like the apps beside it. For two releases the
+shell *emulated* that: a carousel card built by hand out of a QtObject, a
+workspace claimed on its behalf, a hide fired from a focus watcher, and a list
+of three plugin ids kept in four files. Each piece answered a question sway
+already answers for every window on the phone, and the emulation always stopped
+one gesture short of the real thing.
 
-Two things change: the card model here, and — since K13, written when the
-sideways swipe turned out to have the same disagreement in it — which workspace
-the screen sits on. Everything in A, E and J applies to Settings unchanged once
-it has a card, which is why this section is mostly pointers at criteria that
-already exist.
+The last of those was the one that ended it. K13 gave Settings a workspace and
+K14 took the screen away when focus left it, which meant you could swipe *out*
+of Settings and never swipe back *in* — the workspace it had claimed was empty
+by the time the swipe returned to it, because the surface it was standing for
+had been unmapped on the way out. A layer surface has no workspace, and every
+attempt to give it one is a re-implementation of window management inside a
+shell plugin.
 
-**K1** Settings has a card in the carousel for exactly as long as it is
-running: from the summon that opened it until it is closed (K6). Hiding it does
-not end that — a hidden app is still in the switcher, which is the whole
-purpose of the switcher.
-→ `omarchy-shell recents list` has a `moarchy.settings` line while
-Settings is running and no such line when it is not
+So it is not a layer surface any more. **Settings, Wi-Fi and Bluetooth are
+ordinary Wayland toplevels**, drawn by the shell process and mapped as windows.
+This section is short because that is the whole of it: A, B, E, F, G and J apply
+to them unchanged, with no clause of their own, and the criteria that used to be
+written here are deleted rather than restated.
 
-**K2** The card is icon, name and title, the same three lines a window's card
-has (E1). The icon is the gear the shade opens it by, the name is "Settings",
-and the title is the page it is on — so a card parked three pages into
-Appearance says which page it will come back to. At the root page the title
-line is absent, the way it is for a window whose title is its own name.
+**K1** The three shell screens are xdg toplevels. Sway tiles them,
+`bin/moarchy-one-app-per-workspace` moves each one to a workspace of its own and
+focuses it, and `ToplevelManager` reports them — which is what makes the
+carousel card a real card rather than a stand-in, and what makes B, E, F, G and
+J apply with nothing added.
 
-**K3** With Settings on screen, an up-swipe from the strip does what it does
-from an app: the carousel rises, following the finger, with the Settings card
-leading and marked (A1, E1). It is not A8's "clear whatever is covering the
-screen" any more — that criterion keeps the shade and the drawer.
-→ `recents state` == `open` and `recents list`'s first line is
+Quickshell's `FloatingWindow` is what this rests on: a window the shell's own
+process owns, which the compositor treats as any other client's. Nothing about
+it is privileged. It carries no server-side decoration (`deco_rect` is zero
+under `default_border pixel 2` with `hide_edge_borders smart`), so a shell app
+alone on its workspace fills it edge to edge, under the bar and above the strip,
+exactly as `foot` does.
+→ with Settings open, `swaymsg -t get_tree` has an `app_id == "org.quickshell"`
+node that is the only window on its workspace, and `recents list` names
 `moarchy.settings`
 
-**K4** Carried on into the home band, that same drag hides Settings and lands
-on a home screen (A4). Hidden, not closed: the card is still in the carousel.
-→ `settings state` == `closed`, the focused workspace's `representation` is
-empty, and `recents list` still has its `moarchy.settings` line
+**K2** Swiping sideways off a shell app and back again arrives back *on* it, on
+the page it was left on.
 
-**K4a** Reaching a home screen from Settings takes a workspace switch whenever
-*any* window is open, not only when one is on the workspace underneath.
+This is the criterion the emulation could not meet, and it is the reason for the
+change. A window does not have to be put back: it was never taken away.
+→ from `settings page` == `appearance.bar`, `gestures swipe left` then
+`gestures swipe right` leaves `settings state` == `open` and `settings page`
+== `appearance.bar`
 
-This is a concession and worth naming as one. Sway gives an exclusive-focus
-layer surface the keyboard and deactivates the window beneath it, so for the
-whole time Settings is on screen every toplevel reads unfocused and
-`focusedToplevel()` — the question F1's switch is gated on — cannot tell an app
-under the sheet from a bare home screen under it. The same fact is already
-recorded in the drawer's keyboard-focus note, where sway "handed focus back to
-a window" on the drawer's first close frame.
+**K3** Everything else that moves the workspace does the same, and none of it is
+this shell's code: `swaymsg workspace`, a keybinding on a paired keyboard, a
+launcher that lands an app somewhere else. The screen stays where it was put.
+→ with Settings up, `swaymsg workspace next_on_output` then
+`swaymsg workspace prev_on_output` leaves `settings state` == `open`
 
-Of the two ways to be wrong, this picks the harmless one. Switching when the
-workspace was already empty hops to another empty workspace and costs a
-workspace number, which F1 immediately makes contiguous again. Not switching
-when it was occupied leaves a *home* gesture looking at the app it was supposed
-to leave, which is the bug this whole section exists to fix.
-→ with Settings over a bare home screen and one app on another workspace, the
-home band still ends on an empty workspace
+**K4** Going home (A4, F1) leaves a shell app running on its workspace, the way
+it leaves any app running. Its card is in the carousel and tapping the card
+comes back to the page it was on.
+→ after the home band, the focused workspace's `representation` is empty,
+`recents list` still names `moarchy.settings`, and `settings state` == `open`
 
-**K5** Tapping the Settings card resumes the page it was hidden on, not the
-root. That is the difference between hidden and closed, and it is why
-`settings.md` A6 is amended rather than dropped: a *closed* Settings still
-reopens at the root.
-→ from `settings page` == `appearance.bar`, an up-swipe and a tap on the card
-leaves `settings page` == `appearance.bar`
+Note what `settings state` says here and did not before. It answers whether the
+window is mapped, and going home does not unmap it — so the old reading, where
+`closed` meant "hidden but running", has no state left to describe. There is no
+hidden. A shell app is on screen, on another workspace, or gone.
 
-**K6** Two things close Settings, and both drop the card and reset the stack:
-flicking the card away (E3), and the back gesture on the root page (G, and
-`settings.md` B3). That pairing is not new — it is exactly what those two
-gestures already do to a window, where E3 closes a card and G4 closes the
-focused app.
+**K5** The card is icon, name and title, the same three lines a window's card
+has (E1): the glyph the shade opens it by, the app's name, and the page it is
+on. At the root the title line is absent, the way it is for a window whose title
+is its own name.
+
+The icon and name do not come from a desktop entry, because there is none to
+find — see K9. They come from the plugin, which is the one place that knows.
+
+**K6** Two things close a shell app, and both drop the card and reset the page
+stack: flicking the card away (E3), and the back gesture with nothing left to go
+back to (K7). That pairing is exactly what those two gestures already do to a
+window — E3 closes a card, G4 closes the focused app — and here they *are* those
+two gestures rather than a copy of them.
 → after either, `recents list` has no `moarchy.settings` line and
 `settings stack` is one line
 
-**K7** Closing the Settings card when it is the only card leaves a home screen,
-the way E6 has it for a window. The carousel still has no empty state.
+**K7** The back gesture over a shell app walks its page stack first, and closes
+the window only from the root page. G3's "an overlay that owns a page stack gets
+first refusal" now reads off the *focused window* rather than off a list of open
+overlays, because a shell app is no longer an overlay.
 
-**K8** Dismissing the carousel without picking anything puts you back on
-Settings (E5). Nothing has to restore it, because the carousel covered Settings
-rather than hiding it — hiding is what the home band does (K4) and what tapping
-another card does (K9).
-→ `settings state` == `open` after a dismiss tap
+Ordering matters and is the whole of the criterion: back inside Settings must
+never reach G4 and close the app underneath, and back on the root page must not
+be swallowed into doing nothing.
+→ from depth 2, one back leaves `settings page` one page up and the window
+count unchanged; from the root, one back leaves `settings state` == `closed`
 
-**K9** Tapping a *window's* card hides Settings on the way to that window. A
-card that focuses an app must not hand it over with a full-screen sheet still
-drawn on top.
-→ `settings state` == `closed` and the tapped window is focused
+**K8** A row that ends in a terminal needs nothing to get out of its way. A
+tiled terminal is moved to a free workspace and focused
+(`bin/moarchy-one-app-per-workspace`); a floating one maps above the window it
+was launched from. Either way it is on screen and typeable.
 
-**K10** Settings gets the shrink (J) like any app: the still captured when the
-drag latches is of Settings, and it lands on the Settings card. J10's "only the
-app you are leaving gets a picture" is satisfied the same way — Settings is on
-screen and is being rendered, which is the whole of that constraint's
-reasoning.
+This deletes the `hides` mechanism and the two criteria that carried it
+(`settings.md` C9, D8). Both existed because a full-screen *layer surface* is
+above every window on the output, so a terminal launched from Settings mapped
+underneath it and was indistinguishable from a tap that did nothing — which is
+how a phone ended up with sshd enabled and an empty `authorized_keys`
+(2026-09-08). A window is not above other windows, so the failure has no
+mechanism left.
+→ `settings activate ssh` leaves `settings state` == `open` and a new window
+focused
 
-**K11** Three shell apps: **Settings**, **Wi-Fi** and **Bluetooth**, and
+**K9** All three carry `app_id == "org.quickshell"`, which is the shell process's
+app id and not something this port chooses: Qt sets the xdg-toplevel app id once
+per process from `QGuiApplication::desktopFileName`, and there is no per-window
+override in Qt 6.11. Identity is therefore the window *title*, which each screen
+sets to its own name and page.
+
+Recorded as a criterion because it is the one place a reader will expect a
+different answer, and because everything that resolves a shell app — the card's
+icon, the back gesture's page stack — depends on it. A window whose title this
+shell did not set is somebody else's window and gets an ordinary card.
+→ `swaymsg -t get_tree` reports `app_id == "org.quickshell"` and a `name` of
+`Settings` for the root page
+
+**K10** Three shell screens: **Settings**, **Wi-Fi** and **Bluetooth**, and
 nothing else. The shade and the drawer stay transient sheets with no card: they
 are summoned and dismissed in one motion, Android gives neither a recents entry,
 and A7/A8 already say the strip clears them. The theme picker stays out too — it
 is a page reached from Settings that returns to the page it was opened from
 (`settings.md` B7), not a screen of its own.
 
-Stated as a criterion because "shell app" is a mechanism, and a mechanism with
-one user looks like an oversight rather than a decision. Each addition is a
-decision taken deliberately, not by noticing that the machinery would allow it.
+Stated as a criterion because "a shell screen that is a window" is a mechanism,
+and a mechanism with one user looks like an oversight rather than a decision.
 The test is whether it is a screen you *sit in* — Wi-Fi (2026-09-06) because
 joining a network means retyping a passphrase and coming back; Bluetooth
-(`shade.md` S6d) because pairing means waiting for a device to appear, putting it
-in pairing mode, and trying again. Both are the shape of Settings and nothing
-like a sheet you dismiss in one motion.
+(`shade.md` S6d) because pairing means waiting for a device to appear, putting
+it in pairing mode, and trying again.
 
-**K12** A bridged launch still puts Settings away first (`settings.md` E6) and
-leaves it running, so the terminal it opened and the Settings page behind it
-are both cards and the row you came from is one tap away.
+**K11** A shell app gets the shrink (J) like any app, with nothing said here:
+it is on screen, it is a toplevel, and J10's "only the app you are leaving gets
+a picture" is satisfied by the same reasoning it is for `foot`.
 
-**K13** A shell app has a workspace of its own. Summoning one takes a free
-workspace — F1's rule, the one home uses — and the surface is drawn over that,
-so the sideways swipe reaches it as one more app in the row (B1): leaving
-Settings goes to the workspace next to *Settings'*, and the app you summoned it
-from is beside it rather than under it.
-
-A layer surface has no workspace of its own to begin with. Sway arranges it
-against an output and leaves it there while the workspaces change underneath,
-which is what made B1 look broken for as long as it did — Settings was never on
-the workspace it appeared to be on, so nothing about switching workspaces could
-take it off the screen.
-
-A *free* workspace, without first asking whether the one already under it is
-empty. That question is K4a's, and K4a records that it cannot be answered from
-here: the surface holds the seat's keyboard, sway deactivates the window
-beneath it, and every toplevel then reads unfocused. Asking it and believing
-the answer is exactly how a screen ends up sharing a workspace with an app.
-Not asking costs a workspace number when the summon came from a bare home
-screen — the same hop K4a already takes, and F1 makes the numbering contiguous
-again on the next pass.
-
-Only when the surface goes up. A *quiet* summon — one that fires a row and
-never maps (`settings.md` O4) — takes no workspace, because nothing was ever
-drawn to need one.
-→ with an app focused, `omarchy-shell settings open` leaves a focused workspace
-that is empty and is not the one the app is on
-
-**K14** Focus leaving that workspace puts the shell app away, whatever moved
-it: the strip's sideways swipe (B3), `swaymsg workspace`, a keybinding on a
-paired keyboard. Hidden and not closed, so the card stays and the page stack
-stands — the same half of the pair the home band uses (K4, K5).
-
-This is the criterion that makes K13 worth anything. A workspace of one's own
-that the screen refused to leave would be the old bug with a longer
-explanation.
-→ with Settings up, `swaymsg workspace next_on_output` leaves `settings state`
-== `closed` and `recents list` still carrying its `moarchy.settings` line
+**K12** Summoning a shell app that is already running focuses its window rather
+than opening a second one, and leaves it on the page it was on. There is one
+window per screen, and the ways in are many — the shade's gear, a Settings row,
+the drawer, an IPC verb. Naming a page still navigates (`settings.md` A7); it is
+the summon that names none that means "the screen I was on".
+→ with Settings running on another workspace at `appearance.bar`, `settings
+open` leaves the focused workspace holding it, `settings page` unchanged, and
+`recents list` with one `moarchy.settings` line
 
 ---
 

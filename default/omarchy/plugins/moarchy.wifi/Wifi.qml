@@ -58,18 +58,17 @@ Item {
 
   readonly property string pluginId: "moarchy.wifi"
 
-  property bool opened: false
+  // Whether the window is mapped (docs/gestures.md K1). Read off the window,
+  // never assigned -- see moarchy.common/AppWindow.qml for why that direction.
+  //
+  // There is no `running` beside it any more: that property stood for "off
+  // screen but still an app", which is what a layer surface needed and what a
+  // window has a workspace for.
+  readonly property bool opened: wifiWindow.visible
 
-  // The app-like half of this screen (docs/gestures.md K).
-  //
-  // `running` is "summoned and not yet closed", which outlives any number of
-  // hides -- swiping away to another app leaves Wi-Fi running, so the carousel
-  // keeps a card for it and coming back resumes where you were. `opened` is
-  // only whether the surface is on screen right now.
-  //
-  // Settings established this contract; moarchy.recents reads exactly these
-  // four things off a shell app: running, opened, pageTitle and quit().
-  property bool running: false
+  // How moarchy.recents and the back gesture find this plugin from its window
+  // (moarchy.common/ShellApps.js).
+  readonly property var appWindow: wifiWindow
 
   // The card shows the network you are on, which is the useful thing to see on
   // a card, and nothing when there is none.
@@ -86,9 +85,6 @@ Item {
   property string returnPage: ""
 
   // --------------------------------------------------------------- palette
-  // Matches the shade, which is where the tile that opens this lives.
-  readonly property int gestureStrip: Style.space(20)
-
   // The card radius, from the four this shell has (docs/style.md D1).
   // Was a bare Style.space(14) -- a fifth radius nobody chose, which put
   // this screen's rows next to Settings' rows at 18 and made the two lists
@@ -349,8 +345,7 @@ Item {
       if (root.shell.isPluginOpen("moarchy.shade")) root.shell.hide("moarchy.shade")
       if (root.shell.isPluginOpen("moarchy.drawer")) root.shell.hide("moarchy.drawer")
     }
-    root.opened = true
-    root.running = true
+    wifiWindow.show()
     root.returnTo = ""
     root.returnPage = ""
     root.expandedSsid = ""
@@ -366,18 +361,12 @@ Item {
     }
   }
 
-  function close() { root.opened = false }
+  function close() { wifiWindow.hide() }
 
-  // Swiping the card away in the carousel. Distinct from close(): this ends the
-  // app rather than putting its surface down.
-  function quit(): void {
-    root.running = false
-    root.expandedSsid = ""
-    root.passphrase = ""
-    root.showPassphrase = false
-    if (root.shell && typeof root.shell.hide === "function") root.shell.hide(root.pluginId)
-    else root.close()
-  }
+  // K6. Kept as a name because the carousel and the back gesture ask for it by
+  // name. Unmapping the window is closing the app, and there is no second,
+  // gentler thing it could mean now that it is a window.
+  function quit(): void { root.close() }
 
   function dismiss() {
     var back = root.returnTo
@@ -435,40 +424,40 @@ Item {
     }
   }
 
-  // ----------------------------------------------------------------- chrome
-  PanelWindow {
+  // ----------------------------------------------------------------- window
+  //
+  // docs/gestures.md K. An ordinary toplevel, so sway gives it a workspace and
+  // the strip's swipes reach it as one more app.
+  //
+  // The passphrase field needs no arrangement of its own here. A focused window
+  // holds the seat's keyboard by being focused, which is what activates
+  // text-input-v3 and what raises squeekboard; squeekboard's own exclusive zone
+  // then shrinks this window, so the field reflows clear of it with no inset
+  // computed in this file. The layer surface had to do all three by hand.
+  Shared.AppWindow {
     id: wifiWindow
 
-    visible: root.opened
-    anchors { top: true; bottom: true; left: true; right: true }
-    color: "transparent"
+    shell: root.shell
+    appName: "Wi-Fi"
+    pageTitle: root.pageTitle
+    pluginId: root.pluginId
+    // The literal character, not an escape. "\uF092F" is \uF092 followed by an
+    // "F" -- JavaScript's \u takes exactly four hex digits -- and U+F092 is the
+    // GitHub octocat, which is what the card drew.
+    glyph: "󰤯"
+    color: root.surface
 
-    WlrLayershell.namespace: "moarchy-wifi"
-    WlrLayershell.layer: WlrLayer.Top
-
-    exclusionMode: ExclusionMode.Normal
-    exclusiveZone: 0
-
-    // Draw under the gesture strip, except while the passphrase field has
-    // focus -- then the on-screen keyboard needs the space and the inset has to
-    // go, or the field ends up behind it. Keyed on activeFocus rather than on
-    // the keyboard's visibility, because focus is the signal that arrives
-    // first. Same arrangement as the drawer's search field.
-    margins.bottom: root.passphraseFocused ? 0 : -root.gestureStrip
-
-    // Exclusive, not OnDemand: the passphrase field needs the surface to hold
-    // keyboard focus for Qt to activate text-input-v3, and moarchy-keyboard
-    // raises itself off that activation. Without it the field takes taps and
-    // no keyboard ever appears.
-    WlrLayershell.keyboardFocus: root.opened ? WlrKeyboardFocus.Exclusive
-                                             : WlrKeyboardFocus.None
+    onUnmapped: {
+      root.expandedSsid = ""
+      root.passphrase = ""
+      root.showPassphrase = false
+    }
 
     Rectangle {
       anchors.fill: parent
       color: root.surface
-      opacity: root.opened ? 1 : 0
-      Behavior on opacity { NumberAnimation { duration: 140 } }
 
+      focus: true
       Keys.onEscapePressed: root.dismiss()
 
       Column {

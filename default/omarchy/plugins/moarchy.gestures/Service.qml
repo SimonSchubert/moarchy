@@ -57,6 +57,7 @@ import Quickshell.I3
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
+import "../moarchy.common/ShellApps.js" as ShellApps
 
 Item {
   id: root
@@ -98,6 +99,42 @@ Item {
   // region before delivering the touch. Cutting the region is the only knob.
   readonly property int backEdgeBottomInset:
     root.stripHeight + root.keyboardPanelHeight
+
+  // I1a. Is the on-screen keyboard reserving space right now?
+  //
+  // Read off `home`'s own configure, which is the only live answer available
+  // here. The busctl probe below answers a different question and answers it
+  // slowly: `keyboardUp` is what the back gesture asks on press and reads on
+  // release, it is stale between gestures, and `sm.puri.OSK0`'s `Visible` has
+  // been seen to read true with nothing drawn. A surface the compositor has
+  // resized cannot be wrong about it.
+  //
+  // Why `home` can answer at all: sway resolves exclusive zones from Overlay
+  // downwards, so a Bottom surface is arranged after the keyboard's Top zone
+  // has been subtracted and shrinks with it. The strip cannot answer the same
+  // question -- it is Overlay, and G10's inset is a hand-computed number for
+  // exactly that reason.
+  //
+  // Half a keyboard is the threshold rather than an exact height, the way
+  // I5e's is: `home` is one strip taller than the free area (its negative
+  // bottom margin), so neither cluster is an exact number and the test only
+  // has to fall between them. The bar's own band is nowhere near it.
+  readonly property bool keyboardReserving:
+    !!home.screen
+    && home.height < home.screen.height - root.keyboardPanelHeight / 2
+
+  // I1a. Fill the band the strip reserves with the theme's background instead
+  // of leaving the wallpaper showing through it.
+  //
+  // Both halves are cases where the wallpaper is the right answer and the fill
+  // would be wrong: an empty workspace *is* the home screen, and with the
+  // keyboard up the band sits under the keyboard rather than under the app.
+  //
+  // `focusedToplevel()` for "is this workspace empty", because it is already
+  // the answer `run("home")` trusts for that question -- and since K1 it is an
+  // honest one: the shell's own screens are windows and answer it themselves.
+  readonly property bool fillStripBand:
+    !!root.focusedToplevel() && !root.keyboardReserving
 
   // G6. Rightward travel that commits a back swipe -- three times the band, so
   // brushing the edge never closes an app.
@@ -212,6 +249,40 @@ Item {
     else Quickshell.execDetached(["swaymsg", cmd])
   }
 
+  // E2, K12. Focus a window. Every caller in this shell lands here, so there is
+  // one answer to "how do you focus something" and one place to change it.
+  //
+  // NOT `Toplevel.activate()`, which is what the carousel used and what this
+  // replaced. The foreign-toplevel activate request does nothing on this
+  // compositor: measured 2026-09-08 from inside the running shell, against
+  // `foot` on another workspace and against one of this shell's own windows,
+  // and in both cases the request was sent, no warning appeared anywhere, and
+  // the focused workspace did not move. `close()` on the same handle works, so
+  // this is sway's activate path and not a dead protocol -- sway 1.12 matches
+  // the request's seat against its own seats and drops it when nothing matches.
+  //
+  // It had been silently broken for as long as the carousel has existed. E2
+  // passed throughout, because it asserted that the workspace the tap landed on
+  // holds a window -- which is also true when the tap changed nothing and you
+  // were already looking at one.
+  //
+  // Criteria, because a foreign-toplevel handle carries no con_id and there is
+  // nothing else to address a window by. Two windows with the same app id *and*
+  // the same title are ambiguous and sway will act on both; that is the known
+  // cost, and it is a better failure than the request that did nothing at all.
+  function swayEscape(text: string): string {
+    return String(text).replace(/[\\^$.|?*+()\[\]{}"]/g, "\\$&")
+  }
+
+  function focusToplevel(tl): bool {
+    if (!tl) return false
+    var criteria = '[app_id="^' + root.swayEscape(tl.appId || "") + '$"'
+    var title = String(tl.title || "")
+    if (title !== "") criteria += ' title="^' + root.swayEscape(title) + '$"'
+    root.dispatch(criteria + '] focus')
+    return true
+  }
+
   function isOpen(id: string): bool {
     return root.shell && typeof root.shell.isPluginOpen === "function"
            && root.shell.isPluginOpen(id)
@@ -226,140 +297,33 @@ Item {
   // still on screen, so nothing looked wrong until you dismissed it and found
   // the app gone. Adding a screen must not mean remembering two lists.
   //
-  // Shell apps come last, in K11's order, because this is dismissal order: a
-  // sheet over an app is put away before the app under it.
+  // Sheets only, and that is the whole list now. Settings, Wi-Fi and Bluetooth
+  // used to be concatenated on the end of it: they are windows
+  // (docs/gestures.md K1), the compositor puts them away and brings them back,
+  // and every function below that walks this list would close one if it were
+  // still here.
   readonly property var overlayIds: [
     "moarchy.shade",
     "moarchy.drawer",
     "moarchy.recents",
     "moarchy.themes"
-  ].concat(root.shellAppIds)
-
-  // K11. The shell's own screens that are apps rather than sheets: they get a
-  // carousel card and the strip hides them instead of clearing them.
-  //
-  // Three, matching docs/gestures.md K11 and moarchy.recents' own `shellApps`,
-  // in the same order. This said `moarchy.settings` and nothing else for a
-  // release after Wi-Fi and Bluetooth became shell apps, under a comment
-  // reading "One, and deliberately so" -- so the file that implements K11
-  // disagreed with K11, and the comment made that read as the decision rather
-  // than as the omission it was (docs/refactor.md B3).
-  //
-  // What the omission actually cost was the back gesture. Neither id was in
-  // overlayIds either, so topmostOverlay() could not return them,
-  // backTopmostOverlay() never reached the quit() both plugins define, and a
-  // back swipe over Wi-Fi fell all the way through to `kill` -- closing the
-  // app *behind* the sheet while the sheet stayed on screen. Word for word the
-  // failure the overlayIds comment above records, reappearing in the two
-  // surfaces added after that list was written (docs/refactor.md B4).
-  readonly property var shellAppIds: [
-    "moarchy.settings",
-    "moarchy.wifi",
-    "moarchy.bluetooth"
   ]
 
-  function isShellApp(id: string): bool {
-    return root.shellAppIds.indexOf(id) >= 0
-  }
-
-  // Whichever shell app is up, or "" for none. Only one can be: each hides the
-  // others on the way up, which is the invariant moarchy.recents' shellApps
-  // comment records from the other side.
-  function openShellApp(): string {
-    for (var i = 0; i < root.shellAppIds.length; i++)
-      if (root.isOpen(root.shellAppIds[i])) return root.shellAppIds[i]
-    return ""
-  }
-
-  // ------------------------------------------------- a shell app's workspace
+  // K7. The shell app whose window is focused, or null.
   //
-  // K13, K14. A shell app is a layer surface, and a layer surface has no
-  // workspace: sway arranges it against the output and leaves it there while
-  // the workspaces change underneath. That is what B1 kept running into --
-  // the sideways swipe changed the workspace *under* Settings and Settings
-  // stayed drawn over whatever it landed on, so the switch happened
-  // invisibly and the phone ended up on a workspace nobody had asked for.
-  //
-  // So one is taken for it: on the way up the screen moves to a free
-  // workspace, and focus arriving anywhere else while it is up means the user
-  // has left, and the screen goes with the workspace it was on.
-  //
-  // Watched from here rather than added to the three plugins, for the reason
-  // moarchy.recents already watches the same three from outside: shellAppIds
-  // is the one list, and a fourth screen must not mean remembering a fourth
-  // place. This file is also where every compositor call already lives.
-  //
-  // The number this workspace was claimed under, or -1 when no shell app is on
-  // screen.
-  property int shellAppWorkspace: -1
-
-  // K13. A *free* workspace rather than "this one if it happens to be free":
-  // whether the workspace underneath is empty is K4a's question, and K4a is
-  // the record of it being unanswerable from here. The cost of not asking is
-  // one workspace number when the summon came from a bare home screen, which
-  // F1 makes contiguous again on the next pass.
-  function claimWorkspace(): void {
-    var free = root.firstFreeWorkspace()
-    // Recorded from the request rather than read back afterwards. The switch
-    // is asynchronous, so between dispatching it and the event arriving the
-    // focused workspace is still the old one -- and a watcher comparing
-    // against that would take the surface away on its own arrival.
-    root.shellAppWorkspace = free
-    root.dispatch("workspace number " + free)
-  }
-
-  // `opened` and not `running`: the trigger is the surface being ON SCREEN.
-  // A quiet summon fires a row and never maps (`settings.md` O4), and must not
-  // take a workspace it never draws on -- which is also why this hangs off the
-  // plugin's own property rather than off the host's openPanelIds, where the
-  // two are the same event.
-  Instantiator {
-    model: root.shellAppIds
-
-    delegate: QtObject {
-      id: watch
-
-      required property string modelData
-
-      readonly property var loader: root.shell && root.shell.panelLoaders
-        ? root.shell.panelLoaders[watch.modelData] : null
-      readonly property bool onScreen:
-        !!(watch.loader && watch.loader.item && watch.loader.item.opened)
-
-      // The `else` is the hand-off case: Settings opening Wi-Fi puts Settings
-      // away and stands Wi-Fi up, in some order, and the one going down must
-      // not clear a claim the one coming up has just made. Asking who is open
-      // rather than assuming the order settles it either way round.
-      onOnScreenChanged: {
-        if (watch.onScreen) root.claimWorkspace()
-        else if (root.openShellApp() === "") root.shellAppWorkspace = -1
-      }
-    }
-  }
-
-  Connections {
-    target: I3
-
-    // K14. A hide and never a quit: leaving the workspace leaves the screen
-    // standing behind you, which is what the card is for (K4, K5). Closing is
-    // the other half and belongs to the two gestures that mean it (K6).
-    function onFocusedWorkspaceChanged() {
-      if (root.shellAppWorkspace < 0) return
-      var ws = I3.focusedWorkspace
-      if (!ws || Number(ws.number) === root.shellAppWorkspace) return
-      var id = root.openShellApp()
-      root.shellAppWorkspace = -1
-      if (id && root.shell) root.shell.hide(id)
-    }
+  // Focus and not "is it open": a shell app is a window, so the question the
+  // back gesture asks is the one it asks of any app -- which one am I in --
+  // and there can be three of them mapped at once on three workspaces.
+  function focusedShellApp() {
+    return ShellApps.forToplevel(root.shell, root.focusedToplevel())
   }
 
   // A7, A8. The surfaces an up-swipe *clears* rather than switches away from.
   //
   // Derived from overlayIds rather than written out again: a second list of
   // ids is exactly how Settings and Themes came to be missing from the back
-  // gesture. Minus the two kinds that are not sheets -- the carousel, which a
-  // second drag continues into the home band (A6), and a shell app, which the
-  // strip hides the way it hides a window (K3).
+  // gesture. Minus the carousel, which a second drag continues into the home
+  // band rather than clears (A6).
   //
   // Vendored popups are deliberately not consulted here, unlike in
   // topmostOverlay(). That branch reads the host's openPanelIds, which carries
@@ -370,7 +334,7 @@ Item {
   function coveringSheet(): bool {
     for (var i = 0; i < root.overlayIds.length; i++) {
       var id = root.overlayIds[i]
-      if (id === "moarchy.recents" || root.isShellApp(id)) continue
+      if (id === "moarchy.recents") continue
       if (root.isOpen(id)) return true
     }
     return false
@@ -416,9 +380,9 @@ Item {
   // gesture that visibly does nothing and silently does something.
   //
   // All of them rather than the topmost one. The two can differ -- the shade
-  // pulls down over a shell app -- and hiding only the top of that pair would
-  // leave the other one covering the workspace the swipe had just reached,
-  // which is the same failure one layer down.
+  // pulls down over the theme picker -- and hiding only the top of that pair
+  // would leave the other one covering the workspace the swipe had just
+  // reached, which is the same failure one layer down.
   //
   // Vendored popups are deliberately not swept. topmostOverlay()'s fallback
   // reads the host's openPanelIds, which carries every mounted `omarchy.`
@@ -440,30 +404,30 @@ Item {
     return true
   }
 
-  // G3. Same order, but an overlay that owns a page stack gets first refusal --
-  // Settings is a stack, and back walks up it before leaving the surface.
+  // G3. Same order, but an overlay that owns a page stack gets first refusal.
   // goBack() answers true when it consumed the gesture; false means "nothing
   // left, close me".
+  //
+  // No sheet in overlayIds owns one today -- the three screens that do are
+  // windows and reach performBack()'s own K7 branch instead. Kept because the
+  // next sheet with a stack must not have to rediscover the ordering.
   function backTopmostOverlay(): bool {
     var id = root.topmostOverlay()
     if (!id || !root.shell) return false
     var item = root.panelItem(id)
     if (item && typeof item.goBack === "function" && item.goBack() === true) return true
 
-    // K6. A surface that draws a distinction between hidden and closed gets
-    // to close itself, because hide() is the wrong half for this gesture:
-    // back on the root page of Settings ends it, the way G4 ends an app,
-    // rather than parking it in the carousel with its stack intact. Anything
-    // without a quit() is a sheet where the two are the same act, and takes
-    // the hide below unchanged.
+    // A surface that draws a distinction between hidden and closed gets to
+    // close itself. Nothing in this list does any more -- that distinction was
+    // the shell apps', and a window has a workspace instead of it -- so this is
+    // the same escape hatch the goBack() above is, kept for the same reason.
     if (item && typeof item.quit === "function") { item.quit(); return true }
 
     root.shell.hide(id)
     return true
   }
 
-  // Windows only. Kept apart from hasApps() because home needs exactly this
-  // question and A9 needs the other one -- see K4a.
+  // Every window, this shell's three screens included (K1).
   function hasWindows(): bool {
     var list = ToplevelManager.toplevels ? ToplevelManager.toplevels.values : []
     return list.length > 0
@@ -471,16 +435,12 @@ Item {
 
   // A9. Nothing open anywhere means the strip's up-swipe has nothing to show.
   //
-  // "Anywhere" now includes Settings, which is an app (K1) without being a
-  // window: a phone whose only running thing is Settings has one card, so the
-  // strip does have a carousel worth raising. The carousel is asked rather
-  // than told, so what counts as an app is decided in one place -- and it
-  // answers false when that plugin failed to load, which leaves the strip
-  // doing what it did before this section.
+  // One question again. This used to ask the carousel a second one -- "is a
+  // shell app running" -- because Settings was an app without being a window
+  // and ToplevelManager could not see it. Since K1 it can, and hasWindows() is
+  // the whole answer.
   function hasApps(): bool {
-    if (root.hasWindows()) return true
-    var recents = root.panelItem("moarchy.recents")
-    return !!(recents && recents.shellAppsRunning)
+    return root.hasWindows()
   }
 
   // The window a back gesture would close.
@@ -586,15 +546,11 @@ Item {
     if (root.dragMode !== "recents" || !root.dragTarget) return
     if (!root.dragTarget.armPreview) return
     if (root.isOpen("moarchy.recents")) return
-    // K10. A shell app is an app and gets the shrink too. It is on screen and
-    // is being rendered, which is the whole of J10's reasoning -- but it holds
-    // the keyboard, so every window under it reads deactivated and
-    // focusedToplevel() alone would refuse to arm here.
-    //
-    // All three of them, not Settings alone: Wi-Fi and Bluetooth hold the
-    // keyboard the same way and are on screen the same way, so naming one was
-    // the difference between a card that shrinks and a card that snaps.
-    if (!root.focusedToplevel() && !root.openShellApp()) return
+    // K11. A shell app is a window, so this one question covers it too. It used
+    // to need a second clause: an exclusive-focus layer surface deactivates the
+    // window beneath it, so with Settings up every toplevel read unfocused and
+    // focusedToplevel() alone refused to arm.
+    if (!root.focusedToplevel()) return
     root.dragTarget.armPreview()
   }
 
@@ -668,11 +624,12 @@ Item {
   //              nothing.
   function run(action: string): void {
     if (action === "next" || action === "prev") {
-      // B3, and in this order. A shell app would leave on its own once the
-      // focused workspace moved off its own (K14), but that hide would land
-      // *after* sway had re-picked a focus -- the ordering K9 records from the
-      // carousel, where hiding late took the keyboard back off the window the
-      // tap had just raised. The sheets have no other mechanism at all.
+      // B3. Sheets only, and before the dispatch: a sheet left standing while
+      // the workspace moves underneath is a gesture that visibly does nothing
+      // and silently does something. A shell app is not swept -- it is a window
+      // (K1), the switch leaves it behind on its own workspace, and the swipe
+      // back arrives on it (K2). Sweeping it here is what made a shell app
+      // impossible to swipe back to.
       root.hideCoveringSurfaces()
       root.dispatch(action === "next" ? "workspace next_on_output"
                                       : "workspace prev_on_output")
@@ -695,39 +652,22 @@ Item {
       // already warns about.
       root.hideKeyboard()
 
-      // K4. A shell app goes where an app goes: off screen, still running, its
-      // card still in the carousel. Hidden through the host so openPanelIds
-      // cannot drift, and hidden *before* the switch, because a full-screen
-      // sheet left standing over a home screen is the exact state this
-      // gesture exists to get out of.
+      // K4. A shell app goes where an app goes: nowhere. It stays mapped on its
+      // own workspace, its card stays in the carousel, and this gesture leaves
+      // it the way it leaves `foot` -- by going somewhere else.
       //
-      // Any of the three, not Settings alone. Home from Wi-Fi used to switch
-      // the workspace underneath and leave Wi-Fi covering the home screen it
-      // had just gone to -- a home gesture that visibly did nothing.
-      var shellAppWasUp = root.openShellApp()
-      if (shellAppWasUp && root.shell) root.shell.hide(shellAppWasUp)
-
       // Already on a home screen: no toplevel is activated when focus is on an
       // empty workspace, which makes this the one reliable "is this workspace
       // empty" question available here. Without it, home from home would hop
       // to a *different* empty workspace and churn the numbering for nothing.
       //
-      // K4a. That question is unanswerable while a shell app is up, and this
-      // is the concession. Sway gives an exclusive-focus layer surface the
-      // keyboard and deactivates the window beneath it -- the same fact the
-      // drawer's keyboardFocus note records as sway "handing focus back to a
-      // window" -- so for that whole time every toplevel reads unfocused and
-      // an app under the sheet is indistinguishable from a bare home screen
-      // under it. Hiding the sheet a line above does not fix it either: the
-      // surface unmaps and sway re-picks a focus on a later frame, long after
-      // this returns.
-      //
-      // So fall back to "is there a window at all", which is wrong only in the
-      // harmless direction. Switching when this workspace was already empty
-      // hops to another empty one and costs a workspace number, which F1 makes
-      // contiguous again on the next pass. Not switching when it was occupied
-      // would leave a *home* gesture looking at the app it was meant to leave.
-      if (shellAppWasUp ? root.hasWindows() : !!root.focusedToplevel())
+      // One question, and it used to be two. While a shell app was a layer
+      // surface it held the seat's keyboard, sway deactivated the window
+      // beneath it, and every toplevel read unfocused -- so an app under the
+      // sheet was indistinguishable from a bare home screen under it and this
+      // fell back to "is there a window anywhere", which hopped a workspace
+      // whenever anything at all was open. A focused window answers for itself.
+      if (root.focusedToplevel())
         root.dispatch("workspace number " + root.firstFreeWorkspace())
     }
     else if (action === "clear") root.hideTopmostOverlay()
@@ -807,6 +747,18 @@ Item {
 
     // G3
     if (root.backTopmostOverlay()) return
+
+    // K7. A shell app owns a page stack, and back walks up it before leaving
+    // the window. Asked of the *focused window* and not of a list of open
+    // overlays: a shell app is a window (K1), so "which one am I in" is the
+    // same question G4 asks a line below, and asking it here is what keeps back
+    // inside Settings from falling through to closing the app on the workspace
+    // beside it.
+    //
+    // goBack() answers true when it consumed the gesture; false means there is
+    // nothing left, and the window takes G4's close request like any other.
+    var own = root.focusedShellApp()
+    if (own && typeof own.goBack === "function" && own.goBack() === true) return
 
     // G4, G7. close() is xdg_toplevel.close -- a close *request*, so an editor
     // with unsaved work prompts rather than dies. That is what makes firing it
@@ -902,6 +854,13 @@ Item {
              + " strip=" + root.stripHeight
              + " panel=" + root.keyboardPanelHeight
              + " screen=" + (backEdge.screen ? backEdge.screen.height : 0)
+             // I1a. The band under the pill, and the two answers it is decided
+             // from. `home` is published because it is the measurement -- a
+             // check that read only `band` could not tell "the keyboard is up"
+             // from "this surface never got a configure".
+             + " home=" + Math.round(home.height)
+             + " kbd=" + (root.keyboardReserving ? 1 : 0)
+             + " band=" + (root.fillStripBand ? 1 : 0)
     }
 
     function status(): string {
@@ -909,15 +868,17 @@ Item {
       // C3. `free` is the answer bin/moarchy-one-app-per-workspace computes
       // independently for the same phone, and publishing it is the only way
       // the selftest can hold the two implementations against each other.
-      // K13. `shellws` is the workspace a shell app is standing on, or -1 when
-      // none is. Published for the same reason `free` is: it is the number the
-      // hide in K14 is compared against, and a check that could not read it
-      // would be asserting on the outcome of a claim it could not see.
+      // K7. `shellapp` is the plugin id of the shell app the back gesture would
+      // hand this swipe to, or `none`. Published because the resolution is by
+      // toplevel handle and is otherwise invisible from outside: a card with a
+      // missing icon and a back swipe that closes the wrong thing are the same
+      // fault, and this is the one place a check can see it.
+      var own = root.focusedShellApp()
       var focus = " focus=" + (tl ? (tl.appId || "?") : "none")
                   + " apps=" + (ToplevelManager.toplevels
                                 ? ToplevelManager.toplevels.values.length : 0)
                   + " free=" + root.firstFreeWorkspace()
-                  + " shellws=" + root.shellAppWorkspace
+                  + " shellapp=" + (own ? own.pluginId : "none")
       if (!root.tracking) return "idle" + focus
       return "tracking mode=" + root.dragMode
              + " pull=" + Math.round(root.pull * 100)
@@ -1010,9 +971,9 @@ Item {
         // else, which left Settings to fall through to it -- and only when no
         // window was open, because with one the third line claimed the gesture
         // first and raised the carousel over the top of Settings, leaving it
-        // there. Settings is an app now (K3) and reaches the third line in
-        // both cases; the theme picker and any other sheet reach the first one
-        // in both cases, which they did not before.
+        // there. Settings is a window now (K1), so the third line claims it in
+        // both cases with no clause of its own; the theme picker and any other
+        // sheet reach the first one in both cases, which they did not before.
         if (root.coveringSheet())
           root.pendingMode = "none"
         else if (root.isOpen("moarchy.recents") || root.hasApps())
@@ -1119,8 +1080,46 @@ Item {
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
     // Reserve nothing. This must never change any window's geometry -- it is
-    // only here to catch a gesture on empty space.
-    exclusionMode: ExclusionMode.Ignore
+    // only here to catch a gesture on empty space, and now to fill the band the
+    // strip reserves (I1a).
+    //
+    // `Normal` with a zero zone rather than `Ignore`, which is what this was.
+    // Both reserve nothing; the difference is that `Ignore` asks for the whole
+    // output and `Normal` is arranged into what the exclusive surfaces left --
+    // which is what lets this surface's own height say whether the keyboard is
+    // up (`keyboardReserving`). Nothing about the touch catcher depends on the
+    // difference: the bands it gives up are the bar's and the keyboard's, and
+    // both of those are opaque surfaces above this one that were taking those
+    // touches already.
+    exclusionMode: ExclusionMode.Normal
+    exclusiveZone: 0
+
+    // And then back down over the strip, so the band the strip reserves is
+    // still this surface's to paint. The same negative margin the sheets use
+    // for the same reason (I1, I3): wlroots stores layer-shell margins as
+    // int32_t and subtracts them without clamping, so a negative one extends
+    // the surface rather than shrinking it.
+    margins.bottom: -root.stripHeight
+
+    // I1a. The band, filled from underneath.
+    //
+    // Underneath is the whole trick, and it is why this costs nothing anywhere
+    // else. Bottom is below every window, so on an occupied workspace this is
+    // covered except in the band no window is drawn in; and it is below every
+    // sheet, so the drawer, the shade, the carousel and the theme picker draw
+    // over it exactly as before. Painting the band from the *strip* instead
+    // would have put it over all four.
+    //
+    // Only the band, not the whole surface. A window with gaps on, or two
+    // tiled side by side, would otherwise get the theme colour in the gutters
+    // as well -- a change nobody asked for, in a place the wallpaper is meant
+    // to show.
+    Rectangle {
+      anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
+      height: root.stripHeight
+      color: Color.background
+      visible: root.fillStripBand
+    }
 
     MultiPointTouchArea {
       anchors.fill: parent

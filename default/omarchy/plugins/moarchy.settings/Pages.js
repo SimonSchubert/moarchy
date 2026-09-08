@@ -30,16 +30,12 @@
 //            `readValue` is what to compare (defaults to `value`), and `write`
 //            is what to run. Those are separate fields because upstream has a
 //            case where they differ -- setup.default.editor.zed reads
-//            "zeditor" and writes "zed". `hides` takes Settings off screen
-//            before the write, for the rows whose write ends in a terminal
-//            rather than in a file: the AI agent rows, where choosing one
-//            installs it and then opens it. Without it the terminal comes up
-//            under a full-screen layer surface, which looks exactly like a tap
-//            that did nothing.
+//            "zeditor" and writes "zed".
 //   action   runs `run`. `launch` picks how: "tui" a terminal at TUI size,
-//            "menu" a vendored picker that needs Settings out of the way
-//            first, "none" straight to execDetached, "inline" in place with
-//            the screen left up and the page re-read afterwards. `back: true`
+//            "menu" a vendored picker, "none" straight to execDetached,
+//            "inline" in place with the page re-read afterwards. Only "inline"
+//            is a distinction the screen makes now -- nothing takes Settings
+//            off screen any more (docs/gestures.md K8). `back: true`
 //            pops one page when it is done. `argsFrom` names `input` rows
 //            whose text is appended, shell-quoted, in order; `requires` names
 //            one that must be non-empty or the row is dimmed and inert.
@@ -467,8 +463,11 @@ var PAGES = {
 // So this page is both ends of the loop: the only screen that installs an
 // agent, and the only screen the grid can reach before one exists.
 //
-// `hides` on all nine because every tap ends in a terminal either way -- the
-// presentation terminal on the way in, omarchy-agent's own on the way out.
+// Every tap ends in a terminal either way -- the presentation terminal on the
+// way in, omarchy-agent's own on the way out -- and all nine used to carry
+// `hides: true` to take Settings off screen so that terminal could be seen.
+// Settings is a window now (docs/gestures.md K8): the terminal maps above it or
+// beside it, and the flag is gone from the model entirely.
 //
 // All nine are listed, as upstream lists them, rather than the subset proven to
 // run here. Verified as having a linux-arm64 artifact on npm: claude, codex,
@@ -485,31 +484,31 @@ var PAGES = {
 "apps.default.agent": { title: "AI agent", reader: "omarchy-default-agent", rows: [
   { id: "how", type: "info", glyph: "󰚩", label: "Tap one to install it",
     detail: "The first run downloads the agent, then opens it" },
-  { id: "claude", type: "choice", label: "Claude", value: "claude", hides: true,
+  { id: "claude", type: "choice", label: "Claude", value: "claude",
     write: "moarchy-agent open claude",
     covers: { "setup.default.agent.claude": "N" } },
-  { id: "codex", type: "choice", label: "Codex", value: "codex", hides: true,
+  { id: "codex", type: "choice", label: "Codex", value: "codex",
     write: "moarchy-agent open codex",
     covers: { "setup.default.agent.codex": "N" } },
-  { id: "copilot", type: "choice", label: "Copilot", value: "copilot", hides: true,
+  { id: "copilot", type: "choice", label: "Copilot", value: "copilot",
     write: "moarchy-agent open copilot",
     covers: { "setup.default.agent.copilot": "N" } },
-  { id: "crush", type: "choice", label: "Crush", value: "crush", hides: true,
+  { id: "crush", type: "choice", label: "Crush", value: "crush",
     write: "moarchy-agent open crush",
     covers: { "setup.default.agent.crush": "N" } },
-  { id: "gemini", type: "choice", label: "Gemini", value: "gemini", hides: true,
+  { id: "gemini", type: "choice", label: "Gemini", value: "gemini",
     write: "moarchy-agent open gemini",
     covers: { "setup.default.agent.gemini": "N" } },
-  { id: "grok", type: "choice", label: "Grok", value: "grok", hides: true,
+  { id: "grok", type: "choice", label: "Grok", value: "grok",
     write: "moarchy-agent open grok",
     covers: { "setup.default.agent.grok": "N" } },
-  { id: "omp", type: "choice", label: "omp", value: "omp", hides: true,
+  { id: "omp", type: "choice", label: "omp", value: "omp",
     write: "moarchy-agent open omp",
     covers: { "setup.default.agent.omp": "N" } },
-  { id: "opencode", type: "choice", label: "OpenCode", value: "opencode", hides: true,
+  { id: "opencode", type: "choice", label: "OpenCode", value: "opencode",
     write: "moarchy-agent open opencode",
     covers: { "setup.default.agent.opencode": "N" } },
-  { id: "pi", type: "choice", label: "Pi", value: "pi", hides: true,
+  { id: "pi", type: "choice", label: "Pi", value: "pi",
     write: "moarchy-agent open pi",
     covers: { "setup.default.agent.pi": "N" } }
 ]},
@@ -649,16 +648,18 @@ var PAGES = {
   // Read natively, written through a bridged launch: the state is a systemctl
   // question, but the write needs a sudo prompt a QML surface cannot host.
   //
-  // `hides` because both commands end in a terminal that asks something. The
-  // setup script runs `setup_sshd` unattended and only then asks, twice, with
-  // gum: a `gum choose` between GitHub and pasting, then a `gum input` for the
-  // username. A foot window under a full-screen layer surface makes both
-  // invisible -- so the daemon comes up and the keys never do.
+  // Both commands end in a terminal that asks something. The setup script runs
+  // `setup_sshd` unattended and only then asks, twice, with gum: a `gum choose`
+  // between GitHub and pasting, then a `gum input` for the username. Under the
+  // old layer surface that foot window was invisible, so the daemon came up and
+  // the keys never did -- port 22 open on a phone nobody could reach, observed
+  // 2026-09-08. The terminal is a window above a window now (K8); nothing on
+  // this row has to arrange for it.
   { id: "ssh", type: "switch", glyph: "󰣀", label: "Remote access (SSH)",
     read: "systemctl is-enabled --quiet sshd && echo true || echo false",
     on: "omarchy-launch-floating-terminal-with-presentation omarchy-setup-security-sshd",
     off: "omarchy-launch-floating-terminal-with-presentation omarchy-remove-security-sshd",
-    hides: true, launch: "none",
+    launch: "none",
     covers: { "setup.security.sshd": "B", "remove.security.sshd": "B" } },
   // The same script, on demand. Two rows because the switch reads
   // `systemctl is-enabled sshd`: once the daemon is on the switch shows ON and

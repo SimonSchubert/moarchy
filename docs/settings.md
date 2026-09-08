@@ -12,7 +12,7 @@ visible.
 
 | Term | What it means |
 | --- | --- |
-| **Settings** | The `moarchy.settings` overlay. One plugin, many pages. |
+| **Settings** | The `moarchy.settings` window. One plugin, one window, many pages. |
 | **page** | One screen in the stack, addressed by a dotted id (`appearance.bar`). |
 | **stack** | The pages currently pushed, root first. Back pops one. |
 | **row** | A line on a page. One of `nav`, `plugin`, `switch`, `choice`, `action`, `link`, `info`, `input`. |
@@ -20,9 +20,12 @@ visible.
 | **reader** | The command a `switch` or `choice` page reads its state from. |
 | **bridged launch** | Running an upstream `omarchy-*` command unchanged, in a TUI terminal or the browser. |
 | **the shade** | The pull-down (`moarchy.shade`), which owns the radios and sliders. |
-| **running** | Summoned and not yet closed. Settings stays running across any number of hides, and has a carousel card for exactly that span (`gestures.md` K1). |
-| **hidden** | Off screen but running. The strip's up-swipe hides; the page stack survives. |
-| **closed** | Not running. The card is gone and the stack is back at the root. |
+| **running** | The window is mapped. It stays mapped while you are on another workspace, and has a carousel card for exactly that span (`gestures.md` K1). |
+| **closed** | Not running. The window is gone, the card with it, and the stack is back at the root. |
+
+There is no *hidden*. It was the state a layer surface needed to stand for "off
+screen but still an app", and a window has a workspace instead
+(`gestures.md` K).
 
 ## The screen tree
 
@@ -87,8 +90,12 @@ and migrations upstream's script does and delivering an upgrade.
 → `omarchy-shell settings state` == `open`; `omarchy-shell settings page` == `root`
 
 **A2** Opening Settings puts away the shade, drawer, carousel and theme picker, so
-exactly one full-screen surface is up.
+nothing of the shell's is drawn over the window it just mapped.
 → each of `omarchy-shell {shade,drawer,recents,themes} state` == `closed`
+
+Sheets only, and Wi-Fi and Bluetooth are deliberately not in that list any more:
+they are windows on their own workspaces (`gestures.md` K1) and putting them
+away would be closing them.
 
 **A3** The shade's power glyph opens Settings at the Power page, not the vendored
 `omarchy.menu`.
@@ -107,13 +114,27 @@ where every reader has been made slow
 
 **A6** Closing and reopening lands on the root, never on the page last left.
 
-*Closing*, specifically — which since `gestures.md` K is not the only way to
-leave the screen. Being hidden and resumed from the carousel card keeps the
-page you were on (K5); it is closing that resets the stack, and the two ways to
-close are the card flick and the back gesture at the root (K6). Written when
-those were the same act, and the criterion is unchanged for the case it was
-written about.
+*Closing*, specifically — which is not the only way to leave the screen. Going
+to another workspace and coming back keeps the page you were on
+(`gestures.md` K2, K4), because the window was never unmapped; it is closing
+that resets the stack, and the two ways to close are the card flick and the back
+gesture at the root (`gestures.md` K6).
 → `settings close; settings open; settings page` == `root`
+
+**A7** Summoning Settings while it is already running focuses its window instead
+of opening a second one, whichever entry point does it — the shade's gear, a
+drawer result, an IPC verb (`gestures.md` K12) — and it comes back on the page
+it was on.
+
+Naming a page still navigates: `openAt system.power` goes to Power whether or
+not the window is up, which is what the shade's power glyph depends on. The page
+is only kept when the summon named none, because that summon is somebody asking
+for *the screen*, and an app asked for by name comes back where you left it.
+This does not touch A6: closing clears the stack, so a reopen after a close is
+still the root.
+→ from another workspace and from `appearance.bar`, `settings open` leaves the
+focused workspace holding the Settings window, `settings page` still
+`appearance.bar`, and `recents list` with exactly one `moarchy.settings` line
 
 ## B. The page stack and back
 
@@ -128,13 +149,12 @@ root is on top. It never closes the app underneath.
 → from depth 2: `settings page` moves up one and the open-window count is unchanged
 
 **B4** An up-swipe from the strip treats Settings as the app it is: the carousel
-rises over it with the Settings card leading (`gestures.md` K3), and a drag
-carried on into the home band hides Settings and lands on a home screen (K4).
-Hidden, not closed — the card is still there to come back to, and the
-open-window count is still unchanged.
-→ `recents list`'s first line is `moarchy.settings`; after the home band
-`settings state` == `closed`, that line is still in `recents list`, and the
-focused workspace's `representation` is empty
+rises over it with the Settings card leading, and a drag carried on into the
+home band lands on a home screen with Settings left running on its own workspace
+(`gestures.md` K4). Nothing is closed — the card is still there to come back to.
+→ `recents list`'s first line is `moarchy.settings`; after the home band the
+focused workspace's `representation` is empty, that line is still in
+`recents list`, and `settings state` is still `open`
 
 This replaces a criterion that was only ever half true. It read "an up-swipe
 puts Settings away and does nothing else — A8 applied to this surface", and the
@@ -146,9 +166,10 @@ was dismissed. The fix is not to clear Settings in both cases — it is that the
 two cases were disagreeing about whether Settings is an app, and K answers
 that.
 
-Hidden rather than closed is the half of this that is a decision rather than a
-repair. An up-swipe on an app hides it and leaves it in the carousel; doing
-anything else to Settings would make "treated as an app" stop at the card.
+Left running rather than closed is the half of this that is a decision rather
+than a repair. An up-swipe on an app leaves it running and in the carousel;
+doing anything else to Settings would make "treated as an app" stop at the
+card.
 
 **B5** The back gesture dismisses whichever overlay is topmost, including vendored
 ones. `HyprlandFocusGrab` is stubbed in this port, so no vendored popup dismisses
@@ -251,13 +272,20 @@ crash-capture-off` exits 0 and the watch service is not `active`
 **C8** A switch may read natively while writing through a bridged launch.
 → on `security`, `settings value ssh` matches `systemctl is-enabled --quiet sshd`
 
-**C9** A switch whose write ends in a terminal takes Settings off screen first,
-the way `hides` does for choice rows. Without it the terminal maps under a
-full-screen layer surface and the question it asks cannot be seen, let alone
-answered -- which is how a phone ends up with sshd enabled and an empty
-`authorized_keys` (observed 2026-09-08).
-→ on `security`, `settings activate ssh` leaves `settings state` == `closed`
-while `settings running` == `running`; activating it a second time restores
+**C9** A switch whose write ends in a terminal leaves Settings exactly where it
+is. The terminal is a window and Settings is a window: a tiled one is moved to a
+free workspace and focused, a floating one maps above Settings, and either way
+the question it asks is on screen (`gestures.md` K8).
+
+This is the annulment of a criterion, not a new one. C9 used to require Settings
+to take *itself* off screen first, because a full-screen layer surface is above
+every window on the output and a terminal launched under one is
+indistinguishable from a tap that did nothing -- which is how a phone ended up
+with sshd enabled and an empty `authorized_keys` (observed 2026-09-08). The
+mechanism that made that possible is gone, so the workaround goes with it, and
+the criterion is kept as the record that the failure it names must not return.
+→ on `security`, `settings activate ssh` leaves `settings state` == `open` and a
+window focused that was not there before; activating it a second time restores
 the daemon to the state it started in
 
 ## D. Choices
@@ -296,17 +324,18 @@ the raw path and the *label* carries the prettifying instead.
 ~/.local/state/omarchy/current/background`, exactly one row is `checked=1`, and
 its label is the name the `background` row on `appearance` shows as its detail
 
-**D8** A choice row whose write ends in a terminal takes Settings off screen
-first. Choosing is normally instant and writes a file, so a choice row leaves the
-screen up and re-reads -- which is right for DNS and wrong for AI agent, where
-the write is `moarchy-agent open <name>`: it writes the drawer tile (P), then hands
-off to `omarchy-default-agent`, which installs through mise in a presentation
-terminal and execs the agent. Both ends of that are a foot window, and a foot
-window mapped under a full-screen layer surface is indistinguishable from a tap
-that did nothing. `hides: true` on the row is what the action branch does by
-default; it is not the page's property, because a page may hold both kinds.
-→ every row on `apps.default.agent` carries `hides`, and no other choice row in
-the model does
+**D8** A choice row whose write ends in a terminal leaves Settings where it is,
+the same as C9 and for the same reason (`gestures.md` K8). Choosing an AI agent
+runs `moarchy-agent open <name>`, which writes the drawer tile (P) and then hands
+off to `omarchy-default-agent`, installing through mise in a presentation
+terminal and exec'ing the agent; both ends of that are a `foot` window, which now
+maps above Settings rather than under it.
+
+Annulled the same way C9 is. `hides: true` was the row property that took
+Settings off screen for exactly these nine rows, and there is no longer anything
+for it to work around.
+→ no row anywhere in `Pages.js` carries `hides`, and `settings activate claude`
+under `dryRun` leaves `settings state` == `open`
 
 A reader may also answer something the provider's list genuinely omits, which is
 not the same fault. `omarchy-font-list` enumerates `fc-list :spacing=100`, and
@@ -350,12 +379,16 @@ on one of its keys arrives in the terminal. The bus property alone is not the
 check — it read `Visible true` for the whole time the keyboard was drawn
 underneath the terminal and taking no touches
 
-**E6** Launching a bridged row puts Settings away first, so the terminal is not
-covered by a layer surface. It is put away *hidden*, so Settings and the
-terminal it launched are both cards and you can get back to the row you came
-from (`gestures.md` K12).
-→ `settings state` == `closed` when the child process starts, and
-`recents list` holds both `moarchy.settings` and the terminal
+**E6** Launching a bridged row leaves Settings running, so Settings and the
+terminal it launched are both cards and the row you came from is one tap away.
+The terminal is not covered, because a window does not cover another window
+(`gestures.md` K8).
+→ after `settings activate`, `recents list` holds both `moarchy.settings` and
+the terminal, and `settings state` == `open`
+
+Settings used to hide itself here, and the hide was the only thing making the
+terminal visible. Both halves of that are gone: it does not hide, and it does
+not need to.
 
 **E7** A bridged row that summons a vendored picker reaches it.
 → on `shell.plugins`, after `settings activate enable`, `omarchy-shell shell listPlugins`

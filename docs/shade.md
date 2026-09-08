@@ -72,7 +72,15 @@ The cost is that Wi-Fi cannot be switched **off** from this tile while it is
 stranded. Airplane (S8) and Settings still do it, and an idle radio with
 nothing saved in range is the case where turning it off matters least.
 
-**S6b** The picker is `moarchy.wifi`, a screen, not a terminal.
+**S6b** The picker is `moarchy.wifi`, a screen, not a terminal — and since
+`gestures.md` K1, a screen that is a window, so it opens on a workspace of its
+own and the shade's sheet is gone by the time it does.
+
+Summoning it is not suppressed by `shade dryRun 1`. The two effects dryRun holds
+back are the ones that cannot be taken back on a phone reached over the radio it
+would switch off; a screen can be closed again. Suppressing it made S6 and S6c
+unpassable by construction — they assert the picker is on screen, and the only
+way to run them safely was the setting that stopped it opening.
 
 It was `nmtui-connect`, which fits the 60x41 grid `moarchy-launch-tui` gives —
 the network list and its buttons are all on screen. They still cannot be

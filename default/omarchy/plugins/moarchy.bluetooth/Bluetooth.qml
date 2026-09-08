@@ -74,21 +74,23 @@ Item {
 
   readonly property string pluginId: "moarchy.bluetooth"
 
-  property bool opened: false
-
-  // The app-like half of this screen (docs/gestures.md K, K11).
+  // Whether the window is mapped (docs/gestures.md K1). Read off the window,
+  // never assigned -- see moarchy.common/AppWindow.qml for why that direction.
   //
-  // `running` is "summoned and not yet closed", which outlives any number of
-  // hides -- swiping away to another app leaves this running, so the carousel
-  // keeps a card for it and coming back resumes where you were. `opened` is
-  // only whether the surface is on screen right now.
+  // There is no `running` beside it any more. That property stood for "off
+  // screen but still an app", which is what a layer surface needed and what a
+  // window has a workspace for.
   //
-  // The third shell app, after Settings and Wi-Fi. K11 asks for that to be a
+  // The third shell app, after Settings and Wi-Fi. K10 asks for that to be a
   // decision rather than a discovery that the machinery allows it: pairing is
   // a screen you sit in -- wait for the device to appear, hold its button
   // down, try again -- which is the shape of Settings and nothing like a sheet
   // dismissed in one motion.
-  property bool running: false
+  readonly property bool opened: bluetoothWindow.visible
+
+  // How moarchy.recents and the back gesture find this plugin from its window
+  // (moarchy.common/ShellApps.js).
+  readonly property var appWindow: bluetoothWindow
 
   // The card shows the device you are on, which is the useful thing to see on
   // a card, and nothing when there is none.
@@ -106,9 +108,6 @@ Item {
   property string returnPage: ""
 
   // --------------------------------------------------------------- palette
-  // Matches the shade, which is where the tile that opens this lives.
-  readonly property int gestureStrip: Style.space(20)
-
   // The card radius, from the four this shell has (docs/style.md D1).
   readonly property int radiusCard: Style.space(18)
 
@@ -478,8 +477,7 @@ Item {
       if (root.shell.isPluginOpen("moarchy.shade")) root.shell.hide("moarchy.shade")
       if (root.shell.isPluginOpen("moarchy.drawer")) root.shell.hide("moarchy.drawer")
     }
-    root.opened = true
-    root.running = true
+    bluetoothWindow.show()
     root.returnTo = ""
     root.returnPage = ""
     root.expandedAddress = ""
@@ -494,16 +492,12 @@ Item {
     }
   }
 
-  function close() { root.opened = false }
+  function close() { bluetoothWindow.hide() }
 
-  // Swiping the card away in the carousel. Distinct from close(): this ends
-  // the app rather than putting its surface down.
-  function quit(): void {
-    root.running = false
-    root.expandedAddress = ""
-    if (root.shell && typeof root.shell.hide === "function") root.shell.hide(root.pluginId)
-    else root.close()
-  }
+  // K6. Kept as a name because the carousel and the back gesture ask for it by
+  // name. Unmapping the window is closing the app, and there is no second,
+  // gentler thing it could mean now that it is a window.
+  function quit(): void { root.close() }
 
   function dismiss() {
     var back = root.returnTo
@@ -565,34 +559,35 @@ Item {
     }
   }
 
-  // ----------------------------------------------------------------- chrome
-  PanelWindow {
+  // ----------------------------------------------------------------- window
+  //
+  // docs/gestures.md K. An ordinary toplevel, so sway gives it a workspace and
+  // the strip's swipes reach it as one more app. The strip inset and the
+  // keyboard inset the layer surface had to compute are the compositor's.
+  Shared.AppWindow {
     id: bluetoothWindow
 
-    visible: root.opened
-    anchors { top: true; bottom: true; left: true; right: true }
-    color: "transparent"
+    shell: root.shell
+    appName: "Bluetooth"
+    pageTitle: root.pageTitle
+    pluginId: root.pluginId
+    // The literal character, not an escape: JavaScript's \u takes exactly four
+    // hex digits, so "\uF00AF" is U+F00A followed by an "F". U+F00AF,
+    // md-bluetooth -- the same rune the shade's tile and the Settings row wear.
+    glyph: "󰂯"
+    color: root.surface
 
-    WlrLayershell.namespace: "moarchy-bluetooth"
-    WlrLayershell.layer: WlrLayer.Top
-
-    exclusionMode: ExclusionMode.Normal
-    exclusiveZone: 0
-
-    // Draw under the gesture strip. Unconditional, unlike Wi-Fi's, which has
-    // to give the band back when its passphrase field takes focus so the
-    // on-screen keyboard has somewhere to be. There is no text field here.
-    margins.bottom: -root.gestureStrip
-
-    WlrLayershell.keyboardFocus: root.opened ? WlrKeyboardFocus.Exclusive
-                                             : WlrKeyboardFocus.None
+    onUnmapped: {
+      root.expandedAddress = ""
+      root.errorAddress = ""
+      root.errorText = ""
+    }
 
     Rectangle {
       anchors.fill: parent
       color: root.surface
-      opacity: root.opened ? 1 : 0
-      Behavior on opacity { NumberAnimation { duration: 140 } }
 
+      focus: true
       Keys.onEscapePressed: root.dismiss()
 
       Column {

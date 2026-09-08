@@ -19,7 +19,7 @@ Two of the duplicates have already drifted, and one of those is a defect
 | --- | --- |
 | **copy** | The same code written out in two files. Not a call to shared code — a second text of it. |
 | **canonical list** | A list of surface ids written once and read everywhere. `gestures.md` A8 already says why: "Three hand-kept lists of overlay ids is how Settings and Themes came to be missing from the back gesture." |
-| **shell app** | `gestures.md` K11: a screen this shell draws that behaves like an app. Three of them — Settings, Wi-Fi, Bluetooth. |
+| **shell app** | `gestures.md` K10: a screen this shell draws and maps as an ordinary window. Three of them — Settings, Wi-Fi, Bluetooth. |
 | **sheet** | A full-screen surface that is dismissed rather than left running: shade, drawer, themes. |
 | **the common dir** | `default/omarchy/plugins/moarchy.common/`, proposed in §E. It has no `manifest.json` and is not a plugin. |
 
@@ -59,12 +59,16 @@ having happened once.
 **B1** There is one canonical list of overlay ids and one canonical list of
 shell apps, and neither is written twice.
 
-Today `moarchy.gestures/Service.qml:228` holds `overlayIds` — shade, drawer,
-recents, themes, settings — and `Service.qml:239` holds `isShellApp()`, which
-answers `moarchy.settings` and nothing else, under a comment reading "One, and
-deliberately so". Meanwhile `moarchy.recents/Recents.qml:486` holds
-`shellApps: [settingsApp, wifiApp, bluetoothApp]`, and `gestures.md` K11 says
-three. The carousel is right and the gestures plugin is a version behind it.
+**Done, 2026-09-08.** The shell-app list is
+`moarchy.common/ShellApps.js`, imported by both plugins that need it; the
+overlay list stays `moarchy.gestures`' `overlayIds` and is now sheets only,
+because a shell app is a window and not an overlay at all (`gestures.md` K1).
+
+It had already drifted exactly as this section predicted. `Service.qml` held an
+`isShellApp()` that answered `moarchy.settings` and nothing else, under a
+comment reading "One, and deliberately so", while `moarchy.recents` held
+`shellApps: [settingsApp, wifiApp, bluetoothApp]` and the specification said
+three. The carousel was right and the gestures plugin was a version behind it.
 
 **B2** The "put the other surfaces away" guard in each plugin's `open()` derives
 from B1's list rather than naming ids. Four spellings exist today:
@@ -75,9 +79,14 @@ from B1's list rather than naming ids. Four spellings exist today:
 | `Drawer.qml:463` | shade |
 | `Settings.qml:373` | shade, drawer, recents, themes |
 
-**B3** `isShellApp()` answers true for all three of K11's shell apps, or the
-mechanism and the specification disagree in the file that implements the
-specification.
+**B3** No file answers "is this a shell app" from a list of its own.
+
+**Done, and by deletion.** `isShellApp()` is gone rather than corrected: a shell
+app is a window, so the questions that used to be asked of that list — is one on
+screen, which workspace is it on, does the back gesture belong to it — are asked
+of the compositor instead. The one thing still resolved by id is which *plugin*
+owns a given window, and `ShellApps.forToplevel()` answers it by comparing
+handles rather than by matching ids or titles a second time.
 
 **B4 — the defect.** A back swipe over Wi-Fi or Bluetooth reaches that surface,
 not the app behind it.
@@ -110,13 +119,15 @@ It must answer with Wi-Fi closing and the app behind it still open.
 
 **B5** Back over a shell app *ends* it rather than parking it, and does not
 return to whatever opened it. This is K6 already, and it is what Settings has
-always done — `backTopmostOverlay()` calls `quit()`, and `quit()` is the half
-that does not summon `returnTo`; only `dismiss()`, which the header chevron
-calls, does. Stated here because putting Wi-Fi and Bluetooth on that path makes
-it apply to two more screens, and it is the kind of thing that reads as an
-oversight the first time it is noticed. Whether a back swipe out of Wi-Fi
-*should* land back on the Settings row that opened it is a real question and a
-separate one; today all three shell apps answer it the same way.
+always done. Stated here because it applies to all three screens, and it is the
+kind of thing that reads as an oversight the first time it is noticed. Whether a
+back swipe out of Wi-Fi *should* land back on the Settings row that opened it is
+a real question and a separate one; today all three answer it the same way.
+
+The route changed with `gestures.md` K7 and the answer did not. Back no longer
+walks a list of open overlays looking for one that owns a page stack; it asks
+which window is focused, and hands the gesture to that window's plugin. The
+same `goBack()`-then-close pair, keyed on something the compositor knows.
 
 ---
 
