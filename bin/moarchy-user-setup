@@ -10,8 +10,9 @@
 # phone.
 #
 # These are the exceptions: three app configs that only ever read ~/.config, the
-# initial theme, which writes user state by design, and the Grok wrapper, which
-# is a file in ~/.local/bin because that is where mise-managed tools live.
+# initial theme, which writes user state by design, and the coding-agent
+# wrappers, which are files in ~/.local/bin because that is where mise-managed
+# tools live.
 set -uo pipefail
 
 STAMP="$HOME/.local/state/moarchy/user-setup-done"
@@ -38,8 +39,8 @@ say() { printf '==> %s\n' "$*"; }
 # before this script ends. Quickshell's DesktopEntries watches it, and a watch
 # cannot be placed on a directory that is not there -- so a shell that came up
 # first never noticed the directory being created and showed no user .desktop
-# file for the life of the session. Measured on the device 2026-09-07: the Grok
-# entry written at 18:47 was invisible to a shell started at 18:40 and appeared
+# file for the life of the session. Measured on the device 2026-09-07: the agent
+# tile written at 18:47 was invisible to a shell started at 18:40 and appeared
 # within three seconds of a restart, after which a second entry showed up live.
 mkdir -p "$HOME/.config/omarchy/themed" \
          "$HOME/.local/state/omarchy/current" \
@@ -84,36 +85,39 @@ if [[ -f $HOME/.config/btop/btop.conf ]]; then
   sed -i 's/^shown_boxes = .*/shown_boxes = "cpu mem"/' "$HOME/.config/btop/btop.conf"
 fi
 
-# Grok, as a wrapper rather than an install.
+# The coding agents: nine wrappers and one drawer tile, and not one download.
 #
-# omarchy-mise-install writes a five-line ~/.local/bin/grok that runs
-# `mise use -g npm:@xai-official/grok` on first invocation, so this costs no
-# network here and no disk until someone actually opens it. Upstream does the
-# same for thirteen tools in install/user/mise.sh; one is enough on a phone,
-# where each of the others is a download apiece.
+# `seed` writes a five-line ~/.local/bin/<name> per agent through
+# omarchy-mise-install, each of which runs `mise use -g <package>` on ITS first
+# invocation -- so this costs no network here and no disk until someone
+# actually opens one. Upstream does the same for thirteen tools in
+# install/user/mise.sh. All nine rather than the one that used to be here,
+# because the cost of the other eight is eight small files: what a wrapper buys
+# is that `claude` typed into the terminal works, that
+# `omarchy-cmd-present claude` is true, and that upstream's keybinding launcher
+# -- which gives up on `omarchy-cmd-missing` before it ever reaches mise -- has
+# something to find.
 #
-# It is what makes the agent reachable at all. Every row on Settings >
-# Apps > AI agent is guarded `when: omarchy-cmd-present <bin>`, and so is the
-# nav row that reaches the page -- so with nothing on PATH the page does not
-# exist, and there is no tap that installs one. Writing the wrapper satisfies
-# that guard immediately, and `omarchy-default-agent grok` behind the row does
-# the real install in a terminal that shows it happening.
+# The tile is one file however many agents there are (see moarchy-agent): a
+# 64-entry grid does not want nine icons for a thing nobody runs nine of, so
+# moarchy-agent.desktop carries whichever agent was picked last and is rewritten
+# rather than added to. At first boot nothing has been picked -- Omarchy writes
+# no default -- so what it carries is the SETUP tile, which opens the page that
+# lists all nine. It named Grok until 2026-09-08, which is the one agent this
+# script used to install, and which told a user who wanted Claude that their
+# phone had come with the wrong agent.
 #
 # ~/.local/bin is on PATH for the shell already: /etc/profile.d/omarchy.sh
 # sources upstream's env-bootstrap, which appends it, and sway starts from the
 # login shell, so quickshell inherits it.
-if ! omarchy-mise-install npm:@xai-official/grok grok; then
-  # Not fatal, and deliberately not an exit. It costs the AI agent page; the
-  # theme below is what decides whether the phone has colours at all.
-  echo "!! could not write ~/.local/bin/grok -- Settings > Apps > AI agent will be empty" >&2
-fi
-
-# And the drawer entry, so Grok is an icon in the app grid rather than four taps
-# into Settings. Nothing is downloaded by this either: the entry runs
-# `moarchy-agent open grok`, which installs on the first tap and launches on
-# every one after it -- the same command the Settings row runs.
-if ! moarchy-agent entry grok; then
-  echo "!! could not write the Grok drawer entry -- Settings > Apps > AI agent still reaches it" >&2
+#
+# Not fatal, and deliberately not an exit. Settings > Apps & defaults > Default
+# apps > AI agent installs any of the nine with or without this -- those rows
+# carry no presence guard and run omarchy-default-agent, which asks mise
+# directly. What is lost is the tile and the names on PATH. The theme below is
+# what decides whether the phone has colours at all.
+if ! moarchy-agent seed; then
+  echo "!! could not seed the coding agents -- Settings > Apps > AI agent still installs one" >&2
 fi
 
 # The starting theme, which also generates

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="copilotTile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6366F1"/>
+      <stop offset="1" stop-color="#312E81"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#copilotTile)"/>
+  <g stroke="#ffffff" stroke-width="8" stroke-linecap="round">
+    <path d="M64 46V33"/>
+    <path d="M30 68H23M98 68H105"/>
+  </g>
+  <rect x="30" y="46" width="68" height="48" rx="18"
+        fill="none" stroke="#ffffff" stroke-width="8"/>
+  <circle cx="64" cy="28" r="5.5" fill="#ffffff"/>
+  <circle cx="50" cy="70" r="6.5" fill="#ffffff"/>
+  <circle cx="78" cy="70" r="6.5" fill="#ffffff"/>
+</svg>

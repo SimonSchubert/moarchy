@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- The plain letter. omp.svg is the same letter with three dots; see there
+       for why they are deliberately a pair. -->
+  <defs>
+    <linearGradient id="piTile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F43F5E"/>
+      <stop offset="1" stop-color="#9F1239"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#piTile)"/>
+  <g fill="none" stroke="#ffffff" stroke-width="11" stroke-linecap="round">
+    <path d="M32 44H96"/>
+    <path d="M50 44C50 66 47 82 42 94"/>
+    <path d="M78 44C78 68 80 82 84 94"/>
+  </g>
+</svg>

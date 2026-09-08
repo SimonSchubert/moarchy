@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Pi with three dots over it, and pi.svg without them. The two agents are
+       related, since oh-my-pi wraps pi, so they share a letter on purpose and
+       are told apart by the ornament and the colour, not by the label. -->
+  <defs>
+    <linearGradient id="ompTile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#06B6D4"/>
+      <stop offset="1" stop-color="#0E7490"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#ompTile)"/>
+  <g fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round">
+    <path d="M34 54H94"/>
+    <path d="M52 54C52 74 50 86 46 96"/>
+    <path d="M80 54C80 76 82 88 86 96"/>
+  </g>
+  <g fill="#ffffff">
+    <circle cx="46" cy="32" r="5"/>
+    <circle cx="64" cy="28" r="5"/>
+    <circle cx="82" cy="32" r="5"/>
+  </g>
+</svg>

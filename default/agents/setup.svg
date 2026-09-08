@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- The tenth file in a directory of nine agents, and the only one that is not
+       an agent. It is what the tile draws before anything has been picked: a
+       fresh phone has no default, and naming one arbitrarily (this was Grok,
+       for no reason but alphabetical luck) tells a user who wants Claude that
+       their phone came with the wrong agent.
+       Tokyo-night's own blue, since it is the theme the phone boots into, and
+       an "add" mark rather than a robot: copilot.svg is the robot, and this
+       tile is a question, not a product. -->
+  <defs>
+    <linearGradient id="setupTile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7AA2F7"/>
+      <stop offset="1" stop-color="#3D59A1"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#setupTile)"/>
+  <g stroke="#ffffff" stroke-width="12" stroke-linecap="round">
+    <path d="M60 48V96"/>
+    <path d="M36 72H84"/>
+  </g>
+  <path d="M96 20C97.5 30 102 34.5 112 36C102 37.5 97.5 42 96 52C94.5 42 90 37.5 80 36C90 34.5 94.5 30 96 20Z"
+        fill="#ffffff"/>
+</svg>

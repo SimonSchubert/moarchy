@@ -7,26 +7,65 @@
 # Settings > Apps & defaults > Default apps > AI agent -- four taps to open the
 # thing you use every day, and nothing in the drawer to say it is there at all.
 #
-# So installing one writes a .desktop file. The drawer is upstream's apps
-# provider over the XDG dirs, ~/.local/share/applications included, so an entry
-# appearing there is an icon in the grid with no drawer change at all.
+# So there is a .desktop file. The drawer is upstream's apps provider over the
+# XDG dirs, ~/.local/share/applications included, so an entry appearing there is
+# an icon in the grid with no drawer change at all.
 #
-#   moarchy-agent entry <name>   write the drawer entry, install nothing
-#   moarchy-agent open  <name>   write it, then install and launch through
+#   moarchy-agent list           print the agents this script knows
+#   moarchy-agent shim  <name>   write ~/.local/bin/<name>, download nothing
+#   moarchy-agent entry [name]   write the drawer tile, install nothing
+#   moarchy-agent seed           shim all of them, and write the tile once
+#   moarchy-agent open  <name>   shim, tile, then install and launch through
 #                                omarchy-default-agent
 #
-# `open` is what both the Settings row and the drawer entry run, and it is
+# `open` is what both the Settings row and the drawer tile run, and it is
 # idempotent on purpose: the first tap installs, every tap after it launches,
-# and the entry is rewritten either way so a hand-edited or half-written file
+# and the tile is rewritten either way so a hand-edited or half-written file
 # heals itself.
+#
+# ---------------------------------------------------------------------------
+# One tile, nine agents
+# ---------------------------------------------------------------------------
+# Every agent used to write a .desktop file of its own, so the grid grew by one
+# every time a different one was opened and never shrank. Nine of them is nine
+# tiles in a 64-entry grid for a thing nobody runs nine of.
+#
+# So there is exactly one file, moarchy-agent.desktop, and it is REWRITTEN
+# rather than added to: its Name, Icon and Exec carry whichever agent was
+# picked last. The grid gains one tile at first boot and never gains another,
+# and that tile is always the agent you actually use.
+#
+# The one path that goes behind it is `omarchy-default-agent <name>` run by
+# hand, which changes the default without coming through here and leaves the
+# tile naming the previous agent. `moarchy-agent entry` with no argument is the
+# repair: it re-reads the default and rewrites the tile to match.
+#
+# ---------------------------------------------------------------------------
+# The tile before anything is picked
+# ---------------------------------------------------------------------------
+# Omarchy writes no default agent, so a fresh phone has picked nothing, and the
+# tile has nothing to name. It used to name Grok anyway -- the one agent
+# moarchy-user-setup happened to install -- which told a user who wanted Claude
+# that their phone had come with the wrong agent, and gave them no hint the
+# other eight existed. The picker was four taps away in Settings and nothing in
+# the grid pointed at it.
+#
+# So with nothing picked the tile is a SETUP tile: it opens
+# Settings > Apps & defaults > Default apps > AI agent, which is the page that
+# lists all nine and installs any of them. The first tap chooses, and from then
+# on the tile is that agent's and stays that way. Two states, one file.
 set -uo pipefail
 
 APPS="$HOME/.local/share/applications"
+ENTRY="$APPS/moarchy-agent.desktop"
+ICONS="${MOARCHY_PATH:-/usr/share/moarchy}/agents"
 
 # Upstream's own names, from omarchy-default-agent's case statement. Duplicated
 # rather than parsed out of it: that script maps a name to a mise package and
 # exits, so there is nothing to ask it for, and a label is not worth sourcing a
-# script that ends in `exec`.
+# script that ends in `exec`. moarchy-selftest asserts this list against
+# upstream's `omarchy:args=` line, against the rows in Pages.js and against the
+# icons that ship, so the duplication is checked rather than trusted.
 agent_name() {
   case "$1" in
     claude)   echo "Claude Code" ;;
@@ -42,76 +81,207 @@ agent_name() {
   esac
 }
 
+agents() { printf '%s\n' claude codex copilot crush gemini grok omp opencode pi; }
+
+# What mise is asked for, which is the agent's own name for seven of the nine.
+# omarchy-default-agent spells that `agent_package=${agent_package:-$agent}`
+# and names the two exceptions; they are named here for the same reason the
+# labels are.
+agent_package() {
+  case "$1" in
+    grok) echo "npm:@xai-official/grok" ;;
+    omp)  echo "github:can1357/oh-my-pi" ;;
+    *)    echo "$1" ;;
+  esac
+}
+
+# The agent that has been picked, or nothing at all. There is deliberately no
+# fallback: a fresh phone answers empty here and gets the setup tile.
+#
+# An unreadable file or a name this script does not know answers empty too. The
+# file holds one word written by omarchy-default-agent, and a tile named after
+# whatever else ended up in it is worse than a tile that offers the picker.
+current_agent() {
+  local agent="" file="$HOME/.config/omarchy/defaults/agent"
+  [[ -f $file ]] && read -r agent <"$file"
+  agent_name "${agent:-}" >/dev/null 2>&1 && echo "$agent"
+}
+
+# The mise wrapper, which is five lines and no download.
+#
+# omarchy-mise-install writes a ~/.local/bin/<name> that runs
+# `mise use -g <package>` on first invocation, so this costs no network and no
+# disk until someone actually opens the agent. That is the whole reason all
+# nine are written at first boot rather than the one: nine wrappers is nine
+# small files, not nine downloads.
+#
+# What it buys is that the agent's own name works. `claude` typed into the
+# terminal installs and runs claude, `omarchy-cmd-present claude` is true, and
+# upstream's keybinding launcher -- which refuses on `omarchy-cmd-missing
+# "$agent"` before it ever reaches mise -- has something to find.
+write_shim() {
+  local agent=$1 bin="$HOME/.local/bin/$1"
+
+  # A file we did not write is left alone. omarchy-mise-install always
+  # clobbers, and every wrapper it has ever written mentions mise on two of its
+  # five lines, so "exists and never says mise" is a real binary somebody put
+  # there by hand and this is not the place to remove it.
+  if [[ -e $bin ]] && ! grep -q mise "$bin" 2>/dev/null; then
+    echo "moarchy-agent: leaving $bin alone, it is not a mise wrapper" >&2
+    return 0
+  fi
+
+  omarchy-mise-install "$(agent_package "$agent")" "$agent"
+}
+
 write_entry() {
-  local agent=$1 label
+  local agent=$1 label icon
   label=$(agent_name "$agent") || {
     echo "moarchy-agent: unknown agent '$agent'" >&2; return 1; }
 
   mkdir -p "$APPS"
 
-  # system-run, and the two names it is not are both worth writing down, because
-  # `find /usr/share/icons -name <name>.*` answers yes for all three and the
-  # drawer draws only one of them.
+  # An absolute path, not a themed name, for the reason the plugin entries give
+  # at length: AppLibrary.iconSource() returns a file URL for anything starting
+  # with "/" and never consults the icon theme.
   #
-  # utilities-terminal was first and was wrong on sight: Terminal and Foot
-  # already draw it, so Grok arrived in the grid as a third identical icon with
-  # a different word under it. applications-development was second and was
-  # worse -- the slot came up EMPTY. It exists, at
+  # That is not a preference here, it is the only thing that works. No agent has
+  # an icon in Adwaita, breeze or hicolor, so the tile was `system-run` -- a
+  # stock glyph, and the three candidates before it were worse. utilities-terminal
+  # was wrong on sight: Terminal and Foot already draw it, so Grok arrived in the
+  # grid as a third identical icon with a different word under it.
+  # applications-development came up EMPTY -- it exists, at
   # breeze/categories/{22,32}/applications-development.svg, and a categories/
-  # icon is not one the drawer's lookup finds; a blank tile is worse than a
-  # duplicate one.
-  #
-  # So the candidates were probed on the device rather than reasoned about:
-  # three throwaway .desktop entries, one capture of the real drawer, and
-  # accessories-dictionary (AdwaitaLegacy PNG) and text-x-script (breeze
-  # mimetypes) both came up blank as well. system-run draws, and looks like
-  # neither terminal already in the grid.
-  #
-  # No agent has an icon of its own in Adwaita, breeze or hicolor, which is the
-  # whole reason this is a stock name and not a brand.
-  #
-  # Exec is this script rather than the agent binary, so the drawer entry and
-  # the Settings row take the same path -- including the install, for an entry
-  # written before the agent was ever downloaded.
-  cat >"$APPS/moarchy-agent-$agent.desktop" <<EOF
+  # icon is not one the drawer's lookup finds. accessories-dictionary and
+  # text-x-script came up blank as well. A blank tile is worse than a duplicate
+  # one, and a duplicate one is worse than a picture.
+  icon="$ICONS/$agent.svg"
+  [[ -f $icon ]] || icon=system-run
+
+  # Written to a temporary file and moved, because the drawer is watching this
+  # directory: Quickshell's DesktopEntries reloads on the write, and a truncated
+  # file is a tile that vanishes and comes back.
+  cat >"$ENTRY.tmp" <<EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
 Name=$label
 Comment=Coding agent in a terminal
 Exec=moarchy-agent open $agent
-Icon=system-run
+Icon=$icon
 Terminal=false
 StartupNotify=true
 Categories=Development;Utility;
+Keywords=ai;agent;coding;llm;
+X-Moarchy-Agent=$agent
 EOF
-  chmod +x "$APPS/moarchy-agent-$agent.desktop"
+  finish_entry
+}
+
+# Everything both tiles do once their body is at $ENTRY.tmp.
+finish_entry() {
+  mv -f "$ENTRY.tmp" "$ENTRY" || { rm -f "$ENTRY.tmp"; return 1; }
+  chmod +x "$ENTRY"
+
+  # The per-agent files this script wrote until the one-tile rule above. A phone
+  # upgraded rather than reflashed still has them -- at least
+  # moarchy-agent-grok.desktop, which moarchy-user-setup wrote at first boot,
+  # and one more for every agent that was ever opened. The glob cannot match
+  # moarchy-agent.desktop, which has no hyphen after `agent`.
+  rm -f "$APPS"/moarchy-agent-*.desktop
 
   # What omarchy-refresh-applications ends with, for the same reason: the
   # mimeinfo cache in that directory is stale the moment a .desktop lands in it.
   # The drawer does not need it -- Quickshell's DesktopEntries watches the
-  # directory and a new entry shows up within seconds -- but everything else
-  # that resolves a handler does.
+  # directory and the tile updates within seconds -- but everything else that
+  # resolves a handler does.
   update-desktop-database "$APPS" 2>/dev/null || true
 }
 
+# The tile with no agent behind it, which is what a fresh phone gets.
+#
+# Exec opens the picker rather than installing anything, and it is the same IPC
+# the plugin entries use to raise a shell surface from a .desktop
+# (`Exec=omarchy-shell shell toggle moarchy.wifi`). Verified on the device:
+# `omarchy-shell settings openAt apps.default.agent` answers `ok` and leaves
+# `settings page` == apps.default.agent with all nine rows drawn.
+#
+# Keywords carries all nine agent names, so a new user who opens the drawer and
+# types "claude" finds the screen that installs Claude. Before this there was
+# nothing in the grid to find.
+write_setup_entry() {
+  local icon="$ICONS/setup.svg"
+  [[ -f $icon ]] || icon=system-run
+
+  mkdir -p "$APPS"
+  cat >"$ENTRY.tmp" <<EOF
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=AI Agent
+Comment=Choose and install a coding agent
+Exec=omarchy-shell settings openAt apps.default.agent
+Icon=$icon
+Terminal=false
+StartupNotify=true
+Categories=Development;Utility;
+Keywords=ai;agent;coding;llm;$(agents | tr '\n' ';')
+X-Moarchy-Agent=none
+EOF
+  finish_entry
+}
+
+# The tile as it should be right now: the chosen agent's, or the setup tile
+# when nothing has been chosen.
+write_current() {
+  local chosen
+  chosen=$(current_agent)
+  if [[ -n $chosen ]]; then write_entry "$chosen"; else write_setup_entry; fi
+}
+
 case "${1:-}" in
+  list)
+    agents
+    ;;
+  shim)
+    [[ -n ${2:-} ]] || { echo "usage: moarchy-agent shim <name>" >&2; exit 2; }
+    agent_name "$2" >/dev/null || { echo "moarchy-agent: unknown agent '$2'" >&2; exit 1; }
+    write_shim "$2"
+    ;;
   entry)
-    [[ -n ${2:-} ]] || { echo "usage: moarchy-agent entry <name>" >&2; exit 2; }
-    write_entry "$2"
+    # No argument means "whatever the tile should say now": the chosen agent, or
+    # the setup tile when nothing is chosen. It is both the first-boot path and
+    # the repair path for a default set behind this script's back.
+    if [[ -n ${2:-} ]]; then write_entry "$2"; else write_current; fi
+    ;;
+  seed)
+    # First boot, from moarchy-user-setup. Every agent gets its wrapper and the
+    # grid gets its one tile.
+    #
+    # A wrapper that cannot be written is reported and not fatal: it costs that
+    # agent's name on PATH, and Settings > Apps > AI agent installs it either
+    # way -- those rows are unguarded, and run omarchy-default-agent, which
+    # asks mise directly.
+    rc=0
+    while read -r a; do
+      write_shim "$a" || { echo "moarchy-agent: no wrapper for $a" >&2; rc=1; }
+    done < <(agents)
+    write_current || rc=1
+    exit $rc
     ;;
   open)
     [[ -n ${2:-} ]] || { echo "usage: moarchy-agent open <name>" >&2; exit 2; }
-    # Not fatal if the entry cannot be written: the point of the tap is to open
-    # the agent, and an unwritable ~/.local/share costs an icon, not a session.
-    write_entry "$2" || echo "moarchy-agent: could not write the drawer entry" >&2
+    # Neither of these is fatal: the point of the tap is to open the agent, and
+    # an unwritable ~/.local costs an icon or a name on PATH, not a session.
+    write_shim "$2"  || echo "moarchy-agent: could not write the wrapper" >&2
+    write_entry "$2" || echo "moarchy-agent: could not write the drawer tile" >&2
     # omarchy-default-agent installs through mise when it has to, writes
     # ~/.config/omarchy/defaults/agent, and execs omarchy-agent. exec, so this
     # script is not left holding a process for the life of the session.
     exec omarchy-default-agent "$2"
     ;;
   *)
-    echo "usage: moarchy-agent {entry|open} <name>" >&2
+    echo "usage: moarchy-agent {list|shim|entry|seed|open} [name]" >&2
     exit 2
     ;;
 esac

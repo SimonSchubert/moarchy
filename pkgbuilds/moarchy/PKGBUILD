@@ -122,7 +122,30 @@ package() {
          "$pkgdir/usr/share/moarchy/default/omarchy" \
          "$pkgdir/usr/share/moarchy/default/themed" \
          "$pkgdir/usr/share/moarchy/default/pacman-hooks" \
-         "$pkgdir/usr/share/moarchy/default/polkit"
+         "$pkgdir/usr/share/moarchy/default/polkit" \
+         "$pkgdir/usr/share/moarchy/default/agents"
+
+  # --- the coding-agent tile icons ------------------------------------------
+  # Not in an icon theme, and that is the point. moarchy-agent writes the
+  # drawer tile with `Icon=` set to one of these ABSOLUTE paths, because
+  # AppLibrary.iconSource() returns a file URL for anything starting with "/"
+  # and never consults the theme -- the same reason the three plugin entries
+  # do it, given at length in moarchy.wifi/icon.svg.
+  #
+  # It is not a preference here so much as the only thing that works: no agent
+  # has an icon in Adwaita, breeze or hicolor, so before these the tile was
+  # `system-run`, a stock glyph the grid already draws for two other apps.
+  #
+  # One per agent moarchy-agent knows, plus setup.svg -- the tile a phone draws
+  # before any agent is picked. moarchy-selftest asserts that correspondence in
+  # both directions, and asserts setup.svg separately, because an agent with no
+  # icon falls back to `system-run` and an icon with no agent is dead weight
+  # nothing will notice.
+  # `install -d` then a plain copy, not `install -Dm644 <glob> <dir>/`: -D takes
+  # a single SOURCE and a DEST, and needs -t to accept several. It silently does
+  # the wrong thing with a glob rather than failing.
+  install -d "$pkgdir/usr/share/moarchy/agents"
+  install -m644 "$_repo"/default/agents/*.svg "$pkgdir/usr/share/moarchy/agents/"
 
   # --- the shell plugins ---------------------------------------------------
   # PluginRegistry scans this directory before ~/.config/omarchy/plugins, so a

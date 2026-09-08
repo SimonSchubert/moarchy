@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- A heart with a prompt inside it, because both halves of the name are
+       true: it is a Charm TUI, and it is the only agent here whose mark is a
+       character rather than a glyph. -->
+  <defs>
+    <linearGradient id="crushTile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#D946EF"/>
+      <stop offset="1" stop-color="#86198F"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#crushTile)"/>
+  <path d="M64 102C30 78 21 57 34 44C45 33 58 37 64 47C70 37 83 33 94 44C107 57 98 78 64 102Z"
+        fill="none" stroke="#ffffff" stroke-width="9" stroke-linejoin="round"/>
+  <g fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M53 58L62 66L53 74"/>
+    <path d="M69 76H79"/>
+  </g>
+</svg>

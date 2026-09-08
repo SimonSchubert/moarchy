@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="opencodeTile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#84CC16"/>
+      <stop offset="1" stop-color="#365314"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#opencodeTile)"/>
+  <g fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M54 32C43 32 45 57 35 64C45 71 43 96 54 96"/>
+    <path d="M74 32C85 32 83 57 93 64C83 71 85 96 74 96"/>
+  </g>
+  <rect x="57" y="57" width="14" height="14" rx="3" fill="#ffffff"/>
+</svg>

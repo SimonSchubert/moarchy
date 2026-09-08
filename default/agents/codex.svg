@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- A hexagon with three spokes rather than the knot itself: the knot's
+       threefold symmetry survives being drawn at 96px, its overlaps do not. -->
+  <defs>
+    <linearGradient id="codexTile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#10B981"/>
+      <stop offset="1" stop-color="#065F46"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#codexTile)"/>
+  <g fill="none" stroke="#ffffff" stroke-width="9" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M64 26L96.9 45V83L64 102L31.1 83V45Z"/>
+    <path d="M64 26V64M96.9 83L64 64M31.1 83L64 64"/>
+  </g>
+</svg>

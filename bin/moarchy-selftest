@@ -274,6 +274,251 @@ Bluetooth|S6c|openBluetooth|Bluetooth devices|moarchy.bluetooth
 ROWS
 fi
 
+# --- the coding agent tile (docs/settings.md P) ------------------------------
+head_ "coding agent"
+
+# Everything below that writes runs against a throwaway HOME. moarchy-agent
+# reaches ~/.local/share/applications and ~/.local/bin through $HOME and nothing
+# else, so a temporary one exercises the real code paths and leaves the phone's
+# own tile, wrappers and chosen agent untouched. A selftest that rewrites the
+# drawer to prove the drawer is written is not a check, it is a side effect.
+agent_home=$(mktemp -d) || agent_home=""
+agent_bin=$(command -v moarchy-agent)
+agent_icons="$MOARCHY_ROOT/agents"
+
+if [[ -z $agent_bin ]]; then
+  no "moarchy-agent is not on PATH" "the drawer tile and the nine wrappers both come from it"
+elif [[ -z $agent_home ]]; then
+  no "cannot make a scratch HOME to exercise moarchy-agent in"
+else
+  ag() { env HOME="$agent_home" MOARCHY_PATH="$MOARCHY_ROOT" "$agent_bin" "$@"; }
+  entry="$agent_home/.local/share/applications/moarchy-agent.desktop"
+  field() { sed -n "s/^$1=//p" "$entry" | head -1; }
+
+  # P5. One list, four copies, and none of them checked against another: all
+  # four are checked against upstream's, which is the only one that can change
+  # under us. `omarchy:args=` is a comment upstream maintains beside the case
+  # statement -- it is how `omarchy default agent` prints its own usage -- so it
+  # is a machine-readable list rather than a scrape of shell.
+  p5_bad=$(python3 - "$agent_bin" "$(command -v omarchy-default-agent)" \
+                    "$(plugin_dir moarchy.settings)/Pages.js" "$agent_icons" <<'P5PY'
+import os, re, subprocess, sys
+
+agent_bin, upstream, pages, icons = sys.argv[1:5]
+bad = []
+
+def names(label, got):
+    if not got:
+        bad.append(f"{label} is empty")
+    return sorted(got)
+
+ours = names("moarchy-agent list",
+             subprocess.run([agent_bin, "list"], capture_output=True, text=True)
+                       .stdout.split())
+
+# [pi|omp|opencode|...] on the omarchy:args line.
+theirs = []
+if upstream and os.path.exists(upstream):
+    for line in open(upstream, encoding="utf-8", errors="replace"):
+        m = re.match(r"#\s*omarchy:args=\[([^\]]+)\]\s*$", line.strip())
+        if m:
+            theirs = [n.strip() for n in m.group(1).split("|")]
+            break
+    if not theirs:
+        bad.append("no `omarchy:args=[...]` line in omarchy-default-agent; "
+                   "upstream changed shape and this check now proves nothing")
+else:
+    bad.append("omarchy-default-agent is not installed")
+theirs = names("omarchy-default-agent's args", theirs)
+
+# The choice rows on the agent page, by id, between its declaration and the
+# `]},` that closes it -- the same span F8 reads.
+rows = []
+if os.path.exists(pages):
+    lines = open(pages, encoding="utf-8").read().splitlines()
+    start = next((i for i, l in enumerate(lines)
+                  if l.startswith('"apps.default.agent": {')), None)
+    if start is None:
+        bad.append("no apps.default.agent page in Pages.js")
+    else:
+        end = next(i for i in range(start, len(lines)) if lines[i].startswith("]},"))
+        for l in lines[start:end]:
+            m = re.search(r'id:\s*"([^"]+)",\s*type:\s*"choice"', l)
+            if m:
+                rows.append(m.group(1))
+else:
+    bad.append(f"no Pages.js at {pages}")
+rows = names("the rows on apps.default.agent", rows)
+
+all_svgs = ([f[:-4] for f in os.listdir(icons) if f.endswith(".svg")]
+            if os.path.isdir(icons) else [])
+# setup.svg is the tile drawn before any agent is picked (P10) -- the one file
+# in that directory that is not an agent. Set ASIDE rather than ignored: it is
+# asserted present first, so excusing it from the comparison cannot hide it
+# going missing, which would silently drop a fresh phone back to `system-run`.
+if "setup" not in all_svgs:
+    bad.append("no setup.svg in %s; a phone with nothing picked draws system-run"
+               % icons)
+svgs = names("the shipped icons", [n for n in all_svgs if n != "setup"])
+
+for label, got in (("moarchy-agent list", ours),
+                   ("apps.default.agent rows", rows),
+                   ("%s/*.svg" % icons, svgs)):
+    if theirs and got != theirs:
+        missing = [n for n in theirs if n not in got]
+        extra   = [n for n in got if n not in theirs]
+        bad.append("%s differs from upstream's%s%s" % (
+            label,
+            " (missing " + ", ".join(missing) + ")" if missing else "",
+            " (extra " + ", ".join(extra) + ")" if extra else ""))
+
+print("; ".join(bad))
+P5PY
+)
+  if [[ -z $p5_bad ]]; then
+    ok "P5 one agent list: moarchy-agent, Pages.js and the icons all match upstream's"
+  else
+    no "P5 $p5_bad" "an agent upstream adds must fail here, not arrive with no icon"
+  fi
+
+  # P3. Nothing chosen, so the tile is the setup tile -- twice, because an
+  # absent defaults file and a corrupt one are different code paths and both
+  # have to land here rather than on a tile named after junk.
+  ag entry >/dev/null 2>&1
+  p3_absent=$(field X-Moarchy-Agent)
+  mkdir -p "$agent_home/.config/omarchy/defaults"
+  printf 'half-written-garbage\n' >"$agent_home/.config/omarchy/defaults/agent"
+  ag entry >/dev/null 2>&1
+  p3_junk=$(field X-Moarchy-Agent)
+  rm -f "$agent_home/.config/omarchy/defaults/agent"
+  ag entry >/dev/null 2>&1
+  if [[ $p3_absent == none && $p3_junk == none && $(field Name) == "AI Agent" ]]; then
+    ok "P3 with nothing picked the tile offers the picker, not an agent"
+  else
+    no "P3 the tile on a fresh HOME is absent=$p3_absent junk=$p3_junk name=$(field Name)" \
+       "naming one agent arbitrarily tells a user who wants another that the phone came wrong"
+  fi
+
+  # P10. And that tile opens the picker rather than installing anything.
+  p10_exec=$(field Exec)
+  if [[ $p10_exec == "omarchy-shell settings openAt apps.default.agent" ]]; then
+    ok "P10 the setup tile opens the AI agent page"
+  else
+    no "P10 the setup tile runs '$p10_exec'" \
+       "it must reach the page that lists all nine, not install one of them"
+  fi
+
+  # P11. And it is findable by the name of the agent someone actually wants,
+  # which is the drawer search that returned nothing at all before.
+  p11_missing=""
+  p11_keywords=$(field Keywords)
+  while read -r a; do
+    [[ $p11_keywords == *"$a;"* ]] || p11_missing="$p11_missing $a"
+  done < <("$agent_bin" list)
+  if [[ -z $p11_missing ]]; then
+    ok "P11 the setup tile is findable by every agent name"
+  else
+    no "P11 the setup tile's Keywords omit:$p11_missing" \
+       "a new user typing 'claude' into the drawer finds nothing"
+  fi
+
+  # P4. A file path, not a theme name, and one that is actually there.
+  icon=$(field Icon)
+  if [[ $icon == /* && -f $icon ]]; then
+    ok "P4 the tile's icon is a file that exists ($(basename "$icon"))"
+  elif [[ $icon == /* ]]; then
+    no "P4 the tile names $icon, which is not there" "the drawer draws an empty slot and says nothing"
+  else
+    no "P4 the tile's icon is the theme name '$icon'" \
+       "no agent has one in Adwaita, breeze or hicolor; see docs/settings.md P4"
+  fi
+
+  # P1 and P2. Two agents opened in turn leave one tile, and it is the second.
+  # `entry` and not `open`, because `open` ends in `exec omarchy-default-agent`
+  # and would install an agent and hold a terminal; the tile is written by the
+  # same function either way.
+  ag entry claude >/dev/null 2>&1
+  ag entry opencode >/dev/null 2>&1
+  tiles=""
+  for f in "$agent_home/.local/share/applications"/moarchy-agent*.desktop; do
+    [[ -e $f ]] && tiles="$tiles$(basename "$f") "
+  done
+  if [[ $tiles == "moarchy-agent.desktop " ]]; then
+    ok "P1 two agents in turn leave one tile"
+  else
+    no "P1 the drawer has: $tiles" "one tile per agent is nine icons in a 64-entry grid"
+  fi
+
+  if [[ $(field Name) == "OpenCode" && $(field Exec) == "moarchy-agent open opencode" \
+        && $(field Icon) == */opencode.svg && $(field X-Moarchy-Agent) == opencode ]]; then
+    ok "P2 the tile's name, icon and Exec all move to the agent picked last"
+  else
+    no "P2 the tile disagrees with itself" \
+       "Name=$(field Name) Exec=$(field Exec) Icon=$(field Icon) agent=$(field X-Moarchy-Agent)"
+  fi
+
+  # P8. The per-agent files the old scheme wrote, on a phone upgraded rather
+  # than reflashed.
+  : >"$agent_home/.local/share/applications/moarchy-agent-grok.desktop"
+  ag entry claude >/dev/null 2>&1
+  if [[ ! -e $agent_home/.local/share/applications/moarchy-agent-grok.desktop ]]; then
+    ok "P8 writing the tile clears the per-agent entries an upgrade leaves behind"
+  else
+    no "P8 moarchy-agent-grok.desktop survived" "an upgraded phone keeps two agent icons for good"
+  fi
+
+  # P9. A default set behind moarchy-agent's back, and the one-command repair.
+  mkdir -p "$agent_home/.config/omarchy/defaults"
+  echo codex >"$agent_home/.config/omarchy/defaults/agent"
+  ag entry >/dev/null 2>&1
+  if [[ $(field X-Moarchy-Agent) == codex ]]; then
+    ok "P9 'moarchy-agent entry' with no argument re-reads the chosen agent"
+  else
+    no "P9 the tile still names $(field X-Moarchy-Agent) after the default moved to codex" \
+       "omarchy-default-agent typed by hand has no other repair"
+  fi
+
+  # P7. A binary somebody put there by hand. omarchy-mise-install clobbers
+  # unconditionally, and seeding nine names into a directory the user writes to
+  # is exactly where a real install would disappear.
+  mkdir -p "$agent_home/.local/bin"
+  printf '#!/bin/sh\necho mine\n' >"$agent_home/.local/bin/claude"
+  chmod +x "$agent_home/.local/bin/claude"
+  before=$(cat "$agent_home/.local/bin/claude")
+  ag shim claude >/dev/null 2>&1
+  if [[ $(cat "$agent_home/.local/bin/claude") == "$before" ]]; then
+    ok "P7 a wrapper does not overwrite a binary that was already there"
+  else
+    no "P7 ~/.local/bin/claude was replaced" "a real install vanishes on the next seed"
+  fi
+
+  rm -rf "$agent_home"
+fi
+
+# P6. The real HOME, read-only: all nine names on PATH, each of them a wrapper
+# and not a download. This is the one check that asks about the phone rather
+# than a scratch directory, because "is it on PATH" is only a question about
+# this phone's PATH.
+if [[ -n $agent_bin ]]; then
+  p6_missing=""
+  p6_real=""
+  while read -r a; do
+    if ! resolved=$(command -v "$a" 2>/dev/null); then
+      p6_missing="$p6_missing $a"
+    elif ! grep -q mise "$resolved" 2>/dev/null; then
+      # Not a failure: a real install is a better answer than a wrapper. Named
+      # so the count below is not read as nine wrappers when it is eight.
+      p6_real="$p6_real $a"
+    fi
+  done < <("$agent_bin" list)
+  if [[ -z $p6_missing ]]; then
+    ok "P6 all nine agent names are on PATH${p6_real:+ (installed outright:$p6_real)}"
+  else
+    no "P6 not on PATH:$p6_missing" \
+       "a phone flashed before this shipped never re-runs user-setup: moarchy-agent seed"
+  fi
+fi
+
 # --- the gesture plugin -----------------------------------------------------
 head_ "gesture plugin"
 

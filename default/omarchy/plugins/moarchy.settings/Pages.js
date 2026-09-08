@@ -425,9 +425,22 @@ var PAGES = {
 // absent is the one row that does something.
 //
 // The write is `moarchy-agent open <name>` rather than `omarchy-default-agent
-// <name>` for one reason: it writes the drawer entry first. An agent reachable
+// <name>` for one reason: it writes the drawer tile first. An agent reachable
 // only from here is four taps deep and invisible in the app grid; after this it
 // is an icon like any other app, and the icon runs this same command.
+//
+// One tile, not one per agent. moarchy-agent.desktop is REWRITTEN by every tap
+// on this page -- name, icon and Exec -- so picking a second agent moves the
+// tile rather than adding a tenth icon to a 64-entry grid. Which means this
+// page is also the only thing that keeps the tile honest: `omarchy-default-agent
+// <name>` typed into a terminal changes the default without passing through
+// here, and leaves the tile naming the agent before it. `moarchy-agent entry`
+// with no argument re-reads the default and repairs it.
+//
+// And before anything is picked, that tile is a setup tile pointing back HERE
+// (`omarchy-shell settings openAt apps.default.agent`, docs/settings.md P10).
+// So this page is both ends of the loop: the only screen that installs an
+// agent, and the only screen the grid can reach before one exists.
 //
 // `hides` on all nine because every tap ends in a terminal either way -- the
 // presentation terminal on the way in, omarchy-agent's own on the way out.
@@ -439,6 +452,11 @@ var PAGES = {
 // names through aqua rather than npm. A row that cannot install says so in a
 // terminal with the reason on screen, which is a better answer than a page that
 // hides the question.
+//
+// The same nine, in the same order, are moarchy-agent's `agents()` and the nine
+// files in default/agents/. Three lists, and moarchy-selftest asserts all three
+// against upstream's own `omarchy:args=` line rather than against each other,
+// so a name upstream adds fails here loudly instead of quietly missing an icon.
 "apps.default.agent": { title: "AI agent", reader: "omarchy-default-agent", rows: [
   { id: "how", type: "info", glyph: "󰚩", label: "Tap one to install it",
     detail: "The first run downloads the agent, then opens it" },

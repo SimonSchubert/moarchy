@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Butt caps, not round: the mark is slabs, and rounding them turns it into
+       a generic X. The broken upper-left/lower-right arms are what make it one
+       letter rather than a multiplication sign. -->
+  <defs>
+    <linearGradient id="grokTile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#334155"/>
+      <stop offset="1" stop-color="#020617"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#grokTile)"/>
+  <g stroke="#ffffff" stroke-width="12" stroke-linecap="butt">
+    <path d="M34 98L94 30"/>
+    <path d="M34 30L57 56"/>
+    <path d="M71 72L94 98"/>
+  </g>
+</svg>

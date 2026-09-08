@@ -262,7 +262,7 @@ its label is the name the `background` row on `appearance` shows as its detail
 **D8** A choice row whose write ends in a terminal takes Settings off screen
 first. Choosing is normally instant and writes a file, so a choice row leaves the
 screen up and re-reads -- which is right for DNS and wrong for AI agent, where
-the write is `moarchy-agent open <name>`: it writes the drawer entry, then hands
+the write is `moarchy-agent open <name>`: it writes the drawer tile (P), then hands
 off to `omarchy-default-agent`, which installs through mise in a presentation
 terminal and execs the agent. Both ends of that are a foot window, and a foot
 window mapped under a full-screen layer surface is indistinguishable from a tap
@@ -849,6 +849,105 @@ upstream's own presentation terminal, and claims no upstream id.
 update` leaves `settings lastLaunch` ==
 `omarchy-launch-floating-terminal-with-presentation sudo pacman -Syu`; and
 `settings coverage` is still 129 lines
+
+## P. The coding agent tile
+
+The AI agent page installs an agent (D8, F8). This section is the other half:
+what the phone does with one once it is picked, which is put it in the app grid,
+because a coding agent reached only by walking Settings > Apps & defaults >
+Default apps > AI agent is four taps deep and invisible in the drawer.
+
+**P1** The drawer carries exactly **one** agent tile, however many agents have
+been opened. Every agent used to write a `.desktop` of its own, so the grid grew
+by one each time a different one was tried and never shrank; nine of them is nine
+icons in a 64-entry grid for a thing nobody runs nine of. There is one file and
+it is rewritten.
+→ after `moarchy-agent open claude; moarchy-agent open opencode`,
+`ls ~/.local/share/applications/moarchy-agent*.desktop` is exactly
+`moarchy-agent.desktop`
+
+**P2** That tile names whichever agent was picked last, and its three moving
+parts move together. A tile whose icon and label disagree with what it launches
+is worse than no tile.
+→ after `moarchy-agent open opencode` the entry holds `Name=OpenCode`,
+`Exec=moarchy-agent open opencode`, `Icon=.../opencode.svg` and
+`X-Moarchy-Agent=opencode`
+
+**P3** With no agent picked the tile is a **setup tile**, not an agent. Omarchy
+writes no default, so a fresh phone has nothing to name. It used to name Grok
+anyway -- the one agent first boot happened to install -- which told a user who
+wanted Claude that their phone came with the wrong agent, and gave them no hint
+the other eight existed. There is no fallback agent now: an absent, unreadable
+or unrecognised `defaults/agent` all produce the setup tile.
+→ with `~/.config/omarchy/defaults/agent` absent, and again with junk in it,
+`moarchy-agent entry` writes `Name=AI Agent` and `X-Moarchy-Agent=none`
+
+**P4** The icon is a **file path**, never a theme name. No agent has an icon in
+Adwaita, breeze or hicolor, which is what left this on `system-run` -- a stock
+glyph the grid already draws for Terminal and Foot. The three candidates tried
+before it were worse: `applications-development` exists, at
+`breeze/categories/{22,32}/`, and a `categories/` icon is not one the drawer's
+lookup finds, so the tile came up **empty**; `accessories-dictionary` and
+`text-x-script` came up empty as well. `AppLibrary.iconSource()` returns a file
+URL for anything starting with `/` and never consults the theme, which is the
+same escape the three plugin entries take.
+→ the tile's `Icon=` starts with `/`, and that path exists
+
+**P5** The list of agents is **one list**. moarchy-agent's `agents()`, the choice
+rows on `apps.default.agent`, and the icons in `/usr/share/moarchy/agents` are
+three copies of it, and all three are checked against upstream's own
+`omarchy:args=` line rather than against each other -- so an agent upstream adds
+fails loudly here instead of quietly arriving with no icon.
+→ `moarchy-agent list` sorted equals the names in `omarchy-default-agent`'s
+`omarchy:args=[...]`, equals the choice-row ids on `apps.default.agent`, and
+equals the `.svg` basenames in `/usr/share/moarchy/agents` once `setup.svg` --
+the one file there that is not an agent (P10) -- is set aside. `setup.svg`
+itself must be present, so setting it aside cannot hide its absence.
+
+**P6** All nine names are on PATH from first boot, and nothing was downloaded to
+put them there. `omarchy-mise-install` writes a five-line wrapper that runs
+`mise use -g <package>` on **its** first invocation, so the cost of the eight
+agents nobody picked is eight small files. What it buys is that the agent's own
+name works in a terminal, that `omarchy-cmd-present <name>` is true, and that
+upstream's keybinding launcher -- which gives up on `omarchy-cmd-missing` before
+it ever reaches mise -- has something to find.
+→ after `moarchy-agent seed`, every name in `moarchy-agent list` resolves through
+`command -v`, and every file it resolves to names `mise`
+
+**P7** A binary somebody put in `~/.local/bin` by hand is left alone.
+`omarchy-mise-install` always clobbers, and seeding nine names into a directory
+the user also writes to must not be how a real install disappears.
+→ with a non-mise `~/.local/bin/claude` in place, `moarchy-agent seed` leaves it
+byte-identical
+
+**P8** An upgraded phone loses the old per-agent tiles. A device that was flashed
+rather than reflashed still has `moarchy-agent-grok.desktop` from first boot, and
+one more for every agent that was ever opened; P1 is not true on it until those
+are gone.
+→ with `moarchy-agent-grok.desktop` present, any `moarchy-agent entry` leaves no
+`moarchy-agent-*.desktop` behind
+
+**P9** The default can still be set behind this script's back, and the repair is
+one command. `omarchy-default-agent <name>` typed into a terminal writes
+`~/.config/omarchy/defaults/agent` without passing through `moarchy-agent`, so
+the tile keeps naming the agent before it.
+→ after `omarchy-default-agent codex`, `moarchy-agent entry` with no argument
+leaves `X-Moarchy-Agent=codex`
+
+**P10** The setup tile opens the picker rather than installing anything. It is
+one tap to the screen that lists all nine and installs any of them, where before
+that screen was four taps deep with nothing in the grid pointing at it. The IPC
+is the one the plugin entries already use to raise a shell surface from a
+`.desktop` (`Exec=omarchy-shell shell toggle moarchy.wifi`).
+→ the setup tile's `Exec` is `omarchy-shell settings openAt apps.default.agent`;
+running it answers `ok` and leaves `settings page` == `apps.default.agent` with
+its nine choice rows drawn
+
+**P11** A new user can find that screen by the name of the agent they want. The
+setup tile carries all nine agent names as `Keywords`, so typing `claude` into
+the drawer on a phone with no agent installed finds the screen that installs
+Claude -- which is the search that returned nothing at all before.
+→ the setup tile's `Keywords` contains every name in `moarchy-agent list`
 
 ## The IPC surface
 
