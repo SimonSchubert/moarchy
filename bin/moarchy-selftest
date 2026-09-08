@@ -15,7 +15,13 @@
 # Four opt-in suites take a flag, because each needs more than a read:
 #
 #   --gestures   drives real touch through /dev/uinput. Needs root and
-#                python-evdev, and closes a window at the end.
+#                python-evdev, and closes a window at the end. Section L
+#                creates a launcher of its own under
+#                ~/.local/share/applications and removes it again through the
+#                drawer -- no package moves, and nothing you installed is
+#                touched, but a launcher really does get deleted, because a
+#                check that only ever plans would pass against a Remove button
+#                wired to nothing.
 #   --settings   walks the Settings stack over IPC, against docs/settings.md.
 #                Flips three switches and restores them; launches nothing.
 #                Section J sets reminders and clears them, so any that were
@@ -1501,6 +1507,216 @@ print("armed=%d mid=%d lag=%d stop=%d landed_ok=%s landed=%s"
   # it, the match includes the shell running it, and the session dies mid-run.
   # Asking a window to close by app_id cannot reach anything but a window, and
   # it is what the rest of this file does to windows anyway.
+
+  # --- L. long-press on an app ----------------------------------------------
+  #
+  # The gesture is real touch; everything it opens is text inside a QML item
+  # that nothing outside the shell can read, and a grim capture can show that
+  # *a* card is up without saying which entry it is about. So L1 and L3 are
+  # driven through the injector and read back over IPC, and the rest is IPC on
+  # both ends.
+  #
+  # Nothing here removes a package. L9 needs something to actually leave, so it
+  # creates a launcher of its own and removes that -- a check that only ever
+  # plans is a check that would pass against a Remove button wired to nothing.
+  if ! ipc_present drawer detail; then
+    printf '  \033[90m%-4s\033[0m   \033[90mL skipped: the drawer has no `detail` -- this suite is ahead of the plugin\033[0m\n' ""
+  else
+    dr() { timeout 10 omarchy-shell drawer "$@" 2>/dev/null; }
+    l_reset() { dr detailClose >/dev/null; dr close >/dev/null; sleep 1
+                dr open >/dev/null; sleep 2; }
+    # Wait for a plan rather than sleeping a fixed time: it is a pacman
+    # transaction on a 1.15GHz A53, and a check that guessed the duration would
+    # read "pending" as "cannot remove" on a busy phone.
+    l_settle() { local i; for i in 1 2 3 4 5 6 7 8; do
+                   [[ $(dr canRemove) != pending ]] && return; sleep 2; done; }
+    l_field() { dr detail | sed -n "s/^$1\t//p"; }
+
+    # Where cell 0 is, in panel pixels. Three frames meet here and each is read
+    # from whatever owns it: the cell rect from the shell (surface space), the
+    # bar's height from sway (it is the surface's top), and the scale from the
+    # output. Nothing is written down -- Style.space(86) is a *scaled* number
+    # and the row pitch moves with the theme.
+    l_bar=$(swaymsg -t get_workspaces | jq -r '.[]|select(.focused)|.rect.y')
+    l_scale=$(swaymsg -t get_outputs | jq -r '.[]|select(.active)|.scale' | cut -d. -f1)
+    l_reset
+    l_cell=$(dr cellTarget 0)
+    l_id=$(tr ' ' '\n' <<<"$l_cell" | sed -n 's/^id=//p')
+    l_rect=$(tr ' ' '\n' <<<"$l_cell" | sed -n 's/^rect=//p')
+    l_size=$(tr ' ' '\n' <<<"$l_cell" | sed -n 's/^size=//p')
+
+    if [[ -z $l_id || -z $l_rect || -z ${l_bar:-} ]]; then
+      noac L1 "cellTarget answered '$l_cell'" \
+              "with the drawer open it must name a cell; nothing else can aim the hold"
+    else
+      l_cx=$(( (${l_rect%%,*} + ${l_size%%x*} / 2) * l_scale ))
+      l_cy=$(( (${l_rect#*,} + ${l_size#*x} / 2 + l_bar) * l_scale ))
+
+      # L1/L2 together, and they have to be one check: L2 is about what the
+      # same touch did NOT do, so a separate run would be asserting a different
+      # gesture.
+      l_cards=$(cards)
+      sudo -n "$touch_bin" hold "$l_cx" "$l_cy" 900 >/dev/null 2>&1
+      sleep 4
+      l_held=$(l_field id)
+      if [[ $l_held == "$l_id" ]]; then
+        okac L1 "a 900ms hold on $l_id opens its card"
+      else
+        noac L1 "the hold left detail='${l_held:-empty}', wanted $l_id" \
+                "the timer never fired, or travel cancelled it -- check dragSlop against the injector's jitter"
+      fi
+      if [[ $(cards) -eq $l_cards ]]; then
+        okac L2 "the hold did not also launch it ($l_cards cards either side)"
+      else
+        noac L2 "cards went $l_cards -> $(cards)" \
+                "the click Qt delivers after the release is still reaching launch()"
+      fi
+
+      # L3. Down from the same cell, past the slop: a close drag, and no card.
+      l_reset
+      sudo -n "$touch_bin" swipe "$l_cx" "$l_cy" "$l_cx" $(( l_cy + 1000 )) 1200 >/dev/null 2>&1
+      sleep 3
+      l_samples=$(dr dragTrace | wc -w)
+      if [[ $(shell_state drawer) == "closed" ]] && [[ -z $(l_field id) ]] \
+         && (( l_samples >= 8 )); then
+        okac L3 "a drag from a cell closes the drawer and opens no card ($l_samples samples)"
+      else
+        noac L3 "state $(shell_state drawer), detail '$(l_field id)', $l_samples samples" \
+                "travel must cancel the hold, and the hold must not eat the drag"
+      fi
+    fi
+
+    # L6. A packaged entry says which package, which version and how big.
+    l_reset
+    dr hold org.gnome.clocks >/dev/null; sleep 3
+    l_pkg=$(l_field info.package); l_ver=$(l_field info.version); l_sz=$(l_field info.size)
+    if [[ -n $l_pkg && -n $l_ver && -n $l_sz ]]; then
+      okac L6 "the card names its origin ($l_pkg $l_ver, $l_sz)"
+    else
+      noac L6 "package='$l_pkg' version='$l_ver' size='$l_sz'" \
+              "moarchy-app-remove info is missing, or is not on the shell's PATH"
+    fi
+
+    # L7 and L13. Uninstall shows a plan, and says when the set exception fired.
+    echo "$(dr uninstall)" >/dev/null; l_settle
+    l_count=$(l_field plan.count); l_set=$(l_field plan.set)
+    if [[ $(dr canRemove) == yes && -n $l_count ]]; then
+      okac L7 "Uninstall shows a plan first (removes $l_count, $(l_field plan.size))"
+    else
+      noac L7 "canRemove=$(dr canRemove) count='$l_count'" \
+              "Uninstall must ask pacman before it offers Remove"
+    fi
+    if [[ $l_set == 1 ]]; then
+      okac L13 "the plan says the set will bring it back"
+    else
+      noac L13 "plan.set='$l_set' for a package moarchy-meta declares" \
+               "the --assume-installed branch did not fire, or moarchy-meta no longer declares it"
+    fi
+
+    # L11. The shell will not uninstall itself. moarchy owns three launchers --
+    # Wi-Fi, Bluetooth and Device -- so there is always one of these to ask.
+    l_reset
+    dr hold moarchy.wifi >/dev/null; sleep 3
+    if [[ $(l_field info.protected) == 1 && $(dr uninstall) == protected \
+          && $(dr canRemove) == no ]]; then
+      okac L11 "moarchy's own launcher offers no Uninstall"
+    else
+      noac L11 "protected='$(l_field info.protected)' uninstall='$(dr uninstall)' canRemove='$(dr canRemove)'" \
+               "a moarchy* package must be refused before pacman is even asked"
+    fi
+
+    # L5. Back walks out of the card the way it walks out of Settings (G3):
+    # the plan steps back to the detail, the detail closes the card, and only
+    # then does the drawer go. Nothing else in this suite calls the drawer's
+    # goBack(), and until it existed a back gesture over an open card closed the
+    # whole drawer and lost the card with it.
+    l_reset
+    dr hold org.gnome.clocks >/dev/null; sleep 3
+    dr uninstall >/dev/null; l_settle
+    l_s1=$(l_field stage)
+    timeout 10 omarchy-shell gestures back >/dev/null 2>&1; sleep 2
+    l_s2=$(l_field stage)
+    timeout 10 omarchy-shell gestures back >/dev/null 2>&1; sleep 2
+    l_s3="$(l_field id)/$(shell_state drawer)"
+    timeout 10 omarchy-shell gestures back >/dev/null 2>&1; sleep 2
+    if [[ $l_s1 == plan && $l_s2 == info && $l_s3 == "/open" \
+          && $(shell_state drawer) == closed ]]; then
+      okac L5 "back steps plan -> card -> drawer, one at a time"
+    else
+      noac L5 "stages '$l_s1' -> '$l_s2' -> '$l_s3' -> $(shell_state drawer)" \
+              "each back must consume one level; the drawer is the last of them"
+    fi
+
+    # L12, at the script rather than through a card: nothing the drawer lists
+    # has a dependent outside the set, so the blocked branch has no entry to
+    # reach it with. Asked of a package that does have one, found rather than
+    # named -- which package that is depends on what is installed.
+    l_dep=$(LC_ALL=C pacman -Qi $(pacman -Qqo /usr/share/applications/*.desktop 2>/dev/null | sort -u) 2>/dev/null |
+            awk -F": " '/^Name/{n=$2} /^Required By/{if ($2 !~ /^(None|moarchy-meta *)$/) print n}' | head -1)
+    if [[ -z $l_dep ]]; then
+      printf '  \033[90m%-4s\033[0m   \033[90mL12 skipped: nothing with a .desktop has a dependent outside the set\033[0m\n' ""
+    else
+      l_file=$(pacman -Qlq "$l_dep" | grep '/applications/.*\.desktop$' | head -1)
+      l_blocked=$(moarchy-app-remove plan "$(basename "$l_file" .desktop)" 2>&1 | sed -n 's/^blocked\t//p')
+      if [[ -n $l_blocked ]]; then
+        okac L12 "$l_dep is refused: ${l_blocked:0:48}"
+      else
+        noac L12 "$l_dep planned cleanly despite a dependent outside moarchy-meta" \
+                 "the blocker parse is wrong, or --assume-installed fired when it should not have"
+      fi
+    fi
+
+    # L12's other half: the rule only protects what the metadata declares, and
+    # foot is the case that proved it. This fails on a phone still holding
+    # moarchy 0.2.0-1, which is the point -- that is a device whose drawer will
+    # offer to remove its own terminal.
+    l_foot=$(moarchy-app-remove plan foot 2>&1 | sed -n 's/^blocked\t//p')
+    if [[ -n $l_foot ]]; then
+      okac L12a "the terminal is refused: ${l_foot:0:48}"
+    else
+      noac L12a "foot plans cleanly" \
+                "moarchy must declare foot (pkgbuilds/moarchy 0.2.0-2); until it does, the drawer will remove it"
+    fi
+
+    # L9 and L10, with something that is really removed. A launcher of this
+    # suite's own, so no package moves and nothing the user installed is at
+    # risk -- and the whole path runs: plan, Remove, the script, the
+    # notification, and the grid noticing.
+    l_disp="$HOME/.local/share/applications/moarchy-selftest-disposable.desktop"
+    printf '[Desktop Entry]\nType=Application\nName=Selftest Disposable\nExec=true\nIcon=application-x-executable\n' > "$l_disp"
+    update-desktop-database "${l_disp%/*}" >/dev/null 2>&1
+    sleep 4
+    l_reset
+    if ! dr entries | grep -qx "moarchy-selftest-disposable"; then
+      noac L10 "the disposable launcher never appeared in the grid" \
+               "the desktop-entry watcher did not pick it up; L9 cannot be run"
+      rm -f "$l_disp"
+    else
+      dr hold moarchy-selftest-disposable >/dev/null; sleep 3
+      dr uninstall >/dev/null; l_settle
+      l_conf=$(dr removeConfirm)
+      sleep 6
+      l_gone=$([[ -f $l_disp ]] && echo no || echo yes)
+      if [[ $l_conf == ok && $l_gone == yes && -z $(l_field id) ]]; then
+        okac L9 "Remove removed it, with no terminal, and closed the card"
+      else
+        noac L9 "removeConfirm='$l_conf' file gone=$l_gone card='$(l_field id)'" \
+                "the Remove button did not reach moarchy-app-remove"
+      fi
+      sleep 4
+      if dr entries | grep -qx "moarchy-selftest-disposable"; then
+        noac L10 "the grid still lists it" \
+                 "appsChanged() is not reaching appRows, or the entry cache is stale"
+      else
+        okac L10 "the grid dropped it without a reopen"
+      fi
+      rm -f "$l_disp"
+      update-desktop-database "${l_disp%/*}" >/dev/null 2>&1
+    fi
+
+    dr detailClose >/dev/null; dr close >/dev/null
+  fi
+
   swaymsg '[app_id=moa-selftest] kill' >/dev/null 2>&1
 
   # An AC with no check here is a gap, and a gap nobody can see is the same as
@@ -1527,7 +1743,14 @@ print("armed=%d mid=%d lag=%d stop=%d landed_ok=%s landed=%s"
   #   K9      needs a tap on a named card, and nothing addresses one by name
   #   K10     the shrink out of Settings; J1 drives the same path from a window
   #   K11/K12 an absence, and a bridged launch that must not run for real here
-  printf '  \033[90m%-4s\033[0m   \033[90mnot covered: A6 A8 A9 B2 D2 D3 D4 E1 E4 E5 E6 E7 F1 G5 G7 G8 G9 G10a J2 J4 J5 J6 J7 J8 J9 J10 K2 K4a K7 K9 K10 K11 K12\033[0m\n' ""
+  #   L4      a scroll that cancels the hold. It needs a grid that scrolls AND
+  #           a thumb that stops on a cell; the cancel arrives through
+  #           onCanceled when the Flickable steals the grab, which is the same
+  #           path H6 already relies on for every press veil on this sheet.
+  #   L5a     the card keeps the grid's SCROLL POSITION. The back ladder and
+  #           the drawer staying open are checked as L5; the scroll offset
+  #           itself is not readable over IPC.
+  printf '  \033[90m%-4s\033[0m   \033[90mnot covered: A6 A8 A9 B2 D2 D3 D4 E1 E4 E5 E6 E7 F1 G5 G7 G8 G9 G10a J2 J4 J5 J6 J7 J8 J9 J10 K2 K4a K7 K9 K10 K11 K12 L4 L5a\033[0m\n' ""
 fi
 
 # ---------------------------------------------------------------------------

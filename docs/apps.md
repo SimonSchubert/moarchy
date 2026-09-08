@@ -22,6 +22,21 @@ an app is usable:
    nothing to rebuild for ARM, and `dotnet-runtime` is not in the aarch64 repos
    either. Check for a non-`-bin` package before assuming an app is available.
 
+## Removing one
+
+Long-press an icon in the app drawer. The card that opens says what the app is
+and which package it came from; Uninstall then shows what `pacman` would
+actually take — every package in the transaction and the total size — before
+anything runs, and Remove does it with no terminal and no prompt. The rules for
+what may not go are [`gestures.md` section L](gestures.md), and the short
+version is two: the shell will not uninstall itself, and nothing another
+installed package needs can be removed.
+
+Everything in the tables below is in `moarchy-meta`'s `depends`, so an upgrade
+of that package pulls a removed app back in — pacman resolves an upgraded
+package's dependencies. The card says so when it applies rather than letting it
+be a surprise on the next `pacman -Syu`.
+
 ## GNOME (libadwaita)
 
 These reflow to a phone width natively and are the most comfortable fit.

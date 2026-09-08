@@ -48,12 +48,53 @@ pkgver=$_ver
 # package has carried -- the published 0.1.1-1, the 0.1.1-2 a flashed phone
 # holds, and the 0.1.1-3 that never left packages/ -- so pacman offers it to
 # all three. The counter starts over; the rule does not.
-pkgrel=1
+#
+# 2 for the drawer's app detail sheet (docs/gestures.md L): bin/ gains
+# moarchy-app-remove, default/ gains the sheet, and depends= gains foot and
+# polkit-gnome. 0.2.0-1 is published and a phone is holding it, so this is
+# content that has changed since the last artifact that shipped -- which is
+# exactly the case the paragraphs above say the number moves for. The depends
+# change alone would be reason enough: pacman compares versions, not depends.
+pkgrel=2
 pkgdesc="Omarchy's look, keybindings and theming on a PinePhone, under Sway"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
 license=('MIT')
-depends=('bash' 'sway' 'omarchy-config')
+# The last three are new here, and they are a fix rather than an addition. Each
+# has always been a dependency of this package and none of them was declared:
+#
+#   foot          bin/moarchy-launch-tui execs it by name -- it is the terminal
+#                 every TUI, and omarchy-launch-floating-terminal-with-
+#                 presentation, opens in.
+#   polkit-gnome  default/sway/autostart.conf execs
+#                 polkit-gnome-authentication-agent-1.
+#   upower        moarchy.bar's battery is `import Quickshell.Services.UPower`,
+#                 which talks to upowerd over DBus. No grep for a binary name
+#                 finds this one, which is why it survived longest.
+#
+# Nothing noticed because moarchy-meta lists foot and polkit-gnome too, and on a
+# phone built from moarchy-meta that is indistinguishable from being declared
+# here. upower is not even in moarchy-meta: it is on the phone only as a
+# transitive dependency of KWeather.
+#
+# The drawer's uninstall (docs/gestures.md L12) is what made the difference
+# visible. It refuses to remove a package another package needs, and treats
+# moarchy-meta -- a depends line with no files, which every app on the phone is
+# under -- as the record of the set rather than as a need. Measured on the
+# device against all 34 entries the drawer lists, before this line changed:
+#
+#   foot      "Removes 2 packages" -- the terminal, offered for removal
+#   kweather  "Removes 40 packages", upower among them, because `pacman -Rs`
+#             takes dependencies nothing else needs and nothing else declared
+#             it -- so removing the weather app takes the battery indicator
+#
+# So the protection is metadata being right rather than a second list of what
+# matters (docs/structure.md P5). grim is in the same position --
+# bin/moarchy-capture-screenshot execs it -- and is left out here only because it
+# ships no .desktop file and cannot be reached from the drawer; it is worth
+# declaring on its own merits. A browser is deliberately NOT in this list:
+# bin/moarchy-launch-browser is a fallback chain over four of them and says so.
+depends=('bash' 'sway' 'omarchy-config' 'foot' 'polkit-gnome' 'upower')
 source=()
 
 package() {

@@ -131,6 +131,11 @@ Item {
   // back into itself. Scene coordinates are stationary, so a finger that stops
   // moving produces a delta that stops changing.
   property real sheetPressY: 0
+  // X as well, and only the hold reads it (L3). The sheet itself is a
+  // one-axis gesture and has never needed it; a long press has to be cancelled
+  // by travel in *any* direction, because a finger that has gone 40px sideways
+  // has plainly stopped meaning "tell me about this one".
+  property real sheetPressX: 0
   property bool sheetDragging: false
 
   // Cleared on the next press, not on release, and that ordering is the whole
@@ -150,9 +155,16 @@ Item {
   readonly property real sheetFling: 0.6
 
   function sheetPress(item, mouse): void {
-    root.sheetPressY = item.mapToItem(null, mouse.x, mouse.y).y
+    var p = item.mapToItem(null, mouse.x, mouse.y)
+    root.sheetPressY = p.y
+    root.sheetPressX = p.x
     root.sheetDragging = false
     root.sheetWasDrag = false
+    // L2. Cleared here rather than on release, for the reason sheetWasDrag is:
+    // Qt delivers `released` and then `clicked`, so a flag cleared in the
+    // release handler is already false when the click arrives -- and the app
+    // whose card is on screen is the app that launches behind it.
+    root.holdFired = false
     root.sheetVelocity = 0
     root.sheetLastY = root.sheetPressY
     root.sheetLastT = Date.now()
@@ -194,6 +206,65 @@ Item {
     root.sheetDragging = false
     root.dragging = false
     root.progress = 1
+  }
+
+  // ------------------------------------------------------- the hold (L1-L4)
+  //
+  // The same MouseArea that launches an app and drags the sheet also has to
+  // answer a long press, and it has to do that without taking anything from
+  // either. It cannot be a TapHandler alongside: that handler would only ever
+  // get a passive grab -- the delegate's MouseArea holds the exclusive one, the
+  // same fact the sheet-wide DragHandler note above is about -- so the press it
+  // saw would end wherever the MouseArea decided the gesture was over.
+  //
+  // A timer armed on `pressed` and cancelled by everything that means "this was
+  // not a hold" has no grab of its own to lose.
+  readonly property int holdDelay: 500
+
+  // The cell under the finger, or null. Held rather than passed to the timer,
+  // because a Timer has no payload and a second finger on a second cell must
+  // not be able to open the first one's card.
+  property var holdEntry: null
+
+  // L2. True from the moment the card opens until the next press, so the click
+  // Qt delivers after the finger lifts does not also launch the app.
+  property bool holdFired: false
+
+  function armHold(entry): void {
+    root.holdEntry = entry || null
+    if (root.holdEntry) holdTimer.restart()
+  }
+
+  function cancelHold(): void {
+    holdTimer.stop()
+    root.holdEntry = null
+  }
+
+  // L3, L4. Travel cancels the hold, in either direction and on either axis.
+  //
+  // sheetMove cannot do this job: it latches only on *downward* travel past the
+  // slop, deliberately (H5), so an upward drag on a grid that fits its view --
+  // which is what this phone's app count gives -- moves nothing, latches
+  // nothing, and would leave the timer running under a finger that has already
+  // travelled half the sheet. A scroll on a grid that does not fit cancels
+  // through onCanceled instead, when the Flickable steals the grab.
+  function holdMove(item, mouse): void {
+    if (!holdTimer.running) return
+    var p = item.mapToItem(null, mouse.x, mouse.y)
+    if (Math.abs(p.y - root.sheetPressY) > root.dragSlop
+        || Math.abs(p.x - root.sheetPressX) > root.dragSlop)
+      root.cancelHold()
+  }
+
+  Timer {
+    id: holdTimer
+    interval: root.holdDelay
+    onTriggered: {
+      if (!root.holdEntry) return
+      root.holdFired = true
+      root.openDetail(root.holdEntry)
+      root.holdEntry = null
+    }
   }
 
   // Diagnostic only, and cheap enough to leave in: one integer appended per
@@ -308,8 +379,31 @@ Item {
   // on a dark tile while the properties either side of them are fine.
   readonly property color textOnSurface: Color.menu.text
   readonly property color container: Util.alpha(Color.menu.text, 0.08)
+  // The fifth of C2's six roles, and the drawer had never needed one: at rest
+  // this screen is a search pill and bare icons, and a second tone with nothing
+  // to distinguish from would be a colour nobody chose. The detail card is what
+  // gave it something -- the card is `container`, and Remove has to read as a
+  // control sitting on it rather than as more card (style.md C2, and the
+  // Bluetooth sheet's Forget for the precedent that a destructive button here is
+  // a tone up, not a red).
+  readonly property color containerHigh: Util.alpha(Color.menu.text, 0.14)
   readonly property color subduedBase: Theme.mix(
     Qt.rgba(root.surface.r, root.surface.g, root.surface.b, 1), Color.menu.text, 0.08)
+
+  // The detail card's fill, and it has to be this rather than `container`.
+  //
+  // `container` is an 8% wash, which is 8% of whatever is behind it -- and
+  // behind this card is a grid of saturated app icons rather than a page of
+  // text. Measured on glass: Foliate's and Geary's labels read straight through
+  // the Uninstall button, over the word Uninstall.
+  //
+  // This is the colour `container` resolves TO over a solid surface, with the
+  // transparency taken out, which is the same number subduedBase already had to
+  // compute for the contrast maths (C3). One computation named twice, rather
+  // than two that have to agree -- and it is what makes H2's press arithmetic
+  // true here, since a 12% veil over a 14% fill assumes the 14% is over
+  // something solid.
+  readonly property color cardFill: root.subduedBase
   readonly property color subdued: Theme.readableOn(root.subduedBase,
                                                    Color.menu.text, 0.55, 4.5)
 
@@ -485,6 +579,218 @@ Item {
     root.shell.summon("moarchy.settings", JSON.stringify(payload))
   }
 
+  // -------------------------------------------------- the app detail card (L)
+  //
+  // Everything the card knows comes from `moarchy-app-remove`, which is where
+  // the pacman reasoning lives (L11, L12). Nothing here decides what may be
+  // removed; this file decides what the card looks like while the script is
+  // deciding, and that separation is the point -- a rule about dependencies
+  // written in QML is a rule nothing can run from a terminal to check.
+  //
+  // The entry itself, or null. One property rather than a bool and a payload:
+  // "card up with no entry" is not a state this screen has, and two properties
+  // that must agree are two properties that can stop agreeing.
+  property var detailEntry: null
+
+  //   info      what the app is
+  //   plan      what removing it would take -- L7, never skipped
+  //   working   the removal is running
+  property string detailStage: "info"
+
+  property var detailInfo: ({})
+  property var detailPlan: ({})
+
+  // True while a script is in flight. The card draws a line of its own rather
+  // than an empty one: on an A53 the `info` fork lands in well under a second
+  // and the `plan` fork is a pacman transaction, which does not.
+  property bool detailBusy: false
+
+  // An answer for a card that has since been closed, or opened on something
+  // else, is not a late answer -- it is the wrong one. Same bargain the
+  // settings guards strike above, for the same reason.
+  //
+  // Moved by openDetail and closeDetail ONLY. Arming a plan is not a new card
+  // and must not invalidate one: `info` and `plan` are two forks about the same
+  // entry, and a generation bumped on the tap would throw away an `info` still
+  // in flight -- which on a busy phone is the card losing the line that says
+  // what the app is, at the moment it is being asked about removing it.
+  property int detailGeneration: 0
+
+  function parseKv(text) {
+    var out = ({})
+    var lines = String(text || "").split("\n")
+    for (var i = 0; i < lines.length; i++) {
+      var t = lines[i].indexOf("\t")
+      if (t <= 0) continue
+      out[lines[i].slice(0, t)] = lines[i].slice(t + 1)
+    }
+    return out
+  }
+
+  // argv and not `bash -c`, so nothing here has to quote a desktop id. They
+  // contain spaces on this phone -- "Disk Usage.desktop" is upstream's own --
+  // and a quoting bug in a command whose verb is `remove` is not a bug worth
+  // being one shell metacharacter away from.
+  //
+  // Non-login, deliberately: /usr/lib/moarchy/bin is already on the shell's
+  // PATH (it comes from /etc/profile.d, through the session), and a login shell
+  // sources profiles that touch ~/.local/share -- the directory the desktop
+  // entry watcher is on. AppLibrary's own scans carry the same note.
+  function detailRun(proc, verb, extra) {
+    if (!root.detailEntry) return
+    var argv = ["moarchy-app-remove", verb, String(root.detailEntry.id)]
+    if (extra) argv.push(extra)
+    root.detailBusy = true
+    proc.wanted = root.detailGeneration
+    if (proc.running) proc.running = false
+    proc.command = argv
+    proc.running = true
+  }
+
+  function openDetail(entry): void {
+    if (!entry) return
+    root.detailGeneration += 1
+    root.detailEntry = entry
+    root.detailStage = "info"
+    root.detailInfo = ({})
+    root.detailPlan = ({})
+    root.detailRun(infoProc, "info", "")
+  }
+
+  // L7. Uninstall does not remove; it asks the question and shows the answer.
+  function planRemoval(): void {
+    root.detailStage = "plan"
+    root.detailPlan = ({})
+    root.detailRun(planProc, "plan", "")
+  }
+
+  function removeApp(): void {
+    if (!root.detailEntry) return
+    root.detailStage = "working"
+    root.detailRun(removeProc, "remove",
+                   root.shell && root.shell.appLibrary
+                     ? String(root.shell.appLibrary.entryName(root.detailEntry)) : "")
+  }
+
+  function closeDetail(): void {
+    root.detailGeneration += 1
+    root.detailEntry = null
+    root.detailStage = "info"
+    root.detailInfo = ({})
+    root.detailPlan = ({})
+    root.detailBusy = false
+  }
+
+  // L8. What the plan settled: a package with a blocker has no Remove button at
+  // all, rather than one that fails when pressed.
+  readonly property string detailBlocked: String(root.detailPlan.blocked || "")
+
+  // L8, from the other end: an answer that says nothing is not permission.
+  //
+  // The empty plan is a real state and not a hypothetical -- a phone whose
+  // moarchy package predates bin/moarchy-app-remove runs a shell that has this
+  // card and no script behind it, so the Process exits immediately, the
+  // collector hands back "", and `blocked` is empty because nothing said
+  // anything. Read as "not blocked" that draws a Remove button over a command
+  // that does not exist, which is a control that silently does nothing -- the
+  // exact failure docs/style.md E exists to prevent, arrived at from the
+  // opposite direction.
+  //
+  // Every kind the script can report emits `count`, including the ones with no
+  // package to count, so its absence means the script did not answer.
+  readonly property bool detailPlanReady: String(root.detailPlan["count"] || "") !== ""
+
+  // L6. Where the app came from, in one line. "No package" is an answer and a
+  // blank line is not, so every kind the script can report has a phrase here --
+  // including the one that means the script could not tell.
+  //
+  // Bracketed reads throughout: `package` is a future reserved word, and the
+  // dotted form is legal in ES5 but not worth depending on in a file that is
+  // parsed by whatever qmllint the next Qt ships.
+  readonly property string detailOrigin: {
+    var kind = String(root.detailInfo["kind"] || "")
+    if (kind === "package") {
+      var name = String(root.detailInfo["package"] || "")
+      var version = String(root.detailInfo["version"] || "")
+      return version ? name + " " + version : name
+    }
+    if (kind === "user") return "Personal entry"
+    if (kind === "webapp") return "Web app"
+    if (kind === "tui") return "Terminal app"
+    if (kind === "flatpak") return "Flatpak"
+    if (kind === "") return ""
+    return "Unknown origin"
+  }
+
+  // L7. The count and the weight, in the card's words rather than pacman's.
+  // A launcher that belongs to no package has no packages to count, so it says
+  // what it does take instead -- the script's own `note`.
+  readonly property string detailPlanSummary: {
+    if (String(root.detailPlan["kind"] || "") !== "package")
+      return String(root.detailPlan["note"] || "")
+    var count = parseInt(String(root.detailPlan["count"] || "0"))
+    if (!count) return ""
+    var head = count === 1 ? "Removes 1 package" : "Removes " + count + " packages"
+    var size = String(root.detailPlan["size"] || "")
+    return size ? head + ", " + size : head
+  }
+  // Bracketed, not dotted: `protected` is a future reserved word, and a dotted
+  // read of it is legal in ES5 but not in every parser this file passes through.
+  readonly property bool detailProtected: String(root.detailInfo["protected"] || "") === "1"
+
+  // G3. The card is a screen inside this surface, so back leaves it before it
+  // leaves the drawer -- and from the plan it steps back to the detail rather
+  // than out, because that is the step that was taken to get there. Returning
+  // false is what tells the gestures plugin to close the whole overlay.
+  function goBack(): bool {
+    if (!root.detailEntry) return false
+    // Mid-removal there is nothing to go back to and the pacman transaction
+    // does not stop for a gesture. Consumed rather than obeyed.
+    if (root.detailStage === "working") return true
+    if (root.detailStage === "plan") { root.detailStage = "info"; return true }
+    root.closeDetail()
+    return true
+  }
+
+  Process {
+    id: infoProc
+    property int wanted: 0
+    stdout: StdioCollector {
+      onStreamFinished: {
+        if (infoProc.wanted !== root.detailGeneration) return
+        root.detailInfo = root.parseKv(String(text || ""))
+        root.detailBusy = false
+      }
+    }
+  }
+
+  Process {
+    id: planProc
+    property int wanted: 0
+    stdout: StdioCollector {
+      onStreamFinished: {
+        if (planProc.wanted !== root.detailGeneration) return
+        root.detailPlan = root.parseKv(String(text || ""))
+        root.detailBusy = false
+      }
+    }
+  }
+
+  Process {
+    id: removeProc
+    property int wanted: 0
+    // L9. The outcome is a notification, sent by the script, so nothing here
+    // has to stay on screen to report it -- which is what lets the card close
+    // on exit rather than turning into a result screen nobody asked for. The
+    // grid drops the app on its own (L10): removing a package takes its
+    // .desktop file with it, DesktopEntries notices, and appsChanged() is
+    // already wired to appRows.
+    onExited: {
+      if (removeProc.wanted !== root.detailGeneration) return
+      root.closeDetail()
+    }
+  }
+
   function open(payloadJson) {
     // Only one of the two overlays is ever up. Asking the host rather than
     // tracking it here means this still holds when the shade was opened by its
@@ -495,6 +801,8 @@ Item {
 
     root.query = ""
     searchField.text = ""
+    // L5. The drawer opens on the grid, never on somebody's half-read card.
+    root.closeDetail()
     // A hand-off that never reached an unmap must not silence the next real
     // close (I5d).
     root.handingOff = false
@@ -541,6 +849,11 @@ Item {
     if (!root.handingOff) root.hideKeyboard()
 
     root.query = ""
+    // The card goes with the surface. Left standing it would be the first thing
+    // on screen the next time the drawer came up, about an app that may not be
+    // installed any more.
+    root.closeDetail()
+    root.cancelHold()
     root.dragging = false
     root.progress = 0
   }
@@ -682,6 +995,104 @@ Item {
         if (rows[i] && rows[i].entry) out.push(String(rows[i].entry.id))
       return out.join("\n")
     }
+
+    // ------------------------------------------------------ app detail (L)
+    //
+    // The card, without a finger. A hold can be driven for real --
+    // `sudo moarchy-touch hold` over a cell is what L1 is checked with -- but
+    // everything the card then says is text inside a QML item, and nothing
+    // outside this process can read it. A `grim` capture cannot either: it can
+    // show that *a* card is up and not which entry it is about, which is the
+    // half that matters.
+    //
+    // One function for the whole state rather than one per field, because the
+    // interesting assertions are about two things agreeing -- the stage and
+    // what is in it.
+    function detail(): string {
+      if (!root.detailEntry) return ""
+      var out = ["id\t" + String(root.detailEntry.id),
+                 "stage\t" + root.detailStage,
+                 "busy\t" + (root.detailBusy ? "1" : "0")]
+      var k
+      for (k in root.detailInfo) out.push("info." + k + "\t" + root.detailInfo[k])
+      for (k in root.detailPlan) out.push("plan." + k + "\t" + root.detailPlan[k])
+      return out.join("\n")
+    }
+
+    // Where a cell is, so L1's hold can be aimed rather than guessed at. Same
+    // reason searchTarget exists: a coordinate computed from Style.space in a
+    // shell script is a coordinate that is wrong the moment the theme's
+    // spacing scale moves, and the grid's rows are 86 *scaled* px apart.
+    //
+    // Both frames are reported. `rect` is surface space, which is what
+    // searchTarget answers in and what every other geometry function here
+    // means; `global` is what mapToGlobal makes of it, which is what
+    // moarchy-touch wants once doubled for the panel scale. They differ by the
+    // bar, and reporting the pair is what lets a check say which one it used.
+    function cellTarget(index: string): string {
+      var i = parseInt(String(index || "0"))
+      if (!grid || typeof grid.itemAtIndex !== "function") return "no grid"
+      var item = grid.itemAtIndex(i)
+      if (!item) return "no cell"
+      var p = item.mapToItem(null, 0, 0)
+      var g = item.mapToGlobal(0, 0)
+      return "id=" + (item.entry ? String(item.entry.id) : "")
+           + " rect=" + Math.round(p.x) + "," + Math.round(p.y)
+           + " size=" + Math.round(item.width) + "x" + Math.round(item.height)
+           + " global=" + Math.round(g.x) + "," + Math.round(g.y)
+    }
+
+    // Opens the card on an id, down the same function the hold timer calls.
+    // Keyed the way `launch` is, and it misses for the same reason: callers
+    // pass the bare id with no .desktop suffix.
+    function hold(desktopId: string): string {
+      var id = String(desktopId || "")
+      if (!id) return "no id"
+      if (!root.shell || !root.shell.appLibrary) return "no shell"
+      var rows = root.shell.appLibrary.sortedEntries("") || []
+      for (var i = 0; i < rows.length; i++) {
+        var entry = rows[i] && rows[i].entry
+        if (entry && String(entry.id) === id) { root.openDetail(entry); return "ok" }
+      }
+      return "no entry"
+    }
+
+    // Arms the plan, which is what Uninstall does. Asynchronous on purpose --
+    // it is a pacman transaction on an A53 -- so a caller reads `detail` back
+    // until `busy` is 0 rather than being handed an answer that was guessed at.
+    function uninstall(): string {
+      if (!root.detailEntry) return "no card"
+      if (root.detailProtected) return "protected"
+      root.planRemoval()
+      return "ok"
+    }
+
+    // L8, as a yes/no. `pending` is not `no`: a check that treated "the plan
+    // has not landed yet" as "cannot remove" would pass against a shell that
+    // never answers, which is the one failure this is worth asserting against.
+    function canRemove(): string {
+      if (!root.detailEntry) return "no card"
+      if (root.detailProtected) return "no"
+      if (root.detailStage !== "plan") return "unasked"
+      if (root.detailBusy) return "pending"
+      if (!root.detailPlanReady) return "no"
+      return root.detailBlocked === "" ? "yes" : "no"
+    }
+
+    // The Remove button. Named for what it does rather than `remove`, because
+    // this one uninstalls a package and the noise of the name is the point --
+    // the default selftest suite never calls it, and nothing should reach it by
+    // completing a shorter word.
+    function removeConfirm(): string {
+      if (!root.detailEntry) return "no card"
+      if (root.detailStage !== "plan") return "unasked"
+      if (root.detailBlocked !== "") return "blocked"
+      if (!root.detailPlanReady) return "no plan"
+      root.removeApp()
+      return "ok"
+    }
+
+    function detailClose(): string { root.closeDetail(); return "ok" }
 
     // ------------------------------------------------- settings results (O)
     //
@@ -866,7 +1277,11 @@ Item {
       // corners sit against the home pill and are never seen.
       radius: root.radiusSheet
 
-      Keys.onEscapePressed: root.dismiss()
+      // Through goBack() rather than straight to dismiss, so a keyboard walks
+      // the same ladder the back gesture does (L5): the plan, then the card,
+      // then the drawer. Escape closing the whole sheet from an open card would
+      // be the one way out of this screen that skips a level.
+      Keys.onEscapePressed: if (!root.goBack()) root.dismiss()
 
       // The radius rounds all four corners, so square the bottom two back off
       // rather than leave two notches over the gesture strip.
@@ -1154,14 +1569,23 @@ Item {
             // got exactly one event. So it does both jobs: a touch that never
             // travels is a launch, one that goes down past the slop drags the
             // sheet.
+            //
+            // L1-L4 ride on the same handler for the same reason: it holds the
+            // grab, so a hold is a timer this one arms and everything that ends
+            // the gesture disarms. `onCanceled` covers the scroll case (L4) --
+            // QQuickMouseArea::ungrabMouse() clears `pressed` and emits it when
+            // the Flickable steals the grab.
             MouseArea {
               id: cellArea
               anchors.fill: parent
-              onPressed: mouse => root.sheetPress(this, mouse)
-              onPositionChanged: mouse => root.sheetMove(this, mouse)
-              onReleased: root.sheetRelease()
-              onCanceled: root.sheetCancel()
-              onClicked: if (!root.sheetWasDrag) root.launch(entry)
+              onPressed: mouse => { root.sheetPress(this, mouse); root.armHold(entry) }
+              onPositionChanged: mouse => {
+                root.sheetMove(this, mouse)
+                root.holdMove(this, mouse)
+              }
+              onReleased: { root.cancelHold(); root.sheetRelease() }
+              onCanceled: { root.cancelHold(); root.sheetCancel() }
+              onClicked: if (!root.sheetWasDrag && !root.holdFired) root.launch(entry)
             }
           }
         }
@@ -1294,6 +1718,359 @@ Item {
                 onReleased: root.sheetRelease()
                 onCanceled: root.sheetCancel()
                 onClicked: if (!root.sheetWasDrag) root.activateSetting(resultRow.modelData)
+              }
+            }
+          }
+        }
+      }
+
+      // ------------------------------------------------ the app detail (L)
+      //
+      // A card over the sheet and not a surface of its own (L5). The drawer
+      // keeps its keyboard focus, its scroll position and its progress, so
+      // closing this leaves the grid exactly where the hold found it -- and a
+      // second layer-shell surface for a card would have to be arranged,
+      // focused and dismissed against the keyboard and the strip, which is
+      // three problems this screen has already solved once.
+      //
+      // Declared after sheetColumn, so it takes input ahead of the grid (E6).
+      Rectangle {
+        id: detailScrim
+        anchors.fill: parent
+        visible: root.detailEntry !== null
+        color: Util.alpha(root.surface, 0.92)
+
+        MouseArea {
+          // no press state (style.md H7): a scrim that dismisses. A tap
+          // outside the card is the way out that needs no control of its own,
+          // and it is also the swallower that keeps the tap off the icon
+          // underneath -- which would otherwise launch the app whose card is
+          // being closed.
+          anchors.fill: parent
+          onClicked: if (root.detailStage !== "working") root.closeDetail()
+        }
+
+        Rectangle {
+          anchors.centerIn: parent
+          width: parent.width - Style.space(48)
+          height: detailCol.implicitHeight + Style.space(32)
+          radius: root.radiusCard
+          color: root.cardFill
+
+          MouseArea {
+            // no press state (style.md H7): a tap swallower behind a modal.
+            // Declared before the content so the content still takes its own
+            // taps (E6); without it every gap between the controls is a hole
+            // through to the scrim, and the card closes when you meant to read
+            // it.
+            anchors.fill: parent
+          }
+
+          Column {
+            id: detailCol
+            anchors.centerIn: parent
+            width: parent.width - Style.space(32)
+            spacing: Style.space(14)
+
+            // --- what it is ------------------------------------------------
+            //
+            // An Item with anchors rather than a Row: a Row refuses horizontal
+            // anchors on its children, and the label block has to be "whatever
+            // is left after the icon" rather than a width computed here.
+            Item {
+              width: parent.width
+              height: Math.max(root.iconSize, detailHeadText.height)
+
+              Image {
+                id: detailIcon
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                width: root.iconSize
+                height: root.iconSize
+                // Same reason as the grid's: without this an SVG rasterises at
+                // its natural 512.
+                sourceSize: Qt.size(root.iconSize, root.iconSize)
+                asynchronous: true
+                cache: true
+                fillMode: Image.PreserveAspectFit
+                source: root.shell && root.shell.appLibrary && root.detailEntry
+                  ? root.shell.appLibrary.iconSource(root.detailEntry.icon)
+                  : ""
+              }
+
+              Column {
+                id: detailHeadText
+                anchors.left: detailIcon.right
+                anchors.leftMargin: Style.space(12)
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: Style.space(2)
+
+                Text {
+                  width: parent.width
+                  text: root.shell && root.shell.appLibrary && root.detailEntry
+                    ? root.shell.appLibrary.entryName(root.detailEntry) : ""
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.subtitle
+                  font.weight: root.textWeight
+                  color: root.textOnSurface
+                  elide: Text.ElideRight
+                }
+
+                Text {
+                  width: parent.width
+                  visible: text.length > 0
+                  text: String(root.detailInfo.comment || "")
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.caption
+                  font.weight: root.textWeight
+                  color: root.subdued
+                  wrapMode: Text.Wrap
+                  maximumLineCount: 2
+                  elide: Text.ElideRight
+                }
+              }
+            }
+
+            // --- where it came from (L6) -----------------------------------
+            Column {
+              width: parent.width
+              spacing: Style.space(2)
+              visible: root.detailStage === "info"
+
+              Text {
+                width: parent.width
+                text: root.detailBusy && root.detailOrigin === ""
+                        ? "Looking it up" : root.detailOrigin
+                font.family: Style.font.family
+                font.pixelSize: Style.font.body
+                font.weight: root.textWeight
+                color: root.textOnSurface
+                elide: Text.ElideRight
+              }
+
+              Text {
+                width: parent.width
+                visible: text.length > 0
+                text: String(root.detailInfo.size || "")
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+                font.weight: root.textWeight
+                color: root.subdued
+              }
+
+              Text {
+                width: parent.width
+                visible: text.length > 0
+                text: String(root.detailInfo.id || "")
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+                font.weight: root.textWeight
+                color: root.subdued
+                elide: Text.ElideMiddle
+              }
+            }
+
+            // --- the plan (L7, L8) -----------------------------------------
+            Column {
+              width: parent.width
+              spacing: Style.space(4)
+              visible: root.detailStage === "plan"
+
+              Text {
+                width: parent.width
+                text: root.detailBusy ? "Working out what that takes"
+                    : root.detailBlocked !== "" ? "This one cannot be removed"
+                    : root.detailPlanReady ? root.detailPlanSummary
+                    : "Nothing answered for this one"
+                font.family: Style.font.family
+                font.pixelSize: Style.font.body
+                font.weight: root.textWeight
+                color: root.textOnSurface
+                wrapMode: Text.Wrap
+              }
+
+              // L8's reason, in pacman's own words. Three lines of a dependency
+              // message is a lot of card, so it elides -- what matters is that
+              // it names something, and "required by gtk4" is in the first
+              // line of every one of these.
+              Text {
+                width: parent.width
+                visible: text.length > 0 && !root.detailBusy
+                text: root.detailBlocked
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+                font.weight: root.textWeight
+                color: root.subdued
+                wrapMode: Text.Wrap
+                maximumLineCount: 3
+                elide: Text.ElideRight
+              }
+
+              // Every package the removal takes, named. The count above is the
+              // number; this is the answer to "which ones".
+              Text {
+                width: parent.width
+                visible: text.length > 0 && !root.detailBusy && root.detailPlanReady
+                text: String(root.detailPlan.names || "").split(" ").join(", ")
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+                font.weight: root.textWeight
+                color: root.subdued
+                wrapMode: Text.Wrap
+                maximumLineCount: 4
+                elide: Text.ElideRight
+              }
+
+              // L13. The one thing pacman's own plan cannot say: this package
+              // is in moarchy-meta's depends, so the next upgrade of that
+              // package resolves its dependencies and puts this back. Said
+              // here rather than discovered on the next `pacman -Syu`.
+              Text {
+                width: parent.width
+                visible: String(root.detailPlan.set || "") === "1"
+                         && !root.detailBusy && root.detailBlocked === ""
+                text: "In the moarchy package set: a later update reinstalls it."
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+                font.weight: root.textWeight
+                color: root.subdued
+                wrapMode: Text.Wrap
+              }
+            }
+
+            // --- the removal running ---------------------------------------
+            Text {
+              width: parent.width
+              visible: root.detailStage === "working"
+              text: "Removing"
+              font.family: Style.font.family
+              font.pixelSize: Style.font.body
+              font.weight: root.textWeight
+              color: root.textOnSurface
+            }
+
+            // --- L11, said rather than left as a missing button -------------
+            Text {
+              width: parent.width
+              visible: root.detailStage === "info" && root.detailProtected
+              text: "Part of moarchy. The shell will not uninstall itself."
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
+              font.weight: root.textWeight
+              color: root.subdued
+              wrapMode: Text.Wrap
+            }
+
+            // --- Uninstall (L7) --------------------------------------------
+            //
+            // Full width, because it is the only control on this stage and a
+            // 110px button centred under a 312px card reads as an afterthought.
+            Rectangle {
+              width: parent.width
+              height: Style.space(44)
+              radius: height / 2
+              color: root.containerHigh
+              visible: root.detailStage === "info" && !root.detailProtected
+                       && !root.detailBusy
+              // Guarded like every other press on this sheet (style.md H6),
+              // and the guard is a surface-wide invariant rather than a
+              // condition this control can actually meet: the scrim above
+              // covers the grid and the handle, so nothing can be dragging the
+              // sheet while this button exists. Spelled anyway, because "on
+              // the drawer, no press lights during a sheet drag" is the rule,
+              // and a control exempt by accident of layout is one that stops
+              // being exempt the day the layout moves.
+              PressVeil {
+                anchors.fill: parent
+                radius: parent.radius
+                on: uninstallArea.pressed && !root.sheetDragging
+              }
+              Text {
+                anchors.centerIn: parent
+                text: "Uninstall"
+                font.family: Style.font.family
+                font.pixelSize: Style.font.body
+                font.weight: root.textWeight
+                color: root.textOnSurface
+              }
+              MouseArea {
+                id: uninstallArea
+                anchors.fill: parent
+                onClicked: root.planRemoval()
+              }
+            }
+
+            // --- Cancel / Remove (L7, L8) -----------------------------------
+            Item {
+              id: detailActions
+              width: parent.width
+              height: Style.space(44)
+              visible: root.detailStage === "plan" && !root.detailBusy
+
+              // Two halves of the card's width with one gap between them, so
+              // both clear E1 by a wide margin and neither has to grow into the
+              // other (E3).
+              readonly property int gap: Style.space(12)
+              readonly property int half: Math.floor((width - gap) / 2)
+              // Alone when there is nothing to confirm: a blocked plan has one
+              // way out and it is not called Cancel.
+              readonly property bool paired: root.detailBlocked === "" && root.detailPlanReady
+
+              Rectangle {
+                id: detailBack
+                anchors.left: parent.left
+                width: detailActions.paired ? detailActions.half : detailActions.width
+                height: parent.height
+                radius: height / 2
+                color: Util.alpha(root.textOnSurface, 0.10)
+                PressVeil {
+                  anchors.fill: parent
+                  radius: parent.radius
+                  on: detailBackArea.pressed && !root.sheetDragging
+                }
+                Text {
+                  anchors.centerIn: parent
+                  text: detailActions.paired ? "Cancel" : "Back"
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.body
+                  font.weight: root.textWeight
+                  color: root.textOnSurface
+                }
+                MouseArea {
+                  id: detailBackArea
+                  anchors.fill: parent
+                  onClicked: root.detailStage = "info"
+                }
+              }
+
+              Rectangle {
+                anchors.right: parent.right
+                width: detailActions.half
+                height: parent.height
+                radius: height / 2
+                color: root.containerHigh
+                // L8. Not disabled -- absent. A button that is drawn and
+                // refuses is a button that has to explain itself twice.
+                visible: detailActions.paired
+                PressVeil {
+                  anchors.fill: parent
+                  radius: parent.radius
+                  on: detailRemoveArea.pressed && !root.sheetDragging
+                }
+                Text {
+                  anchors.centerIn: parent
+                  text: "Remove"
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.body
+                  font.weight: root.textWeight
+                  color: root.textOnSurface
+                }
+                MouseArea {
+                  id: detailRemoveArea
+                  anchors.fill: parent
+                  onClicked: root.removeApp()
+                }
               }
             }
           }

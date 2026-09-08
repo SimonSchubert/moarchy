@@ -1,0 +1,397 @@
+#!/bin/bash
+# What an app in the drawer is, and how to be rid of it (docs/gestures.md L).
+#
+# ---------------------------------------------------------------------------
+# Why this exists when upstream already removes launcher entries
+# ---------------------------------------------------------------------------
+# omarchy-remove-launcher-entry classifies a .desktop file exactly the way the
+# first half of this script does, and it is right about all of it: a web app and
+# a TUI have their own removers, a file under ~/.local/share/applications is
+# deleted, and anything else belongs to a package. Those branches are called
+# from here rather than reimplemented.
+#
+# Its package branch is the one that cannot be reused. It ends with
+#
+#   exec omarchy-launch-floating-terminal-with-presentation \
+#        "echo Uninstalling ...; sudo pacman -Rns <pkg>"
+#
+# so the only statement of what a removal will take is pacman's own [Y/n]
+# prompt, in a 60-column foot window, answered on the on-screen keyboard. On a
+# desktop that is the right control. Here it is the consequence being stated in
+# the one surface that costs a keyboard to read (L7), so the drawer asks the
+# question itself and this script answers it: `plan` is what the card shows,
+# `remove` is what Remove runs, and neither opens a terminal.
+#
+# ---------------------------------------------------------------------------
+# Two rules decide what may go, and pacman answers both
+# ---------------------------------------------------------------------------
+# L11, the shell will not uninstall itself: nothing named moarchy* or omarchy*.
+#
+# L12, nothing another installed package needs -- except moarchy-meta, which is
+# a package with no files whose whole content is a depends line
+# (docs/structure.md P5). Every app on this phone has it as a dependent, so a
+# plain `pacman -Rs gnome-clocks` fails with
+#
+#   :: removing gnome-clocks breaks dependency 'gnome-clocks' required by moarchy-meta
+#
+# That is the record of the set objecting, not a package that needs the app.
+# When moarchy-meta is the ONLY blocker the plan is recomputed with
+# `--assume-installed <pkg>`, which waives the check for that one name and
+# leaves every other one standing. Measured on the device: 36 of the 48
+# packages owning a /usr/share/applications entry are in that position, and
+# quickshell and sway are not -- omarchy-config and moarchy declare them too.
+#
+# `-Rs` and not `-Rns` for the plan, and that is pacman's rule rather than a
+# preference: it rejects the pair outright with "invalid option: '--nosave' and
+# '--print' may not be used together". The removal itself carries -n, the way
+# upstream's does.
+#
+# ---------------------------------------------------------------------------
+# Output
+# ---------------------------------------------------------------------------
+# `key<TAB>value` lines, because the caller is QML splitting on a tab and not a
+# person reading prose. An `error` key is the whole answer; every command that
+# can fail emits one rather than exiting silently.
+#
+#   moarchy-app-remove info   <desktop-id>
+#   moarchy-app-remove plan   <desktop-id>
+#   moarchy-app-remove remove <desktop-id> [display-name]
+
+# No -e. Half of what this script does is run a command that is EXPECTED to
+# fail -- `pacman -Rs --print` on a package the set declares -- and read its
+# message; under -e the first of those would take the script with it before the
+# blocker could be parsed out. Errors are checked where they happen.
+set -uo pipefail
+
+SELF=${0##*/}
+
+kv() { printf '%s\t%s\n' "$1" "$2"; }
+fail() { kv error "$*"; exit 1; }
+
+usage() {
+  echo "usage: $SELF info|plan|remove <desktop-id> [display-name]" >&2
+  exit 1
+}
+
+# --- what the drawer is pointing at -----------------------------------------
+#
+# The search order is upstream's: the user directory first, then XDG_DATA_DIRS.
+# A user entry shadowing a packaged one is the entry that launches, so it has to
+# be the entry that is removed.
+DESKTOP_FILE=""
+DESKTOP_NAME=""
+USER_DIR=""
+KIND=""
+PACKAGE=""
+
+resolve() {
+  local id=$1 base dir candidate
+  base=$id
+  [[ $base == *.desktop ]] || base="$base.desktop"
+
+  if [[ -n ${XDG_DATA_HOME-} ]]; then
+    USER_DIR="$XDG_DATA_HOME/applications"
+  else
+    USER_DIR="$HOME/.local/share/applications"
+  fi
+
+  local -a dirs=("$USER_DIR")
+  if [[ -n ${XDG_DATA_DIRS-} ]]; then
+    local -a data_dirs
+    IFS=: read -ra data_dirs <<<"$XDG_DATA_DIRS"
+    for dir in "${data_dirs[@]}"; do dirs+=("$dir/applications"); done
+  else
+    dirs+=("/usr/local/share/applications" "/usr/share/applications")
+  fi
+
+  for dir in "${dirs[@]}"; do
+    candidate="$dir/$base"
+    [[ -f $candidate ]] && { DESKTOP_FILE="$candidate"; break; }
+  done
+
+  [[ -n $DESKTOP_FILE ]] || fail "no launcher entry for $base"
+
+  DESKTOP_NAME="${DESKTOP_FILE##*/}"
+  DESKTOP_NAME="${DESKTOP_NAME%.desktop}"
+
+  # The order is upstream's too, and it matters: a web app and a TUI both live
+  # in the user directory, so testing "is it a user file" first would send both
+  # to a bare `rm` and leave their icons behind.
+  local exec_line
+  exec_line="$(sed -n 's/^Exec=//p' "$DESKTOP_FILE" | head -1)"
+
+  if [[ $exec_line =~ omarchy-launch-webapp|omarchy-webapp-handler ]]; then
+    KIND=webapp
+  elif [[ $exec_line =~ (^|[[:space:]])(\$TERMINAL|xdg-terminal-exec)[[:space:]].*-e([[:space:]]|$) ]]; then
+    KIND=tui
+  elif [[ ${DESKTOP_FILE%/*} == "$USER_DIR" ]]; then
+    KIND=user
+  elif PACKAGE="$(pacman -Qqo "$DESKTOP_FILE" 2>/dev/null | head -1)" && [[ -n $PACKAGE ]]; then
+    KIND=package
+  elif command -v flatpak >/dev/null 2>&1 &&
+       flatpak info "$DESKTOP_NAME" >/dev/null 2>&1; then
+    KIND=flatpak
+  else
+    PACKAGE=""
+    KIND=unknown
+  fi
+}
+
+# L11. Named rather than matched against a list of package names: what is being
+# said is "this project's own packages", and a prefix says that about the ones
+# that do not exist yet as well.
+is_ours() {
+  case $1 in
+    moarchy | moarchy-* | omarchy | omarchy-*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Pacman's own units, so a size the card shows and a size `pacman -Qi` shows are
+# the same number. Bytes are never displayed: 3672430 is not an answer to "is
+# this worth removing".
+human() {
+  awk -v b="${1:-0}" 'BEGIN {
+    if (b <= 0) { print "0 B"; exit }
+    split("B KiB MiB GiB TiB", u, " ")
+    i = 1
+    while (b >= 1024 && i < 5) { b /= 1024; i++ }
+    printf (i == 1 ? "%.0f %s\n" : "%.1f %s\n"), b, u[i]
+  }'
+}
+
+# --- the plan ---------------------------------------------------------------
+#
+# Fills PLAN_NAMES / PLAN_COUNT / PLAN_BYTES / PLAN_SET, or PLAN_BLOCKED with
+# pacman's own line. Returns 1 when blocked, so both `plan` and `remove` can
+# branch on it -- `remove` recomputes rather than trusting what it was told,
+# because the caller is a card that may have been sitting open while a `pacman
+# -Syu` ran underneath it.
+PLAN_NAMES=""
+PLAN_COUNT=0
+PLAN_BYTES=0
+PLAN_SET=0
+PLAN_BLOCKED=""
+
+plan_package() {
+  local pkg=$1 out rc blockers
+
+  PLAN_SET=0
+  PLAN_BLOCKED=""
+
+  out="$(pacman -Rs --print --print-format '%n %v %s' "$pkg" 2>&1)"
+  rc=$?
+
+  if (( rc != 0 )); then
+    # ":: removing X breaks dependency 'Y' required by Z" -- Z is what objects.
+    # Anything else pacman said (an unknown target, a broken db) leaves this
+    # empty, and an empty blocker list is not an excuse to waive anything.
+    blockers="$(printf '%s\n' "$out" |
+                sed -n "s/^:: removing .* required by //p" | sort -u)"
+
+    if [[ -n $blockers ]] && [[ $blockers == "moarchy-meta" ]]; then
+      # L12's one exception, and only when moarchy-meta is the whole list.
+      out="$(pacman -Rs --print --print-format '%n %v %s' \
+                    --assume-installed "$pkg" "$pkg" 2>&1)"
+      rc=$?
+      PLAN_SET=1
+    fi
+
+    if (( rc != 0 )); then
+      # The ":: " lines are the useful half; the "error: failed to prepare
+      # transaction" header says only that something did.
+      # Joined onto one line, because the caller splits the answer on newlines
+      # and then on the first tab: a second line of reason would arrive with no
+      # key in front of it and be dropped in silence.
+      PLAN_BLOCKED="$(printf '%s\n' "$out" | sed -n 's/^:: //p' | head -3 |
+                      awk 'NR > 1 { printf "; " } { printf "%s", $0 } END { print "" }')"
+      [[ -n $PLAN_BLOCKED ]] || PLAN_BLOCKED="$(printf '%s\n' "$out" | head -1)"
+      return 1
+    fi
+  fi
+
+  # Matched by shape rather than taken as "whatever was printed". stderr is
+  # folded in above because the blocker lines are only there, so a `warning:`
+  # on a successful run would otherwise be counted as a package called
+  # "warning:" and shown to the user as one. A plan row is `%n %v %s`: three
+  # fields with a byte count last, which no message pacman emits looks like.
+  local rows
+  rows="$(printf '%s\n' "$out" | awk 'NF == 3 && $3 ~ /^[0-9]+$/')"
+  PLAN_NAMES="$(printf '%s\n' "$rows" | awk 'NF {print $1}' | paste -sd' ' -)"
+  PLAN_COUNT="$(printf '%s\n' "$rows" | awk 'NF' | wc -l | tr -d ' ')"
+  PLAN_BYTES="$(printf '%s\n' "$rows" | awk '{ s += $3 } END { printf "%.0f\n", s }')"
+
+  # A transaction pacman was happy with that names nothing is not an empty
+  # removal, it is an answer this script failed to read -- and `count` is what
+  # the card gates its Remove button on (L8), so it must never be 0 here.
+  if (( PLAN_COUNT == 0 )); then
+    PLAN_BLOCKED="pacman planned nothing for $pkg"
+    return 1
+  fi
+  return 0
+}
+
+# --- commands ---------------------------------------------------------------
+
+cmd_info() {
+  local id=$1 name comment version size
+  resolve "$id"
+
+  kv id "$id"
+  kv file "$DESKTOP_FILE"
+  kv kind "$KIND"
+
+  name="$(sed -n 's/^Name=//p' "$DESKTOP_FILE" | head -1)"
+  comment="$(sed -n 's/^Comment=//p' "$DESKTOP_FILE" | head -1)"
+  [[ -n $name ]] && kv name "$name"
+  [[ -n $comment ]] && kv comment "$comment"
+
+  if [[ $KIND == package ]]; then
+    kv package "$PACKAGE"
+    version="$(pacman -Q "$PACKAGE" 2>/dev/null | awk '{print $2}')"
+    [[ -n $version ]] && kv version "$version"
+    # Straight out of the local db rather than recomputed: this is the one
+    # number pacman already prints for a single installed package, and asking
+    # for it costs no transaction.
+    size="$(LC_ALL=C pacman -Qi "$PACKAGE" 2>/dev/null |
+            sed -n 's/^Installed Size *: *//p' | head -1)"
+    [[ -n $size ]] && kv size "$size"
+    # An `if` and not `&&`, because this is the last statement in the function:
+    # a short-circuited `&&` returns 1, and a script that exits non-zero for an
+    # app that simply is not protected is a script whose exit code lies.
+    if is_ours "$PACKAGE"; then kv protected 1; fi
+  fi
+  return 0
+}
+
+cmd_plan() {
+  local id=$1
+  resolve "$id"
+
+  kv kind "$KIND"
+
+  case $KIND in
+    package)
+      kv package "$PACKAGE"
+      if is_ours "$PACKAGE"; then
+        # L11 answered before pacman is asked. Pacman would happily plan this
+        # one: nothing declares a dependency on moarchy itself.
+        kv blocked "Part of moarchy. The shell will not uninstall itself."
+        return 0
+      fi
+      if plan_package "$PACKAGE"; then
+        kv count "$PLAN_COUNT"
+        kv names "$PLAN_NAMES"
+        kv size "$(human "$PLAN_BYTES")"
+        if (( PLAN_SET )); then kv set 1; fi
+      else
+        kv blocked "$PLAN_BLOCKED"
+      fi
+      ;;
+    webapp | tui | user)
+      # No package to weigh: what goes is the launcher and its icon. Said as a
+      # count of one so the card has the same shape either way.
+      kv count 1
+      kv names "$DESKTOP_NAME"
+      kv note "Removes the launcher, not a package"
+      ;;
+    flatpak)
+      kv count 1
+      kv names "$DESKTOP_NAME"
+      kv note "Uninstalls the flatpak"
+      ;;
+    *)
+      kv blocked "Nothing here knows how to remove $DESKTOP_NAME"
+      ;;
+  esac
+}
+
+cmd_remove() {
+  local id=$1 label=${2-} out rc why
+  resolve "$id"
+  [[ -n $label ]] || label=$DESKTOP_NAME
+
+  notify_ok() { omarchy-notification-send -g "󰏗" "Removed" "$1" >/dev/null 2>&1; }
+  notify_no() {
+    omarchy-notification-send -u critical -g "󰀦" "Could not remove $label" "$1" \
+      >/dev/null 2>&1
+  }
+
+  case $KIND in
+    package)
+      if is_ours "$PACKAGE"; then
+        notify_no "Part of moarchy. The shell will not uninstall itself."
+        fail "$PACKAGE is part of moarchy"
+      fi
+      # Recomputed here rather than taken from the card: the plan the user
+      # agreed to was true when it was drawn, and a pacman transaction that ran
+      # in between is exactly the case where it stopped being.
+      if ! plan_package "$PACKAGE"; then
+        notify_no "$PLAN_BLOCKED"
+        fail "$PLAN_BLOCKED"
+      fi
+      # -n, and it is the difference between a failure and a hang. The caller
+      # is a QML Process with no terminal on its stdin: a sudo that decides it
+      # wants a password would sit there forever, and the card would sit at
+      # "Removing" behind it with nothing to say. This image has passwordless
+      # sudo on purpose, so -n costs nothing when it holds and turns the case
+      # where it does not into one line in a notification.
+      if (( PLAN_SET )); then
+        out="$(sudo -n pacman -Rns --noconfirm \
+                       --assume-installed "$PACKAGE" "$PACKAGE" 2>&1)"
+      else
+        out="$(sudo -n pacman -Rns --noconfirm "$PACKAGE" 2>&1)"
+      fi
+      rc=$?
+      ;;
+    webapp)
+      # Upstream's, because it takes the icon as well as the entry, and it
+      # notifies for itself.
+      out="$(OMARCHY_REMOVE_NOTIFY=false omarchy-webapp-remove "$DESKTOP_NAME" 2>&1)"
+      rc=$?
+      ;;
+    tui)
+      out="$(OMARCHY_REMOVE_NOTIFY=false omarchy-tui-remove "$DESKTOP_NAME" 2>&1)"
+      rc=$?
+      ;;
+    user)
+      out="$(rm -f "$DESKTOP_FILE" 2>&1)"
+      rc=$?
+      update-desktop-database "$USER_DIR" >/dev/null 2>&1
+      ;;
+    flatpak)
+      out="$(flatpak uninstall -y "$DESKTOP_NAME" 2>&1)"
+      rc=$?
+      ;;
+    *)
+      notify_no "nothing here knows how to remove it"
+      fail "don't know how to remove $DESKTOP_NAME"
+      ;;
+  esac
+
+  if (( rc != 0 )); then
+    # Pacman's last line, not "failed". A removal refused for a reason the plan
+    # could not see is the case this message exists for, and the reason is the
+    # only part of it worth carrying.
+    why="$(printf '%s\n' "$out" | grep -v '^$' | tail -1)"
+    notify_no "${why:-exit $rc}"
+    fail "${why:-exit $rc}"
+  fi
+
+  notify_ok "$label"
+  kv ok "$label"
+}
+
+# --- entry point ------------------------------------------------------------
+
+(( $# >= 2 )) || usage
+command=$1
+shift
+[[ -n ${1-} ]] || usage
+
+case $command in
+  info) cmd_info "$1" ;;
+  plan) cmd_plan "$1" ;;
+  remove) cmd_remove "$1" "${2-}" ;;
+  *) usage ;;
+esac

@@ -774,6 +774,168 @@ are both cards and the row you came from is one tap away.
 
 ---
 
+## L. Long-press on an app
+
+A tap on an app icon launches it (H4) and that is the whole vocabulary the grid
+has. There is no way to reach anything *about* an app -- what it is, what it
+came from, or how to be rid of it -- and the phone ships 64 desktop entries
+nobody chose one at a time.
+
+Upstream has an answer and it is keyboard-shaped: in the Omarchy menu, Ctrl+D on
+a highlighted row arms a confirm and calls `appLibrary.remove()`. A modifier on
+a highlighted row is not a thing a thumb can do. The gesture that means "tell me
+about this one" on every phone is a long press, and this section is that gesture
+plus the screen it opens.
+
+**Removal is the drawer's, not a terminal's.** Upstream's
+`omarchy-remove-launcher-entry` ends its package branch by handing
+`sudo pacman -Rns` to a floating terminal, so the answer to "what will this
+take with it" is pacman's `[Y/n]` prompt in a 60-column foot window, typed on
+the on-screen keyboard. That prompt is the right control on a desktop and the
+wrong one here: it is the only place the consequence is stated, and it is
+stated in the one surface that costs a keyboard to answer. So the drawer asks
+the same question itself, from the same `pacman` output, before anything runs
+(L7), and the run itself is silent (L9).
+
+### The gesture
+
+**L1** A press that stays on one app cell for **500ms** without travelling past
+the drag slop (H1) opens that app's detail sheet. Nothing else in the grid
+changes: below the hold, a tap is still a launch (H4); past the slop, the touch
+is still a close drag (H1).
+→ `sudo moarchy-touch hold <x> <y> 900` over a cell, aimed with
+`omarchy-shell drawer cellTarget 0`, leaves `omarchy-shell drawer detail`
+naming that cell's entry
+
+**L2** The hold does not also launch. Qt delivers `released` and then `clicked`
+to the same `MouseArea` the timer fired from, so the flag that swallows the
+click is cleared on the *next* press, exactly as `sheetWasDrag` is and for the
+same reason -- cleared on release it is already false when the click arrives,
+and the app you asked about is the app that starts.
+→ after the hold, `omarchy-shell recents list` gained no card
+
+**L3** Travel cancels the hold; the hold does not cancel travel. A finger that
+goes down on an icon and then drags is a close drag from the first pixel past
+the slop, whether or not 500ms has passed on the way — the timer stops when
+`sheetDragging` latches.
+→ a 1200ms drag down from a cell leaves `drawer state` == `closed`,
+`drawer detail` empty, and `drawer dragTrace` ≥ 8 samples
+
+**L4** Scrolling the grid opens nothing. A `Flickable` steals the grab and Qt
+clears `pressed` before it emits `canceled()` (`style.md` H6), so the timer has
+the same cancel path a press veil has, and a thumb resting mid-scroll does not
+arrive at a detail sheet.
+
+### The sheet
+
+**L5** The detail sheet is a **card over the drawer**, not a surface and not a
+page. The drawer keeps its keyboard focus, its scroll position and its progress;
+closing the card leaves the grid exactly as it was. A phone that answers "what
+is this" by replacing the screen you asked from has lost your place to tell you
+something you could have read in a card.
+
+Two ways out, and neither is a button: a tap on the scrim beside it, and the
+back gesture. Back walks the levels one at a time the way it does in Settings
+(G3) — from the plan to the card, from the card to the grid, and only then out
+of the drawer — because the plan is a step you took and back is the step you
+take to undo one.
+→ from an armed plan, three `omarchy-shell gestures back` calls give stage
+`info`, then no card with `drawer state` == `open`, then `closed`
+
+**L6** The card says what the app is and where it came from: its icon and name,
+its `.desktop` id, and the package that owns it with that package's version and
+installed size. An entry no package owns says which kind it is instead — a
+personal entry, a web app, or a terminal app — because "no package" is an answer
+and a blank field is not.
+→ `omarchy-shell drawer detail` prints `id`, `kind`, and for a package
+`package`, `version` and `size`
+
+**L7** Uninstall never acts on the first tap. Tapping it replaces the card's
+body with the **plan**: every package the removal would take, how many there
+are, and their total size — read out of `pacman -Rs --print`, not guessed and
+not summarised from the one package that was asked for.
+
+`-Rs` and not `-Rns`: pacman rejects `--nosave` together with `--print` outright
+("invalid option: '--nosave' and '--print' may not be used together"), so the
+plan is computed without it and the removal that follows carries it, the way
+upstream's does. The two differ by which config files survive, which is not
+something the plan needs to state.
+
+**L8** A removal pacman would refuse is refused **here**, naming what refused
+it, and the Remove button is not drawn at all. There is no path from this card
+to a failed transaction the user has to read out of a notification.
+→ a `plan` for a package with a dependent outside the set answers `blocked`
+with pacman's own line, and `omarchy-shell drawer canRemove` is `no`
+
+**L9** Confirming removes, with no terminal and no prompt: the result arrives as
+a notification (`omarchy-notification-send`, which is what this image has —
+there is no `notify-send` on it) and the sheet closes. Failure is a
+notification too, carrying pacman's last line rather than "failed".
+
+**L10** The grid drops the app when it is gone, without reopening the drawer.
+`appLibrary` already emits `appsChanged()` when the desktop-entry set moves, and
+`appRows` already re-reads on it — this criterion is that nothing here defeats
+that.
+
+### What may not be removed
+
+The grid is 64 entries and some of them are the phone. Two rules decide, and
+both are answers pacman gives rather than a list kept here — a second list of
+what matters is the failure `structure.md` P5 exists to prevent.
+
+**L11** **The shell will not uninstall itself.** No package whose name begins
+`moarchy` or `omarchy` can be removed from this card, whatever pacman says
+about it. That is `moarchy`, `moarchy-meta`, `moarchy-keep`, `moarchy-store-git`
+and `omarchy-config` today, and it is whatever else this project ships later
+without anyone remembering to come back here.
+
+**L12** **Anything another installed package needs is refused** — with one
+exception, and the exception is the whole reason this section needs stating.
+`moarchy-meta` is a package with no files whose entire content is a `depends`
+line (`structure.md` P5), so *every* app on this phone has it as a dependent and
+a plain `pacman -Rs gnome-clocks` fails with
+
+```
+:: removing gnome-clocks breaks dependency 'gnome-clocks' required by moarchy-meta
+```
+
+That is the record of the set objecting, not a package that needs the app. So
+when `moarchy-meta` is the **only** thing blocking a removal, the plan is
+recomputed with `--assume-installed <pkg>`, which waives the check for that one
+name and leaves every other dependency check standing. When anything else is
+also blocking — `quickshell` is required by `omarchy-config` as well, `sway` by
+`moarchy` as well — the removal is refused (L8).
+
+Measured on the device against all 34 entries the drawer lists, which is what
+turned this from a rule into a section. L12 alone let three things through, and
+none of them because the rule is wrong:
+
+| Entry | What the plan said | Why |
+| --- | --- | --- |
+| Foot | Removes 2 packages | `bin/moarchy-launch-tui` execs `foot`, undeclared |
+| KWeather | Removes 40 packages, `upower` among them | `moarchy.bar`'s battery is `Quickshell.Services.UPower`, undeclared — and `upower` is on the phone only as KWeather's own transitive dependency, so `-Rs` takes it |
+| (not listed) | — | `default/sway/autostart.conf` execs `polkit-gnome-authentication-agent-1`, undeclared |
+
+So the drawer would have offered to remove the terminal every TUI opens in, and
+would have taken the battery indicator away with the weather app. In all three
+cases `moarchy`'s own `depends` was wrong and this feature is what asked the
+question; `pkgbuilds/moarchy` declares all three now, so L12 protects them by
+knowing something true rather than by holding a list. The `upower` one is worth
+keeping in mind: it is not exec'd anywhere, so no grep for a binary name finds
+it, and it was reached by a *cascade* rather than named as a target.
+
+A browser is deliberately not in that list. `bin/moarchy-launch-browser` is a
+fallback chain over four of them and says so in its own comment, so Epiphany
+stays removable — which is the right answer for a browser and the test that
+this rule is about dependencies rather than about a list of favourites.
+
+**L13** The plan says when the exception was used. A package the set declares is
+one a later `moarchy-meta` upgrade will pull back in — pacman resolves an
+upgraded package's dependencies — so the card says so rather than letting the
+app reappear on a `pacman -Syu` as if the removal had not worked.
+
+---
+
 ---
 
 ## Constraints
