@@ -387,6 +387,17 @@ var PAGES = {
     write: "env -u BROWSER xdg-settings set default-web-browser org.gnome.Epiphany.desktop" }
 ]},
 
+// foot is the only terminal installed (docs/apps.md T1, T4), so this page has
+// one row on a stock phone and every other row is an offer that appears with
+// the package. That is the guards working rather than the page being empty:
+// each row is `when: omarchy-cmd-present <term>`, so installing alacritty or
+// kitty brings its row back with no change here.
+//
+// The reader is worth knowing about. It resolves through
+// `xdg-terminal-exec --print-id` and prints the raw desktop id for anything it
+// has no name for -- which is how this page used to read "org.kde.qmlkonsole
+// .desktop", a value none of its rows could match, against a default nobody
+// chose. bin/moarchy-user-setup names foot now.
 "apps.default.terminal": { title: "Terminal", reader: "omarchy-default-terminal", rows: [
   { id: "alacritty", type: "choice", label: "Alacritty", value: "alacritty",
     when: "omarchy-cmd-present alacritty", write: "omarchy-default-terminal alacritty",
@@ -554,8 +565,12 @@ var PAGES = {
     when: "! omarchy-pkg-present kitty",
     run: "omarchy-launch-floating-terminal-with-presentation 'omarchy-install-terminal kitty'",
     launch: "none", covers: { "install.terminal.kitty": "B" } },
-  // Both are installed, so both stay hidden. Kept so the pair is represented
-  // and the coverage map has somewhere to point.
+  // Alacritty is a live offer since 2026-09-08 and Foot is the permanently
+  // hidden one -- they used to be hidden together, on the reading that the
+  // phone came with both. Neither row changed; the package set did
+  // (docs/apps.md T4). Foot stays listed because it is exactly the row that
+  // should reappear if someone ever removes the terminal, which the drawer
+  // refuses (T5) but pacman does not.
   { id: "alacritty", type: "action", glyph: "", label: "Install Alacritty",
     when: "! omarchy-pkg-present alacritty",
     run: "omarchy-launch-floating-terminal-with-presentation 'omarchy-install-terminal alacritty'",
@@ -619,12 +634,36 @@ var PAGES = {
 "security": { title: "Security", rows: [
   // Read natively, written through a bridged launch: the state is a systemctl
   // question, but the write needs a sudo prompt a QML surface cannot host.
+  //
+  // `hides` because both commands end in a terminal that asks something. The
+  // setup script runs `setup_sshd` unattended and only then asks, twice, with
+  // gum: a `gum choose` between GitHub and pasting, then a `gum input` for the
+  // username. A foot window under a full-screen layer surface makes both
+  // invisible -- so the daemon comes up and the keys never do.
   { id: "ssh", type: "switch", glyph: "󰣀", label: "Remote access (SSH)",
     read: "systemctl is-enabled --quiet sshd && echo true || echo false",
     on: "omarchy-launch-floating-terminal-with-presentation omarchy-setup-security-sshd",
     off: "omarchy-launch-floating-terminal-with-presentation omarchy-remove-security-sshd",
-    launch: "none",
+    hides: true, launch: "none",
     covers: { "setup.security.sshd": "B", "remove.security.sshd": "B" } },
+  // The same script, on demand. Two rows because the switch reads
+  // `systemctl is-enabled sshd`: once the daemon is on the switch shows ON and
+  // there is nothing left to tap, and that is exactly the state a phone is in
+  // when sshd came up but no key was ever authorized. It happened on
+  // 2026-09-08 -- port 22 open, `Permission denied (publickey)` from the Mac,
+  // and the only way back to the prompt was typing the script's name by hand.
+  //
+  // The detail is the whole point of the row. "Remote access: on" is not the
+  // question anyone has; "0 authorized" is, and it says at a glance whether
+  // ssh can work. A missing file counts 0 rather than reading blank, so the
+  // row that cannot answer says so instead of looking fine. No `covers`: the
+  // switch above already claims setup.security.sshd, and coverage totals are
+  // asserted at 129 lines.
+  { id: "sshkeys", type: "action", glyph: "󰌆", label: "Authorize SSH keys",
+    keywords: "github remote login publickey",
+    detailCmd: "echo \"$(grep -c '^[a-z]' $HOME/.ssh/authorized_keys 2>/dev/null || echo 0) authorized\"",
+    run: "omarchy-launch-floating-terminal-with-presentation omarchy-setup-security-sshd",
+    launch: "none" },
   // The image already grants this permanently in /etc/sudoers.d/10-moarchy, so
   // upstream's row -- which writes a 15-minute 99-omarchy-nopasswd-$USER and
   // times it out -- changes nothing observable either way. Kept because it is
@@ -832,9 +871,15 @@ var PAGES = {
   // A page of rows, not fastfetch in a terminal. omarchy-launch-about sizes
   // itself by measuring its own output from inside the terminal and re-renders
   // on every resize; here it re-execs through the default terminal with
-  // --render, and the default terminal is qmlkonsole, which answers "Unknown
+  // --render, and the default terminal WAS qmlkonsole, which answers "Unknown
   // option 'render'" under a logo clipped to its first two letters. The fields
   // were never the problem.
+  //
+  // qmlkonsole is gone and foot is the default now (docs/apps.md T1, T2), so
+  // that particular error is not what would happen today. This stays a page of
+  // rows regardless: the terminal was the trigger, but re-rendering fastfetch
+  // on every resize inside a 47-column window is not a thing this screen wants
+  // whichever terminal draws it.
   { id: "aboutomarchy", type: "nav", page: "about.omarchy", glyph: "󰋽",
     label: "About Omarchy", covers: { "about": "N" } }
 ]},

@@ -362,9 +362,62 @@ else
   ok "moarchy-user-setup logged no missing files or commands"
 fi
 
-for f in .config/foot/foot.ini .config/btop/btop.conf .config/alacritty; do
+for f in .config/foot/foot.ini .config/btop/btop.conf; do
   [ -e "$R/home/moarchy/$f" ] && ok "user config $f" || no "user config $f missing"
 done
+# .config/alacritty was checked here until 2026-09-08. It is not a missing check
+# now, it is the opposite one: alacritty is not installed (docs/apps.md T1), so a
+# seeded config for it would be the bug.
+[ -e "$R/home/moarchy/.config/alacritty" ] \
+  && no "a config was seeded for alacritty, which is not installed" \
+  || ok "no config seeded for an uninstalled terminal (T6)"
+
+# T1: one terminal. Read from pacman's local database, which is the only record
+# in an offline rootfs of what was INSTALLED as opposed to what happens to have
+# left a file behind.
+#
+# The count is checked before any of the three names is. A `ls | grep` over a
+# directory that is not there answers "no match" for every package, which reads
+# exactly like "alacritty is not installed" and would turn a broken check into
+# three green lines -- the failure this whole file exists to catch.
+_pdb="$R/var/lib/pacman/local"
+_pn=$(ls -1 "$_pdb" 2>/dev/null | wc -l)
+if [ "$_pn" -lt 100 ]; then
+  no "pacman's local db has $_pn entries -- unreadable, so the terminal checks below prove nothing"
+else
+  ok "pacman local db readable ($_pn packages)"
+  _inst() { ls -1 "$_pdb" 2>/dev/null | grep -qE "^$1-[^-]+-[^-]+$"; }
+  for t in alacritty qmlkonsole; do
+    _inst "$t" && no "$t is installed -- the image should carry foot alone (T1)" \
+                || ok "$t is not installed (T1)"
+  done
+  _inst foot && ok "foot is installed (T1)" \
+             || no "foot is missing -- it IS the terminal"
+fi
+
+# T2: foot is the default terminal, which is also what stops xdg-terminal-exec
+# hanging. The file is the whole mechanism, so the file is what is checked.
+if grep -qx 'foot.desktop' "$R/home/moarchy/.config/xdg-terminals.list" 2>/dev/null; then
+  ok "foot is the default terminal (T2)"
+else
+  no "xdg-terminals.list does not name foot -- xdg-terminal-exec will hang (T2)"
+fi
+
+# T3: one terminal in the DRAWER, which is a different claim from T1 -- foot
+# ships three TerminalEmulator entries, none of them NoDisplay. Upstream hides
+# the other two by id, and this asserts that upstream file rather than anything
+# of ours: nothing here implements T3, so the only way it regresses is that
+# list losing the lines, which no other check would notice.
+_hides="$R/usr/share/omarchy/default/omarchy/launcher.hides"
+if [ ! -s "$_hides" ]; then
+  no "launcher.hides is missing -- footclient and foot-server would both show as apps (T3)"
+else
+  for e in footclient foot-server; do
+    grep -qx "$e" "$_hides" \
+      && ok "$e is hidden from the drawer by launcher.hides (T3)" \
+      || no "$e is not in launcher.hides -- it will show as a second terminal (T3)"
+  done
+fi
 grep -q 'style=Regular' "$R/home/moarchy/.config/foot/foot.ini" 2>/dev/null \
   && ok "foot keeps Regular weight" || no "foot.ini was not adjusted"
 grep -q 'shown_boxes = "cpu mem"' "$R/home/moarchy/.config/btop/btop.conf" 2>/dev/null \

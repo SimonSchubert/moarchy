@@ -77,7 +77,6 @@ run without a KDE session — they are ordinary Wayland clients under Sway.
 | KWeather | `kweather 26.08.0-1` | Weather |
 | Keysmith | `keysmith 26.08.0-1` | TOTP / 2FA codes |
 | Calindori | `calindori 26.08.0-1` | Calendar |
-| QMLKonsole | `qmlkonsole 26.08.0-1` | Touch-friendly terminal |
 
 <p align="center">
   <img src="screenshots/apps/07-kalk.png" width="30%" alt="Kalk">
@@ -86,11 +85,21 @@ run without a KDE session — they are ordinary Wayland clients under Sway.
 </p>
 <p align="center">
   <img src="screenshots/apps/11-calindori.png" width="30%" alt="Calindori">
-  <img src="screenshots/apps/12-qmlkonsole.png" width="30%" alt="QMLKonsole">
 </p>
 
 ```bash
-sudo pacman -S kalk kweather keysmith calindori qmlkonsole
+sudo pacman -S kalk kweather keysmith calindori
+```
+
+**QMLKonsole is no longer installed by default** (2026-09-08), with `alacritty`.
+It is a good touch terminal and that was never the question: foot is a touch
+terminal too, is the one every script already opens, and was going to stay
+whatever happened to the other two. See "One terminal" below for the whole of
+it. It still installs, and its screenshot is
+[`screenshots/apps/12-qmlkonsole.png`](screenshots/apps/12-qmlkonsole.png):
+
+```bash
+sudo pacman -S qmlkonsole alacritty
 ```
 
 **KClock and Index are no longer installed by default** (2026-09-06). Both were
@@ -139,6 +148,74 @@ thermal zones, disks and network.
 
 Also installed and worth knowing: `htop`, `lazygit`, `bluetui`, `wiremix`
 (audio), `s-tui` (CPU frequency/temperature graphs).
+
+### One terminal
+
+The phone shipped three until 2026-09-08 — `foot`, `alacritty` and `qmlkonsole`
+— and they were not three choices so much as one engine and two entries in the
+drawer beside it. `foot` is the only one anything actually reaches:
+`bin/moarchy-launch-tui` execs it *by name* and `pkgbuilds/moarchy` declares it,
+so every TUI, every agent window, the config editor and the removal prompt are
+all foot already. `alacritty` cost 7.75 MiB — eight times foot and qmlkonsole
+put together — to be an OpenGL terminal on a GLES 2.0 Mali-400 that nothing
+launched. `qmlkonsole` was 935 KiB and had won the xdg default by default,
+which is the whole reason `omarchy-launch-about` answers `Unknown option
+'render'`.
+
+Verified on touch before the other two were dropped: foot turns a tap into a
+left-button click (`man 1 foot`, TOUCHSCREEN), which is what the shade's TUI
+cards already rely on.
+
+**T1** One terminal is installed. `alacritty` and `qmlkonsole` are not in the
+package set, and nothing pulls them in behind it.
+→ `pacman -Qq foot` succeeds; `pacman -Qq alacritty qmlkonsole` finds neither
+
+**T2** foot is the default terminal, and `xdg-terminal-exec` resolves rather
+than hangs. Those are one fact, not two: the hang measured on 2026-09-07 was a
+missing `~/.config/xdg-terminals.list`, and that file is exactly what naming a
+default writes. Until it existed, `$mod+Return` and `bin/moarchy-launch-files`
+both hung on the first candidate in their own fallback chain.
+→ `omarchy-default-terminal` prints `foot`, and `xdg-terminal-exec --print-id`
+prints `foot.desktop` and exits 0 rather than timing out
+
+**T3** The drawer shows one terminal, not three — and this one is *already
+true*, which is why it is written down. `foot` ships `foot.desktop`,
+`footclient.desktop` and `foot-server.desktop`, all three `TerminalEmulator`
+and none of them `NoDisplay`, so dropping two packages looked like it would
+leave three tiles behind. Upstream Omarchy hides both by id in
+`/usr/share/omarchy/default/omarchy/launcher.hides` (`btop` is in there too),
+which `AppLibrary` reads into `configuredHiddenEntryIds`. Nothing here
+implements it; the criterion exists because a `launcher.hides` that loses those
+lines is a regression nobody would look for.
+→ `omarchy-shell drawer entries` holds `foot` and holds neither `footclient`
+nor `foot-server`
+
+> A NoDisplay copy in `~/.local/share/applications` was written to do this job
+> and then deleted, because measuring it showed it changed nothing. Worth
+> recording how nearly it stayed: the first A/B moved the masks out, re-queried
+> the drawer, and still saw both hidden — which reads as "the masks are not what
+> does it" and is the *right* conclusion from a *broken* test.
+> `desktopHiddenEntryIds` is only recomputed on `appsChanged`, and removing a
+> `NoDisplay` file changes nothing in `DesktopEntries.applications`, so no
+> rescan fired and the answer came from the cache built while the masks existed.
+> What settled it was forcing a rescan with a visible entry, then cloning
+> `footclient.desktop`'s exact bytes under a new id: the clone appeared, so the
+> filter was on the id, and `grep foot launcher.hides` found it.
+
+**T4** Settings offers the terminals that exist. The Alacritty choice row hides
+itself, and the Install Alacritty row stops being permanently hidden and
+becomes a live offer — the same rows, guarded the same way, answering a
+different truth.
+→ `settings rowsOn apps.default.terminal` holds `foot` and not `alacritty`;
+`settings rowsOn apps.packages.more` holds `alacritty`
+
+**T5** The drawer still refuses to remove the terminal. `pkgbuilds/moarchy`
+declares `foot`, and it is now the only terminal there is to lose.
+→ `moarchy-app-remove plan foot` reports a blocker (selftest L12a)
+
+**T6** Nothing seeds a config for a terminal that is not installed.
+→ `~/.config/alacritty` is not created, and `moarchy-user-setup` logs no
+missing file for it
 
 **Wi-Fi is not a TUI.** The shade's tile and Settings both open `moarchy.wifi`,
 a touch screen with a passphrase field — see `docs/shade.md` S6b. `nmtui-connect`

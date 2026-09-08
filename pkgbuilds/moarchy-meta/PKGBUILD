@@ -48,7 +48,14 @@ pkgver=$_ver
 # in the field actually sees: mise-bin, nodejs and npm; the ten packages
 # makepkg shells out to, so an AUR build gets past fakeroot; moarchy-keep. And
 # lisgd left with the gestures daemon nothing started.
-pkgrel=1
+#
+# 2 for dropping alacritty and qmlkonsole (docs/apps.md T1). 0.2.0-1 is
+# published and a phone is holding it, so this is the case the paragraphs above
+# say the number moves for -- and it moves for a REMOVAL, which is the half
+# that is easy to forget: pacman compares versions, and a depends line that
+# loses two names under an unchanged version leaves both packages installed on
+# every device that already has them.
+pkgrel=2
 pkgdesc="The moarchy package set -- install this and you have the phone"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
@@ -85,10 +92,31 @@ depends=(
   'polkit-gnome'
   'wlsunset'
 
-  # --- Terminals --------------------------------------------------------------
-  # Both are themed by upstream Omarchy templates (alacritty.toml.tpl, foot.ini.tpl).
-  # foot is markedly lighter on a Mali-400 / A53; alacritty keeps Omarchy fidelity.
-  'alacritty'
+  # --- Terminal ---------------------------------------------------------------
+  # One, and it is the one everything already used. bin/moarchy-launch-tui execs
+  # `foot` by name and pkgbuilds/moarchy declares it, so every TUI, every agent
+  # window, the config editor and the removal prompt were foot before this list
+  # said so. Themed by upstream's foot.ini.tpl, and it turns a tap into a
+  # left-button click (`man 1 foot`, TOUCHSCREEN), which is what the shade's TUI
+  # cards rely on and what makes it usable as THE terminal rather than only as
+  # the one scripts open.
+  #
+  # alacritty and qmlkonsole were both here until 2026-09-08 and neither was a
+  # second choice so much as a second tile (docs/apps.md, "One terminal"):
+  #
+  #   alacritty   7.75 MiB, eight times the other two together, to be an OpenGL
+  #               terminal on a GLES 2.0 Mali-400. `pacman -Qi` said Required By
+  #               moarchy-meta and Optional For None, and the only path to it was
+  #               bin/moarchy-launch-terminal's fallback chain -- behind
+  #               xdg-terminal-exec, which hung. It kept "Omarchy fidelity",
+  #               which is not a thing a phone screen can show.
+  #   qmlkonsole  935 KiB and touch-friendly, which foot also is. It had won the
+  #               xdg default by being the only TerminalEmulator that claimed it,
+  #               and that is the whole reason omarchy-launch-about answers
+  #               `Unknown option 'render'` and bin/moarchy-about exists.
+  #
+  # Both still install: `pacman -S alacritty qmlkonsole`. Their Settings rows are
+  # guarded on presence and come back with them.
   'foot'
 
   # --- Capture ----------------------------------------------------------------
@@ -266,7 +294,8 @@ depends=(
   'kweather'
   'keysmith'
   'calindori'
-  'qmlkonsole'
+  # qmlkonsole removed 2026-09-08 with alacritty, for the reason the Terminal
+  # section above gives: foot is the terminal, and this was a second tile for it.
   # index-fm removed 2026-09-06: portfolio-file-manager is already the file
   # manager, and Index brings the whole MauiKit stack with it for a second one.
 

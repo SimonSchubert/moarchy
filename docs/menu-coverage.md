@@ -60,10 +60,13 @@ dropped two thirds are Steam and Battle.net, twenty language runtimes behind
 `mise`, six desktop browsers with no aarch64 build, and Hyprland's own
 configuration files.
 
-Three rows in the tree carry no upstream id at all and so appear in none of
-these numbers: **Wi-Fi networks**, **Bluetooth devices** and **Update system**.
-The last is not `update.omarchy` renamed -- that id stays Unsupported for the
-reason its row below gives, and this one runs `sudo pacman -Syu`, which
+Four rows in the tree carry no upstream id at all and so appear in none of
+these numbers: **Wi-Fi networks**, **Bluetooth devices**, **Update system** and
+**Authorize SSH keys**. The last shares `setup.security.sshd` with the Remote
+access switch, which already claims it, and exists because that switch reads
+`systemctl is-enabled sshd` and so goes inert once the daemon is on.
+**Update system** is not `update.omarchy` renamed -- that id stays Unsupported
+for the reason its row below gives, and this one runs `sudo pacman -Syu`, which
 `docs/structure.md` R8a says works on this image and cannot move the frozen
 device stack. `docs/settings.md` records why claiming the id would be a
 promise the row does not keep.
@@ -83,7 +86,7 @@ The two root entries that are not the head of a route of their own.
 | id | label | class | lands at | note |
 | --- | --- | --- | --- | --- |
 | `apps` | Apps | Native | App drawer | the drawer is the `apps` provider; not repeated in Settings |
-| `about` | About | Native | About phone > About Omarchy | a page of rows; `omarchy-launch-about` re-execs through the default terminal with `--render`, and qmlkonsole refuses it |
+| `about` | About | Native | About phone > About Omarchy | a page of rows; `omarchy-launch-about` re-execs through the default terminal with `--render`, which qmlkonsole refused. foot is the default since 2026-09-08, but the page stays rows -- fastfetch re-measuring itself on every resize is wrong in a 47-column window whichever terminal draws it |
 
 ## System (8)
 
@@ -236,8 +239,8 @@ Native 25 · Bridged 14 · Unsupported 23
 | `setup.default.browser.firefox` | Firefox | Bridged | Default apps > Browser | firefox has an aarch64 build in Arch Linux ARM; hidden until installed |
 | `setup.default.browser.zen` | Zen | Unsupported | -- | x86_64-only |
 | `setup.default.terminal` | Terminal | Native | Default apps > Terminal |  |
-| `setup.default.terminal.alacritty` | Alacritty | Native | Default apps > Terminal | installed |
-| `setup.default.terminal.foot` | Foot | Native | Default apps > Terminal | installed |
+| `setup.default.terminal.alacritty` | Alacritty | Native | Default apps > Terminal | hidden -- not installed since 2026-09-08 (apps.md T1); the row returns with the package |
+| `setup.default.terminal.foot` | Foot | Native | Default apps > Terminal | installed, and the default (apps.md T2) -- the only visible row here on a stock phone |
 | `setup.default.terminal.ghostty` | Ghostty | Unsupported | -- | no aarch64 build, so the `omarchy-cmd-present` guard can never pass |
 | `setup.default.terminal.kitty` | Kitty | Bridged | Default apps > Terminal | aarch64-available; hidden until installed |
 | `setup.default.editor` | Editor | Native | Default apps > Editor |  |
@@ -320,8 +323,8 @@ Native 6 · Bridged 19 · Unsupported 62
 | `install.editor.helix` | Helix | Bridged | Packages > More software | helix is Rust, aarch64 in ALARM |
 | `install.editor.vim` | Vim | Bridged | Packages > More software | vim is aarch64 in ALARM |
 | `install.editor.emacs` | Emacs | Unsupported | -- | x86_64-only |
-| `install.terminal.alacritty` | Alacritty | Bridged | Packages > More software | always hidden -- alacritty is installed |
-| `install.terminal.foot` | Foot | Bridged | Packages > More software | always hidden -- foot is installed |
+| `install.terminal.alacritty` | Alacritty | Bridged | Packages > More software | visible since 2026-09-08 -- a live offer now that alacritty is not installed (apps.md T4) |
+| `install.terminal.foot` | Foot | Bridged | Packages > More software | always hidden -- foot is installed, and is the one terminal |
 | `install.terminal.ghostty` | Ghostty | Unsupported | -- | `pacman -Si ghostty` finds nothing for aarch64 and `omarchy-pkg-add` has no AUR fallback, so the row could only fail |
 | `install.terminal.kitty` | Kitty | Bridged | Packages > More software | aarch64-available |
 | `install.ai.chatgpt` | ChatGPT Desktop | Unsupported | -- | x86_64-only |

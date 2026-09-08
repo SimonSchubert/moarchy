@@ -1,9 +1,34 @@
 #!/bin/bash
-# Upstream Omarchy opens terminals via xdg-terminal-exec, which has no aarch64
-# binary and is one of the source-built packages that may not have made it.
-# Degrade through what is actually installed rather than binding a dead key.
-for t in xdg-terminal-exec alacritty foot; do
-  if command -v "$t" >/dev/null; then exec "$t" "$@"; fi
+# The terminal, for $mod+Return and for bin/moarchy-launch-files.
+#
+# foot is the terminal (docs/apps.md, "One terminal") and a hard dependency of
+# this package, so the last line always works. xdg-terminal-exec is tried first
+# only so that Settings > Apps & defaults > Default apps > Terminal means
+# something: it reads xdg-terminals.list, which is what omarchy-default-terminal
+# writes and what bin/moarchy-user-setup seeds with foot.
+#
+# That file is also why this is a GUARD rather than the fallback chain it used
+# to be. With no xdg-terminals.list anywhere, xdg-terminal-exec does not fail --
+# it HANGS, which is this phone's worst failure mode (docs/apps.md T2). Measured
+# on the device 2026-09-07:
+#
+#   timeout 15 xdg-terminal-exec --app-id=moa-test -e echo hi   ->  rc=124, no output
+#
+# It sat first in the chain regardless, so both callers hung on it and the
+# alacritty and foot behind it were never reached -- a dead $mod+Return that
+# looked like a dead keybinding rather than a missing config file. Testing for
+# the file rather than for the binary is what stops a deleted one bringing that
+# back.
+#
+# Not `timeout`: xdg-terminal-exec stays in the foreground for the terminal's
+# whole life, so a timeout that guards the hang also kills the window.
+# XDG_CONFIG_DIRS is colon-separated, so it has to be split on colons rather
+# than left to word splitting, which uses IFS and would hand the loop one path
+# named "/etc/xdg:/usr/local/etc/xdg".
+IFS=: read -ra _dirs <<<"${XDG_CONFIG_DIRS:-/etc/xdg}"
+for d in "${XDG_CONFIG_HOME:-$HOME/.config}" "${_dirs[@]}"; do
+  if [[ -s $d/xdg-terminals.list ]] && command -v xdg-terminal-exec >/dev/null; then
+    exec xdg-terminal-exec "$@"
+  fi
 done
-notify-send "No terminal found" "Install alacritty or foot" 2>/dev/null
-exit 1
+exec foot "$@"

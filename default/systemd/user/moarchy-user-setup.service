@@ -1,15 +1,26 @@
 [Unit]
 Description=moarchy per-user setup (app configs, initial theme, agent wrappers)
 # Everything else moarchy ships is read from a system path. What is left is the
-# handful of app configs -- alacritty, foot, btop -- that only ever read
-# ~/.config, the initial theme, which writes user state by design, and the
-# ~/.local/bin agent wrappers, which live where mise-managed tools live.
+# handful of app configs -- foot, btop and four more -- that only ever read
+# ~/.config, the default terminal, the initial theme, which writes user state by
+# design, and the ~/.local/bin agent wrappers, which live where mise-managed
+# tools live. (It said "alacritty, foot, btop" until 2026-09-08; alacritty is
+# not installed any more, and the list was already longer than three.)
 #
 # ConditionPathExists below means this never runs twice, so a phone already in
 # the field does not get the wrappers from a `pacman -Syu`. One command adds
 # them, and it is idempotent, so running it on a phone that already has them
 # costs nothing:
 #   moarchy-agent seed
+#
+# The default terminal (docs/apps.md T2) is in the same position and has the
+# same escape hatch. An upgraded phone drops two terminal packages and has no
+# default terminal until this runs, which means xdg-terminal-exec hangs rather
+# than failing. Guarded on absence, so it too costs nothing twice:
+#   moarchy-user-setup --terminal
+#
+# Deliberately not "re-run the whole script": omarchy-theme-set in there is
+# unconditional and would throw away a theme and wallpaper somebody chose.
 ConditionPathExists=!%h/.local/state/moarchy/user-setup-done
 
 [Service]

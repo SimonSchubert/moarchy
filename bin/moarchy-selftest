@@ -802,6 +802,82 @@ else
   ok "an input source is configured"
 fi
 
+# --- the terminal -----------------------------------------------------------
+# docs/apps.md T1-T3, T6. The phone carried three terminals until 2026-09-08 and
+# now carries one, and each of these is a way that could be half-true: the
+# package set can drop a name while the device keeps it, the default can be
+# unset in a way that HANGS rather than fails, and foot's own extra .desktop
+# files can put the tiles back after both packages are gone.
+#
+# T3 is the one nothing here implements -- upstream's launcher.hides hides
+# footclient and foot-server by id -- which is exactly why it is asserted
+# against the running drawer rather than against a file we write.
+head_ "terminal"
+
+# T1. Read-only, and the point of asking on the device rather than trusting the
+# PKGBUILD: a `pacman -Rns` never ran on a phone that was upgraded rather than
+# reflashed, so moarchy-meta losing the name does not remove the package.
+if pacman -Qq foot >/dev/null 2>&1; then
+  ok "T1 foot is installed"
+else
+  no "T1 foot is NOT installed" "it is the terminal moarchy-launch-tui execs by name -- nothing that opens a TUI works"
+fi
+t_extra=$(pacman -Qq alacritty qmlkonsole 2>/dev/null | tr '\n' ' ')
+if [[ -z ${t_extra// /} ]]; then
+  ok "T1 alacritty and qmlkonsole are gone"
+else
+  no "T1 still installed: ${t_extra}" \
+     "moarchy-meta dropped them but this phone was upgraded, not reflashed: sudo pacman -Rns ${t_extra}"
+fi
+
+# T2. The FILE, not the reader. `omarchy-default-terminal` resolves through
+# xdg-terminal-exec, and with no list anywhere xdg-terminal-exec hangs rather
+# than answering -- so a reader-based check would hang exactly when it failed.
+t_list="${XDG_CONFIG_HOME:-$HOME/.config}/xdg-terminals.list"
+if [[ ! -s $t_list ]]; then
+  no "T2 no xdg-terminals.list" \
+     "xdg-terminal-exec HANGS with no list, so \$mod+Return and moarchy-launch-files hang too"
+elif grep -qx 'foot.desktop' "$t_list"; then
+  ok "T2 foot is the default terminal"
+else
+  no "T2 the default terminal is $(grep -v '^#' "$t_list" | grep -m1 .), not foot" \
+     "if that terminal is not installed, everything XDG opens a terminal for fails"
+fi
+
+# T3. One terminal in the DRAWER, which T1 does not cover: foot ships
+# foot.desktop, footclient.desktop and foot-server.desktop, all three
+# TerminalEmulator and none NoDisplay, so removing two packages left three tiles.
+#
+# Asked of the shell rather than of the filesystem, because the masking only
+# counts if DesktopEntries honours the user directory -- which is the assumption
+# the whole approach rests on and the one worth measuring.
+t_entries=$(timeout 8 omarchy-shell drawer entries 2>/dev/null)
+if [[ -z $t_entries ]]; then
+  no "T3 the drawer listed no entries at all" "the shell is not answering -- this proves nothing either way"
+else
+  t_seen=""
+  for t_e in footclient foot-server Alacritty org.kde.qmlkonsole; do
+    grep -qx "$t_e" <<<"$t_entries" && t_seen+="$t_e "
+  done
+  if [[ -n $t_seen ]]; then
+    no "T3 the drawer still shows: ${t_seen}" \
+       "footclient/foot-server come from launcher.hides, alacritty/qmlkonsole from pacman -- check which two are listed"
+  elif grep -qx foot <<<"$t_entries"; then
+    ok "T3 the drawer shows one terminal ($(grep -c . <<<"$t_entries") entries)"
+  else
+    no "T3 the drawer shows no terminal at all" "foot.desktop is missing, or it got masked along with the other two"
+  fi
+fi
+
+# T6. The opposite of a missing-file check: a config for a terminal that is not
+# installed is the bug, and it is the kind that survives forever because nothing
+# ever reads it to notice.
+if [[ -e $HOME/.config/alacritty ]]; then
+  no "T6 ~/.config/alacritty exists for an uninstalled terminal" "harmless, but it means moarchy-user-setup still seeds it"
+else
+  ok "T6 no config seeded for an uninstalled terminal"
+fi
+
 # --- real touch, opt-in ------------------------------------------------------
 # Off by default because it needs root for /dev/uinput and it closes a window at
 # the end. With it, every gesture is checked the way a thumb would drive it
@@ -2987,7 +3063,7 @@ ICONS
     ok "N1 About Omarchy is a page, and opens no terminal"
   else
     no "N1 About Omarchy left Settings $(s state) on $(s page)" \
-       "it was omarchy-launch-about, which qmlkonsole refuses --render"
+       "it was omarchy-launch-about -- fastfetch re-measuring itself in a 47-column window"
   fi
   sleep 2
   n_blank=$(s rows | awk -F'\t' '$6==""' | wc -l)
@@ -3783,7 +3859,11 @@ print(" ".join(out))'; }
   # --- L1, L4: a real app --------------------------------------------------
   entries=$(timeout 8 omarchy-shell drawer entries 2>/dev/null)
   target=""
-  for cand in foot Alacritty org.gnome.Console org.gnome.Nautilus org.gnome.TextEditor; do
+  # Alacritty was second here and is not installed any more (docs/apps.md T1).
+  # Dropped rather than left as a candidate that can never match: this list is
+  # what decides whether L1/L4 run at all, and a name that is never found makes
+  # the skip harder to read, not the check more robust.
+  for cand in foot org.gnome.Console org.gnome.Nautilus org.gnome.TextEditor; do
     grep -qx "$cand" <<<"$entries" && { target=$cand; break; }
   done
 

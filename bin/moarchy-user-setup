@@ -30,6 +30,76 @@ export PATH="/usr/lib/moarchy/bin:/usr/bin:$PATH"
 
 say() { printf '==> %s\n' "$*"; }
 
+# In a function, and not for tidiness. This script runs ONCE -- the unit carries
+# ConditionPathExists on the stamp -- so a phone already in the field upgrades to
+# a moarchy that has dropped two terminals and still has no default terminal set.
+# `moarchy-user-setup --terminal` runs just this much, which is the same escape
+# hatch the unit already documents for `moarchy-agent seed`, and it is guarded on
+# absence so running it twice costs nothing.
+#
+# Not "re-run the whole script": omarchy-theme-set below is unconditional, so
+# that would throw away a theme and a wallpaper somebody chose.
+setup_terminal() {
+  # ~/.config is created by the mkdir -p below, which the --terminal path never
+  # reaches -- so it is ensured here rather than assumed.
+  mkdir -p "$HOME/.config"
+
+  # foot is the default terminal, and this file is what makes that true anywhere
+  # outside our own scripts (docs/apps.md T2). Everything that opens a terminal
+  # through XDG -- xdg-terminal-exec, upstream's omarchy-launch-* wrappers,
+  # `Terminal=true` desktop entries -- resolves it here.
+  #
+  # Without it xdg-terminal-exec HANGS rather than failing, which is what made
+  # $mod+Return look like a dead keybinding for months. It is also what let
+  # qmlkonsole win the default simply by being a TerminalEmulator that claimed it,
+  # which is the whole reason omarchy-launch-about answers `Unknown option
+  # 'render'` and bin/moarchy-about exists.
+  #
+  # Written by hand rather than by calling `omarchy-default-terminal foot`, for
+  # the same reason as the configs above: that command also fires
+  # omarchy-notification-send, and this runs from a systemd user unit before there
+  # is a shell to notify. The format is upstream's, so its reader still parses it.
+  #
+  # Only when absent. A user who picked a different terminal in Settings keeps it.
+  if [[ ! -e $HOME/.config/xdg-terminals.list ]]; then
+    cat >"$HOME/.config/xdg-terminals.list" <<'TERMLIST'
+# Terminal emulator preference order for xdg-terminal-exec
+# The first found and valid terminal will be used
+foot.desktop
+TERMLIST
+    say "default terminal foot"
+  fi
+
+  # footclient and foot-server are NOT masked here, and that is a finding rather
+  # than an omission. They are the other two TerminalEmulator entries the foot
+  # package ships, neither of them NoDisplay, so removing alacritty and qmlkonsole
+  # looked like it would leave three terminal tiles behind -- and upstream Omarchy
+  # already hides both, by id, in /usr/share/omarchy/default/omarchy/launcher.hides
+  # (`btop` is in there too). AppLibrary reads that file into
+  # configuredHiddenEntryIds and filters on it beside the NoDisplay scan.
+  #
+  # A NoDisplay copy in ~/.local/share/applications does work -- it makes
+  # hidden-entries.sh report both ids -- and it changes nothing, because they were
+  # already filtered. It was written, measured against the drawer, and deleted.
+  #
+  # Worth knowing how nearly it went the other way: the first A/B test moved the
+  # masks out and re-queried, and the drawer still hid both, which reads as "the
+  # masks are not what does it". It was a stale cache. desktopHiddenEntryIds is
+  # only recomputed on appsChanged, and REMOVING a NoDisplay file changes nothing
+  # in DesktopEntries.applications -- so no rescan fired, and the shell answered
+  # with the list it had built while the masks existed. The test that settled it
+  # forced a rescan by adding a visible entry, then cloned footclient's exact
+  # content under a new id: the clone appeared, so the filter was on the id.
+}
+
+# Before anything else, so the escape hatch does not depend on the rest of the
+# script -- and before the stamp is consulted, because a phone that needs this
+# is by definition one that is already stamped.
+if [[ ${1:-} == --terminal ]]; then
+  setup_terminal
+  exit 0
+fi
+
 # omarchy-theme-set-templates globs "$HOME/.config/omarchy/themed"/*.tpl ahead
 # of the system directory. Create it empty so that glob has a directory to fail
 # to match in rather than a missing path.
@@ -55,7 +125,7 @@ mkdir -p "$HOME/.config/omarchy/themed" \
 # OVERRIDES the packaged defaults, so copying upstream's there would mask the
 # bar id and plugin list that moarchy sets system-side, and the phone would come
 # up with the desktop bar and no phone UI.
-for d in alacritty foot btop wiremix lazygit tmux imv; do
+for d in foot btop wiremix lazygit tmux imv; do
   src="$OMARCHY_PATH/config/$d"
   [[ -d $src ]] || continue
   [[ -e $HOME/.config/$d ]] && continue
@@ -84,6 +154,8 @@ fi
 if [[ -f $HOME/.config/btop/btop.conf ]]; then
   sed -i 's/^shown_boxes = .*/shown_boxes = "cpu mem"/' "$HOME/.config/btop/btop.conf"
 fi
+
+setup_terminal
 
 # The coding agents: nine wrappers and one drawer tile, and not one download.
 #

@@ -4,13 +4,19 @@
 # Upstream's omarchy-launch-about is fastfetch in a terminal, sized by measuring
 # its own output from inside that terminal and re-rendering on every resize. On
 # this phone it re-execs through the default terminal with --render, and the
-# default terminal here is qmlkonsole, which answers:
+# default terminal WAS qmlkonsole, which answered:
 #
 #   qmlkonsole: Unknown option 'render'.
 #
 # under an ASCII logo clipped to the first two letters. The information was never
 # the problem; the frame around it was. These are the same fields as rows, which
 # is a thing a 360px screen can draw.
+#
+# qmlkonsole was dropped on 2026-09-08 and foot is the default terminal now
+# (docs/apps.md T1, T2), so that exact message is history. This file is not:
+# re-rendering fastfetch on every resize inside a 47-column window is a bad way
+# to read ten fields whichever terminal is drawing it, and the rows below need
+# no terminal at all.
 #
 # Read-only, so nothing here needs to be fast or to be a single process: the page
 # is opened rarely and every command below is a file read or a one-line query.

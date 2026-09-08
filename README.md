@@ -83,7 +83,9 @@ So the entire theme system ports by adding **one file**:
 [`default/themed/sway.conf.tpl`](default/themed/sway.conf.tpl). All **22**
 upstream themes then work on Sway with no per-theme effort, and
 `shell.toml.tpl` — which themes the whole quickshell shell — along with
-`alacritty.toml.tpl`, `foot.ini.tpl` and `btop.theme.tpl`, are reused untouched.
+`foot.ini.tpl` and `btop.theme.tpl`, are reused untouched. (`alacritty.toml.tpl`
+is reused untouched too, and has been unused here since the phone went down to
+one terminal on 2026-09-08 — see [docs/apps.md](docs/apps.md).)
 
 Better still, that template engine already processes a *user* template directory
 (`~/.config/omarchy/themed`) ahead of its own built-ins — so moarchy adds

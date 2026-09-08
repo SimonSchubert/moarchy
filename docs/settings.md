@@ -37,7 +37,7 @@ Settings
 ├─ Appearance           Theme · Wallpaper · Font · Status bar · Get more
 ├─ Apps & defaults      Default apps · Web apps · Terminal apps · Packages
 ├─ Shell & plugins      Plugins · Restart shell · Reset tmux config
-├─ Security             Remote access · Passwordless sudo · Change password
+├─ Security             Remote access · Authorize SSH keys · Passwordless sudo · Change password
 ├─ Tools                Screenshot · Screen record · Emoji · Reminders · Speed tests
 ├─ System               Date & time · Restart hardware · Update system · Power
 └─ About phone          Omarchy · Kernel · Device · Keybindings · Help & docs · About Omarchy
@@ -222,6 +222,15 @@ crash-capture-off` exits 0 and the watch service is not `active`
 
 **C8** A switch may read natively while writing through a bridged launch.
 → on `security`, `settings value ssh` matches `systemctl is-enabled --quiet sshd`
+
+**C9** A switch whose write ends in a terminal takes Settings off screen first,
+the way `hides` does for choice rows. Without it the terminal maps under a
+full-screen layer surface and the question it asks cannot be seen, let alone
+answered -- which is how a phone ends up with sshd enabled and an empty
+`authorized_keys` (observed 2026-09-08).
+→ on `security`, `settings activate ssh` leaves `settings state` == `closed`
+while `settings running` == `running`; activating it a second time restores
+the daemon to the state it started in
 
 ## D. Choices
 
@@ -720,8 +729,15 @@ work, not a row that a switch could replace.
 `omarchy-launch-about` is fastfetch in a terminal that sizes itself by measuring
 its own output from inside that terminal and re-renders on every resize. On this
 phone it re-execs through the default terminal with `--render`, and the default
-terminal is qmlkonsole, which answers `Unknown option 'render'` under an ASCII
+terminal *was* qmlkonsole, which answers `Unknown option 'render'` under an ASCII
 logo clipped to its first two letters. The fields were never the problem.
+
+qmlkonsole was dropped on 2026-09-08 and foot is the default now
+([`docs/apps.md`](apps.md) T1, T2), so that error message is history — but the
+page stays rows. Re-measuring fastfetch on every resize inside a 47-column
+window is the wrong shape for ten fields whichever terminal draws it, and N1
+below asserts the page rather than the terminal, so it did not move when the
+terminal did.
 
 **N1** About Omarchy is a page of rows, and opens no terminal.
 → `settings activate aboutomarchy` leaves `settings state` == `open`, and
@@ -849,6 +865,21 @@ upstream's own presentation terminal, and claims no upstream id.
 update` leaves `settings lastLaunch` ==
 `omarchy-launch-floating-terminal-with-presentation sudo pacman -Syu`; and
 `settings coverage` is still 129 lines
+
+**O14** Authorize SSH keys is a row on Security, runs upstream's sshd setup
+through the presentation terminal, and claims no upstream id. It exists because
+the switch above reads `systemctl is-enabled sshd`: once the daemon is on the
+switch shows ON and there is no way left to re-run the key step from Settings.
+→ `settings rowsOn security` holds `sshkeys`; with `dryRun 1`, `settings
+activate sshkeys` leaves `settings lastLaunch` ==
+`omarchy-launch-floating-terminal-with-presentation omarchy-setup-security-sshd`;
+and `settings coverage` is still 129 lines
+
+**O15** That row's detail answers the question the switch cannot: how many keys
+are authorized. A missing `authorized_keys` reads `0 authorized`, not blank, so
+a row that cannot answer says so rather than looking fine.
+→ on `security`, `settings value sshkeys` == `$(grep -c '^[a-z]'
+$HOME/.ssh/authorized_keys 2>/dev/null || echo 0) authorized`
 
 ## P. The coding agent tile
 
