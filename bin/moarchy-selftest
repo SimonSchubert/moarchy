@@ -1073,6 +1073,25 @@ print(found[0] if found else "")'; }
       noac B1 "swipe right did not return to $start_ws"
     fi
 
+    # B3. The shade, and not Settings, drives this one. Settings is on a
+    # workspace of its own (K13) and would leave on the switch alone, so it
+    # cannot show whether the *sheets* are put away -- which is the half of B3
+    # that has no other mechanism behind it. Both halves are asserted: a swipe
+    # that closed the shade and stopped there is the other way to be wrong.
+    timeout 8 omarchy-shell shade open >/dev/null 2>&1
+    sleep 2
+    b3_ws=$(ws)
+    sudo -n "$touch_bin" swipe 550 $STRIP_Y 120 $STRIP_Y 250 >/dev/null 2>&1
+    sleep 2
+    if [[ $(shell_state shade) == "closed" && $(ws) != "$b3_ws" ]]; then
+      okac B3 "a sideways swipe puts the shade away and still switches"
+    else
+      noac B3 "shade=$(shell_state shade), workspace=$(ws) (was $b3_ws)" \
+              "a sheet left standing over the new workspace makes the switch invisible"
+    fi
+    timeout 8 omarchy-shell shade close >/dev/null 2>&1
+    sleep 1
+
     # --- C. no hold-to-close ----------------------------------------------
     before=$(scratch)
     sudo -n "$touch_bin" hold 360 $STRIP_Y 2000 >/dev/null 2>&1
@@ -1738,6 +1757,7 @@ print("armed=%d mid=%d lag=%d stop=%d landed_ok=%s landed=%s"
 
     # K1. Both halves, because `running` outliving `state` is the whole idea
     # and a card bound to `state` instead would pass here and fail K4.
+    k_ws_before=$(ws)
     timeout 8 omarchy-shell settings open >/dev/null 2>&1
     sleep 3
     if [[ $(settings_running) == running && $(settings_card) == 1 ]]; then
@@ -1746,6 +1766,40 @@ print("armed=%d mid=%d lag=%d stop=%d landed_ok=%s landed=%s"
       noac K1 "settings running=$(settings_running), cards named settings=$(settings_card)" \
               "the card exists for as long as Settings is running, and that is longer than it is on screen"
     fi
+
+    # K13. The workspace of its own, asserted as all three things at once,
+    # because each one alone is satisfied by something that is not this: a
+    # *different* workspace is what a plain switch onto the other app gives, an
+    # *empty* one is what a Settings that took nothing at all gives whenever it
+    # was summoned from a home screen, and `shellws` alone is a number the
+    # service recorded and may never have dispatched.
+    k13_claim=$(sed -n 's/.* shellws=\(-\{0,1\}[0-9]\{1,\}\).*/\1/p' \
+                <<<"$(timeout 8 omarchy-shell gestures status 2>/dev/null)")
+    if [[ $(ws) != "$k_ws_before" && -z $(ws_rep) && $k13_claim == "$(ws)" ]]; then
+      okac K13 "Settings took a free workspace of its own (${k13_claim})"
+    else
+      noac K13 "workspace=$(ws) (was $k_ws_before), representation='$(ws_rep)', claimed=${k13_claim:-none}" \
+               "a layer surface has no workspace until one is taken for it, and B1 needs it to have one"
+    fi
+
+    # K14. Driven with swaymsg rather than a finger, and that is the point of
+    # the criterion: ANY workspace change takes the screen with it. The swipe
+    # would pass this whether or not K14 held, because B3 hides the surface a
+    # beat before dispatching for its own ordering reason.
+    swaymsg workspace next_on_output >/dev/null 2>&1
+    sleep 2
+    if [[ $(shell_state settings) == "closed" && $(settings_card) == 1 ]]; then
+      okac K14 "leaving the workspace hides Settings and leaves its card"
+    else
+      noac K14 "settings=$(shell_state settings), settings cards=$(settings_card)" \
+               "hidden, not closed -- a workspace switch is not a close (K4, K6)"
+    fi
+
+    # Back on screen for K3, which needs Settings drawn over an app. Opened
+    # rather than resumed: which page it lands on is not what K3 asks about,
+    # and a closed Settings opens at the root either way (`settings.md` A6).
+    timeout 8 omarchy-shell settings open >/dev/null 2>&1
+    sleep 3
 
     # K3. The swipe that was wrong. With an app running *and* Settings on
     # screen this used to raise the carousel over the top of Settings and

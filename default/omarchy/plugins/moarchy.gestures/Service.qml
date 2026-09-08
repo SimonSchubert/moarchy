@@ -271,6 +271,88 @@ Item {
     return ""
   }
 
+  // ------------------------------------------------- a shell app's workspace
+  //
+  // K13, K14. A shell app is a layer surface, and a layer surface has no
+  // workspace: sway arranges it against the output and leaves it there while
+  // the workspaces change underneath. That is what B1 kept running into --
+  // the sideways swipe changed the workspace *under* Settings and Settings
+  // stayed drawn over whatever it landed on, so the switch happened
+  // invisibly and the phone ended up on a workspace nobody had asked for.
+  //
+  // So one is taken for it: on the way up the screen moves to a free
+  // workspace, and focus arriving anywhere else while it is up means the user
+  // has left, and the screen goes with the workspace it was on.
+  //
+  // Watched from here rather than added to the three plugins, for the reason
+  // moarchy.recents already watches the same three from outside: shellAppIds
+  // is the one list, and a fourth screen must not mean remembering a fourth
+  // place. This file is also where every compositor call already lives.
+  //
+  // The number this workspace was claimed under, or -1 when no shell app is on
+  // screen.
+  property int shellAppWorkspace: -1
+
+  // K13. A *free* workspace rather than "this one if it happens to be free":
+  // whether the workspace underneath is empty is K4a's question, and K4a is
+  // the record of it being unanswerable from here. The cost of not asking is
+  // one workspace number when the summon came from a bare home screen, which
+  // F1 makes contiguous again on the next pass.
+  function claimWorkspace(): void {
+    var free = root.firstFreeWorkspace()
+    // Recorded from the request rather than read back afterwards. The switch
+    // is asynchronous, so between dispatching it and the event arriving the
+    // focused workspace is still the old one -- and a watcher comparing
+    // against that would take the surface away on its own arrival.
+    root.shellAppWorkspace = free
+    root.dispatch("workspace number " + free)
+  }
+
+  // `opened` and not `running`: the trigger is the surface being ON SCREEN.
+  // A quiet summon fires a row and never maps (`settings.md` O4), and must not
+  // take a workspace it never draws on -- which is also why this hangs off the
+  // plugin's own property rather than off the host's openPanelIds, where the
+  // two are the same event.
+  Instantiator {
+    model: root.shellAppIds
+
+    delegate: QtObject {
+      id: watch
+
+      required property string modelData
+
+      readonly property var loader: root.shell && root.shell.panelLoaders
+        ? root.shell.panelLoaders[watch.modelData] : null
+      readonly property bool onScreen:
+        !!(watch.loader && watch.loader.item && watch.loader.item.opened)
+
+      // The `else` is the hand-off case: Settings opening Wi-Fi puts Settings
+      // away and stands Wi-Fi up, in some order, and the one going down must
+      // not clear a claim the one coming up has just made. Asking who is open
+      // rather than assuming the order settles it either way round.
+      onOnScreenChanged: {
+        if (watch.onScreen) root.claimWorkspace()
+        else if (root.openShellApp() === "") root.shellAppWorkspace = -1
+      }
+    }
+  }
+
+  Connections {
+    target: I3
+
+    // K14. A hide and never a quit: leaving the workspace leaves the screen
+    // standing behind you, which is what the card is for (K4, K5). Closing is
+    // the other half and belongs to the two gestures that mean it (K6).
+    function onFocusedWorkspaceChanged() {
+      if (root.shellAppWorkspace < 0) return
+      var ws = I3.focusedWorkspace
+      if (!ws || Number(ws.number) === root.shellAppWorkspace) return
+      var id = root.openShellApp()
+      root.shellAppWorkspace = -1
+      if (id && root.shell) root.shell.hide(id)
+    }
+  }
+
   // A7, A8. The surfaces an up-swipe *clears* rather than switches away from.
   //
   // Derived from overlayIds rather than written out again: a second list of
@@ -327,6 +409,26 @@ Item {
       }
     }
     return ""
+  }
+
+  // B3. Everything this shell had drawn over the workspace, put away before it
+  // changes underneath. A sheet left standing while the workspace moves is a
+  // gesture that visibly does nothing and silently does something.
+  //
+  // All of them rather than the topmost one. The two can differ -- the shade
+  // pulls down over a shell app -- and hiding only the top of that pair would
+  // leave the other one covering the workspace the swipe had just reached,
+  // which is the same failure one layer down.
+  //
+  // Vendored popups are deliberately not swept. topmostOverlay()'s fallback
+  // reads the host's openPanelIds, which carries every mounted `omarchy.`
+  // surface and not only the popups; a false positive costs nothing where it
+  // is used today, and here it would take a surface off the screen on a swipe
+  // that had nothing to do with it.
+  function hideCoveringSurfaces(): void {
+    if (!root.shell || typeof root.shell.hide !== "function") return
+    for (var i = 0; i < root.overlayIds.length; i++)
+      if (root.isOpen(root.overlayIds[i])) root.shell.hide(root.overlayIds[i])
   }
 
   // A7, A8. Put the topmost surface away outright. Never walks a screen's own
@@ -565,8 +667,16 @@ Item {
   //              out of here", not a toggle, and with nothing up it does
   //              nothing.
   function run(action: string): void {
-    if (action === "next") root.dispatch("workspace next_on_output")
-    else if (action === "prev") root.dispatch("workspace prev_on_output")
+    if (action === "next" || action === "prev") {
+      // B3, and in this order. A shell app would leave on its own once the
+      // focused workspace moved off its own (K14), but that hide would land
+      // *after* sway had re-picked a focus -- the ordering K9 records from the
+      // carousel, where hiding late took the keyboard back off the window the
+      // tap had just raised. The sheets have no other mechanism at all.
+      root.hideCoveringSurfaces()
+      root.dispatch(action === "next" ? "workspace next_on_output"
+                                      : "workspace prev_on_output")
+    }
     else if (action === "home") {
       // F3. The keyboard goes with the app. It does not pop *up* on the way
       // home -- it fails to go *down*, and lands on the wallpaper with nothing
@@ -799,10 +909,15 @@ Item {
       // C3. `free` is the answer bin/moarchy-one-app-per-workspace computes
       // independently for the same phone, and publishing it is the only way
       // the selftest can hold the two implementations against each other.
+      // K13. `shellws` is the workspace a shell app is standing on, or -1 when
+      // none is. Published for the same reason `free` is: it is the number the
+      // hide in K14 is compared against, and a check that could not read it
+      // would be asserting on the outcome of a claim it could not see.
       var focus = " focus=" + (tl ? (tl.appId || "?") : "none")
                   + " apps=" + (ToplevelManager.toplevels
                                 ? ToplevelManager.toplevels.values.length : 0)
                   + " free=" + root.firstFreeWorkspace()
+                  + " shellws=" + root.shellAppWorkspace
       if (!root.tracking) return "idle" + focus
       return "tracking mode=" + root.dragMode
              + " pull=" + Math.round(root.pull * 100)

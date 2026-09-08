@@ -89,6 +89,24 @@ one. With one app per workspace, that is next/previous app.
 **B2** A swipe that curves — as a thumb does — still resolves to whichever
 direction dominates, and does not fall through to doing nothing.
 
+**B3** The swipe lands on a workspace with nothing of the shell's drawn over
+it. The shade, the drawer, the carousel and the theme picker are put away on
+the way, the way an up-swipe puts them away (A7, A8). A shell app needs no
+clause here — it is on its own workspace (K13) and the switch leaves it — but
+is hidden a beat early all the same, for the reason K9 already records: sway
+re-picks a focus when an exclusive-focus layer surface goes, so a hide that
+lands *after* the dispatch takes the keyboard off the app the swipe had just
+reached.
+
+Until 2026-09-08 this gesture consulted nothing at all. It dispatched
+`workspace next_on_output` and left every one of those surfaces exactly where
+it was, so the switch happened invisibly underneath them: you swiped back
+towards the terminal you came from and arrived with Settings still drawn over
+the screen, on a workspace you had not asked for. Measured on hardware that
+day, the shade, the drawer and the carousel all did the same.
+→ with the shade down over an app, a sideways swipe leaves `shade state` ==
+`closed` and a focused workspace that is not the one it started on
+
 ## C. Strip — press and hold
 
 **C1** Pressing and holding on the strip does nothing. Resting a thumb on the
@@ -669,9 +687,11 @@ the same swipe raised the carousel *over* it and left it there, so it was still
 on screen when the carousel went away. The two cases were disagreeing about
 whether Settings is an app. This section answers that it is.
 
-Only the card model changes. Everything in A, E and J applies to Settings
-unchanged once it has a card, which is why this section is short and mostly
-points at criteria that already exist.
+Two things change: the card model here, and — since K13, written when the
+sideways swipe turned out to have the same disagreement in it — which workspace
+the screen sits on. Everything in A, E and J applies to Settings unchanged once
+it has a card, which is why this section is mostly pointers at criteria that
+already exist.
 
 **K1** Settings has a card in the carousel for exactly as long as it is
 running: from the summon that opened it until it is closed (K6). Hiding it does
@@ -771,6 +791,44 @@ like a sheet you dismiss in one motion.
 **K12** A bridged launch still puts Settings away first (`settings.md` E6) and
 leaves it running, so the terminal it opened and the Settings page behind it
 are both cards and the row you came from is one tap away.
+
+**K13** A shell app has a workspace of its own. Summoning one takes a free
+workspace — F1's rule, the one home uses — and the surface is drawn over that,
+so the sideways swipe reaches it as one more app in the row (B1): leaving
+Settings goes to the workspace next to *Settings'*, and the app you summoned it
+from is beside it rather than under it.
+
+A layer surface has no workspace of its own to begin with. Sway arranges it
+against an output and leaves it there while the workspaces change underneath,
+which is what made B1 look broken for as long as it did — Settings was never on
+the workspace it appeared to be on, so nothing about switching workspaces could
+take it off the screen.
+
+A *free* workspace, without first asking whether the one already under it is
+empty. That question is K4a's, and K4a records that it cannot be answered from
+here: the surface holds the seat's keyboard, sway deactivates the window
+beneath it, and every toplevel then reads unfocused. Asking it and believing
+the answer is exactly how a screen ends up sharing a workspace with an app.
+Not asking costs a workspace number when the summon came from a bare home
+screen — the same hop K4a already takes, and F1 makes the numbering contiguous
+again on the next pass.
+
+Only when the surface goes up. A *quiet* summon — one that fires a row and
+never maps (`settings.md` O4) — takes no workspace, because nothing was ever
+drawn to need one.
+→ with an app focused, `omarchy-shell settings open` leaves a focused workspace
+that is empty and is not the one the app is on
+
+**K14** Focus leaving that workspace puts the shell app away, whatever moved
+it: the strip's sideways swipe (B3), `swaymsg workspace`, a keybinding on a
+paired keyboard. Hidden and not closed, so the card stays and the page stack
+stands — the same half of the pair the home band uses (K4, K5).
+
+This is the criterion that makes K13 worth anything. A workspace of one's own
+that the screen refused to leave would be the old bug with a longer
+explanation.
+→ with Settings up, `swaymsg workspace next_on_output` leaves `settings state`
+== `closed` and `recents list` still carrying its `moarchy.settings` line
 
 ---
 
