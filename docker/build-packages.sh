@@ -21,6 +21,31 @@ export PKGDEST="$OUT"
 # Dockerfile.builder copies manifest.toml in next to this script's reader.
 . /usr/local/share/moarchy/manifest.sh
 
+# Refresh the databases before anything asks them for a dependency.
+#
+# `pacman -Syu` runs in the Dockerfile, but that is a LAYER, and the layer is
+# cached: nothing in the Dockerfile changes between releases, so the database
+# baked into it is as old as the last time the image was rebuilt from scratch.
+# Arch mirrors carry one version of a package and delete the rest, so a
+# fortnight-old database names files that are no longer there.
+#
+# That is not a soft failure. `makepkg -s` installs its dependencies from
+# whatever database is present, and one 404 fails the WHOLE transaction, so
+# every dependency goes unmet and the build ends at "Could not resolve all
+# dependencies" -- naming qt6-base and five others that are all perfectly
+# available. The line that says why is a `libwacom-2.19.1-1 ... 404` thirteen
+# mirrors up, and it reads as a mirror problem rather than a stale index.
+#
+# -Syu and not -Sy: a refresh without the upgrade is the partial-upgrade state
+# Arch refuses to support, and it produces the same 404 one library deeper.
+# Failure is not fatal here -- an offline rebuild of packages that are all
+# already in $OUT should still skip its way to a clean exit -- so the run that
+# actually needs a package it cannot get fails at makepkg, with makepkg's
+# reason, rather than here with a network one.
+echo "==> refreshing pacman databases"
+sudo pacman -Syu --noconfirm >/dev/null 2>&1 ||
+  echo "!! could not refresh the databases -- continuing on the cached ones"
+
 # REBUILD=1 rebuilds everything even when the artifact is already there. It has
 # to carry -f as well: without it makepkg refuses the overwrite, which is the
 # very refusal this flag exists to get past.
