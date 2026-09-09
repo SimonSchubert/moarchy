@@ -168,7 +168,7 @@ path under `/etc` that another package owns.
 > is also what upstream does: `omarchy` is a package in `pkgs.omarchy.org`.
 
 **P2** `omarchy-config` (`arch=any`) contains upstream Omarchy's configuration
-and theme layer at the pin in `manifest.toml`'s `[omarchy]` (`346e69e`, v4.0.2 —
+and theme layer at the pin in `manifest.toml`'s `[omarchy]` (`0534987`, v4.0.3 —
 it lived in `install/vendor-omarchy.sh` until V3), installed to the path
 upstream hardcodes.
 
@@ -615,7 +615,20 @@ same manifest now agree.
 > Plugins needed the one addition: `PluginRegistry.pluginsDir` was a single
 > hardcoded path, so the patch adds `/usr/share/moarchy/plugins`, scanned
 > *before* the user directory so a user copy of the same id still wins. Twelve
-> lines. The stale-plugin sweep in `install/config.sh` — and
+> lines.
+>
+> That scan is `scan_thirdparty`, and from Omarchy v4.0.3 the word carries
+> weight: 4.0.3 sandboxes installed third-party plugins behind a
+> capability-scoped `PluginShellApi` with no `panelLoaders`, no `openPanelIds`
+> and no cross-plugin `summon`. Our phone UI is third-party only in that
+> bookkeeping sense — it *is* the shell — so the patch grew a second hunk,
+> `pluginIsTrusted()` in `shell.qml`, returning the host shell for the
+> `moarchy.` namespace at the three injection points. Marking our directory
+> first-party instead would have been one word, and would have cost the
+> override: `PluginRegistry` refuses a third-party id that collides with a
+> first-party one, so a `~/.config` copy of `moarchy.shade` would stop loading
+> and the on-device iteration loop with it. Genuinely foreign plugins stay
+> scoped, which is a protection 4.0.2 did not offer at all. The stale-plugin sweep in `install/config.sh` — and
 > `scripts/test-plugin-sweep.sh` with it — is gone: pacman owns the files now,
 > so a plugin removed from the repo is removed from the phone by the upgrade.
 >
@@ -791,5 +804,5 @@ closed; the three that are still open are the ones to read.
    **Measured 2026-09-07: 9 files, 230 insertions, 30 deletions.** So the
    package stays, on the test this question set itself. Worth re-measuring on
    every upstream bump; the number to watch is this one. Reproduce it with
-   `git diff --stat` against a clean v4.0.2 checkout, or count `+`/`-` lines in
+   `git diff --stat` against a clean v4.0.3 checkout, or count `+`/`-` lines in
    `pkgbuilds/omarchy-config/port-4x.patch`.

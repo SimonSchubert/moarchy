@@ -1,5 +1,5 @@
 diff --git a/config/omarchy/shell.json b/config/omarchy/shell.json
-index e6202da8..ad281879 100644
+index e6202da..b16db36 100644
 --- a/config/omarchy/shell.json
 +++ b/config/omarchy/shell.json
 @@ -23,8 +23,8 @@
@@ -56,7 +56,7 @@ index e6202da8..ad281879 100644
 +  ]
  }
 diff --git a/shell/Ui/PopupCard.qml b/shell/Ui/PopupCard.qml
-index 058b068f..262570b5 100644
+index 058b068..262570b 100644
 --- a/shell/Ui/PopupCard.qml
 +++ b/shell/Ui/PopupCard.qml
 @@ -1,6 +1,6 @@
@@ -82,7 +82,7 @@ index 058b068f..262570b5 100644
    anchor {
      id: popupAnchor
 diff --git a/shell/plugins/bar/Bar.qml b/shell/plugins/bar/Bar.qml
-index def615af..33fce17b 100644
+index be9fece..d52a4ed 100644
 --- a/shell/plugins/bar/Bar.qml
 +++ b/shell/plugins/bar/Bar.qml
 @@ -1,5 +1,5 @@
@@ -92,7 +92,7 @@ index def615af..33fce17b 100644
  import Quickshell.Io
  import Quickshell.Wayland
  import QtQuick
-@@ -488,7 +488,7 @@ Item {
+@@ -714,7 +714,7 @@ Item {
    // belongs. Empty until Hyprland reports one, which leaves panel routing on
    // its per-monitor fallback rather than guessing at an output.
    function focusedScreenName() {
@@ -102,7 +102,7 @@ index def615af..33fce17b 100644
    }
  
 diff --git a/shell/plugins/bar/widgets/KeyboardLayout.qml b/shell/plugins/bar/widgets/KeyboardLayout.qml
-index 5457d88e..38525fbe 100644
+index 5457d88..38525fb 100644
 --- a/shell/plugins/bar/widgets/KeyboardLayout.qml
 +++ b/shell/plugins/bar/widgets/KeyboardLayout.qml
 @@ -1,6 +1,6 @@
@@ -123,7 +123,7 @@ index 5457d88e..38525fbe 100644
        if (!event || !event.name) return
        var name = String(event.name)
 diff --git a/shell/plugins/bar/widgets/Workspaces.qml b/shell/plugins/bar/widgets/Workspaces.qml
-index ec0482a5..fbffb4e1 100644
+index ec0482a..fbffb4e 100644
 --- a/shell/plugins/bar/widgets/Workspaces.qml
 +++ b/shell/plugins/bar/widgets/Workspaces.qml
 @@ -1,6 +1,6 @@
@@ -209,7 +209,7 @@ index ec0482a5..fbffb4e1 100644
          bar: root.bar
          text: focused ? "\uDB85\uDCFB" : (modelData === 10 ? "0" : String(modelData))
 diff --git a/shell/plugins/menu/Menu.qml b/shell/plugins/menu/Menu.qml
-index 1d620278..20f88dcc 100644
+index 1d62027..20f88dc 100644
 --- a/shell/plugins/menu/Menu.qml
 +++ b/shell/plugins/menu/Menu.qml
 @@ -19,6 +19,7 @@ Item {
@@ -352,7 +352,7 @@ index 1d620278..20f88dcc 100644
              anchors.verticalCenter: parent.verticalCenter
              text: root.filterText || (root.dmenuActive ? (root.dmenuPrompt + "…") : ((root.item(root.activeMenu) ? (root.item(root.activeMenu).title || root.item(root.activeMenu).label) : "Go") + "…"))
 diff --git a/shell/plugins/services/idle/Service.qml b/shell/plugins/services/idle/Service.qml
-index 488f2961..61e48c76 100644
+index 1453920..279dc0a 100644
 --- a/shell/plugins/services/idle/Service.qml
 +++ b/shell/plugins/services/idle/Service.qml
 @@ -1,6 +1,6 @@
@@ -363,7 +363,7 @@ index 488f2961..61e48c76 100644
  import Quickshell.Io
  import Quickshell.Wayland
  import "IdleModel.js" as IdleModel
-@@ -281,7 +281,7 @@ Item {
+@@ -282,7 +282,7 @@ Item {
    }
  
    Connections {
@@ -373,7 +373,7 @@ index 488f2961..61e48c76 100644
    }
  
 diff --git a/shell/services/AppLibrary.qml b/shell/services/AppLibrary.qml
-index 738529de..9c447191 100644
+index 738529d..9c44719 100644
 --- a/shell/services/AppLibrary.qml
 +++ b/shell/services/AppLibrary.qml
 @@ -32,6 +32,23 @@ Item {
@@ -434,7 +434,7 @@ index 738529de..9c447191 100644
    }
  
 diff --git a/shell/services/PluginRegistry.qml b/shell/services/PluginRegistry.qml
-index f08bf765..abf65b8d 100644
+index e8b8ad3..7585635 100644
 --- a/shell/services/PluginRegistry.qml
 +++ b/shell/services/PluginRegistry.qml
 @@ -10,6 +10,15 @@ QtObject {
@@ -453,7 +453,7 @@ index f08bf765..abf65b8d 100644
    // Set by shell.qml at startup so we can also scan bundled first-party plugins.
    property string firstPartyDir: ""
  
-@@ -688,8 +697,9 @@ QtObject {
+@@ -715,8 +724,9 @@ QtObject {
        + "  done; "
        + "}; "
        + "scan_firstparty \"$0\"; "
@@ -464,3 +464,65 @@ index f08bf765..abf65b8d 100644
      scanProcess.running = true
    }
  
+diff --git a/shell/shell.qml b/shell/shell.qml
+index 0cc0575..235daf6 100644
+--- a/shell/shell.qml
++++ b/shell/shell.qml
+@@ -736,15 +736,46 @@ ShellRoot {
+     return api
+   }
+ 
++  // Which plugins get the host shell rather than a capability-scoped facade.
++  //
++  // 4.0.3 sandboxed installed third-party plugins: pluginShellFor hands them a
++  // PluginShellApi that can only summon, hide and inspect their OWN id, and
++  // that has no panelLoaders, no openPanelIds and no callIfLoaded at all.
++  //
++  // moarchy's phone UI is not a third-party plugin. It IS the shell -- the bar,
++  // the drawer, the shade, the recents switcher and the edge gestures that
++  // drive all of them ship in the image and replace what upstream draws
++  // (docs/structure.md, the plugin contract). It is third-party only in the
++  // bookkeeping sense that PluginRegistry scans /usr/share/moarchy/plugins with
++  // scan_thirdparty, which is what keeps a ~/.config/omarchy/plugins copy of
++  // the same id able to shadow the packaged one for on-device iteration.
++  //
++  // Scoping it would not degrade it, it would stop it: moarchy.gestures reads
++  // shell.panelLoaders to drive a drag frame-by-frame and shell.openPanelIds to
++  // know what a swipe should dismiss, and every overlay hides moarchy.shade and
++  // moarchy.drawer by name before it opens. All of that returns null or false
++  // through the scoped surface, so the phone comes up with a bar and nothing
++  // that responds to touch.
++  //
++  // So: trust our own namespace, and leave the sandbox in force for everyone
++  // else. `moarchy.` cannot be squatted from ~/.config -- a user copy shadowing
++  // moarchy.shade is the same UI at the same id, which is the point of it --
++  // and any genuinely foreign plugin the user installs is still scoped, which
++  // is a protection 4.0.2 did not offer at all.
++  function pluginIsTrusted(manifest) {
++    if (!manifest || manifest.__isFirstParty) return true
++    return String(manifest.id || "").indexOf("moarchy.") === 0
++  }
++
+   function pluginShellFor(manifest) {
+-    if (!manifest || manifest.__isFirstParty) return shell
++    if (shell.pluginIsTrusted(manifest)) return shell
+     var key = String(manifest.id || "")
+     if (!key) return null
+     return shell.createScopedPluginShell(manifest, key, true, shell.pluginHasBarCapabilities(manifest))
+   }
+ 
+   function pluginRegistryFor(manifest) {
+-    if (!manifest || manifest.__isFirstParty) return shell.pluginRegistry
++    if (shell.pluginIsTrusted(manifest)) return shell.pluginRegistry
+     var key = String(manifest.id || "")
+     if (!key) return null
+     if (_pluginRegistryApis[key]) return _pluginRegistryApis[key]
+@@ -768,7 +799,7 @@ ShellRoot {
+   }
+ 
+   function pluginBarWidgetRegistryFor(manifest) {
+-    if (!manifest || manifest.__isFirstParty) return shell.barWidgetRegistry
++    if (shell.pluginIsTrusted(manifest)) return shell.barWidgetRegistry
+     var key = String(manifest.id || "")
+     if (!key) return null
+     if (_pluginBarWidgetRegistryApis[key]) return _pluginBarWidgetRegistryApis[key]

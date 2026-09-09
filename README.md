@@ -122,7 +122,7 @@ and an assumption about Omarchy 4.x that turned out to be wrong twice over).
 
 ## Omarchy 4.x
 
-moarchy runs **Omarchy v4.0.2** (`346e69e`), pinned in
+moarchy runs **Omarchy v4.0.3** (`0534987`), pinned in
 [`manifest.toml`](manifest.toml). There is no waybar, walker, mako or swayosd
 in the package set: in 4.x the bar, launcher, notifications and OSD are one
 **quickshell/QML** shell, and the phone UI is a set of plugins on top of it

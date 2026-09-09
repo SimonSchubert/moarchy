@@ -1,12 +1,20 @@
 # Omarchy menu coverage
 
-Which of Omarchy 4.0.2's menu entries the phone supports, which it adapts, and
+Which of Omarchy 4.0.3's menu entries the phone supports, which it adapts, and
 which it drops. This file is the *record*; `docs/settings.md` is the contract the
 Settings UI is built to, and `bin/moarchy-selftest --settings` checks both
 against the code.
 
-Upstream ships **320 entries** in `default/omarchy/omarchy-menu.jsonc`, pinned at
-v4.0.2 (`346e69e1`). Every one of them appears below exactly once.
+Upstream ships **333 entries** in `default/omarchy/omarchy-menu.jsonc`, pinned at
+v4.0.3 (`05349870`). Every one of them appears below exactly once.
+
+v4.0.3 added thirteen, all of them AI tooling: four agents for the default-agent
+radio, four Install > AI apps, and the `remove.ai` container with its four
+children. All thirteen land Unsupported. Two of the packages are `x86_64` in the
+AUR outright; the two that do claim `aarch64` are unverified here and their
+installers open the app with `uwsm-app`, which this image does not carry. The
+four agents are a `moarchy-agent` change rather than an upstream one -- its
+list is the same nine it was before the bump.
 
 ## How to read this
 
@@ -52,8 +60,8 @@ appeared and the keys did not.
 | Native | 69 |
 | Bridged | 58 |
 | Shade | 1 |
-| Unsupported | 192 |
-| **Total** | **320** |
+| Unsupported | 205 |
+| **Total** | **333** |
 
 Roughly a third of the menu survives. That is not a gap to be closed: the
 dropped two thirds are Steam and Battle.net, twenty language runtimes behind
@@ -225,9 +233,13 @@ Native 25 · Bridged 14 · Unsupported 23
 | `setup.default.agent.codex` | Codex | Native | Default apps > AI agent | radio row and installer: the tap runs `moarchy-agent open <name>`, which writes the one drawer tile (rewritten, never added to) and hands off to `omarchy-default-agent`. On PATH from first boot as a mise wrapper, like all nine |
 | `setup.default.agent.copilot` | Copilot | Native | Default apps > AI agent | radio row and installer: the tap runs `moarchy-agent open <name>`, which writes the one drawer tile (rewritten, never added to) and hands off to `omarchy-default-agent`. On PATH from first boot as a mise wrapper, like all nine |
 | `setup.default.agent.crush` | Crush | Native | Default apps > AI agent | radio row and installer: the tap runs `moarchy-agent open <name>`, which writes the one drawer tile (rewritten, never added to) and hands off to `omarchy-default-agent`. On PATH from first boot as a mise wrapper, like all nine |
+| `setup.default.agent.cursor-agent` | Cursor CLI | Unsupported | -- | Cursor's CLI, installed through the mise registry. `moarchy-agent`'s list is the nine above; this one arrived with the v4.0.3 bump and adding it is a moarchy change, not an upstream one |
 | `setup.default.agent.gemini` | Gemini | Native | Default apps > AI agent | radio row and installer: the tap runs `moarchy-agent open <name>`, which writes the one drawer tile (rewritten, never added to) and hands off to `omarchy-default-agent`. On PATH from first boot as a mise wrapper, like all nine |
 | `setup.default.agent.grok` | Grok | Native | Default apps > AI agent | radio row and installer. Was the agent the drawer tile named before anything was picked, until 2026-09-08; that tile is now a setup tile pointing at this page (`docs/settings.md` P3, P10), so this row is identical to the eight above |
+| `setup.default.agent.hermes` | Hermes | Unsupported | -- | `omarchy-install-hermes-cli` installs it, and stands aside for the `hermes-desktop` package when that is present. `moarchy-agent`'s list is the nine above; this one arrived with the v4.0.3 bump and adding it is a moarchy change, not an upstream one |
+| `setup.default.agent.muse` | Muse Code | Unsupported | -- | installed from an unpinned launcher script fetched at install time (`api.meta.ai/muse-launcher.sh`), which is the shape V2 exists to keep out. `moarchy-agent`'s list is the nine above; this one arrived with the v4.0.3 bump and adding it is a moarchy change, not an upstream one |
 | `setup.default.agent.omp` | omp | Native | Default apps > AI agent | radio row and installer: the tap runs `moarchy-agent open <name>`, which writes the one drawer tile (rewritten, never added to) and hands off to `omarchy-default-agent`. On PATH from first boot as a mise wrapper, like all nine |
+| `setup.default.agent.openclaw` | OpenClaw | Unsupported | -- | comes from the `openclaw` pacman package rather than mise. `moarchy-agent`'s list is the nine above; this one arrived with the v4.0.3 bump and adding it is a moarchy change, not an upstream one |
 | `setup.default.agent.opencode` | OpenCode | Native | Default apps > AI agent | radio row and installer: the tap runs `moarchy-agent open <name>`, which writes the one drawer tile (rewritten, never added to) and hands off to `omarchy-default-agent`. On PATH from first boot as a mise wrapper, like all nine |
 | `setup.default.agent.pi` | Pi | Native | Default apps > AI agent | radio row and installer: the tap runs `moarchy-agent open <name>`, which writes the one drawer tile (rewritten, never added to) and hands off to `omarchy-default-agent`. On PATH from first boot as a mise wrapper, like all nine |
 | `setup.default.browser` | Browser | Native | Default apps > Browser | empty on a base install, so the parent row hides |
@@ -332,6 +344,10 @@ Native 6 · Bridged 19 · Unsupported 62
 | `install.ai.grok-bot` | Grok Bot | Unsupported | -- | x86_64-only |
 | `install.ai.lm-studio` | LM Studio | Unsupported | -- | x86_64-only |
 | `install.ai.ollama` | Ollama | Unsupported | -- | x86_64-only |
+| `install.ai.t3-code` | T3 Code | Unsupported | -- | `t3code-bin` is `arch=('x86_64')` in the AUR; the installer also ends in `uwsm-app`, which this image has no copy of |
+| `install.ai.hermes` | Hermes Desktop | Unsupported | -- | `hermes-desktop` does claim `aarch64` in the AUR, but it is not in the package set and nothing here has run it; the doc's Bridged rule wants aarch64-verified, and unverified is not that |
+| `install.ai.openclaw` | OpenClaw | Unsupported | -- | `openclaw` claims `aarch64` too, but `omarchy-install-ai-openclaw` registers a web app and opens it with `setsid uwsm-app -- gtk-launch`; sway starts from `~/.bash_profile` here and uwsm is not installed |
+| `install.ai.perplexity` | Perplexity | Unsupported | -- | `perplexity` is `arch=('x86_64')` in the AUR |
 | `install.gaming.steam` | Steam | Unsupported | -- | x86_64-only, or needs flatpak/wine/lib32, none of which are installed |
 | `install.gaming.retroarch` | RetroArch | Unsupported | -- | x86_64-only, or needs flatpak/wine/lib32, none of which are installed |
 | `install.gaming.minecraft` | Minecraft | Unsupported | -- | x86_64-only, or needs flatpak/wine/lib32, none of which are installed |
@@ -388,6 +404,7 @@ Native 3 · Bridged 6 · Unsupported 46
 | `remove.security.fido2` | Fido2 | Unsupported | -- | pam-u2f is not installed |
 | `remove.security.sshd` | SSHD | Bridged | Security > Remote access (off) |  |
 | `remove.security.sudoless-docker` | Sudoless Docker | Unsupported | -- | docker is not installed |
+| `remove.ai.hermes` | Hermes Desktop | Unsupported | -- | nothing to remove: `install.ai.hermes` never runs here |
 | `remove.browser.chrome` | Chrome | Unsupported | -- | never installable here (x86_64-only) |
 | `remove.browser.edge` | Edge | Unsupported | -- | never installable here (x86_64-only) |
 | `remove.browser.brave` | Brave | Unsupported | -- | never installable here (x86_64-only) |
@@ -426,6 +443,10 @@ Native 3 · Bridged 6 · Unsupported 46
 | `remove.development.php.symfony` | Symfony | Unsupported | -- | mise is not installed, so no dev env exists to remove |
 | `remove.development.elixir.elixir` | Elixir | Unsupported | -- | mise is not installed, so no dev env exists to remove |
 | `remove.development.elixir.phoenix` | Phoenix | Unsupported | -- | mise is not installed, so no dev env exists to remove |
+| `remove.ai` | AI | Unsupported | -- | every child unsupported |
+| `remove.ai.t3-code` | T3 Code | Unsupported | -- | nothing to remove: `install.ai.t3-code` never runs here |
+| `remove.ai.openclaw` | OpenClaw | Unsupported | -- | nothing to remove: `install.ai.openclaw` never runs here |
+| `remove.ai.perplexity` | Perplexity | Unsupported | -- | nothing to remove: `install.ai.perplexity` never runs here |
 
 ## Update (28)
 
@@ -444,7 +465,7 @@ Native 6 · Bridged 8 · Unsupported 14
 | `update.password` | Password | Native | dissolved: Security | only the user password survives |
 | `update.timezone` | Timezone | Native | System > Date & time | region then city, two provider pages; the select box was a filter field over ~420 entries |
 | `update.time` | Time | Bridged | System > Date & time |  |
-| `update.channel.stable` | Stable | Unsupported | -- | a channel switch moves the vendored checkout off the pinned v4.0.2 that `pkgbuilds/omarchy-config/port-4x.patch` applies against |
+| `update.channel.stable` | Stable | Unsupported | -- | a channel switch moves the vendored checkout off the pinned v4.0.3 that `pkgbuilds/omarchy-config/port-4x.patch` applies against |
 | `update.channel.rc` | RC | Unsupported | -- | as `update.channel.stable` |
 | `update.channel.edge` | Edge | Unsupported | -- | as `update.channel.stable` |
 | `update.channel.dev` | Dev | Unsupported | -- | as `update.channel.stable` |

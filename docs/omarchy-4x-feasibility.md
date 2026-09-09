@@ -150,8 +150,8 @@ running beside it.
 5. ~~**Path migration.**~~ Done: the current theme is read from
    `~/.local/state/omarchy/current`.
 
-**What it turned out to be.** Not a second branch. moarchy runs Omarchy v4.0.2
-(`346e69e`) and the v3.8.4 port is gone from the tree — it exists only in git
+**What it turned out to be.** Not a second branch. moarchy runs Omarchy v4.0.3
+(`0534987`) and the v3.8.4 port is gone from the tree — it exists only in git
 history. Whether `omarchy-config` should stay a package at all, versus vendoring
 the shell outright, is the live version of this question now; the patch size is
 the test, and `docs/structure.md` §12 Q5 carries it.

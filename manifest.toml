@@ -29,8 +29,8 @@
 # ---------------------------------------------------------------------------
 [omarchy]
 url     = "https://github.com/basecamp/omarchy"
-ref     = "346e69e1cec6c4e8924531874af6ba010a1bc99e"
-version = "v4.0.2"
+ref     = "0534987009061cbe2dacdde4ad564092ab698d12"
+version = "v4.0.3"
 
 # ---------------------------------------------------------------------------
 # This project's own version. The packages built out of pkgbuilds/ carry it:

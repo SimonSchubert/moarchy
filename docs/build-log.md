@@ -1716,6 +1716,95 @@ sitting there invisibly because nothing reinstalls a package it has already got.
 `--overwrite` scoped to those three directories took ownership rather than
 deleting anything, so they are package-owned now.
 
+## 6s. Upstream 4.0.3 sandboxed us (2026-09-09)
+
+Omarchy tagged v4.0.3 on 2026-09-08: 40 commits, 131 files. `port-4x.patch`
+still applied to it cleanly, which is the answer that nearly ended the
+investigation. The port was fine. The shell underneath it was not.
+
+4.0.3 added 742 lines to `shell/shell.qml` implementing a capability-scoped
+plugin sandbox. `pluginShellFor` used to hand every plugin the host `shell`;
+now it hands third-party plugins a `PluginShellApi` that can summon, hide and
+inspect only their **own** id, and that has no `panelLoaders`, no
+`openPanelIds` and no `callIfLoaded` at all:
+
+    function pluginShellFor(manifest) {
+      if (!manifest || manifest.__isFirstParty) return shell
+      return shell.createScopedPluginShell(manifest, key, true, ...)
+    }
+
+Our own patch scans `/usr/share/moarchy/plugins` with `scan_thirdparty`, so
+all eleven `moarchy.*` plugins land on the scoped side. Reading what that
+would actually cost, rather than assuming it was a widening of a sandbox we
+did not use: `moarchy.gestures` reads `panelLoaders` at three sites to drive a
+drag frame-by-frame and `openPanelIds` to know what a swipe should dismiss;
+`moarchy.shade` gets its notifications and media from
+`serviceFor("omarchy.notifications")` and `serviceFor("omarchy.media")`;
+`moarchy.drawer` fills its grid from `appLibrary`, which the scoped surface
+only populates for `kinds: ["menu"]` and the drawer is an `overlay`; and every
+overlay hides `moarchy.shade` and `moarchy.drawer` by name before it opens.
+Only `moarchy.bar` declares `kinds: ["bar"]`, so only it would have kept
+cross-plugin control. The phone would have come up with a bar and nothing that
+answers touch — the failure mode where every individual piece loads and logs
+nothing.
+
+**The fix is a trust boundary, not a capability grant.** `pluginIsTrusted()`
+returns the host shell for `manifest.__isFirstParty` or an id under
+`moarchy.`, used at `pluginShellFor`, `pluginRegistryFor` and
+`pluginBarWidgetRegistryFor` — all three, because our plugins declare
+`pluginRegistry` and `barWidgetRegistry` properties too and the first two gate
+on the same flag. The rejected alternative was one word: scan our directory as
+`scan_firstparty`. It costs the override. `PluginRegistry` refuses a
+third-party id colliding with a first-party one — `plugin <id> rejected: id is
+reserved for first-party Omarchy plugins` — so a `~/.config/omarchy/plugins`
+copy of `moarchy.shade` would stop loading, and that copy is how this phone is
+iterated on.
+
+**The patch was regenerated, not appended to.** It has to apply with no offset
+and no fuzz, so that a moved upstream fails the build rather than landing a
+hunk somewhere it was never aimed at; three hunks had drifted to offsets
+against 4.0.3. Regenerating and diffing old against new showed **zero lines
+removed** from the nine existing hunks — the Sway port carried over untouched,
+and the only addition is the `shell.qml` one. Ten files, 264 insertions, 33
+deletions now.
+
+**The menu grew 320 to 333**, all thirteen AI tooling, all classified
+Unsupported on checkable grounds rather than on the assumption that new is
+unsupported: `perplexity` and `t3code-bin` are `arch=('x86_64')` in the AUR;
+`hermes-desktop` and `openclaw` do claim `aarch64`, but their installers end
+in `setsid uwsm-app -- gtk-launch` and this image has no uwsm — sway starts
+from `~/.bash_profile`. The four new agents are a `moarchy-agent` change, and
+its list is still the same nine.
+
+Which the selftest says out loud. **P5 is red and is meant to be**: "an agent
+upstream adds must fail here, not arrive with no icon". It wants
+`moarchy-agent`'s list, the `apps.default.agent` rows and
+`/usr/share/moarchy/agents/*.svg` extended by four, and it stays red until
+they are. The thirteen Unsupported rows record today's state, not the
+intended one.
+
+**Verified on the device, not just built.** 48 pass / 4 fail, unchanged in
+shape from before the bump: phone shell 18/0, gesture plugin 3/0, drawer
+geometry 2/0. `listPlugins` reports all eleven `moarchy.*` plugins with
+`"firstParty":false`, so they are reaching the host shell through
+`pluginIsTrusted` and nowhere else. Driven by synthesised touch: top-edge
+swipe opens the shade, wallpaper drag opens the drawer, each hides the other,
+the shade's notification list is populated and the drawer's grid is full —
+which are exactly the six things the scoped surface would have returned `null`
+or `false` for.
+
+**A find along the way.** Upgrading `moarchy` 0.2.0 to 0.2.1 failed on
+thirteen conflicting files, all unowned. Sweeping both moarchy trees turned up
+**123 unowned files**: 104 macOS `._*` AppleDouble forks from an `scp` off a
+Mac without `COPYFILE_DISABLE`, and 19 real ones — an earlier session's
+hand-deployed copy of what became 0.2.1. Three of the nineteen are
+`.desktop` files still sitting *inside* their plugin directories, which
+0.2.1's PKGBUILD deliberately moves out; being unowned, the upgrade left them.
+Backed up and resolved with `--overwrite`, not deleted. This is
+§6g's problem with a new symptom: the tell was not a stale copy shadowing a
+new one, it was pacman refusing to install over files nothing admitted to
+owning.
+
 ## 7. Hardware status
 
 | | |
