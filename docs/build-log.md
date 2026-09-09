@@ -1805,6 +1805,65 @@ Backed up and resolved with `--overwrite`, not deleted. This is
 new one, it was pacman refusing to install over files nothing admitted to
 owning.
 
+## 6t. The theme picker had been pointing at a path that moved (2026-09-09)
+
+Reported as "I cannot change themes anymore since at least yesterday". The
+picker opened, the tiles drew, a tap highlighted one, and the header went to
+"Applying..." and stayed there. Found still on screen mid-failure, with
+Flexoki Light selected.
+
+`omarchy-theme-set gruvbox` from a shell worked, exit 0, `theme.name` updated.
+So the script was fine and the UI was not, and the shell's own log had been
+saying why since the moment it broke:
+
+    Process failed to start, likely because the binary could not be found.
+    Command: QList("/usr/share/omarchy/bin/omarchy-theme-set", "Flexoki Light")
+
+`moarchy.themes` built the command as `omarchyPath + "/bin/omarchy-theme-set"`,
+and `OMARCHY_PATH` is `/usr/share/omarchy`. **`omarchy-config` installs
+upstream's `bin/` into `/usr/bin` and never creates `$OMARCHY_PATH/bin` at
+all.** The process could not be spawned, `pendingSlug` was never cleared, and
+the header sat on "Applying..." forever. Quickshell reports this as a warning
+and carries on, so nothing on screen said a word — §6f's shape again.
+
+**The comment beside it was the reason it survived.** It read:
+
+> Absolute path for the same reason the gestures plugin uses one: a shell
+> started without the session environment has only `/usr/bin` on PATH, and the
+> call would report success while nothing happened.
+
+Which was true when it was written. `OMARCHY_PATH` was then the vendored
+checkout at `~/.local/share/omarchy`, its `bin/` really did hold these
+scripts, and `/usr/bin` really was the degraded case. Packaging inverted it on
+2026-09-06: the scripts moved *to* `/usr/bin`, so the fallback the comment
+feared became the only correct answer and the absolute path became the broken
+one. The precedent it cites had evaporated too — `moarchy.gestures` still
+declared `omarchyPath` but no longer used it for anything.
+
+So: call it by name, which is what every other plugin does and what makes the
+PKGBUILD's PATH-order shadowing work, `/usr/lib/moarchy/bin` coming before
+`/usr/bin`. As argv rather than a `bash -lc` string, because theme display
+names carry spaces. The dead `omarchyPath` property goes with it, and
+`scripts/test-themes.sh` had the identical construction for
+`omarchy-theme-set-templates` and is fixed alongside.
+
+**The check that was already failing.** `omarchy-menu is missing from
+/usr/share/omarchy/bin` has been red every selftest run, and §8 recorded it as
+real but harmless because "nothing in the phone UI has needed it". That clause
+was an assumption about who used the directory, not a search for who
+referenced it — one `grep` for `/bin/` across the plugins would have found the
+theme picker. It is the only runtime site in the repo that had it. §8 is
+corrected.
+
+Fixed, packaged and verified by tapping tiles on the device rather than by
+calling the script: gruvbox to catppuccin-latte, then catppuccin-latte to
+catppuccin, each applying visibly with no spawn failure in the log. Two
+observations from doing it that way: the picker takes several seconds to paint
+after `themes open` returns, so IPC reports `open` before anything is drawn
+and a screenshot taken too early looks like the old bug; and applying a theme
+resets the background to the theme's first, which is worth knowing before
+blaming a wallpaper for changing on its own.
+
 ## 7. Hardware status
 
 | | |
@@ -1834,8 +1893,24 @@ owning.
   it learned to skip. They should skip when the running keyboard does not need
   them, rather than fail. `omarchy-menu is missing from /usr/share/omarchy/bin`
   is the third standing base failure and is real: the file genuinely is not
-  there, and nothing in the phone UI has needed it since the menu stopped
-  being how Settings is reached.
+  there, because `omarchy-config` packages upstream's `bin/` into `/usr/bin`
+  and never creates `$OMARCHY_PATH/bin` at all.
+  ~~and nothing in the phone UI has needed it since the menu stopped being how
+  Settings is reached.~~ **That last clause was wrong, and it cost a day.**
+  `moarchy.themes` built its command as `omarchyPath + "/bin/omarchy-theme-set"`,
+  so the theme picker spawned a path that does not exist and sat on
+  "Applying..." forever -- reported 2026-09-09 as "I cannot change themes
+  anymore". The shell log said so plainly the whole time:
+
+      Process failed to start, likely because the binary could not be found.
+      Command: QList("/usr/share/omarchy/bin/omarchy-theme-set", "Flexoki Light")
+
+  Fixed by calling `omarchy-theme-set` by name, which is what every other
+  plugin does and what makes the PKGBUILD's PATH-order shadowing work.
+  `scripts/test-themes.sh` had the same construction and is fixed with it.
+  The lesson is the standing failure itself: this check was pointing at a
+  real broken path, and it was filed as harmless on an assumption about what
+  needed the directory rather than on a search for who referenced it.
 - ~~**The on-screen keyboard was drawn over Settings with no field focused.**~~
   **Explained 2026-09-07**, by the screenshot bug below: satty maps a window
   that never paints, that window takes focus, and the OSK rises to meet it. What

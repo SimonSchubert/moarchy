@@ -93,8 +93,11 @@ for theme in "$OMARCHY_PATH"/themes/*/; do
   mkdir -p "$NEXT_THEME"
   cp "$theme/colors.toml" "$NEXT_THEME/"
 
+  # By name, not "$OMARCHY_PATH/bin/...": omarchy-config packages upstream's
+  # bin/ into /usr/bin and never creates $OMARCHY_PATH/bin. Same fault that
+  # left the theme picker stuck on "Applying..." (moarchy.themes/Themes.qml).
   HOME="$FAKE_HOME" OMARCHY_PATH="$OMARCHY_PATH" \
-    "$NEWBASH" "$OMARCHY_PATH/bin/omarchy-theme-set-templates"
+    "$NEWBASH" "$(command -v omarchy-theme-set-templates)"
 
   out="$NEXT_THEME/sway.conf"
   lines=$(grep -c '^client\.' "$out" 2>/dev/null || echo 0)

@@ -40,8 +40,6 @@ Item {
   id: root
 
   // Injected by the host. Not readonly, not required -- see the drawer.
-  property string omarchyPath: Quickshell.env("OMARCHY_PATH")
-                               || (Quickshell.env("HOME") + "/.local/share/omarchy")
   property var shell: null
   property var manifest: null
   property var barWidgetRegistry: null
@@ -246,11 +244,27 @@ Item {
     if (!row || root.pendingSlug !== "" || row.slug === root.currentSlug) return
     root.pendingSlug = row.slug
     applyTheme.slug = row.slug
-    // By display name, because that is omarchy-theme-set's argument. Absolute
-    // path for the same reason the gestures plugin uses one: a shell started
-    // without the session environment has only /usr/bin on PATH, and the call
-    // would report success while nothing happened.
-    applyTheme.command = [root.omarchyPath + "/bin/omarchy-theme-set", String(row.name)]
+    // By display name, because that is omarchy-theme-set's argument, and as
+    // argv rather than a shell string because those names carry spaces.
+    //
+    // By NAME, not by absolute path. This used to be
+    // root.omarchyPath + "/bin/omarchy-theme-set", written when OMARCHY_PATH
+    // was the vendored checkout in ~/.local/share/omarchy and its bin/ really
+    // was where these scripts lived. Packaging moved them: omarchy-config
+    // installs upstream's bin/ to /usr/bin (pkgbuilds/omarchy-config/PKGBUILD)
+    // and never creates $OMARCHY_PATH/bin at all. The old path therefore named
+    // a directory that does not exist, Quickshell could not spawn it, and the
+    // picker sat on "Applying..." forever with only
+    //   Process failed to start, likely because the binary could not be found.
+    //   Command: QList("/usr/share/omarchy/bin/omarchy-theme-set", ...)
+    // in the shell log to say so. The selftest had been calling this out as
+    // "omarchy-menu is missing from /usr/share/omarchy/bin" the whole time; it
+    // was filed as harmless because nothing was thought to need that directory.
+    //
+    // A bare name is what the rest of the plugins do, and it is what makes the
+    // PATH-order shadowing in the PKGBUILD work: /usr/lib/moarchy/bin comes
+    // before /usr/bin, so a moarchy counterpart wins if one is ever added.
+    applyTheme.command = ["omarchy-theme-set", String(row.name)]
     applyTheme.running = true
   }
 
