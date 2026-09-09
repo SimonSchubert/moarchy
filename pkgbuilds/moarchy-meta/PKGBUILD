@@ -18,9 +18,9 @@ _ver=$(manifest_get moarchy version) || return 1
 
 pkgname=moarchy-meta
 pkgver=$_ver
-# 2 covers everything since 0.1.1-1, which is what the [moarchy] repo actually
-# publishes: the list gaining mise-bin, nodejs and npm, losing lisgd in dafd34f,
-# and gaining the AUR build toolchain below. Three changes on one bump, and that
+# The 2 this line carried into 0.1.1 covered everything since the 0.1.1-1 the
+# [moarchy] repo publishes: the list gaining mise-bin, nodejs and npm, losing
+# lisgd in dafd34f, and gaining the AUR build toolchain below. Three changes on one bump, and that
 # is not a waiver being stretched -- the rule is the one pkgbuilds/moarchy
 # states since 11b98fe. pkgrel moves when content has changed since the last
 # artifact that was PUBLISHED, and packages/ holding a 0.1.1-2 nobody has ever
@@ -40,17 +40,21 @@ pkgver=$_ver
 # and index-fm with no version move at all -- so a phone already holding
 # 0.1.0-1 would never have seen any of it. Then pkgver moved to 0.1.1 and this
 # went back to 1, because 0.1.1-1 is already newer than 0.1.0-2.
-# Back to 1 for 0.2.1, the same way it went back to 1 at 0.1.1 and at 0.2.0:
-# 0.2.1-1 is already newer than the 0.2.0-1 the repo publishes and than the
-# 0.2.0-2 this line said for a day, so the reset hides nothing from any device.
-# No artifact was ever built at that 2 -- packages/ holds a 0.2.0-1 -- so there
-# is nothing in the field on a number the reset walks past.
+# 1 for 0.2.2, and nothing about that is a reset: 0.2.1 shipped as -1 and the
+# line never left 1 during the cycle.
 #
-# What this line lost since that published 0.2.0-1, which is the diff a phone
-# in the field actually sees: alacritty and qmlkonsole (docs/apps.md T1). That
-# it moves for a REMOVAL is the half that is easy to forget -- pacman compares
-# versions, and a depends line that loses two names under an unchanged version
-# leaves both packages installed on every device that already has them.
+# The honest statement of what a phone gains here is: nothing. depends= is
+# byte-identical to the published 0.2.1-1 -- no package joined the set and none
+# left it -- so this package moves to 0.2.2-1 only because the project version
+# moved and pkgver reads it. That costs a 3 KB download and keeps the two
+# packages that carry this project's version in step, which is worth more than
+# the alternative: a moarchy-meta reading 0.2.1 on a phone whose moarchy reads
+# 0.2.2, and half an hour spent working out whether an upgrade had failed.
+#
+# The direction that is easy to get wrong is the other one, and the paragraphs
+# above are the record of it: this package's entire content IS the depends
+# line, so a name added or REMOVED under an unchanged version is invisible to
+# pacman, which compares versions and not depends.
 pkgrel=1
 pkgdesc="The moarchy package set -- install this and you have the phone"
 arch=('any')

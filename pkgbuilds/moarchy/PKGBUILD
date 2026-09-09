@@ -22,7 +22,7 @@ _repo="$startdir/../.."
 
 pkgname=moarchy
 pkgver=$_ver
-# 2 -- and what that covers is recorded in packages/.build-manifest, not here.
+# 1 -- and what that covers is recorded in packages/.build-manifest, not here.
 #
 # An earlier version of this comment enumerated the commits the bump carried.
 # That was wrong within the hour: it named two, a third landed the same evening
@@ -47,14 +47,19 @@ pkgver=$_ver
 # rather than a reset that loses something. It went back to 1 for 0.2.0 the
 # same way, off 0.1.1.
 #
-# 1 for 0.2.1. 0.2.1-1 is newer than every number this package has carried:
-# the 0.2.0-1 that packages/ built and the [moarchy] repo publishes, and the
-# 0.2.0-2 this line said for a day. That 2 is worth a sentence, because it is
-# the shape of thing the reset could lose. It was taken for the drawer's app
-# detail sheet and the three undeclared depends, it was correct, and no
-# artifact ever wore it -- packages/ holds a 0.2.0-1 and nothing else. So there
-# is no device in the field on a 2, and 0.2.1-1 is offered to every phone
-# whatever it holds. The counter starts over; the rule does not.
+# 1 for 0.2.2, and this is the quiet case: the line does not move at all.
+# 0.2.1 shipped as -1 and nothing took a 2 during the cycle, so there is no
+# reset here and nothing a reset could walk past. 0.2.2-1 is newer than the
+# 0.2.1-1 the [moarchy] repo publishes and than every number before it, so
+# pacman offers it to every phone whatever it holds.
+#
+# What has changed inside the package since that published 0.2.1-1 is the theme
+# picker, and it is content rather than metadata: moarchy.themes spawned
+# omarchy-theme-set at $OMARCHY_PATH/bin, a directory omarchy-config does not
+# create, so the header sat on "Applying..." forever and no theme was ever
+# applied. default/ is copied wholesale into this package, so that fix ships
+# here -- which is exactly the case the paragraphs above say a version has to
+# move for. The pkgver is what moves for it.
 pkgrel=1
 pkgdesc="Omarchy's look, keybindings and theming on a PinePhone, under Sway"
 arch=('any')
