@@ -244,11 +244,11 @@ first boot, or to the u-boot SPL — that lives outside any partition, at byte
 ```
 
 Everything comes from the commits pinned in `manifest.toml`, so two runs a
-month apart produce the same image. The package build produces eleven:
-`moarchy-keyboard` and `moarchy-store-git` from their own repos, `yay`,
-`xdg-terminal-exec`, `ttf-ia-writer`, `cbonsai` and `lcl-gui-bin` from the AUR,
-and `moarchy`, `omarchy-config`, `moarchy-meta` and `moarchy-keyring` from
-`pkgbuilds/`.
+month apart produce the same image. The package build produces thirteen:
+`moarchy-keyboard`, `moarchy-store-git` and `moarchy-keep` from their own
+repos, `yay`, `xdg-terminal-exec`, `ttf-ia-writer`, `cbonsai`, `lcl-gui-bin`
+and `mise-bin` from the AUR, and `moarchy`, `omarchy-config`, `moarchy-meta`
+and `moarchy-keyring` from `pkgbuilds/`.
 
 For a debug image that joins your wifi on first boot and enables sshd:
 
