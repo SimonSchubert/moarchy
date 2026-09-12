@@ -186,6 +186,29 @@ version = "1.4.2-1"
 ref     = "733c4928246d5930eca189271203330ffd4d955a"
 version = "2026.9.1-1"
 
+# Spot: a Spotify client, and the only way either port plays Spotify at all.
+#
+# The web player cannot. It asks for Widevine, and there is no Widevine for
+# aarch64 Linux anywhere: Arch's chromium ships no CDM, every widevine package
+# in the AUR is arch=('x86_64') because Google publishes the Linux CDM for
+# x86_64 only, and WebKitGTK has no CDM path either. So "Playback disabled" is
+# the answer in every browser on an ARM phone, whichever one is installed.
+#
+# librespot does not use EME -- it speaks Spotify's own protocol, which wants a
+# Premium account and no CDM. Spot is the GTK4 and libadwaita client on top of
+# it; the AUR packaging declares aarch64 and builds the 0.5.0 release tarball,
+# so this ref pins the packaging and the release pins the code. 5.3 MB built,
+# 20.7 MB installed, and every runtime dependency is already on both images.
+#
+# Here so that it is IN THE REPOSITORY rather than baked into an image: the
+# store's Install button execs `pacman -S`, which can only reach a package that
+# is in a sync database. Verified running and playing on omarchy-mobile's VM on
+# 2026-09-13; untested on the PinePhone, where GLES 2.0 may yet have something
+# to say about a GTK4 app.
+[aur.spot-client]
+ref     = "e9edb52471ce5694c419b5d2fee22549135ead5c"
+version = "0.5.0-1"
+
 # ---------------------------------------------------------------------------
 # Where published packages live, and the key that signs them.
 #
