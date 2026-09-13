@@ -34,11 +34,23 @@ license=('MIT')
 provides=('moarchy-device')
 conflicts=('moarchy-device')
 
-# linux-firmware carries qcom/a630_sqe.fw and qcom/a630_gmu.bin, which is what
-# the Adreno 615 needs to come up at all. That they are FREE and already in the
-# package the image installs was not obvious: the failure on the device read
-# `[drm:adreno_request_fw] *ERROR* failed to load qcom/a630_sqe.fw`, which looks
-# exactly like a missing proprietary blob and is not (devices.md §8.1).
+# linux-firmware-qcom carries qcom/a630_sqe.fw and qcom/a630_gmu.bin, the free
+# Adreno microcode the GPU needs to come up at all.
+#
+# The SUBPACKAGE, and that is the whole point of this entry. Arch splits
+# linux-firmware per vendor, and plain `linux-firmware` pulls in amd, amdgpu,
+# atheros, broadcom, cirrus, intel, mediatek, nvidia, other, radeon, realtek,
+# ti and whence -- every vendor except the one this phone is built on. The
+# image had all thirteen and no qcom directory beyond what our own firmware
+# package put there.
+#
+# What that cost: moarchy booted to a login on 2026-09-14 and sway died with
+#   MESA: error: get_param:235: get-param failed: -6 (No such device or address)
+#   [wlr] Failed to initialize EGL -> [sway/server.c:270] Failed to create renderer
+# A phone that boots, autologins, and has no display server. The earlier
+# `[drm:adreno_request_fw] *ERROR* failed to load qcom/a630_sqe.fw` seen under
+# postmarketOS was the same missing file and was misread at the time as merely
+# an artifact of their minimal initramfs.
 #
 # firmware-moarchy-sargo carries the proprietary half: the a615_zap shader the
 # Adreno needs on top of that free microcode, plus adsp, cdsp, ipa_fws, venus
@@ -47,6 +59,7 @@ conflicts=('moarchy-device')
 depends=(
   'linux-moarchy-sdm670'
   'linux-firmware'
+  'linux-firmware-qcom'
   'firmware-moarchy-sargo'
 )
 
