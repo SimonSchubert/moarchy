@@ -614,17 +614,37 @@ fi
 # The two plugin kinds are enabled by different keys, and crossing them is a
 # silent no-op: a bar plugin answers to shell.json's bar.id and never looks at
 # plugins[], everything else is the other way round.
-bar_id=$(python3 -c '
-import json, os
+#
+# Both files, in the order the shell resolves them: the user's copy wins, and
+# the packaged one answers when there is no user copy. Reading only the user's
+# made this fail on every freshly flashed image -- image/verify.sh asserts that
+# file is ABSENT there ("packaged defaults stay in force"), so the two checks
+# in this repo contradicted each other about the same path. Seen on the
+# 20260913 image: no user shell.json, packaged bar.id moarchy.bar, the bar
+# active and drawing, and this line red.
+#
+# Which file answered is printed, because "the default is right" and "the user
+# pinned it" are different states and the next person to debug a bar wants to
+# know which one they are in.
+bar_src=""
+for _bar_json in "$HOME/.config/omarchy/shell.json" "$OMARCHY_PATH/config/omarchy/shell.json"; do
+  [[ -r $_bar_json ]] || continue
+  bar_id=$(python3 -c '
+import json, sys
 try:
-    print(json.load(open(os.path.expanduser("~/.config/omarchy/shell.json"))).get("bar", {}).get("id", ""))
+    print(json.load(open(sys.argv[1])).get("bar", {}).get("id", ""))
 except Exception:
     pass
-' 2>/dev/null)
+' "$_bar_json" 2>/dev/null)
+  if [[ -n $bar_id ]]; then
+    case $_bar_json in "$HOME"/*) bar_src="user";; *) bar_src="packaged";; esac
+    break
+  fi
+done
 if [[ $bar_id == "moarchy.bar" ]]; then
-  ok "shell.json names the phone bar"
+  ok "shell.json names the phone bar ($bar_src)"
 else
-  no "shell.json bar.id is '${bar_id:-unset}'" \
+  no "shell.json bar.id is '${bar_id:-unset}' (neither the user's nor the packaged copy names it)" \
      "omarchy-refresh-shell runs 'omarchy bar defaults', which drops bar.id entirely"
 fi
 
