@@ -26,10 +26,19 @@ seen one run and taken a screenshot.
 | Store | `moarchy-store-git` | Install and remove packages against a signed catalogue |
 | foot | `foot` | The terminal, and the only one — see [One terminal](#one-terminal) |
 
-**Wi-Fi**, **Bluetooth** and **Device** sit in the drawer beside these and are
-not apps: they are screens the shell already holds, each with a desktop entry
-that toggles a plugin (`default/omarchy/plugins/moarchy.*/`). Settings and
-Themes have no entry at all — they open from the shade.
+**Device** sits in the drawer beside these and is not an app: it is a screen the
+shell already holds, with a desktop entry that toggles a plugin
+(`default/omarchy/plugins/moarchy.device/`). It earns the slot because nothing
+else on the phone shows thermals, memory or storage, and there is no settings
+row that opens it.
+
+**Wi-Fi** and **Bluetooth** had entries of their own and no longer do. They are
+settings, not apps, and they were already reachable two other ways — a long
+press on the shade's tile, and the *Wi-Fi networks* / *Bluetooth devices* rows
+under Network & internet, which the drawer's own search field returns for
+"wifi" or "bluetooth". A third copy in the app grid bought nothing and cost two
+cells in the first screenful. Settings and Themes never had an entry either —
+they open from the shade.
 
 ## GNOME (libadwaita)
 

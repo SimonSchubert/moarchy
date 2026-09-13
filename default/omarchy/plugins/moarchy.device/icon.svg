@@ -1,5 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
-  <!-- See moarchy.wifi/icon.svg for why this is a file and not a theme name.
+  <!-- Shipped rather than named, because a themed name is not a picture.
+       `computer-symbolic` is a monochrome glyph the icon theme is free to paint
+       near-black, and on a dark sheet the entry was there and invisible. A tile
+       with a white glyph reads on any background the theme can produce, and it
+       does not depend on the icon theme carrying the name at all -- which is
+       not a given: the phone shipped on Yaru, which has no wireless icon.
+       AppLibrary.iconSource() returns a file URL for any `Icon=` starting with
+       "/" and never consults the theme, which is what makes that true.
+
+       This is the last of the three. Wi-Fi and Bluetooth had one each until
+       their drawer entries went (docs/apps.md): both are settings screens the
+       shade's tiles and Settings already reach, and an app grid is for apps.
+
        A chip rather than `computer-symbolic`'s desktop tower: the page behind
        it is this phone's CPU, memory, thermals and battery, and nothing on a
        PinePhone looks like a tower. -->

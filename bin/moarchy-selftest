@@ -2102,16 +2102,25 @@ walk(tree)' 2>/dev/null
                "the --assume-installed branch did not fire, or moarchy-meta no longer declares it"
     fi
 
-    # L11. The shell will not uninstall itself. moarchy owns three launchers --
-    # Wi-Fi, Bluetooth and Device -- so there is always one of these to ask.
+    # L11. The shell will not uninstall itself. moarchy owns exactly one
+    # launcher now -- Device -- so this is the entry to ask, and if it ever
+    # stops being in the drawer the check has to say so rather than pass by
+    # never running: Wi-Fi and Bluetooth were the other two until their entries
+    # went, and a hold on a missing id opens no card and leaves every field
+    # empty, which reads as "not protected" and fails for the wrong reason.
     l_reset
-    dr hold moarchy.wifi >/dev/null; sleep 3
-    if [[ $(l_field info.protected) == 1 && $(dr uninstall) == protected \
-          && $(dr canRemove) == no ]]; then
-      okac L11 "moarchy's own launcher offers no Uninstall"
+    if ! dr entries | grep -qx "moarchy.device"; then
+      noac L11 "moarchy.device is not in the drawer's list" \
+               "no entry of ours is left to hold, so nothing checks the refusal"
     else
-      noac L11 "protected='$(l_field info.protected)' uninstall='$(dr uninstall)' canRemove='$(dr canRemove)'" \
-               "a moarchy* package must be refused before pacman is even asked"
+      dr hold moarchy.device >/dev/null; sleep 3
+      if [[ $(l_field info.protected) == 1 && $(dr uninstall) == protected \
+            && $(dr canRemove) == no ]]; then
+        okac L11 "moarchy's own launcher offers no Uninstall"
+      else
+        noac L11 "protected='$(l_field info.protected)' uninstall='$(dr uninstall)' canRemove='$(dr canRemove)'" \
+                 "a moarchy* package must be refused before pacman is even asked"
+      fi
     fi
 
     # L5. Back walks out of the card the way it walks out of Settings (G3):
