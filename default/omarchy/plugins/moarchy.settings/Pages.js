@@ -431,7 +431,23 @@ var PAGES = {
     covers: { "setup.default.terminal.kitty": "B" } }
 ]},
 
+// Upstream's three rows are all terminal editors, which was the whole list
+// while nvim was the default and the only one installed. This phone's default
+// is a window now (docs/apps.md), so the list leads with it -- and the three
+// below stay, guarded as they always were, because a user who installs vim or
+// helix from the store should still be able to choose it.
+//
+// `Text Editor` and not `GNOME Text Editor`: that is the name on its own
+// desktop entry and the name under its icon in the drawer, and a settings row
+// that calls an app something the rest of the phone does not is a row people
+// read twice.
 "apps.default.editor": { title: "Editor", reader: "omarchy-default-editor", rows: [
+  { id: "gnome-text-editor", type: "choice", label: "Text Editor",
+    value: "gnome-text-editor",
+    when: "omarchy-cmd-present gnome-text-editor",
+    write: "omarchy-default-editor gnome-text-editor" },
+  // Guarded like the rest, so it simply is not there on an image that dropped
+  // neovim -- and comes back for anyone who installs it again.
   { id: "neovim", type: "choice", label: "Neovim", value: "nvim",
     when: "omarchy-cmd-present nvim", write: "omarchy-default-editor nvim",
     covers: { "setup.default.editor.neovim": "N" } },

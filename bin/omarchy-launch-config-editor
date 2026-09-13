@@ -3,8 +3,15 @@
 # $EDITOR through uwsm in whatever terminal xdg-terminal-exec picks -- at desktop
 # font size, which on this panel is a 47-column window.
 #
-# Same editor, fullscreen and legible. Everything routed here is a config file,
-# so this is nvim in a foot sized for the screen.
+# Same editor, fullscreen and legible. Everything routed here is a config file.
+#
+# It was `nvim in a foot sized for the screen` until neovim left the package set
+# (docs/apps.md). The editor is GNOME Text Editor now, which is a window rather
+# than a pane, so the TUI wrapper is wrong for it -- a terminal opened around a
+# GUI app is an empty black rectangle that never gets a child. So this asks
+# omarchy-launch-editor, which is the one place that knows which of the two
+# shapes the chosen editor is, and hands a TUI editor to moarchy-launch-tui
+# exactly as this used to.
 path="${1-}"
 [[ -n $path ]] || { echo "usage: omarchy-launch-config-editor <path>" >&2; exit 1; }
 
@@ -12,4 +19,7 @@ path="${1-}"
 # tapped once the editor is fullscreen and the menu is gone.
 omarchy-notification-send -u low "Editing config file" "$path" 2>/dev/null || true
 
-exec setsid moarchy-launch-tui "${EDITOR:-nvim}" "$path"
+# NOT $EDITOR: that is `omarchy-launch-editor --inline`, and --inline is the
+# mode that keeps a GUI editor in the foreground so git can read the file back.
+# Nothing is waiting on this one, so it wants the detached mode instead.
+exec setsid omarchy-launch-editor "$path"

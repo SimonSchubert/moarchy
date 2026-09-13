@@ -61,7 +61,17 @@ pkgver=$_ver
 # docs/style.md I1). Under an unchanged version no phone would ever install it,
 # and the half that is already in bin/omarchy-theme-set-gnome would go on
 # checking for a theme that is not there.
-pkgrel=2
+#
+# 3, and the reason is the sharper reading of "published" that the paragraphs
+# above turn on. 0.2.2-2 was an unpublished artifact this morning -- nothing
+# held it, so it was rebuilt repeatedly under one version, deliberately. The
+# 20260913 image ended that: the card was flashed and the phone holds these
+# exact bytes now, so "no device holds it" is simply false and the waiver those
+# paragraphs describe no longer applies. This build REMOVES six names --
+# amberol, alligator, htop, neovim, songrec, wiremix -- and a removal under an
+# unchanged version is the invisible case §above names explicitly: the phone
+# would keep all six forever, since pacman compares versions and not depends.
+pkgrel=3
 pkgdesc="The moarchy package set -- install this and you have the phone"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
@@ -147,7 +157,12 @@ depends=(
   'wireplumber'
   'pamixer'
   'playerctl'
-  'wiremix'
+  # No wiremix. It was the audio mixer until moarchy.settings grew two screens
+  # of its own (Pages.js "sound.output"/"sound.input", and bin/moarchy-audio
+  # behind them), and both files already say in their headers that they replaced
+  # it -- a TUI whose window mapped at 47 columns on this panel. It stayed in
+  # the set after the thing that replaced it shipped, which is the only reason
+  # it was still here.
 
   # --- Touch input ------------------------------------------------------------
   # Sway delivers wl_touch to clients and stops there: it has no on-screen
@@ -199,10 +214,14 @@ depends=(
   'bluetui'
   'btop'
   # btop will not draw below 60 columns and a tiled terminal here is 47. bottom
-  # (btm) reflows, so it is the one that actually works beside the bar; htop and
-  # s-tui are the other two docs/apps.md names as installed.
+  # (btm) reflows, so it is the one that actually works beside the bar, and
+  # s-tui is the other docs/apps.md name as installed.
+  #
+  # No htop. Three process viewers for one phone was two too many, and htop was
+  # the one with nothing of its own: btop is the one people ask for by name,
+  # btm is the one that fits the width, and moarchy.device draws the same four
+  # numbers with no terminal at all.
   'bottom'
-  'htop'
   's-tui'
   'dust'
   'expac'
@@ -217,7 +236,21 @@ depends=(
   'lazygit'
   'less'
   'man-db'
-  'neovim'
+  # No neovim, and this one is not just a name leaving a list -- it was the
+  # default editor, so removing it is a change of behaviour that took four files
+  # with it. gnome-text-editor (already in this set, further down) is the editor
+  # now: it is the GUI answer to "the system wants me to edit something", which
+  # on a phone with no keyboard attached is the only answer that is any use.
+  #
+  # What had to move with it, because upstream's two scripts both hardcode nvim
+  # as the fallback and neither can reach a GUI editor safely:
+  #   bin/omarchy-default-editor   accepts the name at all, and answers it when
+  #                                nothing has been chosen
+  #   bin/omarchy-launch-editor    falls back to something installed, and runs a
+  #                                GUI editor so that it BLOCKS when it is
+  #                                $EDITOR -- without which `git commit` reads
+  #                                an unedited template
+  # Both shadow upstream by PATH order, like the other 22 in bin/.
   'plocate'
   'ripgrep'
   'starship'
@@ -354,18 +387,17 @@ depends=(
   # already provides -- so it needs nothing added for it.
   'geary'
 
-  # RSS. Kirigami, built for Plasma Mobile, and 0.9 MB. newsflash is the GTK4
-  # alternative and is a Rust binary many times the size for the same job on a
-  # screen this small.
-  'alligator'
+  # No RSS reader. alligator was here -- Kirigami, 0.9 MB, chosen over newsflash
+  # for its size -- and it is out with the rest of the media set below: a
+  # default image should carry what a phone cannot be a phone without, and a
+  # feed reader is a preference. It installs from the store in one tap.
 
-  # Music. Chosen over gnome-music specifically for what it does NOT drag in:
-  # gnome-music depends on localsearch and tinysparql, which is a filesystem
-  # indexer daemon crawling storage on a 1.15 GHz A53. Amberol has no library
-  # and no daemon -- it opens a folder and plays it, on GTK4 and GStreamer
-  # alone. decibels is smaller still but plays one file at a time with no
-  # queue, which is a file preview rather than a music player.
-  'amberol'
+  # No music player. amberol was here and the reasoning that put it here still
+  # holds if one is ever wanted back -- it beats gnome-music because it drags in
+  # no localsearch/tinysparql indexer daemon to crawl storage on a 1.15 GHz A53,
+  # and it beats decibels because decibels plays one file with no queue. It is
+  # out because it is a preference rather than a necessity, and it is one tap
+  # away in the store.
 
   # Passwords, which keysmith is not: keysmith holds TOTP codes only. Secrets
   # reads and writes KeePass v4 .kdbx, so the database is one the user already
@@ -373,22 +405,19 @@ depends=(
   # app that does not reflow to 360px.
   'secrets'
 
-  # Shazam, open and offline-capable: it fingerprints audio locally and only
-  # sends the fingerprint. GTK4/libadwaita, so it reflows, and it is one of the
-  # very few Android staples that has a real Linux client already built for
-  # aarch64.
+  # No songrec, and of the six that left the set this is the one with the
+  # strongest case for going. It is Shazam, open and offline-capable, and its
+  # headline feature does not work on this device and cannot: "listen to what is
+  # playing" needs a microphone, and this PinePhone's microphone records digital
+  # silence -- RMS 0 at PipeWire and at raw ALSA alike, with Mic1 on, boost 7
+  # and the ADC enabled (docs/apps.md, "Not working").
   #
-  # READ THIS BEFORE FILING A BUG. Its headline feature does not work on this
-  # device and cannot: "listen to what is playing" needs a microphone, and this
-  # PinePhone's microphone records digital silence -- RMS 0 at PipeWire and at
-  # raw ALSA alike, with Mic1 on, boost 7 and the ADC enabled (docs/apps.md,
-  # "Not working"). SongRec will open, listen, and match nothing, forever.
-  #
-  # It is here because its other two paths do not touch the microphone:
-  # recognition from an audio file, and recognition from a chosen PipeWire
-  # source -- so it identifies what the phone itself is playing. If the
-  # microphone is ever fixed, this app starts working with no change here.
-  'songrec'
+  # It was defensible while it was here: its other two paths do not touch the
+  # microphone, so it still recognises from a file or from a PipeWire source. But
+  # an app on a default image whose one famous feature silently matches nothing,
+  # forever, teaches the user that the phone is broken. It is in the store for
+  # anyone who wants the two paths that work, and if the microphone is ever fixed
+  # it is one name to put back.
 
   # --- Camera -----------------------------------------------------------
   # Megapixels, from [danctnix]. It is the only camera app that works on this

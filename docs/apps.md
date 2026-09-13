@@ -56,9 +56,7 @@ These reflow to a phone width natively and are the most comfortable fit.
 | Web | `epiphany` | The browser — see [Browsers](#browsers) |
 | Contacts † | `gnome-contacts` | The only app here that can *write* the store Calls and Chats read, so without it both show bare numbers forever |
 | Geary † | `geary` | Email. `geary-mobile` is a dummy package; the plain build is the mobile one |
-| Amberol † | `amberol` | Music. No library and no indexer daemon — it opens a folder and plays it |
 | Secrets † | `secrets` | KeePass v4 `.kdbx` passwords, which Keysmith is not: that holds TOTP codes only |
-| SongRec † | `songrec` | Shazam, fingerprinting locally. Its microphone path **cannot** work here ([Not working](#not-working)); recognition from a file or a PipeWire source does |
 
 <p align="center">
   <img src="screenshots/apps/01-gnome-clocks.png" width="30%" alt="GNOME Clocks">
@@ -82,7 +80,6 @@ run without a KDE session — they are ordinary Wayland clients under Sway.
 | KWeather | `kweather` | Weather |
 | Keysmith | `keysmith` | TOTP / 2FA codes |
 | Calindori | `calindori` | Calendar |
-| Alligator † | `alligator` | RSS. 0.9 MB, against newsflash's much larger Rust binary for the same job |
 
 <p align="center">
   <img src="screenshots/apps/07-kalk.png" width="30%" alt="Kalk">
@@ -127,8 +124,13 @@ rows in exchange for hiding both. For something that fits at the *default* font
 size, use **`btm`** (bottom) — it adapts, and shows CPU, memory, all three
 thermal zones, disks and network.
 
-Also installed and worth knowing: `htop`, `lazygit`, `bluetui`, `wiremix`
-(audio), `s-tui` (CPU frequency/temperature graphs).
+Also installed and worth knowing: `lazygit`, `bluetui`, `s-tui` (CPU
+frequency/temperature graphs).
+
+`htop` and `wiremix` were here and are not any more. Three process viewers was
+two too many and `htop` had nothing the other two do not — and the audio mixer
+was replaced by Settings' own two screens well before it was removed from the
+set. Both install in one command if you want them back.
 
 **Wi-Fi is not a TUI.** The shade's tile and Settings both open `moarchy.wifi`,
 a touch screen with a passphrase field — see `docs/shade.md` S6b.

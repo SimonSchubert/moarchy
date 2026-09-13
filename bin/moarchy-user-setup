@@ -125,7 +125,10 @@ mkdir -p "$HOME/.config/omarchy/themed" \
 # OVERRIDES the packaged defaults, so copying upstream's there would mask the
 # bar id and plugin list that moarchy sets system-side, and the phone would come
 # up with the desktop bar and no phone UI.
-for d in foot btop wiremix lazygit tmux imv; do
+# wiremix is not in this list any more: it left the package set when
+# moarchy.settings grew its own two audio screens, and seeding a config for an
+# absent program is a directory nothing ever reads.
+for d in foot btop lazygit tmux imv; do
   src="$OMARCHY_PATH/config/$d"
   [[ -d $src ]] || continue
   [[ -e $HOME/.config/$d ]] && continue
@@ -219,6 +222,51 @@ else
   # Not fatal: the theme applied, and theme-set already left a background
   # symlink of its own choosing. Only the choice is lost, so say so and stamp.
   echo "!! no $(basename "$BACKGROUND") in the theme -- keeping the default background" >&2
+fi
+
+# --- the default editor ------------------------------------------------------
+# Two halves of one answer, and they have to be written rather than left to a
+# fallback, because neovim is no longer installed (docs/apps.md) and both of
+# upstream's editor scripts name `nvim` as theirs. bin/omarchy-launch-editor and
+# bin/omarchy-default-editor shadow them so an unseeded phone still works; this
+# makes the state explicit rather than relying on that safety net, so that
+# Settings > Apps & defaults > Editor shows a selected row on a phone nobody has
+# touched yet.
+#
+# Written by hand rather than by calling `omarchy-default-editor
+# gnome-text-editor`, for the same reason as the terminal above: that command
+# ends in omarchy-notification-send, and this runs from a systemd user unit
+# before there is anything to notify. The format is the same one its reader
+# parses.
+#
+# Only when absent, like everything else here: a user who chose another editor
+# in Settings keeps it.
+EDITOR_STATE="$HOME/.local/state/omarchy/defaults/editor"
+if [[ ! -e $EDITOR_STATE ]] && command -v gnome-text-editor >/dev/null; then
+  mkdir -p "$(dirname "$EDITOR_STATE")"
+  printf '%s\n' "gnome-text-editor" >"$EDITOR_STATE"
+  say "default editor gnome-text-editor"
+fi
+
+# The other half: what opens when a text file is TAPPED rather than when
+# something asks for $EDITOR. These are two different mechanisms and only this
+# one goes through xdg-mime, which is why a phone could have -- and did have --
+# Text Editor as its editor and still open every .txt in a terminal running
+# Neovim. nvim.desktop claims all of these types, so each one has to be taken
+# back by name; `xdg-mime default` with several types at once is a GNOME
+# extension that other implementations do not honour, so it is a loop.
+#
+# Unconditional, unlike the state file above: mimeapps.list is a machine's
+# record of choices and nvim.desktop's claim is the package's, not the user's,
+# so there is no user decision to preserve here -- and a phone that installs
+# neovim later would silently hand the types back otherwise.
+if command -v xdg-mime >/dev/null && [[ -r /usr/share/applications/org.gnome.TextEditor.desktop ]]; then
+  for t in text/plain text/markdown text/x-csrc text/x-chdr text/x-c++src \
+           text/x-c++hdr text/x-shellscript application/x-shellscript \
+           application/json text/x-python; do
+    xdg-mime default org.gnome.TextEditor.desktop "$t" 2>/dev/null || true
+  done
+  say "text files open in Text Editor"
 fi
 
 # Stamped only on success. Stamping a failed run is how a phone ends up with no

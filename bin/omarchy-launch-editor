@@ -1,0 +1,81 @@
+#!/bin/bash
+# Sway/phone override. Two things differ from upstream's, and both are
+# consequences of this image no longer shipping a terminal editor
+# (docs/apps.md): neovim left the package set, and GNOME Text Editor is what
+# "the editor" means here now.
+#
+# 1. THE FALLBACK IS A COMMAND THAT EXISTS. Upstream reads the chosen editor out
+#    of ~/.local/state/omarchy/defaults/editor and falls back to `nvim` twice --
+#    once when the file is absent, once when the recorded editor is not
+#    installed. Both were safe while nvim was always there. On this image both
+#    resolve to a missing binary, so a phone that had never opened Settings, or
+#    one whose recorded editor had been uninstalled, would answer every "edit
+#    this" with `exec: nvim: not found` -- through omarchy-launch-tui, which
+#    means a terminal that flashes open and closes with the error inside it.
+#
+# 2. A GUI EDITOR HAS TO BLOCK WHEN IT IS $EDITOR. This is the subtle half.
+#    upstream's `envs` sets EDITOR="omarchy-launch-editor --inline", and
+#    --inline exists so that a TUI editor runs in the terminal that asked rather
+#    than spawning a second one. Every non-TUI editor goes down upstream's `*)`
+#    branch, `setsid uwsm-app -- "$editor"`, which detaches and returns
+#    immediately -- correct for "open my project in Zed", catastrophic for
+#    $EDITOR. `git commit` would launch a window, see the editor exit 0 at once,
+#    read the unedited template and abort with "empty commit message"; `visudo`
+#    and `systemctl edit` would write nothing and say nothing. The editor would
+#    still be sitting on screen when it happened.
+#
+#    gnome-text-editor --standalone does block: it is a fresh instance rather
+#    than a message to the running one, so the process lives until the window
+#    closes. Measured on the phone -- `timeout 10 gnome-text-editor --standalone
+#    file` exits 124, still running -- which is the whole reason this is
+#    workable at all and the reason the flag is not optional here. Without
+#    --standalone GApplication hands the file to the existing instance and exits
+#    in milliseconds, which is the failure above wearing the right window.
+
+# omarchy:summary=Launch the default editor selected via Omarchy defaults.
+# omarchy:args=[--inline] <path>
+
+default_editor="$HOME/.local/state/omarchy/defaults/editor"
+
+# Must agree with omarchy-default-editor beside this file, which writes the
+# state this reads and answers the same name when there is nothing to read.
+FALLBACK="gnome-text-editor"
+
+if [[ ${1:-} == "--inline" ]]; then
+  inline=true
+  shift
+else
+  inline=false
+fi
+
+if [[ -f $default_editor ]]; then
+  read -r editor <"$default_editor"
+fi
+[[ -n ${editor:-} ]] || editor="$FALLBACK"
+
+omarchy-cmd-present "$editor" || editor="$FALLBACK"
+
+case "${editor##*/}" in
+nvim | vim | nano | micro | hx | helix | fresh)
+  # Upstream's branch, unchanged. Still reachable: a user who installs vim or
+  # helix from the AUR can select it, and moarchy.settings still offers the rows.
+  if [[ $inline == "true" ]]; then
+    exec "$editor" "$@"
+  else
+    exec omarchy-launch-tui "$editor" "$@"
+  fi
+  ;;
+gnome-text-editor)
+  if [[ $inline == "true" ]]; then
+    # Foreground and blocking, so whatever asked for an editor gets to read the
+    # file back after it is closed. Not through uwsm-app: that detaches, which
+    # is exactly what must not happen here.
+    exec gnome-text-editor --standalone "$@"
+  else
+    exec setsid uwsm-app -- gnome-text-editor "$@"
+  fi
+  ;;
+*)
+  exec setsid uwsm-app -- "$editor" "$@"
+  ;;
+esac

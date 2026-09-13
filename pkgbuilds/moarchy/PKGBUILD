@@ -70,7 +70,24 @@ pkgver=$_ver
 # plugins (docs/shade.md S24-S27, gestures.md G10b). Under an unchanged version
 # pacman would compare 0.2.2-1 to 0.2.2-1 and offer nothing, and every one of
 # those would sit in a package nobody ever receives.
-pkgrel=2
+#
+# 3, and it is the paragraph about "PUBLISHED" above collecting on its own
+# terms. 0.2.2-2 was unpublished for most of 2026-09-13 -- the [moarchy] repo
+# still serves 0.2.2-1 -- so it was rebuilt from a newer HEAD four times under
+# one version, which those paragraphs explicitly allow because "no device holds
+# it". The 20260913 image ended that: the card was flashed, and the phone is
+# holding these exact bytes. The premise is false now, so the waiver is spent.
+#
+# What this build has that 0.2.2-2 does not: bin/omarchy-default-editor and
+# bin/omarchy-launch-editor, two new shadows that make GNOME Text Editor the
+# default editor now that neovim has left the set (moarchy-meta, docs/apps.md);
+# omarchy-launch-config-editor routed through the second of them; the editor
+# rows in moarchy.settings; and moarchy-user-setup seeding the choice and the
+# text/* handlers on first boot. A phone holding 0.2.2-2 has neovim, no
+# gnome-text-editor default, and both upstream scripts falling back to a binary
+# that its next upgrade removes -- so this is precisely the case the rule is
+# for.
+pkgrel=3
 pkgdesc="Omarchy's look, keybindings and theming on a PinePhone, under Sway"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'

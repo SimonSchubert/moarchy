@@ -1,0 +1,85 @@
+#!/bin/bash
+# Sway/phone override. Upstream's version is a closed allowlist of eight names
+# -- code, cursor, zed, sublime_text, helix, vim, emacs, nvim -- and every one
+# of them is either a desktop IDE with no aarch64 build or a TUI. This phone
+# ships exactly one editor now, GNOME Text Editor, and upstream's script exits 1
+# on the name, so Settings could not write it and nothing could select it.
+#
+# A superset, not a replacement: all eight of upstream's names still work, so a
+# phone that has installed vim or helix from the AUR can still pick it and the
+# rows in moarchy.settings that offer them keep working.
+#
+# The no-argument read also differs, and that is the half that matters after
+# neovim left the package set (docs/apps.md). Upstream answers "nvim" when the
+# state file is missing, which was a safe guess while nvim was always installed
+# and is now the name of a command that is not there -- so a fresh phone would
+# report a default it cannot run. This answers the editor this image actually
+# ships. See omarchy-launch-editor beside this file, which has the same problem
+# one layer down and solves it the same way.
+
+# omarchy:summary=Set the default editor used by omarchy-launch-editor
+# omarchy:args=[gnome-text-editor|code|cursor|zed|sublime_text|helix|vim|emacs|nvim]
+# omarchy:examples=omarchy default editor | omarchy default editor gnome-text-editor
+
+editor_file="$HOME/.local/state/omarchy/defaults/editor"
+
+# The one this image ships, and the answer when nothing has been chosen. Named
+# once here because omarchy-launch-editor has to agree with it.
+FALLBACK="gnome-text-editor"
+
+if (($# == 0)); then
+  if [[ -f $editor_file ]]; then
+    read -r editor <"$editor_file"
+  fi
+
+  # An editor that is recorded but no longer installed is not the answer to
+  # "what is the default": every caller of this is about to run the thing.
+  if [[ -n $editor ]] && omarchy-cmd-present "$editor"; then
+    echo "$editor"
+  else
+    echo "$FALLBACK"
+  fi
+  exit 0
+fi
+
+case "$1" in
+gnome-text-editor | text-editor) editor="gnome-text-editor"; name="Text Editor"; glyph=󰷈 ;;
+code) editor="code"; name="VSCode"; glyph= ;;
+cursor) editor="cursor"; name="Cursor"; glyph= ;;
+zed | zeditor) editor="zeditor"; name="Zed"; glyph= ;;
+sublime_text) editor="sublime_text"; name="Sublime Text"; glyph= ;;
+helix) editor="helix"; name="Helix"; glyph= ;;
+vim) editor="vim"; name="Vim"; glyph= ;;
+emacs) editor="emacs"; name="Emacs"; glyph= ;;
+nvim) editor="nvim"; name="Neovim"; glyph= ;;
+*)
+  echo "Usage: omarchy-default-editor <gnome-text-editor|code|cursor|zed|sublime_text|helix|vim|emacs|nvim>"
+  exit 1
+  ;;
+esac
+
+mkdir -p "$(dirname "$editor_file")"
+printf '%s\n' "$editor" >"$editor_file"
+
+# Also the GUI handler, which upstream's version does not touch because on a
+# desktop the two are separate choices. Here they are one: "the editor" is what
+# opens when you tap a text file in Files as much as when git wants a commit
+# message, and a phone with two different answers to that is a phone where one
+# of them is wrong. Only for editors that have a desktop entry to point at --
+# a TUI has none, and xdg-mime would record a name nothing can resolve.
+_desktop=""
+case "$editor" in
+gnome-text-editor) _desktop="org.gnome.TextEditor.desktop" ;;
+nvim) _desktop="nvim.desktop" ;;
+esac
+if [[ -n $_desktop && -r /usr/share/applications/$_desktop ]]; then
+  # The text/* types nvim.desktop claims, so picking Text Editor takes all of
+  # them and does not leave half the file types opening in a terminal.
+  for _t in text/plain text/markdown text/x-csrc text/x-chdr text/x-c++src \
+            text/x-c++hdr text/x-shellscript application/x-shellscript \
+            application/json text/x-python; do
+    xdg-mime default "$_desktop" "$_t" 2>/dev/null || true
+  done
+fi
+
+omarchy-notification-send -g $glyph "$name is now the default editor"
