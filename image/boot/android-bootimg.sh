@@ -149,11 +149,35 @@ say "rootfs image"
 local ROOT_USED_MIB ROOT_MIB
 ROOT_USED_MIB=$(du -sm "$ROOTDIR" | cut -f1)
 ROOT_MIB=$(( ROOT_USED_MIB + ROOT_SLACK_MIB ))
-truncate -s "${ROOT_MIB}M" "$OUTDIR/rootfs.img"
+truncate -s "${ROOT_MIB}M" "$WORK/rootfs.raw"
 mkfs.ext4 -q -L "$ROOT_LABEL" -d "$ROOTDIR" \
-  -O ^has_journal,^metadata_csum_seed "$OUTDIR/rootfs.img"
-tune2fs -O has_journal "$OUTDIR/rootfs.img" >/dev/null
+  -O ^has_journal,^metadata_csum_seed "$WORK/rootfs.raw"
+tune2fs -O has_journal "$WORK/rootfs.raw" >/dev/null
 info "rootfs ${ROOT_MIB}M (used ${ROOT_USED_MIB}M + ${ROOT_SLACK_MIB}M slack), label $ROOT_LABEL"
+
+# Ship it SPARSE, not raw, and that is a hard requirement rather than a saving.
+#
+# fastboot cannot flash a raw image larger than 4 GiB -- FlashPartition takes a
+# uint32_t size. A 6.06 GiB rootfs fails instantly with
+#
+#   fastboot: error: Failed reading from userdata
+#
+# which names the partition, says nothing about size, and is the same message
+# an unreadable file produces. The partition is 49.9 GiB and the file read
+# fine; a 200 MB control file to the same partition flashed in five seconds,
+# which is what identified it.
+#
+# An Android sparse image takes a different path: fastboot splits it by
+# max-download-size (256 MiB on this device) and streams the chunks. It is also
+# smaller, because the holes in a freshly-made filesystem become DONT_CARE.
+img2simg "$WORK/rootfs.raw" "$OUTDIR/rootfs.simg" ||
+  die "img2simg failed -- is android-tools in the image container?"
+info "rootfs.simg $(( $(stat -c%s "$OUTDIR/rootfs.simg") / 1048576 ))M sparse (from ${ROOT_MIB}M raw)"
+
+# Asserted rather than assumed: a raw file here would flash on a small image
+# and fail on a large one, which is the worst way to find this out.
+smagic=$(dd if="$OUTDIR/rootfs.simg" bs=4 count=1 status=none | od -An -tx1 | tr -d " \n")
+[ "$smagic" = "3aff26ed" ] || die "rootfs.simg is not an Android sparse image (magic $smagic)"
 
 say "flash script"
 # Written rather than documented, because the ORDER is load-bearing and a
@@ -186,9 +210,11 @@ echo "==> boot"
 fastboot flash boot boot.img
 
 # Far larger than max-download-size (256 MiB on this device), so fastboot
-# sparses it into chunks automatically. Expect several minutes.
+# splits the sparse image into chunks. Expect several minutes.
 echo "==> userdata (the rootfs -- this is the slow one)"
-fastboot flash userdata rootfs.img
+# A SPARSE image. fastboot refuses a raw one over 4 GiB with "Failed reading
+# from userdata", which sounds like a read error and is a size limit.
+fastboot flash userdata rootfs.simg
 
 echo "==> done; rebooting"
 fastboot reboot
@@ -196,7 +222,7 @@ FLASH
 chmod +x "$OUTDIR/flash.sh"
 
 say "done"
-( cd "$OUTDIR" && sha256sum boot.img vbmeta.img rootfs.img > "$NAME.sha256" )
+( cd "$OUTDIR" && sha256sum boot.img vbmeta.img rootfs.simg > "$NAME.sha256" )
 ls -lh "$OUTDIR" | awk 'NR>1 {print "    " $9 "  " $5}'
 info "flash with: $OUTDIR/flash.sh"
 }

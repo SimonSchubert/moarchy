@@ -6,16 +6,17 @@
 # have in common is about the rootfs and stays in image/verify.sh.
 #
 # The artifact is a DIRECTORY, not a file (D10): boot.img, vbmeta.img,
-# rootfs.img and flash.sh. So "decompress" has no counterpart here -- there is
-# nothing to decompress, and rootfs.img is already an ext4 filesystem image
-# that image/verify.sh can mount directly.
+# rootfs.simg and flash.sh. So "decompress" has no counterpart here -- but the
+# rootfs is an Android SPARSE image and has to be expanded with simg2img before
+# image/verify.sh can mount it, because fastboot cannot flash a raw image over
+# 4 GiB and ours is 6.06.
 
 # Assert the boot artifacts, then hand image/verify.sh a $WORK/root.img.
 verify_artifact() {
 sec "artifact"
 # A directory, and saying so plainly beats "cannot open file" three checks later.
 [ -d "$IMG_XZ" ] || { no "$IMG_XZ is not a directory -- an Android artifact is a directory of images (D10)"; return 1; }
-for f in boot.img vbmeta.img rootfs.img flash.sh; do
+for f in boot.img vbmeta.img rootfs.simg flash.sh; do
   [ -e "$IMG_XZ/$f" ] && ok "$f present" || no "$f missing from the artifact"
 done
 [ -x "$IMG_XZ/flash.sh" ] && ok "flash.sh is executable" || no "flash.sh is not executable"
@@ -58,11 +59,20 @@ vflags=$(od -An -tu4 --endian=big -j120 -N4 "$IMG_XZ/vbmeta.img" 2>/dev/null | t
                   || no "vbmeta flags = ${vflags:-?}, not 2 -- the bootloader will refuse this kernel"
 
 sec "rootfs"
-# Already a filesystem image; no partition table to carve it out of. Copied
-# rather than used in place because image/verify.sh mounts it read-write and
-# runs the first-boot scripts inside it.
-cp "$IMG_XZ/rootfs.img" "$WORK/root.img" || { no "could not copy rootfs.img"; return 1; }
-printf '  rootfs %s\n' "$(du -h "$WORK/root.img" | cut -f1)"
+# Sparse, and checked for it. A raw image here would flash fine while it is
+# small and fail the day the rootfs crosses 4 GiB, with fastboot reporting
+# "Failed reading from userdata" -- a message about a partition that is really
+# about a size. Catching it here costs one dd.
+smagic=$(dd if="$IMG_XZ/rootfs.simg" bs=4 count=1 status=none 2>/dev/null | od -An -tx1 | tr -d " \n")
+[ "$smagic" = "3aff26ed" ] && ok "rootfs.simg is an Android sparse image" \
+  || no "rootfs.simg has magic $smagic, not 3aff26ed -- fastboot cannot flash a raw image over 4 GiB"
+
+# Expanded rather than mounted in place: the shared checks below mount it
+# read-write and run the first-boot scripts inside it.
+simg2img "$IMG_XZ/rootfs.simg" "$WORK/root.img" 2>/dev/null || {
+  no "simg2img could not expand rootfs.simg"; return 1; }
+printf '  rootfs %s sparse -> %s raw\n' \
+  "$(du -h "$IMG_XZ/rootfs.simg" | cut -f1)" "$(du -h "$WORK/root.img" | cut -f1)"
 }
 
 # The rootfs growing to fill its partition.
