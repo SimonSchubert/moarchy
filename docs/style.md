@@ -649,6 +649,37 @@ completion as well now.
 
 *F5.* That `field=` rect is identical focused and unfocused, in every reading.
 
+**F6 verified on glass**, 2026-09-13, on the PinePhone, against the packaged
+build rather than a hand-copied file. `omarchy-shell drawer searchTarget`
+throughout; taps synthesised with `moarchy-touch` in panel pixels, so twice the
+logical coordinate, and the drawer's surface starts at screen y=26.
+
+| state | reading |
+| --- | --- |
+| empty | `pill=10,26 340x46 field=10,26 340x46 clear=none text=""` |
+| `wifi` typed | `field=10,26 296x46 clear=306,27 44x44 text="wifi"` |
+| after a tap on `clear` | `field=10,26 340x46 clear=none text=""`, `drawer results` empty |
+
+Five things that reading settles, and the last three are the ones a screenshot
+could not:
+
+- The slot is 44 on both sides and lies inside the pill: 306..350 against the
+  pill's 10..350, vertically 27..71 against 26..72.
+- The field gives up exactly the button's width and gets all of it back.
+- **F1 survives.** With the field empty, a tap at the pixel the button *would*
+  occupy — 656,150 panel, the button's own centre — reports `focused=true`.
+  That is the zero-width branch measured rather than argued.
+- **The tap is the button and not the field.** The same tap with `wifi` in the
+  field empties it; a tap 60 logical px to its left leaves the text alone and
+  focuses the field.
+- **Focus does not move.** `focused=true` before, during and after the clear, so
+  the on-screen keyboard stays up and the next character typed lands in the
+  field. Tapping it from unfocused leaves `focused=false`, which is F4's
+  contract one control along.
+
+Drawn on `flexoki-light` and on `matte-black`, with identical geometry on both:
+the glyph is `subdued`, so it is the theme's own secondary ink either way.
+
 **Still unverified: F4.** It needs a secured network that is not the connected
 one, and the phone cannot scan: quickshell's polkit agent fails to register
 ("An authentication agent already exists for the given subject"), NetworkManager
