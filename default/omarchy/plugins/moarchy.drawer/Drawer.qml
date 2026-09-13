@@ -366,6 +366,14 @@ Item {
   readonly property int radiusCard: Style.space(18)
   readonly property int glyphSlot: Math.round(Style.font.iconLarge * 1.35)
 
+  // The search field's clear button. Derived, never a flat 44 (E5): on a theme
+  // with a larger base font the glyph is already over the floor, and a fixed 44
+  // would shrink its target back down to meet the glyph instead of clearing it.
+  // Capped at the pill, because a slot taller than the 46 it sits in would
+  // stick out of both ends of the chrome it has none of.
+  readonly property int clearSlot:
+    Math.min(Style.space(46), Math.max(Style.space(44), root.glyphSlot))
+
   // Radii are written out rather than taken from Style.cornerRadius, which
   // mirrors Hyprland's `decoration:rounding` and is pinned to 0 here by the
   // hyprctl shim -- right for tiled windows under Sway, wrong for a phone.
@@ -912,6 +920,14 @@ Item {
       return "pill=" + box(searchPill)
            + " field=" + box(searchField)
            + " focused=" + searchField.activeFocus
+           // The clear button, or where it would be. Reported as `none` rather
+           // than as a zero-width rect at the pill's right edge, because a
+           // check that taps a rect it was handed must not be handed one it
+           // cannot tell from a real target (F6).
+           + " clear=" + (clearButton.visible ? box(clearButton) : "none")
+           // What is actually in the field, so a check can say the tap emptied
+           // it rather than that something is no longer drawn.
+           + " text=" + JSON.stringify(searchField.text)
     }
 
     // What the compositor actually granted this surface. Nothing else can
@@ -1438,11 +1454,23 @@ Item {
           // so on a theme whose two border widths differ the text used to jump
           // sideways the instant the field was tapped (F5). Vertical is safe as
           // it stands: top and bottom move together, so the centre holds.
+          // Left/right rather than fill, so the clear button below keeps a
+          // target of its own (docs/style.md F4, F6) -- the same shape as the
+          // Wi-Fi passphrase and its reveal eye. With nothing typed the button
+          // is 0 wide and `clearButton.left` is the pill's right edge, so the
+          // field is back to filling the pill and F1 still holds: every pixel
+          // of the drawn pill focuses it.
           Ui.TextField {
             id: searchField
-            anchors.fill: parent
+            anchors.left: parent.left
+            anchors.right: clearButton.left
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
             leftPadding: searchGlyph.x + searchGlyph.width + Style.space(10)
-            rightPadding: Style.space(16)
+            // 16 against the pill's own edge, 4 against the button: the
+            // button's slot already carries the gap on that side, and a second
+            // one would leave the caret stranded well short of the glyph.
+            rightPadding: clearButton.visible ? Style.space(4) : Style.space(16)
             // The control is taller than its line now, so it has to be told
             // where that line goes. Left at the default the text renders
             // against the top of the pill.
@@ -1451,6 +1479,64 @@ Item {
             background: null
             verticalPadding: 0
             onTextChanged: queryDebounce.restart()
+          }
+
+          // Clear (F6). A field a thumb can fill is a field a thumb has to be
+          // able to empty: backspacing a wrong query out is 20 taps on a phone
+          // keyboard, and the alternative people actually use -- close the
+          // drawer and swipe it up again -- throws away the scroll position and
+          // the keyboard with it.
+          //
+          // Only when there is something to clear. Drawn unconditionally it is
+          // a control that does nothing for as long as the field is empty,
+          // which is most of the time this surface is on screen, and it would
+          // sit exactly where a thumb reaching for the right-hand column of
+          // apps comes to rest.
+          Item {
+            id: clearButton
+            visible: searchField.text.length > 0
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            // Zero, not merely invisible: an invisible Item still holds its
+            // anchors, so a fixed width would take 44px off the field's hit
+            // area on every screenful where nothing has been typed.
+            width: visible ? root.clearSlot : 0
+            height: root.clearSlot
+
+            // No chrome of its own, so the veil is the chrome (docs/style.md
+            // H8), exactly as the reveal eye does it. Guarded on
+            // `sheetDragging` like every other control on this sheet (H6):
+            // this one holds its own grab and never becomes the drag, so the
+            // guard cannot fire today -- but "which of these MouseAreas is
+            // also a drag handle" is exactly the question the rule exists so
+            // that nobody has to answer per control.
+            PressVeil {
+              anchors.fill: parent
+              radius: width / 2
+              on: clearArea.pressed && !root.sheetDragging
+            }
+
+            Ui.OpticalGlyph {
+              anchors.fill: parent
+              text: "󰅙"
+              fontFamily: Style.font.family
+              fontSize: Style.font.iconLarge
+              color: root.subdued
+            }
+
+            MouseArea {
+              id: clearArea
+              anchors.fill: parent
+              // Straight to the query as well as to the field. Through
+              // onTextChanged alone this goes via the 120ms debounce, and the
+              // grid then holds the results of a query that is visibly no
+              // longer there -- which reads as a tap that did not take.
+              onClicked: {
+                searchField.text = ""
+                queryDebounce.stop()
+                root.query = ""
+              }
+            }
           }
         }
 

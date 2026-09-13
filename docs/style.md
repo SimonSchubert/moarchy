@@ -211,8 +211,12 @@ taps, and it is load-bearing in both files.
 
 ## F. Text inputs
 
-Both text fields in this shell are a `Ui.TextField` drawn *inside* a pill rather
-than as the pill: `background: null`, so the pill is a sibling `Rectangle`.
+Both pill-shaped text fields in this shell — the drawer's search and the Wi-Fi
+passphrase — are a `Ui.TextField` drawn *inside* the pill rather than as the
+pill: `background: null`, so the pill is a sibling `Rectangle`. (The third
+input in the shell is a settings `input` row, which has no pill: the row card is
+already the field's surface. F1–F3 apply to it the same way, and `SettingsRow`
+says so.)
 
 That shape has a trap in it, and both fields were in it. Positioned by
 `anchors.verticalCenter` with `verticalPadding: 0` and no background, the
@@ -250,6 +254,36 @@ from its normal one, the placeholder and the caret shift sideways at the moment
 of the tap. Pinning the four paddings is what settles it.
 → `omarchy-shell drawer searchTarget` reports the same `field=` rect focused
 and unfocused
+
+**F6** A field a thumb fills, a thumb can empty in one tap. Any text input that
+takes a free-form query carries a **clear** control at its trailing end, drawn
+only while there is something to clear. On a phone the alternative is holding
+backspace down, or closing the surface and reopening it — which on the drawer
+throws away the scroll position and the keyboard along with the query.
+
+Four things follow from the controls this shell already has, and none of them
+are new rules:
+
+- Its slot is its own and is derived, not fixed at 44 (E5), and a tap on it
+  does not focus the field or raise the keyboard — the same contract as Wi-Fi's
+  reveal eye in F4.
+- While it is not drawn it takes **no** width, or it silently eats 44px of the
+  field's hit area on every screenful where nothing has been typed, which is
+  F1 undone by the control that was meant to help.
+- It clears the model as well as the text. Through a debounced `onTextChanged`
+  alone the results survive the tap by 120ms, which reads as a tap that did not
+  take.
+- The accessor reports it, so a check can tap the real thing rather than a
+  coordinate computed from `Style.space` (§J).
+
+Not every field: a passphrase already has a trailing control and the pair a
+password field is expected to carry is a reveal, not a clear; a settings `input`
+row is a 58px card whose placeholder *is* its label, holding a number of minutes
+or one line of text. This is for the search fields.
+→ `omarchy-shell drawer type wifi` then `drawer searchTarget` reports a `clear=`
+rect whose shorter side is at least 44 and which lies inside `pill=`; a
+`sudo moarchy-touch tap` inside it makes the same call report `text="" clear=none
+focused=` unchanged, and `drawer results` comes back empty
 
 ---
 
