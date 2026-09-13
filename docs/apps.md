@@ -1,55 +1,55 @@
-# Apps that work on the PinePhone
+# Apps
 
-Every app below was installed and launched on a **Pine64 PinePhone Braveheart
-(1.1)** — Allwinner A64, 2 GB RAM, 720×1440 at `scale 2` (360×720 logical) —
-running this Sway session. Screenshots are straight off the device via `grim`,
-uncropped, so the bar is visible in each one.
+What ships on the phone, and what each one is for. The list itself lives in one
+place — `depends` in `pkgbuilds/moarchy-meta/PKGBUILD` (`docs/structure.md` P5)
+— and this file is the readable half of it: the apps, what they are, and the
+criteria the terminal, the web apps and the camera are held to.
 
-## What actually limits app choice
+**Keeping it true.** An app that joins or leaves that `depends` moves a row
+here in the same commit. Names without versions, deliberately: a version in a
+table goes stale in silence and a package name does not.
 
-Availability is *not* the constraint. Essentially the whole desktop catalogue is
-built for aarch64 in Arch Linux ARM — Firefox, Chromium, GIMP, Inkscape,
-LibreOffice, Signal, Telegram all install fine. Three other things decide whether
-an app is usable:
+Everything below runs on a **Pine64 PinePhone Braveheart (1.1)** — Allwinner
+A64, 2 GB RAM, 720×1440 at `scale 2`, so a **360×720 logical** screen.
+Screenshots are straight off the device via `grim`, uncropped, so the bar is
+visible in each one.
 
-1. **A 360×720 logical screen.** Desktop layouts do not reflow. The apps that
-   work are the ones designed to adapt — GNOME's libadwaita apps and KDE's
-   Kirigami/Plasma Mobile apps. Both families were built for phones.
-2. **2 GB of RAM.** Electron and Chromium will run and will hurt.
-3. **`*-bin` AUR packages are usually dead.** They ship prebuilt x86_64 binaries
-   by definition. `braincup-bin`, for example, ships
-   `Braincup-3.5.0-linux-x86_64.tar.gz` and has no source PKGBUILD — there is
-   nothing to rebuild for ARM, and `dotnet-runtime` is not in the aarch64 repos
-   either. Check for a non-`-bin` package before assuming an app is available.
+Rows marked **†** are in the set but have not been launched on the device yet.
+They are there on availability and fit; the dagger comes off when someone has
+seen one run and taken a screenshot.
 
-## Removing one
+## Ours
 
-Long-press an icon in the app drawer. The card that opens says what the app is
-and which package it came from; Uninstall then shows what `pacman` would
-actually take — every package in the transaction and the total size — before
-anything runs, and Remove does it with no terminal and no prompt. The rules for
-what may not go are [`gestures.md` section L](gestures.md), and the short
-version is two: the shell will not uninstall itself, and nothing another
-installed package needs can be removed.
+| App | Package | What it is |
+| --- | --- | --- |
+| Keep | `moarchy-keep` | Notes and checklists. Pure Python on the GTK4/libadwaita stack the rest of the set already pulls in |
+| Store | `moarchy-store-git` | Install and remove packages against a signed catalogue |
+| foot | `foot` | The terminal, and the only one — see [One terminal](#one-terminal) |
 
-Everything in the tables below is in `moarchy-meta`'s `depends`, so an upgrade
-of that package pulls a removed app back in — pacman resolves an upgraded
-package's dependencies. The card says so when it applies rather than letting it
-be a surprise on the next `pacman -Syu`.
+**Wi-Fi**, **Bluetooth** and **Device** sit in the drawer beside these and are
+not apps: they are screens the shell already holds, each with a desktop entry
+that toggles a plugin (`default/omarchy/plugins/moarchy.*/`). Settings and
+Themes have no entry at all — they open from the shade.
 
 ## GNOME (libadwaita)
 
 These reflow to a phone width natively and are the most comfortable fit.
 
-| App | Package | Notes |
+| App | Package | What it is |
 | --- | --- | --- |
-| Clocks | `gnome-clocks 50.0-2` | Bottom tab bar, fully adaptive |
-| Text Editor | `gnome-text-editor 50.1-1` | Works well with the on-screen keyboard |
-| Loupe | `loupe 50.0-1` | Image viewer, gesture zoom |
-| Papers | `papers 50.2-1` | PDF viewer (Evince's successor) |
-| Foliate | `foliate 3.3.0-3` | E-book reader; genuinely good on this screen |
-| Portfolio | `portfolio-file-manager 1.0.2-1` | File manager built for touch |
+| Clocks | `gnome-clocks` | Alarms, timers, world clocks; bottom tab bar, fully adaptive |
+| Text Editor | `gnome-text-editor` | Works well with the on-screen keyboard |
+| Loupe | `loupe` | Image viewer, gesture zoom |
+| Papers | `papers` | PDF viewer (Evince's successor) |
+| Foliate | `foliate` | E-book reader; genuinely good on this screen |
+| Portfolio | `portfolio-file-manager` | File manager built for touch. From `[danctnix]` |
 | Maps | `gnome-maps` | Adaptive; reflows to 360px like the rest of the set |
+| Web | `epiphany` | The browser — see [Browsers](#browsers) |
+| Contacts † | `gnome-contacts` | The only app here that can *write* the store Calls and Chats read, so without it both show bare numbers forever |
+| Geary † | `geary` | Email. `geary-mobile` is a dummy package; the plain build is the mobile one |
+| Amberol † | `amberol` | Music. No library and no indexer daemon — it opens a folder and plays it |
+| Secrets † | `secrets` | KeePass v4 `.kdbx` passwords, which Keysmith is not: that holds TOTP codes only |
+| SongRec † | `songrec` | Shazam, fingerprinting locally. Its microphone path **cannot** work here ([Not working](#not-working)); recognition from a file or a PipeWire source does |
 
 <p align="center">
   <img src="screenshots/apps/01-gnome-clocks.png" width="30%" alt="GNOME Clocks">
@@ -62,21 +62,18 @@ These reflow to a phone width natively and are the most comfortable fit.
   <img src="screenshots/apps/06-portfolio.png" width="30%" alt="Portfolio">
 </p>
 
-```bash
-sudo pacman -S gnome-clocks gnome-text-editor loupe papers foliate portfolio-file-manager gnome-maps
-```
-
 ## Plasma Mobile (Kirigami)
 
 KDE's mobile apps are the other family designed for this form factor, and they
 run without a KDE session — they are ordinary Wayland clients under Sway.
 
-| App | Package | Notes |
+| App | Package | What it is |
 | --- | --- | --- |
-| Kalk | `kalk 26.08.0-1` | Calculator with unit conversion |
-| KWeather | `kweather 26.08.0-1` | Weather |
-| Keysmith | `keysmith 26.08.0-1` | TOTP / 2FA codes |
-| Calindori | `calindori 26.08.0-1` | Calendar |
+| Kalk | `kalk` | Calculator with unit conversion |
+| KWeather | `kweather` | Weather |
+| Keysmith | `keysmith` | TOTP / 2FA codes |
+| Calindori | `calindori` | Calendar |
+| Alligator † | `alligator` | RSS. 0.9 MB, against newsflash's much larger Rust binary for the same job |
 
 <p align="center">
   <img src="screenshots/apps/07-kalk.png" width="30%" alt="Kalk">
@@ -87,54 +84,29 @@ run without a KDE session — they are ordinary Wayland clients under Sway.
   <img src="screenshots/apps/11-calindori.png" width="30%" alt="Calindori">
 </p>
 
-```bash
-sudo pacman -S kalk kweather keysmith calindori
-```
+## Telephony, camera, reference
 
-**QMLKonsole is no longer installed by default** (2026-09-08), with `alacritty`.
-It is a good touch terminal and that was never the question: foot is a touch
-terminal too, is the one every script already opens, and was going to stay
-whatever happened to the other two. See "One terminal" below for the whole of
-it. It still installs, and its screenshot is
-[`screenshots/apps/12-qmlkonsole.png`](screenshots/apps/12-qmlkonsole.png):
-
-```bash
-sudo pacman -S qmlkonsole alacritty
-```
-
-**KClock and Index are no longer installed by default** (2026-09-06). Both were
-second copies of something already here: GNOME Clocks is the more adaptive of
-the two clocks, and Portfolio is the file manager — Index additionally drags the
-whole MauiKit stack in behind it. Both still install cleanly:
-
-<p align="center">
-  <img src="screenshots/apps/08-kclock.png" width="30%" alt="KClock">
-  <img src="screenshots/apps/13-index-fm.png" width="30%" alt="Index">
-</p>
-
-```bash
-sudo pacman -S kclock index-fm
-```
-
-## Reference
-
-| App | Package | Notes |
+| App | Package | What it is |
 | --- | --- | --- |
-| Linux Command Library | `lcl-gui-bin 4.7.1-2` | Qt6 command reference and cheat sheets |
+| Calls | `gnome-calls` | Dialer and in-call UI |
+| Chats | `chatty` | SMS/MMS |
+| Megapixels | `megapixels` | The camera, and the only one that works here — see [Camera](#camera). From `[danctnix]` |
+| Linux Command Library | `lcl-gui-bin` | Qt6 command reference and cheat sheets, useful on a device whose terminal is 47 columns. Built from the pin in `manifest.toml`; not in ALARM |
 
-Useful on a device whose terminal is 47 columns: looking a flag up in
-a GUI beats scrolling a man page at that width. Not in Arch Linux ARM — built
-from the pin in `manifest.toml`, from an AUR PKGBUILD that declares `aarch64`
-and ships a matching prebuilt tarball.
+`callaudiod` (earpiece/speaker/headset routing) and `mmsd-tng` (MMS transport,
+from `[danctnix]`) come with the first two and have no UI of their own. Their
+systemd units are replaced rather than enabled: both ship
+`Requisite=gnome-session-initialized.target`, which under sway never exists, so
+`pkgbuilds/moarchy` installs same-named units into `/etc/systemd/user`, which
+wins over the `/usr/lib` copies.
 
-```bash
-sudo pacman -S lcl-gui-bin
-```
+Two web apps ship as well — **X** and **Discord**, entries rather than packages.
+See [Web apps](#web-apps).
 
-## Terminal apps
+## Terminal tools
 
-This is where the hardware is genuinely comfortable, and it is the Omarchy idiom
-anyway. Two measured constraints shape it:
+This is where the hardware is genuinely comfortable, and it is the Omarchy
+idiom anyway. Two measured constraints shape it:
 
 - A **terminal is 47×41 characters** at font size 9.
 - **btop refuses to draw below 60 columns**, whatever `shown_boxes` says.
@@ -149,18 +121,78 @@ thermal zones, disks and network.
 Also installed and worth knowing: `htop`, `lazygit`, `bluetui`, `wiremix`
 (audio), `s-tui` (CPU frequency/temperature graphs).
 
-### One terminal
+**Wi-Fi is not a TUI.** The shade's tile and Settings both open `moarchy.wifi`,
+a touch screen with a passphrase field — see `docs/shade.md` S6b.
+`nmtui-connect` still works from a terminal, but its buttons cannot be pressed
+with a finger. `impala` looks like the wifi TUI to reach for and is wrong twice
+over: its buttons have the same problem, and it is an **iwd** client on a phone
+running NetworkManager with `iwd.service` disabled — iwd is D-Bus activatable,
+so impala starts it to fight NetworkManager for `wlan0` rather than failing
+cleanly.
 
-The phone shipped three until 2026-09-08 — `foot`, `alacritty` and `qmlkonsole`
-— and they were not three choices so much as one engine and two entries in the
-drawer beside it. `foot` is the only one anything actually reaches:
-`bin/moarchy-launch-tui` execs it *by name* and `pkgbuilds/moarchy` declares it,
-so every TUI, every agent window, the config editor and the removal prompt are
-all foot already. `alacritty` cost 7.75 MiB — eight times foot and qmlkonsole
-put together — to be an OpenGL terminal on a GLES 2.0 Mali-400 that nothing
-launched. `qmlkonsole` was 935 KiB and had won the xdg default by default,
-which is the whole reason `omarchy-launch-about` answers `Unknown option
-'render'`.
+## Not installed by default
+
+Every name below is available for aarch64 and left out on purpose.
+`sudo pacman -S <name>` installs any of it; the reasoning per name is the
+commented block at the foot of `pkgbuilds/moarchy-meta/PKGBUILD`.
+
+| Package | Why not |
+| --- | --- |
+| `alacritty`, `qmlkonsole` | The second and third terminals, dropped 2026-09-08 — [One terminal](#one-terminal) |
+| `kclock`, `index-fm` | A second clock and a second file manager, dropped 2026-09-06. Index drags the whole MauiKit stack in behind it |
+| `spot-client` | Spot, a native Spotify client over librespot — the reason there is no Spotify *web* app here (B3) |
+| `chromium`, `signal-desktop`, `libreoffice-fresh`, `nautilus`, `mpv`, `imv`, `kdenlive`, `gpu-screen-recorder` | Each is heavy for an A64 with 2 GB of RAM; none is needed for the phone to be a phone |
+| `waydroid` | Android in an LXC container. `waydroid init` pulls a ~1 GB image on first run and then shares 2 GB of RAM and a GLES 2.0 Mali-400 — not something a dependency should commit a fresh phone to |
+
+<p align="center">
+  <img src="screenshots/apps/12-qmlkonsole.png" width="30%" alt="QMLKonsole">
+  <img src="screenshots/apps/08-kclock.png" width="30%" alt="KClock">
+  <img src="screenshots/apps/13-index-fm.png" width="30%" alt="Index">
+</p>
+
+## What limits app choice
+
+Availability is *not* the constraint. Essentially the whole desktop catalogue is
+built for aarch64 in Arch Linux ARM — Firefox, Chromium, GIMP, Inkscape,
+LibreOffice, Signal, Telegram all install fine. Three other things decide
+whether an app is usable:
+
+1. **A 360×720 logical screen.** Desktop layouts do not reflow. The apps that
+   work are the ones designed to adapt — GNOME's libadwaita apps and KDE's
+   Kirigami/Plasma Mobile apps. Both families were built for phones, which is
+   why the set above is drawn from exactly those two.
+2. **2 GB of RAM.** Electron and Chromium will run and will hurt.
+3. **`*-bin` AUR packages are usually dead.** They ship prebuilt x86_64 binaries
+   by definition. `braincup-bin`, for example, ships
+   `Braincup-3.5.0-linux-x86_64.tar.gz` and has no source PKGBUILD — there is
+   nothing to rebuild for ARM. Check for a non-`-bin` package before assuming
+   an app is available.
+
+## Removing one
+
+Long-press an icon in the app drawer. The card that opens says what the app is
+and which package it came from; Uninstall then shows what `pacman` would
+actually take — every package in the transaction and the total size — before
+anything runs, and Remove does it with no terminal and no prompt. The rules for
+what may not go are [`gestures.md` section L](gestures.md): the shell will not
+uninstall itself, and nothing another installed package needs can be removed.
+
+Everything in the tables above is in `moarchy-meta`'s `depends`, so an upgrade
+of that package pulls a removed app back in — pacman resolves an upgraded
+package's dependencies. The card says so when it applies rather than letting it
+be a surprise on the next `pacman -Syu`.
+
+## One terminal
+
+The phone shipped three until 2026-09-08, and they were not three choices so
+much as one engine and two entries in the drawer beside it:
+`bin/moarchy-launch-tui` execs `foot` *by name* and `pkgbuilds/moarchy` declares
+it, so every TUI, every agent window, the config editor and the removal prompt
+were foot already. `alacritty` cost 7.75 MiB — eight times the other two
+together — to be an OpenGL terminal on a GLES 2.0 Mali-400 that nothing
+launched, and `qmlkonsole`'s 935 KiB had won the xdg default by being the only
+`TerminalEmulator` that claimed it, which is why `omarchy-launch-about` answers
+`Unknown option 'render'`.
 
 Verified on touch before the other two were dropped: foot turns a tap into a
 left-button click (`man 1 foot`, TOUCHSCREEN), which is what the shade's TUI
@@ -190,17 +222,14 @@ lines is a regression nobody would look for.
 → `omarchy-shell drawer entries` holds `foot` and holds neither `footclient`
 nor `foot-server`
 
-> A NoDisplay copy in `~/.local/share/applications` was written to do this job
-> and then deleted, because measuring it showed it changed nothing. Worth
-> recording how nearly it stayed: the first A/B moved the masks out, re-queried
-> the drawer, and still saw both hidden — which reads as "the masks are not what
-> does it" and is the *right* conclusion from a *broken* test.
-> `desktopHiddenEntryIds` is only recomputed on `appsChanged`, and removing a
+> A `NoDisplay` copy in `~/.local/share/applications` was written to do this job
+> and then deleted, because measuring it showed it changed nothing — and the
+> first measurement was broken in a way worth remembering.
+> `desktopHiddenEntryIds` is recomputed only on `appsChanged`, and removing a
 > `NoDisplay` file changes nothing in `DesktopEntries.applications`, so no
-> rescan fired and the answer came from the cache built while the masks existed.
-> What settled it was forcing a rescan with a visible entry, then cloning
-> `footclient.desktop`'s exact bytes under a new id: the clone appeared, so the
-> filter was on the id, and `grep foot launcher.hides` found it.
+> rescan fires and the answer comes from a cache built while the masks existed.
+> Cloning `footclient.desktop`'s bytes under a new id settled it: the clone
+> appeared, so the filter is on the id.
 
 **T4** Settings offers the terminals that exist. The Alacritty choice row hides
 itself, and the Install Alacritty row stops being permanently hidden and
@@ -217,44 +246,103 @@ declares `foot`, and it is now the only terminal there is to lose.
 → `~/.config/alacritty` is not created, and `moarchy-user-setup` logs no
 missing file for it
 
-**Wi-Fi is not a TUI.** The shade's tile and Settings both open `moarchy.wifi`,
-a touch screen with a passphrase field — see `docs/shade.md` S6b. `nmtui-connect`
-still works from a terminal, but its buttons cannot be pressed with a finger.
-`impala` looks like the wifi TUI to reach for and is wrong twice over: its
-buttons have the same problem, and it is an **iwd** client on a phone running
-NetworkManager with `iwd.service` disabled — iwd is D-Bus activatable, so impala
-starts it to fight NetworkManager for `wlan0` rather than failing cleanly.
-
 ## Browsers
 
-**Epiphany** (`epiphany`) is the one to reach for — WebKit, ~260 MB, and it has a
-genuinely adaptive mobile layout with the URL bar at the bottom. Firefox and
+**Epiphany** (`epiphany`) is the one to reach for — WebKit, ~260 MB, and it has
+a genuinely adaptive mobile layout with the URL bar at the bottom. Firefox and
 Chromium both install and run, but cost far more memory for no layout benefit.
 
 Heavy SPAs are the real problem, not the browser. x.com loads but paints poorly
 and leaves large black regions — that is the workload against a 1.15 GHz A53 and
 a GLES 2.0 GPU, not something configuration fixes.
 
+### Web apps
+
+A site a phone treats as an app: its own window with no browser chrome, its own
+name and icon on a recents card, its own entry in the drawer. Ids are `B<n>`.
+
+**B1** A web app opens as a window of its own site: no tab strip, no
+bookmarks, no other site reachable from it, and its own cookies and login.
+Epiphany's `--application-mode` is the equivalent of the `--app=` upstream's
+launcher assumes, and it needs a `--profile` with it or every launch starts
+logged out.
+
+**What it does not remove is Epiphany's own bottom bar** — the site title, the
+URL, back, forward and a ⋮ menu. There is no key for it: `org.gnome.Epiphany.ui`
+offers only `bottom-url-bar` (where, not whether), and `.lockdown` disables
+actions rather than chrome. Epiphany *does* hide it in the fullscreen state,
+which is how the Hyprland sibling gets a bare window — its compositor can tell a
+client it is fullscreen while still laying it out under the bar. **Sway has no
+fake fullscreen**, and the real thing is ruled out by `windows.md` W5: a
+fullscreen window on sway draws above the Top layer and ignores exclusive zones,
+so it takes the status bar, the launch splash, and the band the on-screen
+keyboard reserves. So the win here is the window and its identity (B2), not a
+bare canvas.
+→ launched from the drawer, the window is Epiphany's web-app window: no tab
+strip, and `org.gnome.Epiphany.WebApp_<slug>` is its own profile
+
+**B2** Each web app is its own window identity. The profile directory's
+basename becomes the window's app id — `org.gnome.Epiphany.WebApp_x_com` — and
+the entry names it in `StartupWMClass`, which is what gives the recents card
+and the shade's notification card (`shade.md` S25) a name and an icon to take.
+Without it a web app's card reads `org.gnome.Epiphany.WebApp_x_com`, and two
+web apps sharing one profile would collapse into a single card.
+→ `swaymsg -t get_tree` reports one `app_id` per web app, each matching its
+entry's `StartupWMClass`; `omarchy-shell recents list` names the app
+
+**B3** The drawer carries **X** and **Discord** from first boot, with their own
+artwork. Both are upstream's own entries and upstream's own icons; nothing on
+this phone ever copied either into a place the drawer or an icon theme reads,
+so the package installs them.
+
+Not Spotify, which is where this parts company with the desktop and with
+[omarchy-mobile](https://github.com/SimonSchubert/omarchy-mobile): there is no
+Widevine for aarch64 Linux in any repo, so the web player answers "Playback
+disabled" in every browser on this phone. Spotify here is **Spot**, a native
+client over librespot, from the repo (`manifest.toml`, `[aur.spot-client]`).
+Every other web app upstream ships an entry for — WhatsApp, YouTube, Zoom, the
+Google ones — installs with `omarchy-webapp-install` and needs nothing from
+this project.
+→ `omarchy-shell drawer entries` lists `X` and `Discord` — the entries are
+named by id, without the `.desktop`, like every other row
+
+**B4** The phone asks the web for a phone's version of itself. WebKitGTK's own
+agent says `X11; Linux aarch64`, which is a desktop, and a site that branches
+on the agent rather than on a media query serves one — the layout that is
+clipped on the right in a 360px window. The override is the schema's default,
+not a write into anyone's dconf, and `org.gnome.Epiphany.web` is relocatable,
+so one stanza reaches the browser and every web app profile at once. A user
+who wants one site back on the desktop layout overrides that profile's key.
+
+An iPhone, not an Android: Epiphany is WebKitGTK, so a site that branches on
+the agent should be handed the code it tests against WebKit rather than the
+Blink path.
+→ `gsettings get "org.gnome.Epiphany.web:/org/gnome/epiphany/web/" user-agent`
+names a Mobile agent. The path is not optional: the schema is relocatable, and
+naming it without one answers "is relocatable (path must be specified)" rather
+than a value — which is a check that fails for the wrong reason
+
+**B5** Installing a Chromium-family browser gets upstream's behaviour back.
+The launcher's Chrome-family branch is upstream's, unchanged and first; only
+the fall-through is ours. What it must never do is upstream's own ending,
+which rewrites every non-Chrome browser to `chromium.desktop` and then execs a
+command with no program in it when chromium is not installed — silently, which
+is how every web app tile on this phone did nothing at all.
+→ with no Chromium-family browser installed, `omarchy-launch-webapp
+https://x.com/` still opens a window
+
 ## Camera
 
-**Megapixels 2.1.0** is the camera app. Verified on the device on 2026-09-06:
-both sensors stream, the camera switch works, the flash toggles, and a shutter
-press captures a three-frame burst at the rear sensor's full 2592×1944.
+**Megapixels** is the camera app. Verified on the device on 2026-09-06: both
+sensors stream, the camera switch works, the flash toggles, and a shutter press
+captures a three-frame burst at the rear sensor's full 2592×1944.
 
 The reason it works where nothing else does is `libmegapixels`, which ships a
-`pine64,pinephone.conf` describing this device's media graph and **configures the
-links itself** before streaming:
-
-```
-Pipeline: ({Type: "Link", From: "ov5640", FromPad: 0, To: "sun6i-csi-bridge", ToPad: 0},
-           {Type: "Mode", Entity: "ov5640"}, {Type: "Mode", Entity: "sun6i-csi-bridge"});
-```
-
-That is the whole of the old "`VIDIOC_STREAMON` fails — pipeline links
-unconfigured" entry. The links were unconfigured because no one was configuring
-them; `sun6i-csi` on 6.18 requires it and a generic app never does. This is also
-why **`snapshot` and `plasma-camera` cannot work here** — both assume a camera
-that just streams, and neither knows about the `sgm3140` flash.
+`pine64,pinephone.conf` describing this device's media graph and **configures
+the links itself** before streaming. `sun6i-csi` on 6.18 requires that, and a
+generic app never does — which is the whole of the old "`VIDIOC_STREAMON` fails
+— pipeline links unconfigured" entry, and why **`snapshot` and `plasma-camera`
+cannot work here** at all.
 
 `megapixels-findconfig` auto-detects from the devicetree (`pine64,pinephone-1.1`):
 
@@ -264,44 +352,38 @@ that just streams, and neither knows about the `sgm3140` flash.
 | Front | `gc2145` | screen | 1280×720@60 BGGR8 |
 
 The camera switch was confirmed against the media graph rather than by eye —
-tapping it flips which sensor link to `sun6i-csi-bridge` is `[ENABLED]`, cycling
-`gc2145 → ov5640 → gc2145`.
+tapping it flips which sensor link to `sun6i-csi-bridge` is `[ENABLED]`.
 
-### Three things that bite
+Three things bite:
 
 1. **`xdg-user-dirs` is required, and `megapixels` does not declare it.**
-   Without it `~/Pictures` never exists, and every photo is captured and then
-   **silently thrown away** at the last step:
-   `cp: cannot create regular file '/home/…/Pictures/IMG….dng': No such file or
-   directory`. The burst is written to `/tmp` first, so the failure appears only
-   after the shutter animation, and the app reports nothing. `moarchy-meta`
-   declares it, so an image has it; a hand-built system has to add it.
+   Without it `~/Pictures` never exists and every photo is captured and then
+   **silently thrown away** at the last step — the burst goes to `/tmp` first,
+   so the failure appears only after the shutter animation and the app reports
+   nothing. `moarchy-meta` declares it; a hand-built system has to add it.
 2. **The flash permission does not survive a reboot on its own.** The shipped
-   `90-megapixels.rules` chmods `flash_strobe` to 666 on `ACTION=="add"` only,
-   and the LED is added at boot before the rule exists, so it stays root-owned.
-   `udevadm trigger --subsystem-match=leds` fixes it until the next boot, and
-   `moarchy-led-perms.service` runs exactly that after `systemd-udevd` on every
-   boot rather than editing someone else's udev rule.
+   `90-megapixels.rules` chmods `flash_strobe` on `ACTION=="add"` only, and the
+   LED is added at boot before the rule exists. `moarchy-led-perms.service` runs
+   `udevadm trigger --subsystem-match=leds` after `systemd-udevd` on every boot
+   rather than editing someone else's udev rule.
 3. **The preview is software-rendered, by Megapixels' own choice.** It matches
    the devicetree and forces `LIBGL_ALWAYS_SOFTWARE=1`, so the GLES preview runs
-   on the A53s, not the Mali — GTK4 then reports "OpenGL ES 3.2" because that is
-   llvmpipe. It is usable, but the log fills with `Dropping frame`.
+   on the A53s, not the Mali. Usable, but the log fills with `Dropping frame`.
 
-### Not yet verified
-
-Whether the flash physically fires, and video recording. Megapixels ships
-`movie.sh` → `mpegize.py`, which is GStreamer `x264enc speed-preset=ultrafast`
-into `~/Videos/VID*.mkv` — software H.264, since the A64's `cedrus` is
-decode-only. Audio would be silent regardless while the microphone records
-RMS 0. Video also needs `python-gobject`, `gst-plugins-good` and
-`gst-plugins-ugly`, none of which `megapixels` declares.
+Unverified: whether the flash physically fires, and video recording. Megapixels
+ships `movie.sh` → `mpegize.py`, which is GStreamer `x264enc
+speed-preset=ultrafast` into `~/Videos/VID*.mkv` — software H.264, since the
+A64's `cedrus` is decode-only. Audio would be silent regardless while the
+microphone records RMS 0, and video needs `python-gobject`,
+`gst-plugins-good` and `gst-plugins-ugly`, none of which `megapixels` declares
+(they are `moarchy-meta`'s `optdepends`).
 
 ## Not working
 
 | | |
 | --- | --- |
-| **Microphone** | Records digital silence (RMS 0) at PipeWire *and* raw ALSA, despite `Mic1` on, boost 7, `ADC` 144/192 and `AIF1 Slot 0 Digital ADC` enabled |
-| ~~Camera~~ | **Works as of 2026-09-06** — see [Camera](#camera) above. The old entry here blamed `VIDIOC_STREAMON`; the links were never configured because nothing was configuring them. It still reboots the phone on the *first* launch after a boot; second and later launches are fine, and the cause is undiagnosed |
+| **Microphone** | Records digital silence (RMS 0) at PipeWire *and* raw ALSA, despite `Mic1` on, boost 7, `ADC` 144/192 and `AIF1 Slot 0 Digital ADC` enabled. This is what stops SongRec's headline feature |
+| ~~Camera~~ | **Works as of 2026-09-06** — see [Camera](#camera). It still reboots the phone on the *first* launch after a boot; second and later launches are fine, and the cause is undiagnosed |
 | Audio **output** | Works |
 | Hardware video decode | `cedrus` present at `/dev/video1`, unexplored |
 

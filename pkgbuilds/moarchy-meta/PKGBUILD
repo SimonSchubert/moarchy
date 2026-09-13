@@ -307,11 +307,12 @@ depends=(
   # GNOME set.
   'gnome-maps'
 
-  # Added 2026-09-06 to close five gaps the set above left open. Unlike the
-  # names before them these are NOT yet in docs/apps.md, because that file's
-  # bar is "installed and launched on the device, screenshot uncropped" and
-  # none of these have been. They are here on availability and fit, and
-  # docs/apps.md gets them once they have been seen running.
+  # Added 2026-09-06 to close five gaps the set above left open. They are in
+  # docs/apps.md's tables carrying a dagger, which is that file's way of saying
+  # "in the set, not launched on the device yet": an unmarked row there means
+  # installed, run and screenshotted uncropped, and none of these have been.
+  # They are here on availability and fit, and the dagger comes off when
+  # somebody has seen one run.
   #
   # None of the five needs building. Arch Linux ARM has all of extra for
   # aarch64, so the whole GNOME adaptive set and the whole Plasma Mobile set

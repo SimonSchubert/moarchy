@@ -93,8 +93,9 @@ Sway theming **without patching the vendored upstream at all**.
 
 ## What runs on it
 
-[`docs/apps.md`](docs/apps.md) — the apps actually installed and launched on the
-device, with screenshots straight off the phone. Short version: GNOME's
+[`docs/apps.md`](docs/apps.md) — every app the phone ships with, what each one
+is, and screenshots straight off the device for the ones that have been run on
+it. Short version: GNOME's
 libadwaita apps and KDE's Kirigami/Plasma Mobile apps both reflow to a 360px
 screen and are the comfortable fit; availability is not the constraint, screen
 width and 2 GB of RAM are.
