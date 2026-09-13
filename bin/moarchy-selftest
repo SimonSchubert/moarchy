@@ -1003,11 +1003,11 @@ print(found[0] if found else "")'; }
   # travel the plugin sees. Measured against the *sheet* since A3a -- the
   # drawer's own height, 694 logical on this panel, which is what both drags on
   # it now divide by:
-  #   120  panel =  60 logical =  9%  -> under the 35% commit, springs back
-  #   694  panel = 347 logical = 50%  -> drawer (commits at 35%)
-  #   1220 panel = 610 logical = 88%  -> home (commits at 85%)
-  #   300  panel = 150 logical = 22%  -> home *from an open drawer*, which
-  #                                      starts at 100% and needs 15% more
+  #   120  panel =  60 logical =   9%  -> under halfway, animates back down
+  #   820  panel = 410 logical =  59%  -> over halfway, the drawer stays up
+  #   1388 panel = 694 logical = 100%  -> home: a full sheet and past it
+  #   300  panel = 150 logical =  22%  -> home *from an open drawer*, which
+  #                                       starts at 100% and needs 15% more
   # All dragged over 2000ms, ~0.3 logical px/ms at the longest, under the 0.6
   # fling threshold -- so these test the distance bands, which is the whole
   # point of the bands being distance-only.
@@ -1154,7 +1154,7 @@ print(found[0] if found else "")'; }
       noac A2 "a 9% drag left the drawer $(shell_state drawer)"
     fi
 
-    sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 726 2000 >/dev/null 2>&1
+    sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 600 2000 >/dev/null 2>&1
     sleep 3
     samples=$(timeout 8 omarchy-shell drawer dragTrace 2>/dev/null | wc -w)
     if [[ $(shell_state drawer) == "open" ]] && (( samples >= 8 )); then
@@ -1253,10 +1253,34 @@ print(found[0] if found else "")'; }
       fi
     fi
 
+    # --- F5. home answers through a sheet ----------------------------------
+    # No finger needed, and none wanted: this is about what the shell can see,
+    # not about a drag. With the drawer up over an app the seat reports no
+    # focused toplevel -- an exclusive-focus layer surface deactivates the
+    # window beneath it -- and the home switch used to read that as "already
+    # home" and do nothing. `rep` is the signal that answers anyway.
+    timeout 8 omarchy-shell drawer close >/dev/null 2>&1; sleep 1
+    swaymsg '[app_id=moa-selftest] focus' >/dev/null 2>&1; sleep 1
+    timeout 8 omarchy-shell drawer open >/dev/null 2>&1; sleep 2
+    f5_status=$(timeout 8 omarchy-shell gestures status 2>/dev/null)
+    f5_rep=$(sed -n 's/.*rep="\([^"]*\)".*/\1/p' <<<"$f5_status")
+    timeout 8 omarchy-shell gestures swipe home >/dev/null 2>&1; sleep 3
+    if [[ -n $f5_rep && -z $(ws_rep) ]]; then
+      okac F5 "home moves with the drawer up (saw rep='$f5_rep' through it)"
+    else
+      noac F5 "status was '$f5_status', workspace now holds '$(ws_rep)'" \
+              "with a sheet up the seat reports no focused window; the workspace still names one"
+    fi
+    timeout 8 omarchy-shell drawer close >/dev/null 2>&1; sleep 1
+
     # --- A4/F. home --------------------------------------------------------
     timeout 8 omarchy-shell drawer close >/dev/null 2>&1; sleep 2
+    # A4 is a full sheet and past it, so this one runs to the top edge of the
+    # panel. It is the only swipe in this file that does, and that is the
+    # criterion rather than an accident: a home stop inside the drawer's own
+    # travel cannot be told apart from an ordinary swipe up (measured: 92%).
     before=$(windows)
-    sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 200 2000 >/dev/null 2>&1
+    sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 20 2000 >/dev/null 2>&1
     sleep 3
     home_landed=0
     if [[ -z $(ws_rep) ]] && [[ $(shell_state drawer) == "closed" ]]; then
@@ -1861,7 +1885,7 @@ walk(tree)' 2>/dev/null
     # window that happens to be ours -- and the point of K is that they apply
     # with nothing added. It used to need a criterion here because the strip
     # had a branch for it.
-    sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 726 2000 >/dev/null 2>&1
+    sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 600 2000 >/dev/null 2>&1
     sleep 3
     lead=$(timeout 8 omarchy-shell drawer openApps 2>/dev/null | head -1 | awk '{print $1}')
     if [[ $(shell_state drawer) == "open" && $lead == "moarchy.settings" ]]; then
@@ -1887,7 +1911,7 @@ walk(tree)' 2>/dev/null
     # behind, so the tile and the window are asserted alongside the workspace --
     # `representation` alone is equally satisfied by a Settings that was closed
     # outright, which is the other way to get this wrong.
-    sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 200 2000 >/dev/null 2>&1
+    sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 20 2000 >/dev/null 2>&1
     sleep 3
     if [[ -z $(ws_rep) && $(shell_state settings) == "open" && $(settings_tile) == 1 ]]; then
       okac K4 "the home band lands on a home screen and leaves Settings running"
@@ -2232,7 +2256,7 @@ walk(tree)' 2>/dev/null
   #   L5a     the card keeps the grid's SCROLL POSITION. The back ladder and
   #           the drawer staying open are checked as L5; the scroll offset
   #           itself is not readable over IPC.
-  printf '  \033[90m%-4s\033[0m   \033[90mnot covered: A8 B2 D2 D3 D4 F1 G5 G7 G8 G9 G10a K8 K10 L4 L5a M2 M3 M4 M9 M10 M11 M12\033[0m\n' ""
+  printf '  \033[90m%-4s\033[0m   \033[90mnot covered: A8 B2 D3 D4 F1 G5 G7 G8 G9 G10a K8 K10 L4 L5a M2 M3 M4 M9 M10 M11 M12\033[0m\n' ""
 fi
 
 # ---------------------------------------------------------------------------

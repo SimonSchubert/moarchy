@@ -153,8 +153,8 @@ Everything follows the finger rather than firing at a threshold.
 One drag up from the home pill has two stops, the way Android's does:
 
 ```
-0 ---------- 35% ---------- 85% ---- 100%
-app             DRAWER            HOME
+0 -------------- 50% -------------- 100% -- past the top
+    closes             opens                   HOME
 ```
 
 | Gesture | What it does |

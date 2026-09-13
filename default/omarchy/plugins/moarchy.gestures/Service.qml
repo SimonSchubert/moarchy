@@ -45,8 +45,8 @@
 // ---------------------------------------------------------------------------
 // What the up-drag from the strip means
 // ---------------------------------------------------------------------------
-//   0 ------------ 35% ------------ 85% ---- 100%   of the sheet's height
-//   app                 DRAWER              HOME
+//   0 ---------------- 50% ---------------- 100% -- and past it
+//   back down               stays up                    HOME
 //
 // One drag, two stops, and the first one is the launcher from wherever you
 // are: over an app, over a home screen, over nothing. The home screen's own
@@ -190,20 +190,22 @@ Item {
   readonly property real pullTravel:
     Math.max(1, (strip.screen ? strip.screen.height : 720) * 0.45)
 
-  // A2-A4. Where the second stop is, as a fraction of the sheet's own height --
-  // the unit the drag from the home screen has always used, and since this
-  // change the only unit either drag uses (D2a).
+  // A4. Where the second stop is: past a *full* sheet, and never inside the
+  // travel that opens one.
   //
-  // It was 0.75 of a travel that was itself 0.45 * screen, with the sheet full
-  // at 0.40 of it: 130 logical px of finger for a fully open drawer and 243 for
-  // the home band. Right for a switcher, which is a glance rather than a
-  // destination; wrong for the launcher, and reported as "too sensitive". The
-  // failure it produces is landing on a blank workspace when you meant to open
-  // the drawer.
+  // It was 0.85, and before that 0.75 of a shorter travel. Both sat inside the
+  // reach of an ordinary swipe -- measured from a real one on the device, an
+  // unremarkable flick up from the strip runs to 92% of the sheet at 2.5 px/ms.
+  // So the gesture that means "show me the launcher" was landing in the home
+  // band, taking the drawer it had just dragged up away with it. No threshold
+  // inside 0..1 separates those two intents, because they are the same
+  // movement.
   //
-  // 85% is a deliberate sweep nearly to the top of the screen, which is where
-  // Android puts its home gesture too.
-  readonly property real homeCommit: 0.85
+  // Past 1.0 they separate cleanly. From an app that is a sweep to the very top
+  // of the screen -- the sheet is full and the finger kept going -- and from an
+  // already-open drawer it is one homeExtra further (A6), which is the path
+  // that actually gets used: app, swipe, launcher, swipe, wallpaper.
+  readonly property real homeCommit: 1.0
 
   // A6, A7. How much *further* the finger has to travel to reach home when the
   // sheet is already up. Without it `homeCommit` is behind the drag before it
@@ -213,9 +215,15 @@ Item {
   // sheet, so the gesture costs the same finger movement either way.
   readonly property real homeExtra: 0.15
 
-  // D1-D2. The drawer's own thresholds, matching the shade so the two drags
-  // feel like one gesture in opposite directions.
-  readonly property real drawerCommit: 0.35
+  // D2. Half the sheet decides, on both surfaces that drag it: released above
+  // halfway it animates up, below it animates back down. That is what a bottom
+  // sheet does everywhere else -- the sheet is the thing being positioned, so
+  // the question is which end it is nearer -- and it is what was asked for, in
+  // those words.
+  //
+  // It was 0.35, inherited from the shade, whose sheet is a different shape and
+  // whose drag has no second stop past it.
+  readonly property real drawerCommit: 0.5
   readonly property real fling: 0.6
 
   // D2a. What one pixel of finger is worth to the sheet being dragged: one
@@ -554,6 +562,18 @@ Item {
   //
   // `omarchy-shell gestures status` publishes this answer so the selftest can
   // compare the two rather than trust that they still agree.
+  // What sway says is laid out on the focused workspace, or "" for a bare one.
+  // Read off the workspace and not off the seat, so an exclusive-focus layer
+  // surface over an app cannot make the app disappear from the answer.
+  function focusedRepresentation(): string {
+    var list = I3.workspaces ? I3.workspaces.values : []
+    for (var i = 0; i < list.length; i++)
+      if (list[i] && list[i].focused)
+        return String(list[i].lastIpcObject
+                      ? (list[i].lastIpcObject.representation || "") : "")
+    return ""
+  }
+
   function firstFreeWorkspace(): int {
     var taken = ({})
     var list = I3.workspaces ? I3.workspaces.values : []
@@ -683,18 +703,33 @@ Item {
       // own workspace, it keeps its tile on the drawer's shelf, and this
       // gesture leaves it the way it leaves `foot` -- by going somewhere else.
       //
-      // Already on a home screen: no toplevel is activated when focus is on an
-      // empty workspace, which makes this the one reliable "is this workspace
-      // empty" question available here. Without it, home from home would hop
-      // to a *different* empty workspace and churn the numbering for nothing.
+      // Already on a home screen? Then there is nowhere to go, and going anyway
+      // would hop to a *different* empty workspace and churn the numbering for
+      // nothing.
       //
-      // One question, and it used to be two. While a shell app was a layer
-      // surface it held the seat's keyboard, sway deactivated the window
-      // beneath it, and every toplevel read unfocused -- so an app under the
-      // sheet was indistinguishable from a bare home screen under it and this
-      // fell back to "is there a window anywhere", which hopped a workspace
-      // whenever anything at all was open. A focused window answers for itself.
-      if (root.focusedToplevel())
+      // Two signals, and the second one is the fix for a gesture that did
+      // nothing at all. `focusedToplevel()` alone was the test, on the
+      // reasoning that no toplevel is activated when focus is on an empty
+      // workspace -- true, and true for a second reason as well: an
+      // exclusive-focus *layer surface* deactivates the window beneath it, so
+      // with one up every toplevel reads unfocused too.
+      //
+      // The drawer is such a surface -- it owns a search field, so it takes the
+      // keyboard -- and it is now what is on screen when this runs, because the
+      // home band is reached by dragging it. So the drag hid the drawer, called
+      // this, and this concluded the phone was already home and returned. From
+      // outside: the drawer slid away and nothing happened. The carousel took
+      // no keyboard focus, which is why the band worked for as long as it held
+      // it, and why this surfaced with the drawer rather than with the change
+      // that moved the band.
+      //
+      // `representation` is sway's own description of what is laid out on the
+      // workspace. A layer surface cannot perturb it, so it answers while the
+      // drawer is still mapped. It is the signal I3 refreshes late -- a
+      // workspace that just *gained* a window can still read empty (F1) -- and
+      // that is the right way round here: a stale empty reading costs one
+      // skipped hop, where a stale focus reading cost the whole gesture.
+      if (root.focusedToplevel() || root.focusedRepresentation() !== "")
         root.dispatch("workspace number " + root.firstFreeWorkspace())
     }
     else if (action === "clear") root.hideTopmostOverlay()
@@ -911,6 +946,12 @@ Item {
                                 ? ToplevelManager.toplevels.values.length : 0)
                   + " free=" + root.firstFreeWorkspace()
                   + " shellapp=" + (own ? own.pluginId : "none")
+                  // The second signal the home switch reads (F5). Published
+                  // because it is the one that answers *through* a sheet: with
+                  // the drawer up, `focus` reads none over an app that is
+                  // plainly there, and the difference between the two fields is
+                  // the whole of the defect F5 records.
+                  + " rep=" + JSON.stringify(root.focusedRepresentation())
       if (!root.tracking) return "idle" + focus
       return "tracking mode=" + root.dragMode
              + " pull=" + Math.round(root.pull * 100)

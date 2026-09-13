@@ -28,8 +28,8 @@ cites these ids, so an AC with no test is visible.
 One drag, two stops, and the first one is the same sheet from everywhere:
 
 ```
-0 ------------ 35% ------------ 85% ---- 100%   of travel
-                DRAWER               HOME
+0 ---------------- 50% ---------------- 100% -- past the top
+      closes              opens                    HOME
 ```
 
 Until 2026-09-13 the first stop was a **carousel** — a row of cards, one per
@@ -48,15 +48,23 @@ rather than appearing at a threshold. From an app, from a home screen, with
 nothing open anywhere: one gesture, one meaning.
 → `omarchy-shell drawer dragTrace` leaves ≥ 8 samples
 
-**A2** Released under 35% travel, nothing happens and the drawer springs back.
+**A2** Released below halfway, the sheet animates back down and disappears.
 → `omarchy-shell drawer state` == `closed`
 
-**A3** Released between 35% and 85% travel, the drawer stays open.
+**A3** Released above halfway, the sheet animates the rest of the way up and
+stays. Half the sheet decides, because the sheet is the thing being positioned
+and the question is which end it is nearer — the rule a bottom sheet follows
+everywhere else.
+
+A fling still overrides the distance in both directions, as it does on the
+home screen (D2): a short fast flick up opens the drawer, a fast flick down
+closes it. That is the one case where the halfway line is not what decides, and
+it is deliberate — a flick is not an unfinished drag.
 → `omarchy-shell drawer state` == `open`
 
 **A3a** The strip's drag is the home screen's drag. Same ratio (1:1 with the
-finger, against the sheet's own height), same commit at 35%, same fling rule in
-both directions — the only thing the strip adds is the second stop.
+finger, against the sheet's own height), same halfway commit, same fling rule
+in both directions — the only thing the strip adds is the second stop.
 
 It was not, until 2026-09-13: the strip measured against 0.45 × screen and
 opened the sheet fully at 40% of *that*, so 130 logical px of finger gave a
@@ -69,11 +77,23 @@ band over. `pullTravel` no longer measures any real drag.
 within a few percent of *n* / 694, the same figure D2a asserts for the
 wallpaper drag
 
-**A4** Released past 85% travel, focus lands on a home screen and the drawer is
-not shown. The sheet lifts through the last 15% before that point rather than
-standing still, so the second stop announces itself before you let go — the
-pill goes accent at the same place the lift completes.
+**A4** Home is **past a full sheet**, never inside the travel that opens one.
+From an app that means a sweep to the very top of the screen — the drawer is
+full and the finger kept going; from an already-open drawer it is one short
+pull more (A6), which is the path that actually gets used. Released there,
+focus lands on a home screen and the drawer is not shown. The sheet lifts
+through the last 15% before the stop rather than standing still, so it
+announces itself before you let go, and the pill goes accent where the lift
+completes.
 → focused workspace `representation` is empty; `drawer state` == `closed`
+
+The stop was at 85% until 2026-09-13, and 0.75 of a shorter travel before that.
+Both sat inside the reach of an ordinary swipe: measured from a real one on the
+device, an unremarkable flick up from the strip runs to **92% of the sheet at
+2.5 px/ms**. So the gesture that means "show me the launcher" was landing in the
+home band and taking the drawer it had just dragged up away with it — reported
+as *the drawer does not stick, it disappears to the bottom*. No threshold
+inside 0..1 separates those two intents, because they are the same movement.
 
 **A5** The strip always opens the drawer, and it is the only thing the strip
 opens. This inverts what A5 said until 2026-09-13 — "no gesture on the strip
@@ -83,10 +103,9 @@ had a carousel to raise instead.
 and from a home screen alike
 
 **A6** With the drawer already open, dragging up from the strip again carries on
-to home. The drag starts from where the sheet already is — an open drawer is at
-100% — so home is **15% of the sheet further up**, not 85% from the bottom of
-one that is already at the top. Measured from where the drag began, so the
-gesture costs the same finger movement whether the drawer was up or not.
+to home: **15% of the sheet further up**, measured from where the drag began.
+This is the ordinary way to reach the wallpaper — app, swipe, launcher, swipe,
+home — and it is why A4's stop can afford to be out at the top of the screen.
 → from an open drawer, a 20% drag leaves `representation` empty and
 `drawer state` == `closed`
 
@@ -96,8 +115,8 @@ never "back". What closes the drawer is a drag *down* on the sheet itself (H1)
 or the back gesture (G3).
 
 This is what A6's "measured from where the drag began" buys. Against a fixed
-85% an open drawer is already past the stop before the finger moves, so every
-touch on the strip would go home — including the ones that mean nothing.
+threshold an open drawer is already past the stop before the finger moves, so
+every touch on the strip would go home — including the ones that mean nothing.
 → from an open drawer, a 5% drag leaves `drawer state` == `open`
 
 **A8** With the shade down, an up-swipe from the strip puts the shade away and
@@ -173,8 +192,9 @@ existed to stand in for.
 the strip — opens the drawer, following the finger.
 → `omarchy-shell drawer state` == `open`, `drawer dragTrace` ≥ 8 samples
 
-**D2** Released short of the threshold, the drawer springs back and nothing
-happens.
+**D2** Released below halfway the drawer animates back down; above halfway it
+animates up and stays (A2, A3). One rule, both surfaces, and a fling in either
+direction overrides it.
 
 **D2a** The open drag is 1:1 with the finger: one pixel of travel is one pixel
 of sheet, measured against the drawer's own height. Not a preference — the
@@ -286,6 +306,29 @@ across the release; `homeHint` must not be 0 in the first frame. Measured
 without the fix `100:0 63:0 46:0 33:0 ...`, and with it
 `100:73 73:54 54:40 40:27 ...` -- so peak scrim alpha goes from 1.0 to 0.56,
 falling monotonically from there instead of jumping
+
+**F5** Going home works **while a sheet of ours is on screen**, and that is
+not free: the drawer takes exclusive keyboard focus for its search field, and
+an exclusive-focus layer surface deactivates the window beneath it. Every
+toplevel then reads unfocused, so "is a window focused" — which is how this
+gesture decided whether it was already home — answered *no* over an app that
+was plainly there, and the switch silently did nothing.
+
+From outside it looked like the drawer failing to stick: the drag hid the sheet
+on its way to home, home declined to move, and the phone came back to the app
+with nothing changed. It arrived with the drawer rather than with the change
+that moved the band — the carousel took no keyboard focus, so the band worked
+for as long as it held it.
+
+The workspace's own `representation` is the signal that cannot be perturbed by
+a layer surface, and it is consulted alongside the focused toplevel. It is the
+one I3 refreshes late, which is the right way round here: a stale empty reading
+costs one skipped hop, where a stale focus reading cost the gesture.
+→ `omarchy-shell gestures status` with the drawer up over an app reports
+`focus=none` and `rep="V[…]"` in the same line; a home gesture from there
+leaves the focused workspace's `representation` empty
+
+---
 
 ## G. Left edge — back
 
