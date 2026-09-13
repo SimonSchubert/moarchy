@@ -63,8 +63,35 @@ source=("linux-$_tag.tar.gz::$_url/-/archive/$_tag/linux-$_tag.tar.gz"
 sha256sums=('8113d2acbb65f02845af0bfd4c6c8999f6602edd39f598c5079d98bb6c74fae4'
             'cfc0c9aa48de7606854a6bd1b65e51c99dacb8b9daf8df6c1b48063055cadf51')
 
+# --- Do not build this on a macOS bind mount --------------------------------
+#
+# The kernel carries net/netfilter/xt_TCPMSS.c (the target) AND xt_tcpmss.c
+# (the match). APFS is case-insensitive by default, so extracting the tarball
+# onto a macOS path silently keeps one of them and the build dies far away
+# from the cause:
+#
+#   make[4]: *** No rule to make target 'net/netfilter/xt_TCPMSS.o'
+#
+# which reads like a broken tarball or a bad config and is neither -- tar
+# reported success and the checksum matched, because the file that was lost was
+# overwritten rather than dropped.
+#
+# docker/build-packages.sh is already safe: it copies /repo into
+# /home/builder/repo, the container's own filesystem, before building. Anything
+# iterating by hand with `-v $PWD:/work` is NOT, and that is how this was found.
 prepare() {
   cd "linux-$_tag"
+
+  # Cheap, and it turns the confusing failure above into one sentence. Both
+  # files exist in every kernel this package will ever build; if only one is
+  # here, the filesystem ate the other.
+  if [ ! -f net/netfilter/xt_TCPMSS.c ] || [ ! -f net/netfilter/xt_tcpmss.c ]; then
+    echo "!! net/netfilter/xt_TCPMSS.c and xt_tcpmss.c do not both exist."
+    echo "!! This filesystem is case-insensitive (macOS?). Build on a"
+    echo "!! case-sensitive one -- see the note above prepare()."
+    return 1
+  fi
+
   cp "$srcdir/config" .config
   # Non-interactive by construction. A .config that does not answer every
   # symbol this tree asks about makes `make` prompt on stdin, and in a build

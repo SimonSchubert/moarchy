@@ -441,6 +441,16 @@ Restated as a checklist, in build order. Each carries its state.
    `pil-squasher` is packaged for Arch; each replacement is ~40 lines with a
    test that fails when broken.
 
+   **D21** The kernel is built on a **case-sensitive filesystem**, never in a
+   macOS bind mount. `net/netfilter/` holds both `xt_TCPMSS.c` and
+   `xt_tcpmss.c`; APFS keeps one. The build then dies twelve minutes in with
+   `No rule to make target 'net/netfilter/xt_TCPMSS.o'`, which reads like a
+   corrupt tarball and is not — `tar` exited 0 and the sha256 matched, because
+   the file was overwritten rather than dropped. `docker/build-packages.sh` is
+   already safe (it copies `/repo` into the container first); hand-rolled
+   `-v $PWD:/work` iteration is not. `prepare()` now checks for both files and
+   fails in one sentence.
+
    **D20** The builder image carries the kernel's build tools (`bc`, `libelf`),
    not `linux-moarchy-sdm670`'s `makedepends`. `docker/build-packages.sh`
    builds every in-repo package with `--nodeps`, so makedepends are declared
