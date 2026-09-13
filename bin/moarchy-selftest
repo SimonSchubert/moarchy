@@ -1872,11 +1872,18 @@ walk(tree)' 2>/dev/null
     sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 1120 2000 >/dev/null 2>&1
     sleep 3
     lead=$(timeout 8 omarchy-shell recents list 2>/dev/null | head -1 | awk '{print $1}')
-    if [[ $(shell_state recents) == "open" && $lead == "moarchy.settings" ]]; then
-      okac E1 "the strip raises the carousel with Settings leading"
+    # And which end it leads from. `list` is model order either way, so it
+    # cannot see the row being drawn from the right; cardX reports where the
+    # first two cards actually landed. Card 1 left of card 0 is the mirroring.
+    # Both numbers or bust: "none" for card 1 means one app was open, which is
+    # a precondition failure here and not a pass.
+    read -r e1_x0 e1_x1 <<<"$(timeout 8 omarchy-shell recents cardX 2>/dev/null)"
+    if [[ $(shell_state recents) == "open" && $lead == "moarchy.settings" \
+          && $e1_x0 =~ ^-?[0-9]+$ && $e1_x1 =~ ^-?[0-9]+$ && $e1_x1 -lt $e1_x0 ]]; then
+      okac E1 "the strip raises the carousel with Settings leading, at the right of the row (card 1 at $e1_x1, card 0 at $e1_x0)"
     else
-      noac E1 "recents=$(shell_state recents), leading card='${lead:-none}'" \
-              "the strip does to Settings what it does to an app, and Settings is what you just left"
+      noac E1 "recents=$(shell_state recents), leading card='${lead:-none}', cardX='${e1_x0:-none} ${e1_x1:-none}'" \
+              "the strip does to Settings what it does to an app, Settings is what you just left, and its card sits at the right-hand end -- a 'none' for card 1 is the scratch foot opened at the top of K having gone, which is a precondition and not the row failing to mirror"
     fi
 
     # E5, for the same reason. Kept from the old K8: the obvious way to

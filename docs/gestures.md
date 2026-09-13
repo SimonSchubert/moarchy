@@ -160,11 +160,18 @@ workspace and the top edge still opens the shade.
 ## E. The carousel
 
 **E1** One card per open app, most recent first, with the app you just left
-leading and marked. A shell app — Settings, Wi-Fi, Bluetooth (K10) — is a window
-and has a card on exactly those terms, with no branch of its own anywhere in the
-carousel (K1).
-→ `omarchy-shell recents list` has one line per open window, and a shell app's
-line names its plugin id
+leading and marked. The row is drawn from the **right**: the leading card sits
+at the right-hand end, under the thumb that raised the carousel, and older apps
+run away to the left — the direction Android's overview uses. Only the painting
+is mirrored; the order itself is unchanged, so the leading card is still the
+first line of `recents list`. A shell app — Settings, Wi-Fi, Bluetooth (K10) —
+is a window and has a card on exactly those terms, with no branch of its own
+anywhere in the carousel (K1).
+→ `omarchy-shell recents list` has one line per open window, the first line is
+the app just left, and a shell app's line names its plugin id; `recents cardX`
+puts card 1 to the *left* of card 0. That second check is the one that bites:
+`list` is model order and reads the same whichever end the row is drawn from,
+so it would pass a mirroring that silently did not happen.
 
 **E2** Tapping a card focuses that app and closes the carousel.
 → focused workspace holds that window; `recents state` == `closed`

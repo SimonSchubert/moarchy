@@ -311,6 +311,10 @@ Item {
   // Most-recently-used first, which is the order Android shows and the order a
   // thumb expects: the app you just left is under your finger. ToplevelManager
   // hands them over in creation order, so the ordering is kept here.
+  //
+  // First is *drawn* rightmost -- the view is laid out right-to-left (E1) --
+  // so nothing that reads this list has to know which end of the screen index
+  // 0 lands on.
   property var mru: []
 
   function indexOfToplevel(list, tl) {
@@ -595,6 +599,22 @@ Item {
       return out.join("\n")
     }
 
+    // E1. Which end of the screen the row starts from, which `list` cannot
+    // say: that one is model order and reads the same whether the mirroring
+    // happened or not, so on its own it would go green on a layoutDirection
+    // that silently did nothing. The centres of the first two cards, in view
+    // coordinates. Card 0 is centred either way -- the highlight range sees
+    // to that -- so the discriminating number is card 1: left of card 0 when
+    // the row is drawn from the right, and right of it when it is not.
+    function cardX(): string {
+      var out = []
+      for (var i = 0; i < 2; i++) {
+        var it = cards.itemAtIndex(i)
+        out.push(it ? Math.round(it.mapToItem(cards, it.width / 2, 0).x) : "none")
+      }
+      return out.join(" ")
+    }
+
     function open(): string {
       if (root.shell) root.shell.summon(root.pluginId, "{}")
       else root.open("{}")
@@ -725,6 +745,16 @@ Item {
         model: root.mru
         clip: false
         opacity: 1 - 0.55 * root.homeHint
+
+        // The row is drawn from the right: index 0 -- the app you just left --
+        // sits at the right-hand end and older apps run away to the left,
+        // which is where Android's overview puts them and where the thumb
+        // that raised the carousel already is. Only the painting is mirrored.
+        // The model stays most-recent-first, so `recents list`, the accent
+        // border and the preview's hand-off to card 0 all read unchanged, and
+        // the highlight range below is symmetric about the centre, so the
+        // mirroring leaves the centred card centred.
+        layoutDirection: Qt.RightToLeft
 
         // A pager, not a free scroll: one card is always centred, so a flick
         // lands somewhere definite instead of between two apps.
