@@ -1,0 +1,62 @@
+# The Google Pixel 3a (sargo), and the only place in the project that names it
+# (docs/devices.md D1, D2).
+#
+# The second device, and the one the abstraction was built for. Everything
+# here is either a dependency or a hardware value; not a line of shell, not a
+# QML file, not a keybinding. If something device-shaped cannot be expressed in
+# this package, the boundary is in the wrong place and devices.md §4 is the
+# file to argue with.
+#
+# What is NOT here, and deliberately:
+#
+#   The boot image. A device package describes a running system; getting that
+#   system onto flash is image/boot/android-bootimg.sh's job (D9). The two are
+#   separate because the rootfs is device-independent (D8) and only the last
+#   step is not.
+#
+#   Telephony. sargo's modem needs q6voiced and hexagonrpcd, neither of which
+#   is packaged for Arch. DEVICE_SERVICES is empty and device.conf says so
+#   rather than naming a unit that is not there -- moarchy-firstboot would warn
+#   on every first boot for a feature nobody has built yet.
+
+. "$startdir/../../scripts/manifest.sh"
+_ver=$(manifest_get moarchy version) || return 1
+
+pkgname=moarchy-device-sargo
+pkgver=$_ver
+pkgrel=1
+pkgdesc="Google Pixel 3a (sargo) hardware support for moarchy"
+arch=('any')
+url='https://github.com/SimonSchubert/moarchy'
+license=('MIT')
+
+# One device package at a time, enforced by pacman rather than by care (D4).
+provides=('moarchy-device')
+conflicts=('moarchy-device')
+
+# linux-firmware carries qcom/a630_sqe.fw and qcom/a630_gmu.bin, which is what
+# the Adreno 615 needs to come up at all. That they are FREE and already in the
+# package the image installs was not obvious: the failure on the device read
+# `[drm:adreno_request_fw] *ERROR* failed to load qcom/a630_sqe.fw`, which looks
+# exactly like a missing proprietary blob and is not (devices.md §8.1).
+#
+# firmware-moarchy-sargo carries the proprietary half: the a615_zap shader the
+# Adreno needs on top of that free microcode, plus adsp, cdsp, ipa_fws, venus
+# and wlanmdsp -- every path the device tree names except the modem pair, which
+# waits for the daemons that would drive it.
+depends=(
+  'linux-moarchy-sdm670'
+  'linux-firmware'
+  'firmware-moarchy-sargo'
+)
+
+source=('sway.conf' 'device.conf')
+sha256sums=('SKIP' 'SKIP')
+
+package() {
+  install -Dm644 "$srcdir/sway.conf"   "$pkgdir/usr/share/moarchy/device/sway.conf"
+  install -Dm644 "$srcdir/device.conf" "$pkgdir/usr/share/moarchy/device/device.conf"
+
+  printf 'codename=sargo\n' > "$srcdir/build-info"
+  install -Dm644 "$srcdir/build-info" "$pkgdir/usr/share/moarchy/device/build-info"
+}

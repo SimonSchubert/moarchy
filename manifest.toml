@@ -263,6 +263,33 @@ server  = "https://github.com/SimonSchubert/moarchy/releases/download/repo"
 keyid   = "3CA83612E7F3108F442006B418305B893569BAD3"
 
 # ---------------------------------------------------------------------------
+# The second repository the phone carries: the apps built in moarchy-apps,
+# published as a signed pacman repo on GitHub Pages.
+#
+# Pages rather than a release tag, which is the opposite of the choice above
+# and right for the opposite reason: these are twelve packages of about 100 KB
+# each, not 120 MB of system, so the git history they cost is small -- and they
+# are rebuilt far more often than the distro is.
+#
+# THE KEY IS THE SAME ONE. `moarchy package signing`, the fingerprint repeated
+# below, signs both repositories -- so moarchy-keyring already ships and trusts
+# it, and SigLevel = Required works here with nothing added to the keyring. If a
+# third repository ever arrives under a different key, that is the thing that
+# changes: pkgbuilds/moarchy-keyring installs exactly one key, read from [repo].
+#
+# Without this stanza the phone cannot install anything from moarchy-apps at
+# all, and that is not a hypothetical: moarchy-store's catalogue lists ten of
+# these packages, and its helper installs by execing `pacman -S` against a name
+# in a sync database. No stanza, no sync database, no Install button -- on a
+# freshly flashed phone, while the developer's own handset worked because
+# somebody had added the stanza to it by hand months earlier.
+# ---------------------------------------------------------------------------
+[repo.apps]
+name    = "moarchy-apps"
+server  = "https://simonschubert.github.io/moarchy-apps/aarch64"
+keyid   = "3CA83612E7F3108F442006B418305B893569BAD3"
+
+# ---------------------------------------------------------------------------
 # The base image we flash and install onto, from DanctNIX (Pine64-Arch).
 # Consumed as a release, never rebuilt (docs/structure.md §2). Was written in
 # two places -- scripts/flash-sd.sh and scripts/provision.sh -- until it moved
@@ -290,3 +317,56 @@ image   = "archlinux-pinephone-barebone-20251224.img.xz"
 image  = "menci/archlinuxarm"
 tag    = "base-devel"
 digest = "sha256:f7c6f64c0f246f41775e01793340c49f8e9abf3991141c25405361d56b100ccb"
+
+# ---------------------------------------------------------------------------
+# Google Pixel 3a (sargo), SDM670 -- the second device (docs/devices.md D13).
+#
+# This section is the whole reason structure.md §2's "not a distribution"
+# non-goal had to be amended, and devices.md §2 does that in the open. The
+# PinePhone's kernel, u-boot and firmware are DanctNIX's and arrive as pacman
+# packages we never build. Nothing equivalent exists for sargo: postmarketOS
+# did the SDM670 bring-up and maintains it well, but ships Alpine .apk, so for
+# this device moarchy is the packager.
+#
+# Two upstreams, and they are not the same host. The kernel tree lives on
+# gitlab.com and is live -- sdm670-v7.2.3_beta2 was tagged 2026-09-03. pmaports
+# does NOT: gitlab.com/postmarketOS/pmaports is an archive whose last activity
+# was 2026-03-23, and development moved to gitlab.postmarketos.org. Pinning the
+# archive would have frozen us at kernel 6.11.3 while the device we have in
+# hand boots 7.0.10, and nothing would have said so.
+#
+# kernel-ref is a TAG, not a SHA, so makepkg's checksum is what verifies it
+# (P10) -- and 7.1.3 is the newest stable tag, matching the config pmaports
+# `main` ships for it. The two move together on purpose: a kernel pinned to one
+# version with another version's config is a silent olddefconfig away from a
+# kernel nobody chose.
+#
+# Proven, rather than assumed: 7.0.10 from this tree booted on the device on
+# 2026-09-13 -- display via msm_dpu, touch, and a debug shell on the panel. If
+# 7.1.3 misbehaves, sdm670-v7.0.10 is the tag with evidence behind it.
+# ---------------------------------------------------------------------------
+[device.sargo]
+kernel-url    = "https://gitlab.com/sdm670-mainline/linux"
+kernel-ref    = "sdm670-v7.1.3"
+# Where the kernel config is vendored FROM, recorded so a config refresh is a
+# documented fetch rather than an archaeology exercise. Not fetched at build
+# time: the config lives beside the PKGBUILD so a build needs no network to
+# know what it is compiling.
+config-url    = "https://gitlab.postmarketos.org/postmarketOS/pmaports"
+config-ref    = "main"
+config-path   = "device/community/linux-postmarketos-qcom-sdm670/config-postmarketos-qcom-sdm670.aarch64"
+
+# The proprietary firmware, from the vendor tree LineageOS maintains. A commit
+# and not a branch: these are signed blobs whose contents must not move under a
+# phone, and TheMuppets rebases.
+#
+# pkgbuilds/firmware-moarchy-sargo fetches fourteen individual files from this
+# ref rather than the whole tarball, and carries a sha256 for each -- so the
+# pin and the checksums have to agree or makepkg stops. Moving this ref means
+# regenerating those hashes, which is the intended amount of friction for
+# changing what firmware a phone runs.
+#
+# Same commit postmarketOS's firmware-google-sargo uses, which is where the
+# file list came from.
+firmware-url  = "https://github.com/TheMuppets/proprietary_vendor_google_sargo"
+firmware-ref  = "c631f0f2aa24ea60cfb505d327cd4ae56ca27f16"

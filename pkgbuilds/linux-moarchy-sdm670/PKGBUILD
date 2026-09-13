@@ -1,0 +1,143 @@
+# The Qualcomm SDM670 kernel, for the Pixel 3a and anything else on that SoC.
+#
+# This package is the concrete form of the non-goal docs/devices.md §2 amends.
+# For the PinePhone we consume DanctNIX's linux-megi and never build a kernel;
+# for sargo there is no pacman repo anywhere that carries one, so this is
+# moarchy being the packager. The amendment is deliberately narrow: we compile
+# a tree someone else brought up and maintains, at a pinned tag, with their
+# config, and carry no patches of our own. If this file ever grows a patch
+# against the kernel, the scope has been exceeded and the answer is to push it
+# upstream instead.
+#
+# Upstream is gitlab.com/sdm670-mainline/linux, which is mainline plus the
+# SDM670 enablement that has not landed yet. It is actively maintained --
+# sdm670-v7.2.3_beta2 was tagged 2026-09-03, ten days before this file.
+#
+# The config is postmarketOS's, vendored beside this PKGBUILD rather than
+# fetched (manifest.toml [device.sargo] records where from, and at what ref, so
+# refreshing it is a documented fetch). It was audited against what an Arch
+# userspace needs before being trusted, because pmOS runs OpenRC and elogind
+# and has no reason to enable what systemd requires:
+#
+#   DEVTMPFS, DEVTMPFS_MOUNT, CGROUPS, FHANDLE, INOTIFY_USER, SIGNALFD,
+#   TIMERFD, EPOLL, NAMESPACES (+NET/PID/IPC/UTS), SECCOMP, SECCOMP_FILTER,
+#   TMPFS_POSIX_ACL, TMPFS_XATTR, AUTOFS_FS, EXT4_FS
+#
+# All present. FHANDLE and DEVTMPFS_MOUNT are the two that usually bite and
+# both are set, so this config needs no fragment of ours. AUTOFS4_FS reads as
+# absent and that is correct -- it was renamed AUTOFS_FS upstream.
+#
+# Two more that are set, and that the boot backend depends on:
+#   USB_CONFIGFS_ECM / _NCM  -- a USB network gadget macOS can actually bind.
+#                               pmOS's initramfs offers RNDIS, which macOS has
+#                               no driver for, so the phone came up on 2026-09-13
+#                               reachable by nobody. Ours uses ECM (D19).
+#   USB_CONFIGFS_MASS_STORAGE -- exposes a block device over USB, the other way
+#                               to get a log off a phone with no console.
+
+. "$startdir/../../scripts/manifest.sh"
+_url=$(manifest_get device.sargo kernel-url) || return 1
+_tag=$(manifest_get device.sargo kernel-ref) || return 1
+
+pkgname=linux-moarchy-sdm670
+# The tag IS the version: sdm670-v7.1.3 -> 7.1.3. Derived rather than written
+# twice, so a moved pin cannot leave a package claiming the old number -- the
+# exact trap manifest.toml exists to close.
+pkgver=${_tag#sdm670-v}
+pkgrel=1
+pkgdesc="Mainline Linux for Qualcomm SDM670 (Google Pixel 3a)"
+arch=('aarch64')
+url="$_url"
+license=('GPL-2.0-only')
+makedepends=('bc' 'bison' 'flex' 'openssl' 'kmod' 'cpio' 'perl' 'python' 'tar' 'xz' 'zstd')
+# !strip because stripping kernel modules with the default flags removes what
+# modinfo needs; the modules_install below strips them properly instead.
+options=('!strip' '!debug')
+
+_flavor=moarchy-sdm670
+
+source=("linux-$_tag.tar.gz::$_url/-/archive/$_tag/linux-$_tag.tar.gz"
+        'config')
+# Real hashes, not SKIP. A tag can be moved by whoever owns the repo; the
+# checksum is the only thing that notices when it is (structure.md P10).
+sha256sums=('8113d2acbb65f02845af0bfd4c6c8999f6602edd39f598c5079d98bb6c74fae4'
+            'cfc0c9aa48de7606854a6bd1b65e51c99dacb8b9daf8df6c1b48063055cadf51')
+
+prepare() {
+  cd "linux-$_tag"
+  cp "$srcdir/config" .config
+  # Non-interactive by construction. A .config that does not answer every
+  # symbol this tree asks about makes `make` prompt on stdin, and in a build
+  # container with no tty that is a build which hangs rather than fails. The
+  # config and the tag are pinned to the same upstream version so this should
+  # be a no-op; it is here for the day one of them moves and the other does not.
+  make ARCH=arm64 olddefconfig
+  # Say so out loud if it was NOT a no-op, rather than letting a silently
+  # different kernel ship. Diffed against the vendored file, which is the thing
+  # that was audited above.
+  if ! diff -q "$srcdir/config" .config >/dev/null; then
+    echo "==> NOTE: olddefconfig changed the config; the audited file is not what builds:"
+    diff "$srcdir/config" .config | head -40 || true
+  fi
+}
+
+build() {
+  cd "linux-$_tag"
+  # LDFLAGS from makepkg.conf are userspace flags and break the kernel link.
+  unset LDFLAGS CFLAGS CXXFLAGS CPPFLAGS
+  make ARCH=arm64 -j"$(nproc)" Image.gz modules dtbs
+}
+
+package() {
+  cd "linux-$_tag"
+  local _rel
+  _rel=$(make ARCH=arm64 -s kernelrelease)
+
+  # Image.gz, not vmlinuz: the Android boot backend appends a DTB to the
+  # compressed image and hands the result to mkbootimg, which is what the
+  # bootloader on this device expects (devices.md D15, measured off pmOS's own
+  # boot.img: gzip magic at the kernel offset, FDT magic appended after it).
+  install -Dm644 arch/arm64/boot/Image.gz "$pkgdir/boot/Image.gz"
+
+  # Every SDM670 board's DTB, not just sargo's -- three files, 300 KB, and it
+  # covers the Pixel 3a XL (sdm670-google-bonito-*) for nothing. A package per
+  # handset would be the alternative and it buys no one anything.
+  #
+  # Pruned to sdm670-* deliberately. `dtbs_install` ships what `make dtbs`
+  # built, and this config enables the whole Qualcomm platform: 394 boards,
+  # 40.9 MiB, against 0.3 MiB for the SoC family this package is named after.
+  # That is 40 MiB of dead weight in the rootfs image and in every phone's
+  # download, for boards this kernel's config was never going to be asked to
+  # boot. The boot backend appends exactly ONE of these to Image.gz anyway.
+  make ARCH=arm64 INSTALL_DTBS_PATH="$pkgdir/boot/dtbs" dtbs_install
+  find "$pkgdir/boot/dtbs" -name '*.dtb' ! -name 'sdm670-*' -delete
+  find "$pkgdir/boot/dtbs" -type d -empty -delete
+  # An empty result here means the prune pattern stopped matching what the tree
+  # builds, which would ship a kernel with no device tree at all -- a black
+  # screen, and nothing in the build to explain it.
+  [ -f "$pkgdir/boot/dtbs/qcom/sdm670-google-sargo.dtb" ] ||
+    { echo "!! sdm670-google-sargo.dtb missing after prune"; return 1; }
+
+  make ARCH=arm64 INSTALL_MOD_PATH="$pkgdir/usr" INSTALL_MOD_STRIP=1 modules_install
+  # Symlinks into the build tree, which does not exist on a phone.
+  rm -f "$pkgdir/usr/lib/modules/$_rel/build" "$pkgdir/usr/lib/modules/$_rel/source"
+
+  # So the boot backend and mkinitcpio can both ask what this kernel is called
+  # without parsing a directory listing.
+  install -Dm644 include/config/kernel.release \
+    "$pkgdir/usr/share/kernel/$_flavor/kernel.release"
+
+  # mkinitcpio needs a preset to generate an initramfs for a non-default
+  # kernel. ALL_kver names the modules directory, which is the only thing that
+  # has to be right for the autodetect hook to pick up this kernel's modules
+  # rather than a different one's.
+  install -d "$pkgdir/etc/mkinitcpio.d"
+  cat > "$pkgdir/etc/mkinitcpio.d/$_flavor.preset" <<PRESET
+# mkinitcpio preset for $pkgname
+ALL_config="/etc/mkinitcpio.conf"
+ALL_kver="$_rel"
+
+PRESETS=('default')
+default_image="/boot/initramfs-$_flavor.img"
+PRESET
+}

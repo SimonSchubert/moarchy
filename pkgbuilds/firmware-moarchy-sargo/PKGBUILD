@@ -1,0 +1,110 @@
+# Proprietary firmware for the Google Pixel 3a (sargo).
+#
+# The second half of the non-goal docs/devices.md §2 amends. postmarketOS has
+# a firmware-google-sargo package; it is an Alpine .apk and nothing in the
+# pacman world carries these blobs, so moarchy packages them.
+#
+# WHAT THE KERNEL ACTUALLY ASKS FOR, read out of the device tree rather than
+# guessed -- `strings sdm670-google-sargo.dtb | grep firmware-name` gives:
+#
+#   qcom/sdm670/sargo/a615_zap.mbn    GPU  (Adreno 615 zap shader)
+#   qcom/sdm670/sargo/adsp.mbn        audio DSP, and the sensors behind it
+#   qcom/sdm670/sargo/cdsp.mbn        compute DSP
+#   qcom/sdm670/sargo/ipa_fws.mbn     IP accelerator (networking offload)
+#   qcom/sdm670/sargo/venus.mbn       video codec
+#   qcom/sdm670/sargo/mba.mbn         modem \ deliberately absent, see below
+#   qcom/sdm670/sargo/modem.mbn       modem /
+#
+# The modem pair is NOT shipped. sargo telephony needs q6voiced and hexagonrpcd
+# to be any use, neither is packaged for Arch, and modem.mbn is tens of
+# megabytes of blob that would sit in every image doing nothing. It goes in
+# when the daemons that drive it do -- same reasoning as the empty
+# DEVICE_SERVICES in moarchy-device-sargo.
+#
+# wlanmdsp.mbn is shipped and is not in that list: ath10k loads it for wifi
+# rather than the DTB naming it.
+#
+# --- On the free half -------------------------------------------------------
+#
+# a630_sqe.fw and a630_gmu.bin are NOT here, and that is not an omission. They
+# are the Adreno microcode, they are free, and they are in upstream
+# linux-firmware, which the image already installs. The device booted on
+# 2026-09-13 showing
+#   [drm:adreno_request_fw] *ERROR* failed to load qcom/a630_sqe.fw
+# which reads exactly like a missing proprietary blob and is not -- it was
+# missing because a postmarketOS initramfs is minimal. Adding it here would
+# mean two packages owning one path.
+#
+# --- Individual files, not the vendor tarball -------------------------------
+#
+# postmarketOS fetches the whole TheMuppets repo. This fetches the fourteen
+# files it needs, each pinned to the same commit in its URL. The tarball is a
+# full Android vendor tree against 24 MB of what we use, and the explicit list
+# means `pacman -Ql` and this file agree about what a phone is carrying.
+
+. "$startdir/../../scripts/manifest.sh"
+_ver=$(manifest_get moarchy version) || return 1
+_commit=$(manifest_get device.sargo firmware-ref) || return 1
+_url=$(manifest_get device.sargo firmware-url) || return 1
+
+pkgname=firmware-moarchy-sargo
+pkgver=$_ver
+pkgrel=1
+pkgdesc="Proprietary firmware for the Google Pixel 3a (sargo)"
+arch=('any')
+url="$_url"
+license=('LicenseRef-proprietary')
+options=('!strip')
+
+_fw="$_url/raw/$_commit/proprietary/vendor/firmware"
+
+# The split-ELF pieces first, then the blobs that ship whole.
+source=(
+  "$_fw/a615_zap.mdt"  "$_fw/a615_zap.b00"  "$_fw/a615_zap.b01"  "$_fw/a615_zap.b02"
+  "$_fw/ipa_fws.mdt"   "$_fw/ipa_fws.b00"   "$_fw/ipa_fws.b01"
+  "$_fw/ipa_fws.b02"   "$_fw/ipa_fws.b03"   "$_fw/ipa_fws.b04"
+  "$_fw/adsp.mbn"      "$_fw/cdsp.mbn"      "$_fw/venus.mbn"     "$_fw/wlanmdsp.mbn"
+  'pil-squash.py'
+)
+sha256sums=('25487bfa1522db87ab5abd8aed82d322f1eda06226c39ef6181af407166d743b'
+            '91266f98cf40485015edb6773223d134d4b91c2fe26ec32a81ad6921db6776a4'
+            '44bd4f06b97fadccde5682821fec102e545c26305d24b9227220b184a87a078c'
+            '61be42f041eb6051eb9f56beb1f98ed97ab21faf2ef2df6b9151ba1a46aae878'
+            '2a3b23d1cd7a643d80ca1b3ed0c3543c66b7b83854e9b40625684e5d0a6d0625'
+            'dda6338c5a331cb8db31c806b93cfb77028a10291b5b9ad6172b6b6218d7fdc6'
+            'bf9b7e80853ecb45b26b782a333999d5f686dab42e4372782eff43bea16be144'
+            'fc00e78a3e73909eb33e01591cb8758c66bb58d91283c8396fc3ffac97fd17ab'
+            '14024088f436ebd24b097cb113b2177e12c939efdac0211d560c7cc498611507'
+            '8d572c4b4dee9572d90ab90137ec030331856bbfd8bf2e6ee315da4a5bab3373'
+            '9e9d7daa6f7a9555584585f09b5a72a49df905f3c420518ffd5ddbafe599614a'
+            'e5368943533cc1cfbc4afc1a3e2cd3e24a125955508c534d669c7cbd50fce524'
+            '5187a4edb51ebb1d81e9cbe7d65b8c00312bd4430c1c0542732ffb59de9ef8e0'
+            '2242bf300366d266d902416f00a0cb0c1ae91dd4629eb73766482600120a5e8a'
+            'SKIP')
+
+build() {
+  # Qualcomm ships these two as a header file plus one file per segment. The
+  # kernel wants one blob, so they are reassembled here.
+  #
+  # pil-squash.py rather than postmarketOS's pil-squasher, which is packaged
+  # for Alpine and not for Arch. It is checked against the vendor's own
+  # unsplit a615_zap.elf -- see test-pil-squash.py -- so this is a verified
+  # reimplementation rather than a hopeful one.
+  python3 "$srcdir/pil-squash.py" "$srcdir/a615_zap.mdt" "$srcdir/a615_zap.mbn"
+  python3 "$srcdir/pil-squash.py" "$srcdir/ipa_fws.mdt"  "$srcdir/ipa_fws.mbn"
+}
+
+package() {
+  # The path the device tree names. Getting it wrong is not a build failure --
+  # it is a phone that boots to a black screen because the GPU never came up.
+  local d="$pkgdir/usr/lib/firmware/qcom/sdm670/sargo"
+  install -d "$d"
+  for f in a615_zap.mbn ipa_fws.mbn adsp.mbn cdsp.mbn venus.mbn wlanmdsp.mbn; do
+    install -Dm644 "$srcdir/$f" "$d/$f"
+  done
+
+  # A squash that produced nothing would install a zero-byte blob that fails at
+  # boot naming the firmware rather than the build. Cheap to rule out here.
+  [ -s "$d/a615_zap.mbn" ] || { echo "!! a615_zap.mbn is empty"; return 1; }
+  [ -s "$d/ipa_fws.mbn" ]  || { echo "!! ipa_fws.mbn is empty";  return 1; }
+}

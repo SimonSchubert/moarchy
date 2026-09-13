@@ -20,8 +20,23 @@ FROM --platform=linux/arm64 menci/archlinuxarm@sha256:f7c6f64c0f246f41775e017933
 #   "restricting filesystem access failed because Landlock is not supported"
 RUN sed -i '/^\[options\]/a DisableSandbox' /etc/pacman.conf
 
+# bc and libelf are the KERNEL's build tools, and they are here rather than in
+# linux-moarchy-sdm670's makedepends because build-packages.sh builds every
+# in-repo package with --nodeps (see its pkgbuilds loop) -- makedepends are
+# declared for correctness and never installed, so the builder image is what
+# actually has to carry them.
+#
+# Leaving bc out cost a build and read as nothing like a missing package: the
+# kernel fails at `include/generated/timeconst.h ... Error 127`, which is
+# make's code for "command not found" about a header, four directories away
+# from the tool that was missing. kernel/time/timeconst.bc is a bc script.
+#
+# base-devel already supplies bison, flex, gcc, make and perl. libelf is for
+# objtool. pahole is deliberately NOT here: it only enables DEBUG_INFO_BTF,
+# which olddefconfig turns off anyway on a GCC build, and it would add a
+# toolchain dependency for a debugging feature a phone does not use.
 RUN pacman-key --init && pacman-key --populate archlinuxarm && \
-    pacman -Syu --noconfirm git go base-devel sudo
+    pacman -Syu --noconfirm git go base-devel sudo bc libelf
 
 # makepkg refuses to run as root.
 RUN useradd -m builder && \
