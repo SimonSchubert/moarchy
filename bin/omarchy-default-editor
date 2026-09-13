@@ -73,6 +73,10 @@ gnome-text-editor) _desktop="org.gnome.TextEditor.desktop" ;;
 nvim) _desktop="nvim.desktop" ;;
 esac
 if [[ -n $_desktop && -r /usr/share/applications/$_desktop ]]; then
+  # xdg-mime writes $XDG_CONFIG_HOME/mimeapps.list, does not create its parent,
+  # and exits 0 when the touch fails -- so this directory is ensured rather than
+  # assumed. See moarchy-user-setup, which hit exactly that.
+  mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}"
   # The text/* types nvim.desktop claims, so picking Text Editor takes all of
   # them and does not leave half the file types opening in a terminal.
   for _t in text/plain text/markdown text/x-csrc text/x-chdr text/x-c++src \
