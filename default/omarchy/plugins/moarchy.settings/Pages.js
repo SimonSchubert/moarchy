@@ -125,7 +125,11 @@ var PAGES = {
   //
   // returnTo brings Back here rather than dropping you on the home screen.
   { id: "wifi", type: "action", glyph: "󱚾", label: "Wi-Fi networks",
-    keywords: "wlan wireless internet connect",
+    // `passphrase` came off the drawer entry this row replaced (docs/apps.md):
+    // deleting moarchy.wifi.desktop deleted its Keywords= line too, and every
+    // word in it that this row does not carry is a word that used to find
+    // Wi-Fi from the drawer's field and now finds nothing.
+    keywords: "wlan wireless internet connect passphrase",
     // One field of omarchy-network-status, which answers a whole record (I6).
     // A script and not an inline pipeline: E3 resolves the first word of every
     // row's command on PATH, and an awk one-liner puts `else` there.
@@ -145,7 +149,11 @@ var PAGES = {
   // running NetworkManager with iwd.service disabled but D-Bus activatable, so
   // it would have started iwd to fight NetworkManager for wlan0.
   { id: "bluetooth", type: "action", glyph: "󰂯", label: "Bluetooth devices",
-    keywords: "pair headset",
+    // Same as the Wi-Fi row above: these are moarchy.bluetooth.desktop's
+    // Keywords=, folded into the row that is now the only way to search for
+    // it. `bt` is the one that was actually missed -- it matched the entry and
+    // matches nothing in "Bluetooth devices" or "Network & internet".
+    keywords: "bt pair pairing headset headphones speaker",
     run: "omarchy-shell shell summon moarchy.bluetooth '{\"returnTo\":\"moarchy.settings\",\"page\":\"net\"}'",
     launch: "none" },
   { id: "qr", type: "action", glyph: "󰐲", label: "Wi-Fi QR code",
