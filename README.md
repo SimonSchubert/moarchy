@@ -163,6 +163,7 @@ One drag up from the home pill has two stops, the way Android's does:
 | Swipe up from the pill, short | The app drawer — which opens with a shelf of what is already running |
 | Swipe up from the pill, further | Home — a workspace with nothing on it |
 | Swipe up **on the wallpaper** | The app drawer, tracking the finger 1:1 |
+| Press and hold the pill | The default coding agent, in a terminal — the picker, with none chosen yet |
 | Swipe left / right | Next / previous workspace, which is next / previous app |
 | Tap an open-app tile | Switch to that app |
 | Flick an open-app tile up | Close that app |
@@ -174,7 +175,13 @@ recents carousel and the drawer was reachable only from a blank workspace; the
 drawer now lists the open apps along its own top, so the switcher was deleted
 rather than kept beside a launcher that shows the same thing. Nothing on the
 strip closes a window: apps are closed from the drawer's shelf, one tile at a
-time (C1, M6).
+time (C4, M6).
+
+The hold is the other gesture Android spends on what its owner reaches for
+most. Here that is the coding agent, and the pill **shakes** while the press
+counts down — a 4px line under a motionless thumb otherwise looks exactly like
+a 4px line under a thumb that is only resting, and a gesture nobody can see
+happening is a gesture nobody finds (C1, C2).
 
 Everything is reachable without a finger, which is how the selftest asserts it:
 

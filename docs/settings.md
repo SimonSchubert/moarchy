@@ -1044,6 +1044,24 @@ the drawer on a phone with no agent installed finds the screen that installs
 Claude -- which is the search that returned nothing at all before.
 → the setup tile's `Keywords` contains every name in `moarchy-agent list`
 
+**P12** There is **one answer** to "the default agent", and `moarchy-agent
+launch` is where it is read. The tile is a file that carries that answer; the
+strip's press-and-hold (`gestures.md` C1) is a gesture with no file, so it asks
+this verb rather than reading `defaults/agent` for itself. Both states come
+with it: an agent picked and it opens that one, nothing picked and it opens the
+picker the setup tile opens (P3, P10) — so the icon and the gesture cannot
+come to name different agents, which a second reading of the same rule is how
+they would.
+
+`launch` and `open` are different verbs on purpose. `open <name>` *makes* that
+agent the default and opens it, which is what a tap on a row or on the tile
+means; `launch` opens whichever one already is, and chooses nothing. The tile's
+`Exec` stays `open` (P2).
+→ `moarchy-agent launch` with `codex` in `defaults/agent` execs
+`omarchy-default-agent codex`; with that file absent it execs `omarchy-shell
+settings openAt apps.default.agent`, and neither path installs an agent to find
+out which
+
 ## The IPC surface
 
 These verbs exist so the ACs above are checkable without touching the screen.

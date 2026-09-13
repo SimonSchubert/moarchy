@@ -17,11 +17,20 @@
 #   moarchy-agent seed           shim all of them, and write the tile once
 #   moarchy-agent open  <name>   shim, tile, then install and launch through
 #                                omarchy-default-agent
+#   moarchy-agent launch         open the agent already chosen, choosing none
 #
 # `open` is what both the Settings row and the drawer tile run, and it is
 # idempotent on purpose: the first tap installs, every tap after it launches,
 # and the tile is rewritten either way so a hand-edited or half-written file
 # heals itself.
+#
+# `launch` is the same thing for a caller that has no name to give: the strip's
+# press-and-hold (docs/gestures.md C1). It reads the chosen agent and hands off
+# to `open`, and with nothing chosen it opens the picker -- the two states the
+# tile has, from the one place that decides them (docs/settings.md P12). A
+# gesture that read ~/.config/omarchy/defaults/agent for itself would be a
+# second copy of that rule, and the copies would part company the first time
+# either moved.
 #
 # ---------------------------------------------------------------------------
 # One tile, nine agents
@@ -231,6 +240,20 @@ EOF
   finish_entry
 }
 
+# Everything `open` does, so `launch` can do it without spelling it twice.
+#
+# None of the writes is fatal: the point of the tap is to open the agent, and an
+# unwritable ~/.local costs an icon or a name on PATH, not a session.
+open_agent() {
+  local agent=$1
+  write_shim "$agent"  || echo "moarchy-agent: could not write the wrapper" >&2
+  write_entry "$agent" || echo "moarchy-agent: could not write the drawer tile" >&2
+  # omarchy-default-agent installs through mise when it has to, writes
+  # ~/.config/omarchy/defaults/agent, and execs omarchy-agent. exec, so this
+  # script is not left holding a process for the life of the session.
+  exec omarchy-default-agent "$agent"
+}
+
 # The tile as it should be right now: the chosen agent's, or the setup tile
 # when nothing has been chosen.
 write_current() {
@@ -271,17 +294,26 @@ case "${1:-}" in
     ;;
   open)
     [[ -n ${2:-} ]] || { echo "usage: moarchy-agent open <name>" >&2; exit 2; }
-    # Neither of these is fatal: the point of the tap is to open the agent, and
-    # an unwritable ~/.local costs an icon or a name on PATH, not a session.
-    write_shim "$2"  || echo "moarchy-agent: could not write the wrapper" >&2
-    write_entry "$2" || echo "moarchy-agent: could not write the drawer tile" >&2
-    # omarchy-default-agent installs through mise when it has to, writes
-    # ~/.config/omarchy/defaults/agent, and execs omarchy-agent. exec, so this
-    # script is not left holding a process for the life of the session.
-    exec omarchy-default-agent "$2"
+    open_agent "$2"
+    ;;
+  launch)
+    # docs/gestures.md C1. The strip's hold, which has no name to give.
+    chosen=$(current_agent)
+    [[ -n $chosen ]] && open_agent "$chosen"
+
+    # Nothing picked. The picker, not an arbitrary agent -- the same screen and
+    # the same IPC the setup tile carries (docs/settings.md P3, P10), so the
+    # hold on a fresh phone asks the question the grid asks instead of
+    # installing whichever agent this script happened to name first.
+    #
+    # The tile is rewritten on the way for the reason `open` rewrites it: it is
+    # the one moment the answer is known to be fresh, and a tile left naming an
+    # agent the defaults file no longer holds heals here.
+    write_setup_entry || echo "moarchy-agent: could not write the drawer tile" >&2
+    exec omarchy-shell settings openAt apps.default.agent
     ;;
   *)
-    echo "usage: moarchy-agent {list|shim|entry|seed|open} [name]" >&2
+    echo "usage: moarchy-agent {list|shim|entry|seed|open|launch} [name]" >&2
     exit 2
     ;;
 esac

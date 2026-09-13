@@ -492,6 +492,42 @@ P5PY
     no "P7 ~/.local/bin/claude was replaced" "a real install vanishes on the next seed"
   fi
 
+  # P12. `moarchy-agent launch` -- the verb the strip's press-and-hold runs
+  # (docs/gestures.md C1). Both of its states, and neither may install anything.
+  #
+  # Stubs on PATH, because the real thing ends in `exec omarchy-default-agent`
+  # and `exec omarchy-shell`: one downloads an agent through mise and holds a
+  # terminal open, the other opens Settings on the phone running the suite. The
+  # stub records the argv it was called with, which is the whole of what this
+  # check is about -- which command the verb hands off to, in each state.
+  stub_dir=$(mktemp -d)
+  stub_log="$agent_home/launch.log"
+  for stub in omarchy-default-agent omarchy-shell; do
+    printf '#!/bin/bash\necho "%s $*" >>"$MOARCHY_LAUNCH_LOG"\n' "$stub" \
+      >"$stub_dir/$stub"
+    chmod +x "$stub_dir/$stub"
+  done
+  aglaunch() {
+    : >"$stub_log"
+    env HOME="$agent_home" MOARCHY_PATH="$MOARCHY_ROOT" \
+        MOARCHY_LAUNCH_LOG="$stub_log" PATH="$stub_dir:$PATH" \
+        "$agent_bin" launch >/dev/null 2>&1
+    cat "$stub_log"
+  }
+  mkdir -p "$agent_home/.config/omarchy/defaults"
+  echo codex >"$agent_home/.config/omarchy/defaults/agent"
+  p12_picked=$(aglaunch)
+  rm -f "$agent_home/.config/omarchy/defaults/agent"
+  p12_none=$(aglaunch)
+  rm -rf "$stub_dir"
+  if [[ $p12_picked == "omarchy-default-agent codex"
+        && $p12_none == "omarchy-shell settings openAt apps.default.agent" ]]; then
+    ok "P12 the hold opens the chosen agent, and the picker when none is chosen"
+  else
+    no "P12 launch ran '$p12_picked' with codex picked, '$p12_none' with none" \
+       "the strip's hold and the drawer's tile must never name different agents"
+  fi
+
   rm -rf "$agent_home"
 fi
 
@@ -1036,6 +1072,35 @@ print(found[0] if found else "")'; }
              "a full-height band swallows the keyboard's leftmost key column"
   fi
 
+  # --- C2. the strip's hold, as far as it can be asked for nothing ----------
+  #
+  # Above the uinput gate with G10, and for a stronger reason than convenience:
+  # this is the check that catches a phone running an old build, and an old
+  # build is exactly the state in which the touch checks below cannot be
+  # trusted either.
+  #
+  # It used to be a 2s synthetic hold asserting that nothing closed, back when
+  # the hold was specified to do nothing at all. The hold now starts the default
+  # coding agent (docs/gestures.md C1), and a suite may not fire it: on a phone
+  # that has picked an agent it never installed, the first hold downloads one
+  # through mise, and on a phone that has picked none it opens Settings over
+  # every check that follows. A test that installs a package to prove a gesture
+  # works has changed the phone it was measuring.
+  #
+  # What that leaves is the one question only this phone can answer -- does the
+  # shell running here have the gesture at all? The two states behind it are
+  # checked for nothing in the coding agent section (docs/settings.md P12), and
+  # the cue itself is a 4px line moving 4px, which is a hand check (C2, C3, C5).
+  hold_state=$(timeout 8 omarchy-shell gestures status 2>/dev/null \
+               | tr ' ' '\n' | sed -n 's/^hold=//p')
+  if [[ $hold_state == idle ]]; then
+    okac C2 "the strip publishes its hold state, and it is idle with nothing on it"
+  else
+    noac C2 "gestures status says hold=${hold_state:-nothing}" \
+            "no field at all is a build without the gesture -- a stale copy in\
+ ~/.config/omarchy/plugins shadows the package until the shell is restarted"
+  fi
+
   # Does the injector actually RUN? `-x` says only that the file has the bit
   # set. Every call below sends stderr to /dev/null -- it has to, or the noise
   # buries the results -- so an injector that cannot start turns into a dozen
@@ -1120,17 +1185,6 @@ print(found[0] if found else "")'; }
     fi
     timeout 8 omarchy-shell shade close >/dev/null 2>&1
     sleep 1
-
-    # --- C. no hold-to-close ----------------------------------------------
-    before=$(scratch)
-    sudo -n "$touch_bin" hold 360 $STRIP_Y 2000 >/dev/null 2>&1
-    sleep 3
-    if [[ $(scratch) == "$before" ]]; then
-      okac C1 "a 2s hold on the strip closes nothing"
-    else
-      noac C1 "holding on the strip closed a window" \
-              "hold-to-close was removed; nothing on the strip may close a window"
-    fi
 
     # --- A. strip, up ------------------------------------------------------
     # D2b first, because every band below it is a fraction of this number and a

@@ -179,8 +179,11 @@ Item {
   // 360px screen runs the pill off the edge long before the commit threshold.
   readonly property real damping: 0.32
 
-  // Movement past this is a drag rather than a stationary touch. It used to
-  // also cancel a hold-to-close; there is no hold any more (C1).
+  // Movement past this is a drag rather than a stationary touch, and it is what
+  // cancels the hold (C3) as well as what latches a drag. One number for both,
+  // deliberately: a touch that is a drag and a touch that is a hold are the
+  // same touch until this is crossed, so two numbers would leave a band in
+  // which it was neither or both.
   readonly property int slop: Style.space(8)
 
   // The old strip travel, kept only as the fallback in targetTravel() for a
@@ -733,6 +736,33 @@ Item {
         root.dispatch("workspace number " + root.firstFreeWorkspace())
     }
     else if (action === "clear") root.hideTopmostOverlay()
+
+    // C1, C5. The default coding agent, from a gesture that has no name to
+    // give it.
+    else if (action === "agent") {
+      // B3's reason, on a gesture that opens a window rather than switching to
+      // one: the agent arrives on a workspace of its own, and a sheet left
+      // standing over it is a hold that appears to have done nothing at all.
+      root.hideCoveringSurfaces()
+
+      // The keyboard is deliberately left where it is, unlike going home (F3).
+      // What opens is a terminal, which is entitled to the input an empty
+      // workspace was not, and lowering it here would make the agent's first
+      // act be taking it back.
+
+      // One answer to "the default agent", and it is moarchy-agent's:
+      // with one picked this opens it, with none it opens the picker, and the
+      // drawer's tile is rewritten on the way so the icon and this gesture
+      // cannot come to name different agents (settings.md P12). Reading
+      // ~/.config/omarchy/defaults/agent here instead would be a second copy of
+      // that rule, and two copies of a rule is how the tile came to name Grok
+      // on a phone that had chosen Claude.
+      //
+      // execDetached rather than a Process, for the reason hideKeyboard gives:
+      // there is no answer to wait for, and the agent must outlive a shell
+      // restart the way anything else launched from the grid does.
+      Quickshell.execDetached(["moarchy-agent", "launch"])
+    }
   }
 
   // ------------------------------------------------------------------- back
@@ -841,10 +871,96 @@ Item {
     root.dispatch("kill")
   }
 
+  // ------------------------------------------------------- press and hold
+  //
+  // C. A press that stays put starts the default coding agent. Every other
+  // gesture on this strip is decided by travel; this is the one a clock
+  // decides, and so the one with nothing to look at while it is being decided.
+  // That is what the shake is for (C2), and it is not decoration: a 4px line
+  // under a motionless thumb looks exactly like a 4px line under a thumb that
+  // is resting, and a gesture nobody can tell is happening is a gesture nobody
+  // finds.
+  //
+  // Timers rather than a TapHandler, for the reason the drawer's hold gives at
+  // length (L1): the MultiPointTouchArea below owns the exclusive grab, so a
+  // handler beside it would get a passive one and lose the press wherever that
+  // area decided the gesture was over. A timer armed on press has no grab to
+  // lose.
+
+  // C1. L1's number, deliberately. A phone has one hold, not one per surface.
+  readonly property int holdDelay: 500
+
+  // C2. How long the press stays silent before the pill starts to move. Every
+  // gesture here opens with a press -- A's drag, B's swipe, a tap that means
+  // nothing -- so a cue that begins on contact fires on all of them, and a cue
+  // that fires on everything says nothing.
+  readonly property int holdCueDelay: 150
+
+  // How far the pill swings, either side of where it sits. Enough to read as
+  // deliberate on a line this thin, and well short of pillTravel, so the shake
+  // cannot be mistaken for the pill following a finger sideways (pillOffset).
+  readonly property int holdShakeTravel: Style.space(4)
+
+  property bool holdShaking: false
+
+  // C3. True from the moment the hold fires until the next press: the rest of
+  // that touch means nothing, because it has already meant something. Cleared
+  // on press and not on release, which is L2's correction -- cleared on release
+  // it is already false by the time the release path asks.
+  property bool holdFired: false
+
+  // Written by the animations beside the pill and read by its bindings. The
+  // pill's x IS a binding, so an animation that targeted it directly would
+  // break that binding for good and the pill would stop tracking a sideways
+  // drag ever after.
+  property real holdShake: 0
+  property real holdPop: 0
+
+  function armHold(): void {
+    root.holdFired = false
+    holdCue.restart()
+    holdTimer.restart()
+  }
+
+  // Idempotent, and called from every path that ends a touch -- including the
+  // ones where nothing was armed.
+  function cancelHold(): void {
+    holdTimer.stop()
+    holdCue.stop()
+    root.holdShaking = false
+    root.holdShake = 0
+  }
+
+  Timer {
+    id: holdCue
+    interval: root.holdCueDelay
+    onTriggered: root.holdShaking = true
+  }
+
+  Timer {
+    id: holdTimer
+    interval: root.holdDelay
+    onTriggered: {
+      // The shake stops before the flash starts, or the pill is swinging while
+      // it swells and the two cues read as one smear.
+      root.cancelHold()
+      root.holdFired = true
+      holdFlash.restart()
+      root.run("agent")
+    }
+  }
+
   // Back to rest. Every path out of a gesture goes through this.
   function reset(): void {
     watchdog.stop()
     root.tracking = false
+    // After `tracking = false`, so the pill's Behavior is live again and a
+    // shake that was in flight springs back to centre instead of snapping
+    // there. holdFired is deliberately NOT cleared here: the release path has
+    // already read it by the time this runs, and clearing it on the way out
+    // would leave the flag false for a touch that has not started yet. The
+    // next press retires it (C3), which is L2's correction over again.
+    root.cancelHold()
     root.dragMode = "none"
     root.pendingMode = "none"
     root.dragSource = ""
@@ -896,6 +1012,18 @@ Item {
         return "ok: drawer"
       }
       return "usage: swipe left|right|up|home"
+    }
+
+    // C1. The hold, without a finger.
+    //
+    // This one really launches: there is nothing behind it to stub, so on a
+    // phone that has picked an agent it has never installed, the first call
+    // downloads it through mise. That is why the gesture suite does not fire it
+    // -- a check that installs a package to prove a gesture works has changed
+    // the phone it was measuring.
+    function hold(): string {
+      root.run("agent")
+      return "ok: agent"
     }
 
     // G. Reachable without a finger, and the only way to test the priority
@@ -952,6 +1080,14 @@ Item {
                   // plainly there, and the difference between the two fields is
                   // the whole of the defect F5 records.
                   + " rep=" + JSON.stringify(root.focusedRepresentation())
+                  // C2. Where the hold stands. Published because the cue it
+                  // drives is a 4px line moving 4px, which no other check can
+                  // see -- and because `idle` here is the cheapest proof from
+                  // outside that the build on the phone is one that has the
+                  // gesture at all.
+                  + " hold=" + (root.holdFired ? "fired"
+                                : root.holdShaking ? "shaking"
+                                : holdTimer.running ? "armed" : "idle")
       if (!root.tracking) return "idle" + focus
       return "tracking mode=" + root.dragMode
              + " pull=" + Math.round(root.pull * 100)
@@ -991,17 +1127,25 @@ Item {
       height: Math.max(2, Style.space(4))
       radius: height / 2
       anchors.verticalCenter: parent.verticalCenter
-      x: (parent.width - width) / 2 + root.pillOffset
+      x: (parent.width - width) / 2 + root.pillOffset + root.holdShake
 
       // Brightens while tracking, and stretches as an upward swipe approaches
       // the first stop. Armed for home it goes accent, and the sheet has been
       // lifting for the last 15% of travel on its way there (homeHint):
       // between them they are the cue that letting go now goes somewhere else
       // than the sheet you are looking at.
+      //
+      // C2. The hold borrows that same vocabulary for its own moment -- accent
+      // and a swell -- rather than inventing a third colour for a strip that
+      // has room for one idea at a time. It differs in that it decays
+      // (holdPop), because arming for home is a state you can still leave and
+      // firing the hold is a thing that has already happened.
       color: root.homeArmed ? Color.accent
-                            : Util.alpha(Color.foreground, root.tracking ? 0.9 : 0.3)
+           : root.holdPop > 0 ? Util.alpha(Color.accent, 0.4 + 0.6 * root.holdPop)
+           : Util.alpha(Color.foreground, root.tracking ? 0.9 : 0.3)
       scale: root.homeArmed ? 1.6
-           : 1 + Math.min(0.4, Math.max(0, -root.dy) / (root.commitDistance * 4))
+           : 1 + 0.5 * root.holdPop
+             + Math.min(0.4, Math.max(0, -root.dy) / (root.commitDistance * 4))
 
       Behavior on x {
         enabled: !root.tracking
@@ -1014,6 +1158,44 @@ Item {
         SpringAnimation { spring: 4; damping: 0.35 }
       }
       Behavior on color { ColorAnimation { duration: 140 } }
+
+      // C2. The shake, which is the whole of what a hold shows before it fires.
+      //
+      // Three legs rather than a symmetric wobble: out, back through centre to
+      // the far side, then home. A 220ms round trip reads as impatience --
+      // something waiting to happen -- where a slower one reads as drift and a
+      // faster one as a rendering fault. It loops until the hold fires or the
+      // touch ends, so the cue lasts exactly as long as the thing it is a cue
+      // for.
+      //
+      // `running` is bound rather than started by hand: cancelHold() has four
+      // callers and every one of them would otherwise have to remember this.
+      SequentialAnimation {
+        id: holdShakeAnim
+        running: root.holdShaking
+        loops: Animation.Infinite
+        NumberAnimation { target: root; property: "holdShake"
+                          to: root.holdShakeTravel; duration: 55
+                          easing.type: Easing.InOutSine }
+        NumberAnimation { target: root; property: "holdShake"
+                          to: -root.holdShakeTravel; duration: 110
+                          easing.type: Easing.InOutSine }
+        NumberAnimation { target: root; property: "holdShake"
+                          to: 0; duration: 55
+                          easing.type: Easing.InOutSine }
+      }
+
+      // And the moment it fires. Self-retiring, unlike homeArmed: the finger
+      // may sit on the strip for as long as it likes after the agent has been
+      // asked for, and a pill that stays accent until it is lifted is a strip
+      // that looks stuck.
+      SequentialAnimation {
+        id: holdFlash
+        NumberAnimation { target: root; property: "holdPop"; to: 1
+                          duration: 90; easing.type: Easing.OutCubic }
+        NumberAnimation { target: root; property: "holdPop"; to: 0
+                          duration: 320; easing.type: Easing.InOutSine }
+      }
     }
 
     MultiPointTouchArea {
@@ -1052,6 +1234,12 @@ Item {
         root.dragSource = "strip"
         root.pendingMode = root.coveringSheet() ? "none" : "drawer"
         if (root.pendingMode === "drawer") root.resolveTarget("moarchy.drawer")
+
+        // C1. And the clock, which is the only thing on this strip that starts
+        // anything without being told which way the finger went. It is armed on
+        // every press and cancelled by the first pixel past the slop, so the
+        // cost to a swipe is a timer that never reaches 500ms.
+        root.armHold()
         watchdog.restart()
       }
 
@@ -1068,10 +1256,23 @@ Item {
         root.dx = pts[0].sceneX - root.startX
         root.dy = y - root.startY
 
+        // C3. Travel cancels the hold, on either axis and in either direction.
+        // The latch below cannot do this job: a sideways swipe never latches --
+        // dragMode stays "none" for the whole of B -- so a thumb that has
+        // crossed half the screen would still be sitting on a running timer.
+        if (Math.abs(root.dx) > root.slop || Math.abs(root.dy) > root.slop)
+          root.cancelHold()
+
         // B2. Re-tested every frame rather than only at the first movement, so
         // a thumb that starts its arc sideways still latches once the upward
         // travel dominates, instead of falling through to a workspace switch.
-        if (root.dragMode === "none" && root.dragTarget && root.pendingMode !== "none"
+        //
+        // C3. A hold that has fired takes the rest of the touch with it: the
+        // agent is already on its way and the sheets have already been swept,
+        // so a finger that wanders afterwards must not also arrive at the
+        // drawer it just put away.
+        if (root.dragMode === "none" && !root.holdFired
+            && root.dragTarget && root.pendingMode !== "none"
             && root.dy < -root.slop && Math.abs(root.dy) > Math.abs(root.dx)) {
           root.dragMode = root.pendingMode
         }
@@ -1109,7 +1310,11 @@ Item {
             root.releaseTarget(root.velocity >= root.fling
               || (root.velocity > -root.fling && root.pull >= root.drawerCommit))
           }
-        } else {
+        } else if (!root.holdFired) {
+          // C3. Reached only when the hold did not fire. A fired one has
+          // consumed the press, and the lift after it means nothing -- which
+          // is what keeps a 500ms press that drifted 6px from also changing
+          // workspace on the way out.
           root.commit()
         }
         root.reset()

@@ -4,7 +4,7 @@ What the phone's touch gestures must do. Present tense, normative. The
 archaeology of *why* lives in `docs/build-log.md`; this file is the contract.
 
 Every line here is agreed. Nothing is inferred — where a choice was open it was
-put to a decision, and the ones that removed capability (C1, M12) record why.
+put to a decision, and the ones that removed capability (C4, M12) record why.
 
 Each AC is checkable from a terminal. `bin/moarchy-selftest --gestures`
 cites these ids, so an AC with no test is visible.
@@ -174,17 +174,80 @@ same.
 
 ## C. Strip — press and hold
 
-**C1** Pressing and holding on the strip does nothing. Resting a thumb on the
-pill does nothing. There is no gesture on the strip that closes a window.
-→ open-window count unchanged after a 2s press
+Until 2026-09-13 the whole of this section was **C1: the hold does nothing**.
+It had held a close-the-window gesture, removed because an edge a thumb rests
+on is the wrong place to destroy something: what it closed was invisible at the
+moment it closed, and it had no undo. That removal stands (C4) — apps are
+closed from the drawer's shelf, one at a time, by flicking a tile away (M6).
 
-Apps are closed from the drawer's shelf instead — one at a time, by flicking a
-tile away (M6). That is a screen where you can see what you are closing, which
-an edge you rest a thumb on is not.
+What it did not ask is what an empty gesture costs. The hold is the one press
+on this strip that nothing else wants, and every phone spends it on the thing
+its owner reaches for most — Android puts the assistant there. Here that is the
+coding agent: it is why the port exists, it already has exactly one definition
+(`settings.md` P1), and until now it was reachable only by finding its tile in
+a 64-entry grid.
 
-Unaffected: `$mod+w` still closes the focused window for anyone with a
-keyboard, and the `omarchy-shell gestures close` IPC goes away with the hold it
-existed to stand in for.
+The asymmetry is the whole argument for spending it. A hold that fires by
+accident now opens a window, and the back gesture closes it (G4). The hold that
+used to be here closed one, and nothing anywhere undoes that.
+
+**C1** A press that stays on the strip for **500ms** without travelling past
+the drag slop starts the **default coding agent**: the agent the drawer's one
+tile names, in a terminal, on its own workspace like any other app. With no
+agent picked yet it opens the picker instead — the same two states as that
+tile, read from the same one answer (`settings.md` P12), so the gesture and the
+icon can never name different agents. 500ms is L1's number, because a phone has
+one hold and not two.
+→ with `codex` picked, `moarchy-agent launch` execs `omarchy-default-agent
+codex`; with nothing picked it execs `omarchy-shell settings openAt
+apps.default.agent` and installs nothing
+
+**C2** The pill **shakes** while the hold is counting, and stops the moment it
+fires. The strip is a 4px line with no label on it, and a press that is going
+somewhere looks exactly like a thumb resting on the bottom edge: the shake is
+the only thing that says otherwise. It is the cue Android's handle gives for
+the same reason, and without it this gesture is one nobody finds.
+
+It starts **150ms** in, not on contact. Every gesture on this strip opens with
+a press — A's drag, B's swipe, a tap that means nothing — so a pill that jumps
+on contact jumps on all of them, and a cue that fires on everything says
+nothing.
+→ `omarchy-shell gestures status` reports `hold=armed` for the first 150ms of a
+stationary press, `hold=shaking` until it fires, `hold=fired` from then until
+the next press, and `hold=idle` at rest
+
+**C3** Travel cancels the hold, and a fired hold cancels the release. Past the
+slop the touch is A's drag or B's workspace change from that pixel on, whether
+or not 500ms has passed on the way — L3's rule, for the grid's hold, and the
+same rule here. A hold that has fired then takes the rest of that touch with
+it: a finger that wanders afterwards raises nothing and the lift commits
+nothing, so one press never both starts the agent and changes workspace (L2).
+→ a 1200ms press that travels 500px up leaves the drawer open, `hold=idle`,
+and no agent window
+
+**C4** Nothing on the strip closes a window. That is what this section has said
+since hold-to-close was removed, and replacing the hold does not weaken it:
+`$mod+w` still closes the focused window for anyone with a keyboard, the shelf
+still closes one you can see (M6), and the `omarchy-shell gestures close` IPC
+is still gone.
+→ no press on the strip, of any duration, lowers the open-window count
+
+**C5** The hold reaches the agent from wherever the strip does. The shell's own
+sheets are put away on the way, the way a sideways swipe puts them away (B3): a
+window that opens underneath the drawer is a gesture that appears to have done
+nothing. The keyboard is left up, unlike going home (F3) — what opens is a
+terminal, and it is entitled to the input an empty workspace was not.
+→ with the drawer open, `omarchy-shell gestures hold` leaves `drawer state` ==
+`closed` and the agent focused
+
+**The IPC really launches.** `omarchy-shell gestures hold` is the gesture
+without a finger, and there is nothing behind it to stub: on a phone that has
+picked an agent but never installed it, the first call downloads it through
+mise. That is why `bin/moarchy-selftest --gestures` does not fire it — a suite
+that installs a package to prove a gesture works has changed the phone it was
+measuring. C1 is checked where it can be checked for nothing, against
+`moarchy-agent launch` in a scratch HOME (`settings.md` P12); C2, C3 and C5 are
+hand checks on glass.
 
 ## D. Home screen — the workspace itself
 
