@@ -68,6 +68,10 @@ Item {
   // loudly. Read directly:
   //   barSize, barHidden  notifications/Service.qml positions toasts under the bar
   //   fontFamily          notifications/Service.qml renders toast text
+  //   notificationPopups  false, so notifications/Service.qml puts every
+  //                       notification straight into the history the shade
+  //                       lists and toasts none of them (docs/shade.md S24,
+  //                       pkgbuilds/omarchy-config/notification-popups-bar-opt-out.patch)
   // Called behind a typeof guard, so a missing one is survivable but leaves the
   // caller returning "no-bar" forever:
   //   summonBarWidget / hideBarWidget / isBarWidgetOpen   shell.summon routing
@@ -98,6 +102,16 @@ Item {
   // notifications/Service.qml drops toasts to the top of the screen when it is
   // true, and a bar that omits it is a bar with no toast offset.
   readonly property bool barHidden: false
+
+  // S24. No toasts: a phone reads its notifications in the shade, and a toast
+  // here is an Overlay surface across the top of every app and every sheet
+  // that takes their touches until it expires -- which upstream's first-run
+  // ones never do. Every notification goes to the history instead, whatever
+  // its urgency, and the bell below says one is waiting.
+  //
+  // Read by the patched notifications/Service.qml. Pointing `bar.id` back at
+  // `omarchy.bar` brings the toasts back with the rest of the desktop.
+  readonly property bool notificationPopups: false
 
   // This bar hosts no widgets at all, so every widget-routing call has exactly
   // one honest answer. Returning false (rather than omitting the function) is
@@ -345,8 +359,62 @@ Item {
   readonly property var notifications: root.shell && typeof root.shell.serviceFor === "function"
     ? root.shell.serviceFor("omarchy.notifications") : null
   readonly property bool dnd: root.notifications ? root.notifications.doNotDisturb === true : false
-  readonly property int pendingCount: root.notifications && root.notifications.popupModel
-    ? root.notifications.popupModel.count : 0
+
+  // S26. What is waiting in the shade, counted off the history directory.
+  //
+  // It used to be `notifications.popupModel.count` -- what is on screen right
+  // now -- and S24 leaves that permanently empty: with no toasts there is
+  // never a live popup to count, so the one state worth showing in a bar with
+  // nothing under it would have been invisible. The service writes one .json
+  // per notification into this directory and removes it on dismissal, so the
+  // count is the list the shade shows.
+  //
+  // The service's own path, which does not read XDG_STATE_HOME.
+  readonly property string historyDir:
+    Quickshell.env("HOME") + "/.local/state/omarchy/notifications/history"
+
+  property int historyCount: 0
+  readonly property bool bellShown: !root.dnd && root.historyCount > 0
+
+  // The directory is made before it is watched: FileView cannot watch a path
+  // that does not exist, and on a first boot this runs before the service has
+  // made it. So the watch is armed by the first count, not before.
+  property bool historyWatched: false
+
+  Process {
+    id: historyProbe
+    running: true
+    command: ["bash", "-c", "mkdir -p \"$1\" && ls -1 \"$1\" | grep -c '\\.json$'", "--", root.historyDir]
+    stdout: StdioCollector {
+      onStreamFinished: {
+        // grep -c with no match exits 1 and prints 0, which is the count we
+        // want -- but `set -e` semantics elsewhere have made that exit code
+        // look like a failure before now, so the number is read and nothing
+        // reads the status.
+        var n = parseInt(String(text || "").trim(), 10)
+        root.historyCount = isFinite(n) ? n : 0
+        root.historyWatched = true
+      }
+    }
+  }
+
+  // Debounced: Clear all, and the service's own history trim, touch several
+  // files in one burst.
+  Timer {
+    id: historyRecount
+    interval: 150
+    onTriggered: {
+      if (historyProbe.running) historyRecount.restart()
+      else historyProbe.running = true
+    }
+  }
+
+  FileView {
+    path: root.historyWatched ? root.historyDir : ""
+    watchChanges: true
+    printErrors: false
+    onFileChanged: historyRecount.restart()
+  }
 
   SystemClock {
     id: clock
@@ -375,6 +443,11 @@ Item {
            + " gap=" + root.glyphGap
            + " weight=" + root.textWeight
            + " pct=" + (root.batteryPercentShown ? "on" : "off")
+           // S26, and the only way to ask: the bell is a glyph in a layer
+           // surface, so a screenshot is the alternative.
+           + " dnd=" + (root.dnd ? "on" : "off")
+           + " bell=" + (root.bellShown ? "shown" : "none")
+           + " history=" + root.historyCount
     }
 
     // Declared here, not just on the root item: a function the root happens to
@@ -442,9 +515,15 @@ Item {
             color: root.foreground
           }
 
-          // Silenced is worth a glyph; a pending count is worth a dot. Drawing
-          // the count itself would need a second font metric on a bar that has
-          // room for one.
+          // S26. One of these at a time, never both: silenced says only that
+          // you asked not to be told, and the list still fills underneath it.
+          //
+          // The bell replaced a 5px dot when the toasts went (S24). A dot was
+          // the right weight while it meant "and there is one on screen right
+          // now"; as the only indication a notification exists at all it was
+          // too quiet to find, and the count it drew is the same count, so
+          // nothing is lost by drawing the glyph the shade's own list is full
+          // of instead.
           StatusGlyph {
             anchors.verticalCenter: parent.verticalCenter
             visible: root.dnd
@@ -452,13 +531,10 @@ Item {
             color: root.dim
           }
 
-          Rectangle {
+          StatusGlyph {
             anchors.verticalCenter: parent.verticalCenter
-            visible: !root.dnd && root.pendingCount > 0
-            width: Style.space(5)
-            height: width
-            radius: width / 2
-            color: Color.bar.active
+            visible: root.bellShown
+            text: "󰂚"
           }
         }
 

@@ -1,0 +1,154 @@
+#!/bin/bash
+# The GNOME half of a theme set, with the three things upstream's version has
+# no way to know about this phone (docs/style.md I1a, I1b, I5).
+#
+# Upstream's runs first and unchanged, from /usr/bin: this is a shadow, not a
+# replacement. /etc/profile.d/zz-moarchy.sh puts /usr/lib/moarchy/bin ahead of
+# /usr/bin, and omarchy-theme-set runs each of its post-theme commands through
+# `bash -lc`, so a login shell's PATH is what resolves this name -- the same
+# shadowing the other 21 shared names in this directory already rely on.
+#
+# A shadow rather than a hook in ~/.config/omarchy/hooks/theme-set.d, which is
+# where the sibling project (omarchy-mobile) puts the same three fixes. That
+# directory only exists in a home, and moarchy-user-setup runs ONCE, behind a
+# stamp -- so a phone already in the field would upgrade the package and never
+# get the file. Nothing here is copied into a home, which is what makes
+# upgrading the package upgrade the phone (docs/structure.md P1).
+#
+# It must never fail a theme set. Everything below is best-effort and the exit
+# is 0: omarchy-theme-set runs this in parallel with fifteen other commands and
+# a non-zero exit here would report a broken theme when the truthful answer is
+# "there was no GTK app running to restart".
+
+set -uo pipefail
+
+THEME_DIR="$HOME/.local/state/omarchy/current/theme"
+COLORS_FILE="$THEME_DIR/colors.toml"
+
+# --- upstream's own, first -------------------------------------------------
+# light/dark, the GTK theme name, and the icon theme this file is here to
+# check. Called by absolute path, so this cannot recurse through PATH.
+[ -x /usr/bin/omarchy-theme-set-gnome ] && /usr/bin/omarchy-theme-set-gnome
+
+# gsettings needs a user DBus session; upstream exits early without one and so
+# does everything below that talks to it. The symlinks do not, and are done
+# either way -- a theme applied from moarchy-user-setup's systemd unit is the
+# case that matters, because it is the one that runs before there is a session.
+have_dbus=0
+[ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ] && have_dbus=1
+
+# --- I5. an icon theme that is on the disk ---------------------------------
+# Upstream ends by setting the theme's own icons.theme, and every one of the 22
+# themes names a Yaru -- with Yaru-blue as the fallback for a theme that ships
+# none. There is no Yaru for aarch64: not in Arch Linux ARM, and not in the
+# AUR, where neither yaru-icon-theme nor yaru-colors-icon-theme exists at all.
+#
+# GTK answers every themed icon name out of the theme this names, and for a
+# theme that is not installed it answers `image-missing` -- a white square with
+# a folded corner -- for all of them at once, in every GTK app. The shell never
+# showed it: Quickshell walks the icon directories itself, so the drawer, the
+# carousel and the shade's notification icons have always resolved correctly
+# whatever this said.
+#
+# Checked, not replaced: install a Yaru one day and upstream's choice starts
+# working and this stops touching it. Adwaita rather than breeze because the
+# apps this falls back for are GNOME's.
+icon_theme_installed() {
+  local want=$1 d
+  local -a dirs=("$HOME/.icons" "${XDG_DATA_HOME:-$HOME/.local/share}/icons")
+  local -a data_dirs
+  IFS=: read -ra data_dirs <<<"${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+  for d in "${data_dirs[@]}"; do dirs+=("$d/icons"); done
+  # index.theme, not the directory: a bare directory is what an uninstalled
+  # theme's leftovers look like.
+  for d in "${dirs[@]}"; do
+    [ -f "$d/$want/index.theme" ] && return 0
+  done
+  return 1
+}
+
+if [ "$have_dbus" = 1 ]; then
+  want=$(gsettings get org.gnome.desktop.interface icon-theme 2>/dev/null | tr -d "'")
+  if [ -n "$want" ] && ! icon_theme_installed "$want"; then
+    gsettings set org.gnome.desktop.interface icon-theme Adwaita 2>/dev/null
+  fi
+fi
+
+# --- I1a. the palette, for GTK apps ----------------------------------------
+# default/themed/gtk.css.tpl and gtk3.css.tpl are rendered by
+# omarchy-theme-set-templates into the staged theme directory, along with
+# sway.conf, because they ship into $OMARCHY_PATH/default/themed, which that
+# script globs. What is left is pointing GTK at the result, and GTK only reads
+# one path: ~/.config/gtk-<major>.0/gtk.css.
+#
+# A symlink into the staged directory, so a theme switch needs no copy and no
+# write here at all -- the file under it is replaced by theme-set and GTK reads
+# the new one on the next process start.
+#
+# Never over a real file. A user who has written their own gtk.css keeps it,
+# and a symlink pointing anywhere else is left alone too: the only thing
+# replaced is one of ours, which is what makes this safe to run on every theme
+# set forever.
+link_theme_css() {
+  local dir=$1 staged=$2 link="$1/gtk.css"
+  [ -f "$staged" ] || return 0
+  if [ -L "$link" ]; then
+    case "$(readlink "$link")" in
+      "$HOME"/.local/state/omarchy/*) ;;   # ours, repoint it
+      *) return 0 ;;                       # somebody else's, leave it
+    esac
+  elif [ -e "$link" ]; then
+    return 0                               # a real file, theirs
+  fi
+  mkdir -p "$dir" && ln -nsf "$staged" "$link"
+}
+
+link_theme_css "$HOME/.config/gtk-4.0" "$THEME_DIR/gtk.css"
+link_theme_css "$HOME/.config/gtk-3.0" "$THEME_DIR/gtk3.css"
+
+# --- GTK3, which is Geary and the portal's file chooser --------------------
+# GTK3's built-in Adwaita has its colours baked in at build time, so the names
+# a user stylesheet overrides are not the ones its rules read -- upstream
+# measured exactly that in basecamp/omarchy#7557. adw-gtk3 is libadwaita's
+# stylesheet ported to GTK3 and its rules DO read named colours, so gtk3.css
+# reaches them. Two halves, and neither works alone.
+#
+# This runs after upstream set gtk-theme to Adwaita or Adwaita-dark, so it is
+# the last word -- and only when the theme is installed, because naming a
+# theme that is not there drops every GTK3 app to the fallback rather than
+# leaving it on Adwaita.
+if [ "$have_dbus" = 1 ] && [ -d /usr/share/themes/adw-gtk3 ]; then
+  mode=$(omarchy-theme-color --file "$COLORS_FILE" mode 2>/dev/null)
+  if [ "$mode" = light ]; then gtk3_theme=adw-gtk3; else gtk3_theme=adw-gtk3-dark; fi
+  gsettings set org.gnome.desktop.interface gtk-theme "$gtk3_theme" 2>/dev/null
+fi
+
+# --- I1b. reach the apps that are not running ------------------------------
+# GTK reads the user stylesheet once, at process start. Closing the window is
+# not enough for a GNOME app: it is D-Bus activatable, so the process stays
+# behind as a windowless `--gapplication-service` daemon and the next open
+# paints the palette that was current when the phone booted.
+#
+# The daemons are the only thing killed, and no window is closed, because every
+# one of them respawns the moment something asks D-Bus for it. A mapped window
+# keeps its old colours until it is reopened -- retinting one in place needs a
+# per-app extension, which is a lot of moving parts for a phone where reopening
+# an app is one tap.
+#
+# NOT `pkill -f -- --gapplication-service`, which matches any command line that
+# merely CONTAINS the string -- including the ssh command inspecting the phone
+# for it, and including this script. pkill -f has killed the session that ran
+# it here before. So the flag has to be the LAST argument, which is what a real
+# daemon looks like (`gnome-calendar --gapplication-service`) and never what a
+# shell running a command string looks like, where the last argument is the
+# whole string.
+for pid in $(pgrep -f -- '--gapplication-service' 2>/dev/null); do
+  [ "$pid" = "$$" ] && continue
+  argv=()
+  mapfile -d '' -t argv <"/proc/$pid/cmdline" 2>/dev/null || continue
+  [ "${#argv[@]}" -ge 2 ] || continue
+  [ "${argv[-1]}" = "--gapplication-service" ] || continue
+  kill "$pid" 2>/dev/null
+done
+
+exit 0

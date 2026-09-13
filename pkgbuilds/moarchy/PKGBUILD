@@ -60,7 +60,17 @@ pkgver=$_ver
 # applied. default/ is copied wholesale into this package, so that fix ships
 # here -- which is exactly the case the paragraphs above say a version has to
 # move for. The pkgver is what moves for it.
-pkgrel=1
+#
+# 2, and the paragraph above is why: 0.2.2-1 stopped being an unpublished
+# artifact. The [moarchy] repo publishes it now -- `moarchy.db` names
+# moarchy-0.2.2-1 -- so a phone in the field holds these exact bytes, and this
+# build has different ones: bin/omarchy-theme-set-gnome, the two GTK templates
+# it points at, the web app entries and the schema override (docs/style.md
+# I1a/I5, docs/apps.md B1-B4), and the shade and back-edge changes in the
+# plugins (docs/shade.md S24-S27, gestures.md G10b). Under an unchanged version
+# pacman would compare 0.2.2-1 to 0.2.2-1 and offer nothing, and every one of
+# those would sit in a package nobody ever receives.
+pkgrel=2
 pkgdesc="Omarchy's look, keybindings and theming on a PinePhone, under Sway"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
@@ -128,6 +138,8 @@ package() {
          "$pkgdir/usr/share/moarchy/default/themed" \
          "$pkgdir/usr/share/moarchy/default/pacman-hooks" \
          "$pkgdir/usr/share/moarchy/default/polkit" \
+         "$pkgdir/usr/share/moarchy/default/applications" \
+         "$pkgdir/usr/share/moarchy/default/glib-schemas" \
          "$pkgdir/usr/share/moarchy/default/agents"
 
   # --- the coding-agent tile icons ------------------------------------------
@@ -178,12 +190,34 @@ package() {
       rm -f "$entry"
     done
 
-  # --- the one theme template ----------------------------------------------
+  # --- the web apps ---------------------------------------------------------
+  # Two of upstream's own entries, each with the StartupWMClass upstream has no
+  # reason to carry and this phone cannot do without (docs/apps.md B2-B3).
+  # /usr/share/applications rather than a copy into every home, for the same
+  # reason as everything else here: upgrading the package upgrades the phone.
+  # The artwork they name comes from pkgbuilds/omarchy-config, which is where
+  # the tree it lives in is vendored.
+  install -m644 "$_repo"/default/applications/*.desktop \
+    "$pkgdir/usr/share/applications/"
+
+  # The mobile user agent (B4). /usr/share/glib-2.0/schemas because an override
+  # is compiled together with the schema it overrides, and Epiphany's is there;
+  # pacman's glib2 hook recompiles the directory, so this needs no hook of ours.
+  install -Dm644 "$_repo/default/glib-schemas/99-moarchy.gschema.override" \
+    "$pkgdir/usr/share/glib-2.0/schemas/99-moarchy.gschema.override"
+
+  # --- the theme templates -------------------------------------------------
   # omarchy-theme-set-templates globs the user directory and then
-  # $OMARCHY_PATH/default/themed, so dropping it there themes Sway from every
-  # theme's colors.toml with nothing copied and nothing patched.
-  install -Dm644 "$_repo/default/themed/sway.conf.tpl" \
-    "$pkgdir/usr/share/omarchy/default/themed/sway.conf.tpl"
+  # $OMARCHY_PATH/default/themed, so dropping them there themes Sway and every
+  # GTK app from the theme's own colors.toml with nothing copied into a home
+  # and nothing patched upstream (docs/style.md I1a).
+  #
+  # sway.conf.tpl is the one /etc/sway/config includes; gtk.css.tpl and
+  # gtk3.css.tpl are read through the two symlinks omarchy-theme-set-gnome
+  # makes. A glob rather than three named lines: the directory is the list.
+  install -d "$pkgdir/usr/share/omarchy/default/themed"
+  install -m644 "$_repo"/default/themed/*.tpl \
+    "$pkgdir/usr/share/omarchy/default/themed/"
 
   # --- /etc ----------------------------------------------------------------
   install -Dm644 "$_repo/default/etc/profile.d/zz-moarchy.sh" \

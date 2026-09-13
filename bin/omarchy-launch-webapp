@@ -1,10 +1,125 @@
 #!/bin/bash
-# Sway/phone override. Upstream resolves the default browser, insists on a
-# Chromium-family one, and launches `--app=<url>` for a chromeless window.
+# Sway/phone override of upstream's omarchy-launch-webapp: a site as a window
+# of its own, with no browser chrome (docs/apps.md B1-B5).
 #
-# None of the Chromium-family browsers has an aarch64 build in the repos this
-# phone uses; the browser here is epiphany (WebKit), which has no --app= mode.
-# A web app and a tab are the same thing on a phone anyway -- the window is
-# fullscreen either way and there is no taskbar to tell them apart.
-[[ $# -gt 0 ]] || { echo "usage: omarchy-launch-webapp <url> [args...]" >&2; exit 1; }
-exec setsid moarchy-launch-browser "$@"
+# Why it has to exist. Upstream's version ends in:
+#
+#   case $browser in
+#   google-chrome* | brave* | microsoft-edge* | opera* | vivaldi* | helium*) ;;
+#   *) browser="chromium.desktop" ;;
+#   esac
+#   exec setsid uwsm-app -- $(sed -n 's/^Exec=\([^ ]*\).*/\1/p' .../$browser ...) --app="$1" ...
+#
+# Every browser outside the Chrome family falls into that `*` and is rewritten
+# to chromium.desktop. None of the Chromium family has an aarch64 build in the
+# repos this phone uses, so the `sed` reads no file, the command substitution
+# is empty, and the line execs `uwsm-app -- --app=https://...` with no program
+# in it. Every web app entry upstream ships, and every one
+# omarchy-webapp-install adds, would do nothing at all, silently.
+#
+# This file used to answer that by opening a tab in whatever browser was
+# installed. That was honest and it was not a web app: a tab has the URL bar
+# and the tab strip on a 360px screen, and its window is the browser's, so the
+# recents carousel showed one Epiphany card however many sites were open.
+#
+# The Chrome-family branch below is upstream's, unchanged and first, so
+# installing Chromium or Brave gets upstream's behaviour back with no edit
+# here (B5).
+
+set -uo pipefail
+
+url=${1:-}
+[ -n "$url" ] || { echo "usage: omarchy-launch-webapp <url> [args...]" >&2; exit 1; }
+
+browser=$(env -u BROWSER xdg-settings get default-web-browser 2>/dev/null)
+
+browser_exec() {
+  sed -n 's/^Exec=\([^ ]*\).*/\1/p' \
+    {"$HOME"/.local,"$HOME"/.nix-profile,/usr}/share/applications/"$1" 2>/dev/null | head -1
+}
+
+# --- Chrome family: upstream's own path ------------------------------------
+case $browser in
+google-chrome* | brave* | microsoft-edge* | opera* | vivaldi* | helium* | chromium*)
+  exec=$(browser_exec "$browser")
+  if [ -n "$exec" ]; then
+    exec setsid uwsm-app -- "$exec" --app="$url" "${@:2}"
+  fi
+  ;;
+esac
+
+# --- Epiphany --------------------------------------------------------------
+# `--application-mode` is Epiphany's equivalent of Chromium's `--app=`: no URL
+# bar, no tab strip, just the site, in a window with an id of its own. What it
+# wants alongside took some finding, so the findings are here rather than in a
+# commit message (all four are the sibling project's, measured there first):
+#
+#   1. `--application-mode` alone runs a private instance whose data is thrown
+#      away, so every launch would start logged out. It needs `--profile`.
+#   2. The profile directory name is not free-form. Epiphany derives the web
+#      app's GApplication id from the basename and aborts (exit 134) on
+#      anything else:
+#        "Profile directory .../x-com does not begin with required web app
+#         prefix org.gnome.Epiphany.WebApp_"
+#      Dots separate GApplication id components, so the URL's dots have to
+#      become underscores rather than splitting the id.
+#   3. The prefix is necessary and not sufficient. An empty directory with the
+#      right name still aborts, asking for a `.app` keyfile inside the profile
+#      holding Name, Exec, Icon, StartupWMClass, Type and Terminal.
+#   4. With `.app` in place the window opens, and then dies the first time
+#      anything asks whether a URL is in the app's scope, because the portal
+#      looks for the same entry a second time under
+#      XDG_DATA_HOME/xdg-desktop-portal/applications. Both files, or the web
+#      app is a window that aborts on the first link.
+#
+# The per-app id is the point (B2): the carousel and the drawer index on the
+# window's app id, so one profile shared between web apps would collapse them
+# into a single card. The profile lives at Epiphany's own canonical path under
+# XDG_DATA_HOME rather than somewhere tidier of this project's choosing --
+# that is where Epiphany's own web app list looks.
+if command -v epiphany >/dev/null 2>&1; then
+  # The stripped prefixes all mean "the web version of". Without them
+  # web.whatsapp.com is an app called Web, with an icon called web, in a
+  # profile called org.gnome.Epiphany.WebApp_web_whatsapp_com.
+  host=$(printf '%s' "$url" | sed 's;^[a-z]*://;;; s;[/?#].*$;;; s;^www\.;;; s;^web\.;;; s;^app\.;;; s;^open\.;;; s;^m\.;;')
+  slug=$(printf '%s' "$host" | sed 's;[^A-Za-z0-9];_;g; s;__*;_;g; s;^_;;; s;_$;;')
+  [ -n "$slug" ] || slug=webapp
+  # The first label of the host is what upstream's own omarchy-webapp-install
+  # names an icon after -- x.com -> x, app.zoom.us -> zoom -- so a web app
+  # installed the upstream way finds its icon here too. A name that resolves
+  # to nothing just falls back, so guessing costs nothing.
+  leaf=${host%%.*}
+  [ -n "$leaf" ] || leaf=$slug
+  title=${leaf^}   # bash's own capitalise; sed's \U is a GNU-ism
+
+  data_home=${XDG_DATA_HOME:-$HOME/.local/share}
+  app_id="org.gnome.Epiphany.WebApp_$slug"
+  profile="$data_home/$app_id"
+  portal="$data_home/xdg-desktop-portal/applications/$app_id.desktop"
+  mkdir -p "$profile" "$(dirname "$portal")"
+
+  # Written once each. A second launch leaves them alone, so anything the user
+  # or Epiphany itself changed survives.
+  if [ ! -f "$profile/.app" ] || [ ! -f "$portal" ]; then
+    entry=$(cat <<EOF
+[Desktop Entry]
+Name=$title
+Exec=epiphany --application-mode --profile=$profile $url
+StartupWMClass=$app_id
+Icon=$leaf
+Type=Application
+Terminal=false
+EOF
+    )
+    [ -f "$profile/.app" ] || printf '%s\n' "$entry" >"$profile/.app"
+    [ -f "$portal" ]       || printf '%s\n' "$entry" >"$portal"
+  fi
+
+  exec setsid epiphany --application-mode --profile="$profile" "$url" "${@:2}"
+fi
+
+# --- anything else ---------------------------------------------------------
+# No app mode to ask for: open it in whatever browser there is. A tab is a
+# worse web app than a window of its own, and better than nothing happening --
+# which is the failure this whole file is here to prevent.
+exec setsid moarchy-launch-browser "$url" "${@:2}"

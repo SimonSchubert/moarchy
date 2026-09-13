@@ -100,6 +100,29 @@ Item {
   readonly property int backEdgeBottomInset:
     root.stripHeight + root.keyboardPanelHeight
 
+  // G10b. What a GTK app's header bar reserves at the top, in logical px.
+  //
+  // Measured on the device and not chosen, for the same reason as the
+  // keyboard's 200 above: it is another toolkit's chrome, and libadwaita has
+  // never heard of this theme's spacing scale. Spot's header runs from y=52 to
+  // y=144 physical at scale 2 -- 46.5 logical plus its divider -- which is
+  // AdwHeaderBar's own 47. GTK3 and Kirigami land within a pixel or two of it.
+  readonly property int headerBarHeight: 47
+
+  // G10b. How far short of the TOP the back edge stops, so the control an app
+  // puts at its top-left -- libadwaita's back chevron, a hamburger, Geary's
+  // folder button -- is tappable.
+  //
+  // This surface is anchored top and bottom on Overlay, and sway resolves
+  // exclusive zones from Overlay down, so the bar's zone (Top) is subtracted
+  // after this is placed: y=0 here is the top of the SCREEN, not the top of
+  // the app. So the inset carries the bar as well as the header.
+  //
+  // The bar half goes through the theme (it is our surface); the header half
+  // does not (it is not). Same split as the bottom inset, opposite ends.
+  readonly property int backEdgeTopInset:
+    Style.bar.sizeHorizontal + root.headerBarHeight
+
   // I1a. Is the on-screen keyboard reserving space right now?
   //
   // Read off `home`'s own configure, which is the only live answer available
@@ -851,6 +874,10 @@ Item {
       return "backEdge w=" + Math.round(backEdge.width)
              + " h=" + Math.round(backEdge.height)
              + " inset=" + root.backEdgeBottomInset
+             // G10b. Published beside the bottom one, because `h` alone cannot
+             // say which end a missing band was lost at.
+             + " topInset=" + root.backEdgeTopInset
+             + " header=" + root.headerBarHeight
              + " strip=" + root.stripHeight
              + " panel=" + root.keyboardPanelHeight
              + " screen=" + (backEdge.screen ? backEdge.screen.height : 0)
@@ -1210,6 +1237,8 @@ Item {
     // lever the drawer uses in the other direction, where a negative one
     // extends it past the usable area (I5a).
     margins.bottom: root.backEdgeBottomInset
+    // G10b. The same lever at the other end, for the app's header bar.
+    margins.top: root.backEdgeTopInset
 
     WlrLayershell.namespace: "moarchy-back"
     WlrLayershell.layer: WlrLayer.Overlay

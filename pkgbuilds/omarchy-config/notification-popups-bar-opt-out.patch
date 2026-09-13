@@ -1,0 +1,68 @@
+diff --git a/shell/plugins/notifications/Service.qml b/shell/plugins/notifications/Service.qml
+index 34b1314..4f8974b 100644
+--- a/shell/plugins/notifications/Service.qml
++++ b/shell/plugins/notifications/Service.qml
+@@ -51,6 +51,16 @@ Item {
+   readonly property int liveBarSize: shell && shell.bar && !shell.bar.barHidden ? Math.max(0, shell.bar.barSize) : defaultBarSize
+   readonly property int barClearance: liveBarSize + Style.gapsOut
+ 
++  // A bar that shows notifications itself -- a phone's pull-down shade, say --
++  // declares `notificationPopups: false`, and then nothing toasts: every
++  // notification goes straight into history, the way a DND-silenced one does,
++  // for the bar to show. A bar that says nothing keeps the toasts.
++  readonly property bool popupsWanted: !(shell && shell.bar && shell.bar.notificationPopups === false)
++
++  // Toasts already up when the bar says no -- live across a switch of bar --
++  // are archived the way a dismissal archives them, not dropped.
++  onPopupsWantedChanged: if (!popupsWanted) clearPopups()
++
+   // Live Notification objects by originalId, kept OUT of the ListModels: a
+   // QObject stored in a model role becomes a dangling C++ pointer when the
+   // server destroys the notification (sender close, DND untrack, dismiss),
+@@ -183,6 +193,15 @@ Item {
+       return
+     }
+ 
++    // The bar shows notifications itself, so this one goes where a silenced
++    // one goes, whatever its urgency or sender: into history, which is what
++    // the bar reads. Ephemeral ones too -- with no toast, history is the only
++    // place a user-action confirmation can be seen at all.
++    if (!service.popupsWanted) {
++      writeSilenced(notification, snapshot)
++      return
++    }
++
+     persistPopupFile(snapshot)
+     watchForUpdates(notification, snapshot)
+     // Qt.callLater avoids "QV4::Object::insertMember" crashes when a
+@@ -633,6 +652,9 @@ Item {
+   // queue and its own subprocess, so the replay lands in replayHistory once
+   // the work queued ahead of it has finished.
+   function showRecentHistory() {
++    // With toasts off there is nothing to re-show them on, and the bar that
++    // turned them off shows the history itself.
++    if (!service.popupsWanted) return "none"
+     if (readHistoryProc.running || service.historyReadQueued) return "ok"
+     service.replayCarryOver = liveRowsForReplay()
+     service.historyReadQueued = true
+@@ -725,9 +747,10 @@ Item {
+     for (var i = 0; i < entries.length; i++) {
+       var entry = entries[i]
+       var duration = durationFor(entry.urgency, entry.expireTimeout)
+-      if (NotificationLogic.popupExpired(entry, duration, now)) {
++      if (!service.popupsWanted || NotificationLogic.popupExpired(entry, duration, now)) {
+         // It would have expired on screen had the shell kept running, so it
+         // gets archived exactly like an expiry that happened while it did.
++        // With toasts off it is archived regardless: history is what shows.
+         archivePopupFileFor(entry)
+         continue
+       }
+@@ -956,7 +979,7 @@ Item {
+       id: popupWindow
+       required property var modelData
+       screen: modelData
+-      visible: popupModel.count > 0
++      visible: popupModel.count > 0 && service.popupsWanted
+ 
+       WlrLayershell.namespace: "omarchy-notifications"
+       WlrLayershell.layer: WlrLayer.Overlay

@@ -379,11 +379,13 @@ highlight `tapSlot − 10`, handing back the gap E4 moved inside them.
 
 ## I. Surfaces outside this repo
 
-Three programs draw this phone's UI and only one of them is here. They cannot
+Five surfaces draw this phone's UI and only one of them is here. Three cannot
 share code — one is a quickshell plugin set, one is a standalone Qt app, one is
-Python and GTK4 — so what they share is this file and the palette underneath it.
+Python and GTK4 — and the other two are GNOME's own apps, written for a
+different desktop and told about this one only through a file. What they share
+is this file and the palette underneath it.
 
-**I1 One palette, three readers.** The source of truth is the active theme's
+**I1 One palette, five readers.** The source of truth is the active theme's
 `colors.toml`, staged by `omarchy-theme-set` at
 `~/.local/state/omarchy/current/theme/`. Following the staged copy means a theme
 switch is picked up with no knowledge of where themes are installed.
@@ -393,6 +395,38 @@ switch is picked up with no knowledge of where themes are installed.
 | shell plugins | this one | quickshell / QML | `qs.Commons` `Color.*`, per §C |
 | keyboard | [`moarchy-keyboard`](https://github.com/SimonSchubert/moarchy-keyboard) | Qt / QML, standalone | its own theme load; `scripts/fetch-themes.sh` |
 | store | [`moarchy-store`](https://github.com/SimonSchubert/moarchy-store) | Python / GTK4 / libadwaita | `moarchy_store/theme.py` reads `colors.toml` and injects a stylesheet |
+| GNOME's apps | upstream GNOME, unmodified | GTK4 / libadwaita | `~/.config/gtk-4.0/gtk.css`, a symlink to what `default/themed/gtk.css.tpl` renders per theme |
+| Geary, and GTK3 | upstream GNOME, unmodified | GTK3 / libhandy | `~/.config/gtk-3.0/gtk.css` from `default/themed/gtk3.css.tpl`, on top of `adw-gtk3` — GTK3's own Adwaita bakes its colours in and ignores the file |
+
+**I1a** Those last two rows are the only ones that read the palette without
+being written to. Calculator, Contacts, Clocks, Maps and the rest are stock
+packages: the stylesheet GTK already loads for every GTK4 process is the whole
+integration, which is why they are themed here and unthemed on upstream
+Omarchy, whose GNOME step (`omarchy-theme-set-gnome`) sets light or dark and an
+icon theme and stops. Upstream knows — basecamp/omarchy#7557, with two
+competing PRs open — so this is a gap filled locally, not a disagreement with
+upstream's direction.
+
+A template and not a writer, because upstream already renders
+`$OMARCHY_PATH/default/themed/*.tpl` on every theme set, which is where
+`sway.conf.tpl` already lives. Nothing upstream is patched to make this happen
+and nothing is copied into a home: the package owns the template, so upgrading
+the package upgrades the colours.
+
+→ after `omarchy-theme-set`, `~/.local/state/omarchy/current/theme/gtk.css`
+holds the theme's `background`, and `~/.config/gtk-4.0/gtk.css` resolves to it
+
+**I1b** A theme switch reaches an app that is already installed but not
+running. GTK reads the user stylesheet once, at process start, and a GNOME app
+that has been closed is usually still there as a windowless
+`--gapplication-service` daemon, so the next open paints the palette that was
+current when the phone booted. Those daemons are restarted on every theme set,
+and nothing else is: no window is closed, because each one respawns the moment
+D-Bus asks for it. A mapped window keeps its old colours until it is reopened.
+
+→ with a GNOME app's daemon running, `omarchy-theme-set` leaves no process
+holding the old stylesheet: the pid is gone and the app reopens in the new
+palette
 
 **I2** Every surface degrades to its toolkit's own defaults when the palette is
 absent — a desktop with no Omarchy, a theme with no `colors.toml`, a malformed
@@ -419,6 +453,35 @@ GTK app has no `Style.space()` and a standalone QML app has no `qs.Commons`:
 **I4** A new surface joins by linking to this file from its own spec and saying
 which of §A–§H it cannot meet and why. "It is a different toolkit" is not one of
 the answers — all three of these already are.
+
+**I5 The icon theme named is one that is installed.** A GTK app asks for its
+icons by name — `media-playback-start`, `mail-send`, `view-refresh` — and GTK
+answers out of the theme `org.gnome.desktop.interface icon-theme` names. Named
+one that is not on the disk, it answers every one of them with
+`image-missing`: a white square with a folded corner, in every GTK app at once.
+
+That is what this phone shipped. `omarchy-theme-set-gnome` ends by setting the
+theme's own `icons.theme`, and every one of upstream's 22 themes names a Yaru —
+Yaru-blue, Yaru-purple, Yaru-magenta and the rest — with `Yaru-blue` as the
+fallback for a theme that ships none. **There is no Yaru for aarch64**: not in
+Arch Linux ARM, and not in the AUR, where neither `yaru-icon-theme` nor
+`yaru-colors-icon-theme` exists at all. So every theme set every image has ever
+done has pointed GTK at nothing.
+
+The shell cannot see it, which is why it went unnoticed for so long:
+Quickshell walks the icon directories itself, so the drawer's grid, the
+carousel's cards and this shade's notification icons (`shade.md` S25) have
+always resolved correctly whatever this setting said. The one surface this
+project looks at hardest is the one surface the bug cannot reach.
+
+Checked rather than replaced: the name is left alone when it resolves, so
+installing a Yaru one day makes upstream's own choice start working. Adwaita
+rather than breeze when it does not, because the apps this falls back for are
+GNOME's.
+
+→ `gsettings get org.gnome.desktop.interface icon-theme` names a theme with an
+`index.theme` in one of the directories the icon spec searches, after
+`omarchy-theme-set` on any of the 22 themes
 
 ---
 

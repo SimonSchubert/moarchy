@@ -1,0 +1,29 @@
+[Desktop Entry]
+Version=1.0
+Name=X
+Exec=omarchy-launch-webapp https://x.com/
+Terminal=false
+Type=Application
+Icon=x
+StartupNotify=true
+StartupWMClass=org.gnome.Epiphany.WebApp_x_com
+
+# X, as a web app (docs/apps.md B1-B3).
+#
+# Upstream ships this entry, byte for byte, in /usr/share/omarchy/applications.
+# Nothing on this phone copies it into a place the drawer reads -- only
+# omarchy-refresh-applications does that, and this project never runs
+# upstream's installer -- so it is repeated here, with the one key upstream has
+# no reason to carry.
+#
+# StartupWMClass is that key. omarchy-launch-webapp runs a web app as its own
+# Epiphany profile named org.gnome.Epiphany.WebApp_<host with dots underscored>
+# (bin/omarchy-launch-webapp says why it must be named that), and that is the
+# app id its window arrives with. The shell indexes entries by their startup
+# class, so without this line the recents card and the shade's notification
+# card for X would have no entry to take a name or an icon from, and the card
+# would read org.gnome.Epiphany.WebApp_x_com.
+#
+# It names Epiphany's class because Epiphany is this phone's browser
+# (docs/apps.md). Installing a Chromium-family browser changes the class, and
+# the line then matches nothing -- which is what it did before it was here.

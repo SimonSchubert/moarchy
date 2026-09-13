@@ -37,7 +37,14 @@ _ver=$(manifest_get omarchy version) || return 1
 
 pkgname=omarchy-config
 pkgver=${_ver#v}
-pkgrel=1
+# 2, and the reason is the one the moarchy PKGBUILD sets out at length: pacman
+# compares versions, not contents, and the [moarchy] repo already publishes
+# 4.0.3-1. This build is the same upstream ref with different bytes -- a second
+# patch (the notification-popups opt-out the shade needs, docs/shade.md S24)
+# and the web app artwork installed into an icon theme (docs/apps.md B3) -- so
+# without this line every phone in the field would keep the package it has and
+# neither would ever arrive.
+pkgrel=2
 pkgdesc="Omarchy's configuration and theme layer, ported to Sway"
 arch=('any')
 url="$_url"
@@ -45,13 +52,33 @@ license=('MIT')
 # quickshell runs the shell; the rest are what the bin/ scripts shell out to.
 depends=('quickshell' 'bash')
 source=("omarchy-$_ref.tar.gz::$_url/archive/$_ref.tar.gz"
-        'port-4x.patch')
+        'port-4x.patch'
+        'notification-popups-bar-opt-out.patch')
 sha256sums=('25f8c87b89c97aef352ddae02d61902ad9d1a3a07ad44efec0e1436f1c65a5e5'
-            '20e8e569ca0f966cf29da2ac41335be7e8f64dcd6db94f2bc6180fbe5bfbd06d')
+            '20e8e569ca0f966cf29da2ac41335be7e8f64dcd6db94f2bc6180fbe5bfbd06d'
+            '8ab33f7810b721c82f0bea5a0b7756868274f61d59bae4639c028012c9a87160')
 
+# Two patches, and they are different kinds of thing.
+#
+# port-4x.patch is the Sway port: it exists because this hardware cannot run
+# Hyprland, it will never go upstream, and it is the reason this package is not
+# just upstream's tree.
+#
+# notification-popups-bar-opt-out.patch is a hook, and it is MEANT to go
+# upstream and be deleted here once it lands. A bar that shows notifications
+# itself -- a phone's pull-down shade (docs/shade.md S24) -- declares
+# `notificationPopups: false` and gets none; a bar that says nothing keeps its
+# toasts, so desktop Omarchy is unchanged by it. It is byte-identical to the
+# copy the sibling project carries, which is what keeps one patch rather than
+# two drifting ones.
+#
+# Both apply with no fuzz and no offset, so an upstream that has moved under
+# either fails the build and names the hunk rather than landing it somewhere it
+# was never aimed at.
 prepare() {
   cd "omarchy-$_ref"
-  patch -p1 < "$srcdir/port-4x.patch"
+  patch -p1 --fuzz=0 < "$srcdir/port-4x.patch"
+  patch -p1 --fuzz=0 < "$srcdir/notification-popups-bar-opt-out.patch"
 }
 
 package() {
@@ -81,6 +108,34 @@ package() {
   for f in version icon.png icon.txt logo.svg logo.txt LICENSE; do
     [ -f "$f" ] && install -Dm644 "$f" "$pkgdir/usr/share/omarchy/$f"
   done
+
+  # --- the web app artwork, into an icon theme ------------------------------
+  # applications/*.desktop name their icons the themed way -- `x`, `youtube`,
+  # `omarchy-discord` -- and the artwork sits beside them in
+  # applications/icons, which no icon theme reads. On a desktop install
+  # omarchy-webapp-install is what puts a downloaded icon into one; nothing
+  # ever put THESE anywhere, so upstream's own entries have always resolved to
+  # a generic glyph (docs/apps.md B3).
+  #
+  # hicolor/256x256/apps whatever the file measures, which is upstream's own
+  # choice in omarchy-webapp-install, and the name transform is its
+  # safe_icon_name: lowercase, runs of non-alphanumerics to single dashes. That
+  # is what makes `Disk Usage.png` the icon called `disk-usage`.
+  #
+  # All of them, not just the two entries moarchy ships: an entry copied from
+  # /usr/share/omarchy/applications by hand, or installed the upstream way,
+  # then finds its icon with nothing further to do.
+  if [ -d applications/icons ]; then
+    icon_dir="$pkgdir/usr/share/icons/hicolor/256x256/apps"
+    install -d "$icon_dir"
+    for f in applications/icons/*.png; do
+      [ -f "$f" ] || continue
+      icon_name=$(basename "$f" .png | tr '[:upper:]' '[:lower:]' |
+        sed 's/[^[:alnum:]]\+/-/g; s/^-//; s/-$//')
+      [ -n "$icon_name" ] || continue
+      install -m644 "$f" "$icon_dir/$icon_name.png"
+    done
+  fi
 
   # bin/ goes to /usr/bin, which is where upstream's own package puts it and
   # what its sudoers.d entries name by absolute path. moarchy's Sway

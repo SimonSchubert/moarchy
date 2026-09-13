@@ -55,7 +55,13 @@ pkgver=$_ver
 # above are the record of it: this package's entire content IS the depends
 # line, so a name added or REMOVED under an unchanged version is invisible to
 # pacman, which compares versions and not depends.
-pkgrel=1
+#
+# 2 for exactly that reason: 0.2.2-1 is published and this build adds one name
+# (adw-gtk-theme, which is half of how a GTK3 app takes the theme --
+# docs/style.md I1). Under an unchanged version no phone would ever install it,
+# and the half that is already in bin/omarchy-theme-set-gnome would go on
+# checking for a theme that is not there.
+pkgrel=2
 pkgdesc="The moarchy package set -- install this and you have the phone"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
@@ -91,6 +97,17 @@ depends=(
   'xdg-desktop-portal-gtk'
   'polkit-gnome'
   'wlsunset'
+
+  # --- GTK theming ------------------------------------------------------------
+  # libadwaita's stylesheet, ported to GTK3. The GTK4 apps take the theme from
+  # default/themed/gtk.css.tpl on their own, because libadwaita reads the user
+  # stylesheet's named colours; GTK3's built-in Adwaita bakes its colours in at
+  # build time and ignores them (basecamp/omarchy#7557 measured it), so Geary
+  # and the portal's file chooser need a theme whose rules do read the names.
+  # bin/omarchy-theme-set-gnome points GTK3 at it, and only when it is here:
+  # naming a theme that is not installed drops every GTK3 app to the fallback
+  # rather than leaving it on Adwaita. `any` arch, so ALARM has it.
+  'adw-gtk-theme'
 
   # --- Terminal ---------------------------------------------------------------
   # One, and it is the one everything already used. bin/moarchy-launch-tui execs

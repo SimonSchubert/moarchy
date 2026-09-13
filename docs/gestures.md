@@ -301,7 +301,8 @@ with apps here, which halves what this costs them.
 **G10** The band does not run the full height of the screen. It stops **one
 strip plus one keyboard panel** short of the bottom — 220 logical px — and
 everything below that belongs to whoever is drawing there.
-→ `omarchy-shell gestures geometry` reports `h` == `screen - inset`
+→ `omarchy-shell gestures geometry` reports `h` == `screen - inset - topInset`,
+`inset` == 220
 
 The bottom-left corner was the one place this surface took a touch that was
 never a gesture. The on-screen keyboard is on Top and this band is on Overlay,
@@ -328,11 +329,44 @@ through the theme's spacing scale. The keyboard is a separate client that never
 sees this theme; scaling our inset with it would cut the edge shorter than the
 keys it exists to avoid.
 
-**G10a** The dead column is otherwise unchanged: outside that band the leftmost
-16px of every app still belongs to the back gesture (D3), and G8's property is
-still the only knob for it. This is an edge gesture, and Android pays the same
-price — `getMandatorySystemGestureInsets()` exists precisely so apps can move
-their own controls out of the way.
+**G10b** It stops short of the **top** as well, by the status bar plus one
+header bar — **73 logical px** — so an app's own top-left control is tappable.
+→ `omarchy-shell gestures geometry` reports `h` == `screen - inset - topInset`
+and `topInset` == 73
+
+This is G10's problem at the other end, and it is the one that bites daily. The
+top-left of a GTK window is where the toolkit puts the control the user reaches
+for most: libadwaita's back chevron, a hamburger, Geary's folder button. The
+band is on Overlay, so it takes that touch first and the button answers
+nothing — measured on the device with Spot, whose `<` sits at x=22, y=49
+logical, inside a band that runs the full height.
+
+The number is measured, not chosen. On this panel the status bar is 26 logical
+px and libadwaita's `AdwHeaderBar` is 47 — Spot's white header runs from y=52
+to y=144 physical, which is 46.5 plus its divider — so an app's header ends at
+73. Like the keyboard's 200 in G10 and unlike G8's band width, the header half
+does **not** go through the theme's spacing scale: it is another toolkit's
+chrome and it does not know this theme exists. The bar half does, because that
+one is ours.
+
+What it costs is that a back swipe cannot *start* in the top 73px, which is
+the reach a thumb has least need of at the top of a 720px screen — and the
+gesture is unchanged everywhere else: the band is still 427px tall between the
+two insets, and a swipe that starts below the header still closes the app it
+belongs to (G4).
+
+It also hands back the top-left corner, which was contested rather than
+allocated: the shade's grab strip is Overlay too and covers the same 16x26,
+and which of two Overlay surfaces got a touch there was decided by map order
+rather than by anything this spec says. Above 73 the shade now has it outright
+(A8), which is what a pull-down from any point along the status bar already
+implied.
+
+**G10a** The dead column is otherwise unchanged: between those two insets the
+leftmost 16px of every app still belongs to the back gesture (D3), and G8's
+property is still the only knob for its width. This is an edge gesture, and
+Android pays the same price — `getMandatorySystemGestureInsets()` exists
+precisely so apps can move their own controls out of the way.
 
 ## H. Closing an overlay by dragging it
 
@@ -1079,15 +1113,20 @@ Not acceptance criteria — the boundaries any implementation works inside.
   some apps implement.
 - **A claimed edge also swallows taps, and we cannot soften that the way
   Android does.** The band cannot forward a touch it decides not to use, so any
-  app control within it — a hamburger at the top-left, a back button — stops
-  being tappable. Android has the same problem and solved it with
-  `View.setSystemGestureExclusionRects()`, which lets an app carve regions back
-  out of the system gesture, capped at 200dp per edge (sized, explicitly, as
-  four 48dp touch targets plus padding). **Wayland has no equivalent** — there
-  is no protocol for a client to tell a layer-shell surface not to take touches
-  in a region. So our edge is strictly more expensive than Android's, with no
-  mitigation available to apps. If the back gesture turns out to bite in daily
-  use, this is the reason, and the fix is to narrow G8 or drop the gesture —
-  not to look for an API that does not exist.
+  app control within it stops being tappable. Android has the same problem and
+  solved it with `View.setSystemGestureExclusionRects()`, which lets an app
+  carve regions back out of the system gesture, capped at 200dp per edge
+  (sized, explicitly, as four 48dp touch targets plus padding). **Wayland has
+  no equivalent** — there is no protocol for a client to tell a layer-shell
+  surface not to take touches in a region. So our edge is strictly more
+  expensive than Android's, with no mitigation available to apps.
+
+  It did bite in daily use, and the control it took was the one this paragraph
+  named first: the hamburger or back chevron at an app's top-left. The answer
+  was to carve the region out from *our* side, since the app cannot — G10b,
+  which stops the band below the header bar, the same lever G10 already used
+  for the keyboard. What is left is a narrower claim rather than a softer one:
+  a control that sits in the leftmost 16px *between* the two insets is still
+  dead, and there is still no API that would let an app say so.
 - **The right edge stays unclaimed.**
 - **One app per workspace** is assumed throughout: workspace ≈ app.

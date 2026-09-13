@@ -58,6 +58,7 @@ import Quickshell.Services.Pipewire
 import qs.Commons
 import qs.Ui as Ui
 import "../moarchy.common/Theme.js" as Theme
+import "../moarchy.common/ShellApps.js" as ShellApps
 import "../moarchy.common" as Shared
 
 Item {
@@ -331,12 +332,18 @@ Item {
     root.expanded = true
     root.progress = 1
 
-    // Absorb any live toasts. The service's own popup surface is Overlay too
-    // and maps after this one, so anything still on screen floats over the
-    // shade that is supposed to be showing it. clearPopups() is not a discard:
-    // removePopup archives each row into the history directory, so they land in
-    // the list below instead. That is what Android does when you pull down --
-    // the heads-up notifications become the list.
+    // Absorb any live toasts. There are none now (S24): moarchy.bar declares
+    // notificationPopups false and the patched service writes every
+    // notification straight into the history. This stays because it is what
+    // makes the transition survivable in both directions -- a shell running
+    // with `bar.id` pointed at omarchy.bar, or a popup that was already on
+    // screen when the bar changed, still lands in the list rather than
+    // floating over it. The service's own popup surface is Overlay too and
+    // maps after this one.
+    //
+    // clearPopups() is not a discard: removePopup archives each row into the
+    // history directory, so they land in the list below. That is what Android
+    // does when you pull down -- the heads-up notifications become the list.
     if (root.notifications && typeof root.notifications.clearPopups === "function")
       root.notifications.clearPopups()
 
@@ -505,6 +512,33 @@ Item {
       }
       return out.join("\n")
     }
+
+    // S25. Where each card's icon came from, one line per row, in list order.
+    // The kind rather than the path, because the path is a cache URL for an
+    // avatar and an absolute file for everything else -- what a check wants to
+    // know is which rule answered, and that `fallback` is not the answer for
+    // every row, which is what a broken icon theme looks like from here.
+    function icons(): string {
+      var out = []
+      for (var i = 0; i < root.historyRows.length; i++) {
+        var r = root.historyRows[i]
+        if (r) out.push(root.rowStem(r) + " " + root.iconFor(r).kind)
+      }
+      return out.join("\n")
+    }
+
+    // S27. What a tap on each card would do, one line per row, in list order.
+    // Asking is not doing: this runs nothing, which is what makes it usable
+    // from a check that has not decided to lose the notification yet.
+    function actions(): string {
+      var out = []
+      for (var i = 0; i < root.historyRows.length; i++) {
+        var r = root.historyRows[i]
+        if (r) out.push(root.rowStem(r) + " " + root.actionFor(r))
+      }
+      return out.join("\n")
+    }
+
     function toggle(): string {
       if (root.shell) root.shell.toggle(root.pluginId, "{}")
       return root.opened ? "open" : "closed"
@@ -821,6 +855,137 @@ Item {
   // makes per-notification dismissal possible at all from out here.
   function rowStem(row) {
     return String(row.timestamp || 0) + "-" + String(row.originalId || 0)
+  }
+
+  // S25. What leads a card, first match wins: the notification's own picture
+  // (an avatar, album art -- the service copies these beside the history, so
+  // they outlive the sender's temp file), its app icon, the icon of the
+  // desktop entry its app name matches, the glyph omarchy-notification-send
+  // attaches, and last a bell. `glyph` is always set, because a picture that
+  // is named and will not load falls back to it.
+  readonly property int cardIcon: Style.space(36)
+  readonly property string bellGlyph: "󰂚"
+
+  // Upstream NotificationCard's rule, so a card here and a toast on a desktop
+  // resolve one value the same way. The `check` argument is what keeps an
+  // unknown themed name from coming back as Qt's missing-texture placeholder.
+  function iconSource(value): string {
+    var s = String(value || "")
+    if (s === "") return ""
+    if (s.indexOf("file://") === 0 || s.indexOf("image://") === 0) return s
+    if (s.charAt(0) === "/") return Util.fileUrl(s)
+    return String(Quickshell.iconPath(s, true) || "")
+  }
+
+  // The desktop entry a notification's app name belongs to. Through
+  // sortedEntries, which is the list the drawer's grid is built from -- rows,
+  // not entries, so `.entry` is unwrapped here rather than read straight off.
+  function entryFor(app) {
+    var want = String(app || "").toLowerCase()
+    if (!want || !root.shell || !root.shell.appLibrary) return null
+    var lib = root.shell.appLibrary
+    var rows = lib.sortedEntries("") || []
+    for (var i = 0; i < rows.length; i++) {
+      var e = rows[i] && rows[i].entry
+      if (!e) continue
+      var id = String(e.id || "").toLowerCase().replace(/\.desktop$/, "")
+      var name = String(lib.entryName(e) || "").toLowerCase()
+      // The tail of a reverse-DNS id too: "Web" notifies and the entry is
+      // org.gnome.Epiphany.
+      if (want === id || want === name || want === id.split(".").pop()) return e
+    }
+    return null
+  }
+
+  function iconFor(row) {
+    var r = row || {}
+    var glyph = String(r.glyph || "") || root.bellGlyph
+    var image = root.iconSource(r.image)
+    if (image !== "") return { kind: "image", source: image, glyph: glyph }
+    var appIcon = root.iconSource(r.appIcon)
+    if (appIcon !== "") return { kind: "appIcon", source: appIcon, glyph: glyph }
+    var entry = root.entryFor(r.app)
+    var fromEntry = entry && root.shell.appLibrary
+      ? String(root.shell.appLibrary.iconSource(entry.icon) || "") : ""
+    if (fromEntry !== "") return { kind: "entry", source: fromEntry, glyph: glyph }
+    return { kind: r.glyph ? "glyph" : "fallback", source: "", glyph: glyph }
+  }
+
+  // S27. What a tap on a card does, first match wins -- the order upstream's
+  // toast click takes, less the one step history cannot keep:
+  //
+  //   exec    Omarchy's own `--exec` argv, which the row carries as data, so
+  //           it survives into history. The first-run "Update System" is one.
+  //   focus   the sender's window, if it has one open.
+  //   launch  the sender's app, if a desktop entry answers to its name --
+  //           what a phone does with a notification from an app not running.
+  //   none    nothing to do: the card does not light, and a tap leaves it.
+  //
+  // A libnotify "default" action is the step that is missing. It lives on the
+  // sender's live notification, which the service lets go of once the
+  // notification is written into history; focusing the sender is upstream's
+  // own answer for the many senders that register none.
+
+  // Upstream's parseExecArgv (NotificationLogic.js): a structural check that
+  // fails closed. Which senders may set the hint is the notification bus's
+  // boundary, not this function's -- the same one upstream's toast has.
+  function execArgvFor(row) {
+    var text = String((row && row.execArgv) || "")
+    if (!text) return null
+    var parsed
+    try { parsed = JSON.parse(text) } catch (e) { return null }
+    if (!Array.isArray(parsed) || parsed.length === 0) return null
+    for (var i = 0; i < parsed.length; i++)
+      if (typeof parsed[i] !== "string") return null
+    if (!parsed[0] || parsed[0].charAt(0) === "-") return null
+    return parsed
+  }
+
+  // The sender's window: its app id is the notification's app name, the tail
+  // of a reverse-DNS one, or the id of the desktop entry the name matches.
+  function windowFor(row) {
+    var app = String((row && row.app) || "").toLowerCase()
+    if (!app) return null
+    var entry = root.entryFor(app)
+    var entryId = entry ? String(entry.id || "").toLowerCase().replace(/\.desktop$/, "") : ""
+    var list = ToplevelManager.toplevels ? ToplevelManager.toplevels.values : []
+    for (var i = 0; i < list.length; i++) {
+      var id = String((list[i] && list[i].appId) || "").toLowerCase()
+      if (id && (id === app || id === entryId || id.split(".").pop() === app)) return list[i]
+    }
+    return null
+  }
+
+  function actionFor(row): string {
+    if (root.execArgvFor(row)) return "exec"
+    if (root.windowFor(row)) return "focus"
+    return root.entryFor(row ? row.app : "") ? "launch" : "none"
+  }
+
+  // The notification is done with once acted on, as on Android: the card goes
+  // and the shade with it, so what the tap opened is what is on screen. The
+  // row is dropped last -- that destroys the delegate this was called from.
+  function runRow(row): void {
+    var kind = root.actionFor(row)
+    root.lastAction = "card:" + kind
+    if (kind === "none") return
+    if (kind === "exec") {
+      // Through bash's positional parameters, as upstream runs it: never a
+      // shell string, so a title or a filename cannot become a command.
+      Util.execArgv(root.execArgvFor(row))
+    } else if (kind === "focus") {
+      // Not toplevel.activate(): the foreign-toplevel request is a no-op on
+      // this compositor, and moarchy.gestures is where the swaymsg dispatch
+      // that works lives (gestures.md K12).
+      ShellApps.focusToplevel(root.shell, root.windowFor(row))
+    } else {
+      var entry = root.entryFor(row.app)
+      // Through appLibrary, so a card's launch draws the same splash a tap in
+      // the drawer draws (windows.md L1).
+      root.shell.appLibrary.launch(entry.id, root.shell.appLibrary.entryName(entry))
+    }
+    root.close()
+    root.dismissRow(row)
   }
 
   function dismissRow(row) {
@@ -1723,9 +1888,19 @@ Item {
             id: card
             required property var modelData
             width: notificationList.width
-            height: cardBody.implicitHeight + Style.space(20)
+            // S25. The icon is 36 and a one-line card's text is shorter than
+            // that, so the card is whichever is taller. Without this a card
+            // with a summary and no body drew its icon out of its own bounds.
+            height: Math.max(cardBody.implicitHeight, root.cardIcon) + Style.space(20)
 
             readonly property real dismissAt: card.width * 0.35
+
+            // S25/S27, resolved once per card rather than per binding read.
+            // `action` re-evaluates when the window list changes, which is
+            // what makes a card whose app has just opened go from launch to
+            // focus without the shade being reopened.
+            readonly property var icon: root.iconFor(card.modelData)
+            readonly property string action: root.actionFor(card.modelData)
 
             Rectangle {
               id: sheetCard
@@ -1752,9 +1927,20 @@ Item {
               // still takes any drag that turns out to be a scroll (H5). That
               // is the objection this file used to raise against a swipe here
               // -- the answer is to claim one axis rather than the gesture.
+              //
+              // S27 put a tap on the same area. The two do not need a timer to
+              // tell them apart: a swipe has moved the card and a tap has not,
+              // which `onClicked` reads off sheetCard.x at release. A card with
+              // nothing to do keeps exactly the behaviour it had.
+              PressVeil {
+                anchors.fill: parent
+                radius: root.radiusCard
+                on: cardArea.pressed && card.action !== "none"
+                    && Math.abs(sheetCard.x) < 2
+              }
+
               MouseArea {
-                // no press state (style.md H7): a swipe area with no
-                // onClicked. The card follows the finger; that is the feedback.
+                id: cardArea
                 anchors.fill: parent
                 drag.target: sheetCard
                 drag.axis: Drag.XAxis
@@ -1765,6 +1951,10 @@ Item {
                   else springBack.restart()
                 }
                 onCanceled: springBack.restart()
+                // The threshold is the same 2px the veil uses: anything the
+                // finger actually moved is a swipe, and springBack has not run
+                // yet at this point, so x is still where the finger left it.
+                onClicked: if (Math.abs(sheetCard.x) < 2) root.runRow(card.modelData)
               }
 
               NumberAnimation {
@@ -1773,12 +1963,50 @@ Item {
                 duration: 140; easing.type: Easing.OutCubic
               }
 
+            // S25. The sender, leading the card the way Android leads one.
+            // Every card has one, so the text column starts at the same x on
+            // all of them -- a column where some rows start at the edge and
+            // some 48px in reads as misaligned, not as information.
+            Item {
+              id: cardIconSlot
+              anchors.left: parent.left
+              anchors.leftMargin: Style.space(14)
+              anchors.verticalCenter: parent.verticalCenter
+              width: root.cardIcon
+              height: root.cardIcon
+
+              Image {
+                id: cardImage
+                anchors.fill: parent
+                source: card.icon.source
+                fillMode: Image.PreserveAspectFit
+                // Asked for at the size it is drawn: a 512px web app PNG
+                // decoded at full size for a 36px slot is 1 MB of texture on
+                // a Mali-400, per card.
+                sourceSize: Qt.size(root.cardIcon, root.cardIcon)
+                visible: status === Image.Ready
+                asynchronous: true
+              }
+
+              // The glyph is the fallback for both "nothing named an icon"
+              // and "something did and it will not load" -- a themed name no
+              // theme answers is the second case, and it is the common one.
+              Ui.OpticalGlyph {
+                anchors.fill: parent
+                visible: card.icon.source === "" || cardImage.status === Image.Error
+                text: card.icon.glyph
+                fontFamily: Style.font.family
+                fontSize: Style.font.iconLarge
+                color: root.subdued
+              }
+            }
+
             Column {
               id: cardBody
-              anchors.left: parent.left
+              anchors.left: cardIconSlot.right
               anchors.right: parent.right
               anchors.verticalCenter: parent.verticalCenter
-              anchors.leftMargin: Style.space(14)
+              anchors.leftMargin: Style.space(12)
               // Was 44, to clear a close button that is no longer there.
               anchors.rightMargin: Style.space(14)
               spacing: Style.space(3)

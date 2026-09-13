@@ -1,0 +1,45 @@
+# What the web asks the browser it is talking to, on a phone-shaped screen
+# (docs/apps.md B4).
+#
+# Epiphany sends
+#
+#   Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/605.1.15 (KHTML, like Gecko)
+#   Version/60.5 Safari/605.1.15
+#
+# which is a desktop, and a site that decides its layout from the user agent
+# rather than from a media query serves one -- the layout that is clipped on
+# the right in a 360px window. Measured in the sibling project over the three
+# sites it ships web apps for, desktop agent against the one below:
+#
+#   youtube.com        924 KB, no <meta name="viewport"> at all
+#                  ->  368 KB, width=device-width
+#   open.spotify.com   162 KB -> 306 KB, a different bundle
+#   x.com               33 KB ->  35 KB, responsive either way
+#
+# YouTube is the case that settles it: with a desktop agent there is no
+# viewport meta on the page at all, so the phone is handed a layout laid out
+# for a window it does not have.
+#
+# An iPhone, not an Android. Epiphany is WebKitGTK, so Safari's own engine: a
+# site that branches on the agent hands a WebKit browser the code it tests
+# against WebKit, where a Chrome-on-Android string would ask for the Blink path
+# and be told to run code this engine may not have. The lie is chosen to be the
+# smallest one that is true about the renderer.
+#
+# Set as the SCHEMA DEFAULT rather than written into anybody's dconf, and
+# org.gnome.Epiphany.web is relocatable, so this one stanza reaches every path
+# the schema is bound to: /org/gnome/epiphany/web/ for the browser and
+# /org/gnome/epiphany/web-apps/<app id>/web/ for each web app. A user who wants
+# one site back on the desktop layout overrides that app's own key and nothing
+# else moves:
+#
+#   gsettings set "org.gnome.Epiphany.web:/org/gnome/epiphany/web-apps/\
+#     org.gnome.Epiphany.WebApp_x_com/web/" user-agent ''
+#
+# It has to live under /usr/share/glib-2.0/schemas and not in /usr/lib/moarchy
+# with the rest of this package: an override is compiled together with the
+# schema it overrides, and Epiphany's schema is there. pacman's own glib2 hook
+# recompiles that directory on any transaction touching it, so this survives an
+# upgrade and needs no hook of ours.
+[org.gnome.Epiphany.web]
+user-agent="Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"

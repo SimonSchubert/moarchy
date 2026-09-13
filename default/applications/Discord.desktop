@@ -1,0 +1,18 @@
+[Desktop Entry]
+Version=1.0
+Name=Discord
+Exec=omarchy-launch-webapp https://discord.com/channels/@me
+Terminal=false
+Type=Application
+Icon=omarchy-discord
+StartupNotify=true
+StartupWMClass=org.gnome.Epiphany.WebApp_discord_com
+
+# Discord, as a web app. X.desktop beside this one explains both halves: why an
+# entry upstream already ships is repeated here, and what StartupWMClass is for.
+#
+# The URL is upstream's, /channels/@me rather than the front page, so a launch
+# lands in the app rather than on the marketing site. Icon is upstream's name
+# too: the artwork is applications/icons/omarchy-discord.png, kept under a
+# prefix of its own because a `discord` in some icon theme would otherwise
+# shadow it. pkgbuilds/omarchy-config is what puts it in an icon theme.
