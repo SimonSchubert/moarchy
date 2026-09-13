@@ -400,8 +400,7 @@ Item {
   // ------------------------------------------------------------ lifecycle
   function open(payloadJson) {
     if (root.shell && typeof root.shell.isPluginOpen === "function") {
-      var others = ["moarchy.shade", "moarchy.drawer",
-                    "moarchy.recents", "moarchy.themes"]
+      var others = ["moarchy.shade", "moarchy.drawer", "moarchy.themes"]
       for (var i = 0; i < others.length; i++)
         if (root.shell.isPluginOpen(others[i])) root.shell.hide(others[i])
     }

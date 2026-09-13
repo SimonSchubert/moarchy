@@ -150,34 +150,35 @@ Sway's `bindgesture` only fires for touchpads, so the gestures are a Quickshell
 plugin that owns the bottom edge as a layer surface and reads the touch itself.
 Everything follows the finger rather than firing at a threshold.
 
-One drag up from the home pill has three stops, the way Android's does:
+One drag up from the home pill has two stops, the way Android's does:
 
 ```
 0 -- 15% ---------- 75% ---- 100%
-app       RECENTS      HOME
+app       DRAWER       HOME
 ```
 
 | Gesture | What it does |
 | --- | --- |
-| Swipe up from the pill, short | The recents carousel: every open app as a card |
+| Swipe up from the pill, short | The app drawer — which opens with a shelf of what is already running |
 | Swipe up from the pill, further | Home — a workspace with nothing on it |
-| Swipe up **on the wallpaper** | The app drawer |
+| Swipe up **on the wallpaper** | The app drawer, tracking the finger 1:1 |
 | Swipe left / right | Next / previous workspace, which is next / previous app |
-| Tap a card | Focus that app |
-| Swipe a card up | Close that app |
+| Tap an open-app tile | Switch to that app |
+| Flick an open-app tile up | Close that app |
 | Pull down from the status bar | The shade: quick settings, brightness, media |
 
-The two edges are different gestures, not one gesture with two outcomes. The
-strip raises the carousel and goes home; it never opens the drawer
-(`docs/gestures.md` A5). The drawer comes from dragging up on the *workspace*,
-which only a home screen has bare (D1) — so the drawer is one swipe from home
-and two from an app. Nothing on the strip closes a window: apps are closed from
-the carousel, one card at a time (C1, E3).
+Every up-swipe raises the drawer — over an app, over a home screen, over
+nothing (`docs/gestures.md` A5). Until 2026-09-13 the first stop was a separate
+recents carousel and the drawer was reachable only from a blank workspace; the
+drawer now lists the open apps along its own top, so the switcher was deleted
+rather than kept beside a launcher that shows the same thing. Nothing on the
+strip closes a window: apps are closed from the drawer's shelf, one tile at a
+time (C1, M6).
 
 Everything is reachable without a finger, which is how the selftest asserts it:
 
 ```bash
-omarchy-shell recents list          # one line per open app
+omarchy-shell drawer openApps       # one line per open app
 omarchy-shell gestures swipe home
 moarchy-selftest --gestures   # drives real synthetic touch via /dev/uinput
 ```

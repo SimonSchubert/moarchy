@@ -651,7 +651,7 @@ fi
 # Same doubling trap as the gestures plugin, one level along: an overlay
 # declared as a service gets two surfaces, and for the shade that means two
 # grab strips fighting over the top edge.
-for plugin in moarchy.drawer moarchy.recents moarchy.shade \
+for plugin in moarchy.drawer moarchy.shade \
               moarchy.themes moarchy.settings moarchy.device moarchy.wifi \
               moarchy.bluetooth; do
   k=$(python3 -c '
@@ -669,7 +669,7 @@ except Exception:
   fi
 done
 
-for target in drawer recents shade themes settings device; do
+for target in drawer shade themes settings device; do
   if st=$(timeout 5 omarchy-shell "$target" state 2>/dev/null) && [[ -n $st ]]; then
     ok "$target IPC answers ($st)"
   else
@@ -979,7 +979,11 @@ def walk(n):
         for c in n.get(k, []): walk(c)
 walk(json.load(sys.stdin))
 print(found[0] if found else "")'; }
-  cards() { timeout 8 omarchy-shell recents list 2>/dev/null | grep -c . || true; }
+  # One line per open window, which since the carousel was deleted is the
+  # drawer's shelf answering (docs/gestures.md M1). Same list, same order, same
+  # one-line-per-window shape `recents list` had -- only the surface that owns
+  # it changed.
+  windows() { timeout 8 omarchy-shell drawer openApps 2>/dev/null | grep -c . || true; }
 
   # Right after a full-screen surface maps on this GPU the shell can be busy
   # for long enough that omarchy-shell gives up and prints nothing. An empty
@@ -997,8 +1001,8 @@ print(found[0] if found else "")'; }
 
   # Panel pixels; the output is scaled 2, so every figure is twice the logical
   # travel the plugin sees. Against a 324 logical pullTravel:
-  #   60  panel =  30 logical =  9%  -> under the 15% recents commit
-  #   300 panel = 150 logical = 46%  -> recents (tops out at 40%)
+  #   60  panel =  30 logical =  9%  -> under the 15% drawer commit
+  #   300 panel = 150 logical = 46%  -> drawer (tops out at 40%)
   #   560 panel = 280 logical = 86%  -> home (commits at 75%)
   # All dragged over 2000ms, ~0.08 logical px/ms, an order of magnitude under
   # the 0.6 fling threshold -- so these test the distance bands, which is the
@@ -1062,11 +1066,11 @@ print(found[0] if found else "")'; }
 
     # Start from a bare screen. Anything left open changes what the strip's
     # up-drag *means* -- with the shade down it correctly means "put that away"
-    # (A8), so the recents drag never latches and A1/A3 reports 0 samples. That
+    # (A8), so the drawer drag never latches and A1/A3 reports 0 samples. That
     # is the gesture behaving exactly as specified, failing a check that assumed
     # nothing was on screen. A suite that inherits the last session's state is
     # measuring the last session.
-    for overlay in shade drawer recents themes settings; do
+    for overlay in shade drawer themes settings; do
       timeout 8 omarchy-shell "$overlay" close >/dev/null 2>&1
     done
     sleep 2
@@ -1125,79 +1129,121 @@ print(found[0] if found else "")'; }
     fi
 
     # --- A. strip, up ------------------------------------------------------
-    timeout 8 omarchy-shell recents close >/dev/null 2>&1; sleep 2
+    timeout 8 omarchy-shell drawer close >/dev/null 2>&1; sleep 2
     sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 1360 900 >/dev/null 2>&1
     sleep 3
-    if [[ $(shell_state recents) == "closed" ]]; then
+    if [[ $(shell_state drawer) == "closed" ]]; then
       okac A2 "a short drag springs back"
     else
-      noac A2 "a 9% drag left recents $(shell_state recents)"
+      noac A2 "a 9% drag left the drawer $(shell_state drawer)"
     fi
 
     sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 1120 2000 >/dev/null 2>&1
     sleep 3
-    samples=$(timeout 8 omarchy-shell recents dragTrace 2>/dev/null | wc -w)
-    if [[ $(shell_state recents) == "open" ]] && (( samples >= 8 )); then
-      okac A1/A3 "the recents band opens the carousel ($samples samples)"
+    samples=$(timeout 8 omarchy-shell drawer dragTrace 2>/dev/null | wc -w)
+    if [[ $(shell_state drawer) == "open" ]] && (( samples >= 8 )); then
+      okac A1/A3 "the strip band opens the drawer ($samples samples)"
     else
-      noac A1/A3 "the recents drag left $samples samples and state $(shell_state recents)" \
+      noac A1/A3 "the strip drag left $samples samples and state $(shell_state drawer)" \
                  "under 8 means it jumped to open rather than following the drag"
     fi
 
-    # A5 is the correction this whole rewrite exists for: the strip must never
-    # bring the drawer up, in any state.
-    if [[ $(shell_state drawer) == "closed" ]]; then
-      okac A5 "the strip did not open the drawer"
+    # A5, and it is the inverse of what this line asserted until the carousel
+    # was deleted -- "the strip did not open the drawer". The drag above is the
+    # evidence either way, so what is left to say here is that it happened with
+    # a window on screen: that was the state where the strip used to raise
+    # something else entirely.
+    if [[ $(shell_state drawer) == "open" && -n $(ws_rep) ]]; then
+      okac A5 "the strip opened the drawer over an app ('$(ws_rep)')"
     else
-      noac A5 "an up-swipe from the strip opened the drawer" \
-              "the strip is recents-then-home only; the drawer is a home-screen gesture"
+      noac A5 "drawer=$(shell_state drawer), workspace holds '$(ws_rep)'" \
+              "every up-swipe raises the drawer now, whatever is on screen"
     fi
 
-    # --- E. the carousel ---------------------------------------------------
-    before=$(cards)
-    sudo -n "$touch_bin" swipe 360 704 360 300 400 >/dev/null 2>&1
+    # A7. A second, short up-swipe with the drawer already up leaves it up: the
+    # strip means forward, never back. It is checked here rather than beside A2
+    # because it needs the open drawer A1/A3 just left standing.
+    sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 1360 900 >/dev/null 2>&1
     sleep 3
-    after=$(cards)
-    if (( after == before - 1 )); then
-      okac E3 "flicking a card up closes that app ($before -> $after)"
+    if [[ $(shell_state drawer) == "open" ]]; then
+      okac A7 "a short up-swipe over the open drawer leaves it open"
     else
-      noac E3 "the card count went $before -> $after" \
-              "expected one fewer; a horizontal steal by the pager leaves it unchanged"
+      noac A7 "the drawer went $(shell_state drawer) after a 9% drag over it" \
+              "the strip does not toggle the drawer; H1 and G3 are what close it"
     fi
 
-    # E2, and driven from a *home screen* on purpose. Tapping the leading card
-    # while standing on the app it names changes nothing, so the old form of
-    # this check -- tap, then assert the workspace holds a window -- was true
-    # whether or not the tap did anything. It was: `Toplevel.activate()`, which
-    # is what the tap sent, is a no-op on this compositor, and this criterion
-    # passed for as long as that was so. From a home screen the workspace has
-    # to move, and it has to move to the app the card names.
-    timeout 8 omarchy-shell recents close >/dev/null 2>&1; sleep 1
+    # --- M. the drawer's shelf ---------------------------------------------
+    #
+    # Aimed rather than guessed at, the way L1's hold is: `openTarget` answers
+    # in surface pixels, the bar's height comes from sway because it is where
+    # the surface starts, and the scale from the output. A hard-coded tile
+    # centre would be wrong the moment the theme's spacing scale moved.
+    m_bar=$(swaymsg -t get_workspaces | jq -r '.[]|select(.focused)|.rect.y')
+    m_scale=$(swaymsg -t get_outputs | jq -r '.[]|select(.active)|.scale' | cut -d. -f1)
+    m_tile=$(timeout 8 omarchy-shell drawer openTarget 0 2>/dev/null)
+    m_rect=$(tr ' ' '\n' <<<"$m_tile" | sed -n 's/^rect=//p')
+    m_size=$(tr ' ' '\n' <<<"$m_tile" | sed -n 's/^size=//p')
+    if [[ -z $m_rect || -z $m_size || -z ${m_bar:-} ]]; then
+      noac M6 "openTarget answered '$m_tile'" \
+              "with the drawer open and a window running it must name a tile"
+    else
+      m_cx=$(( (${m_rect%%,*} + ${m_size%%x*} / 2) * m_scale ))
+      m_cy=$(( (${m_rect#*,} + ${m_size#*x} / 2 + m_bar) * m_scale ))
+      before=$(windows)
+      sudo -n "$touch_bin" swipe "$m_cx" "$m_cy" "$m_cx" $(( m_cy - 220 )) 400 >/dev/null 2>&1
+      sleep 3
+      after=$(windows)
+      if (( after == before - 1 )); then
+        okac M6 "flicking a tile up closes that app ($before -> $after)"
+      else
+        noac M6 "the open-window count went $before -> $after" \
+                "expected one fewer; a vertical steal by the grid leaves it unchanged"
+      fi
+    fi
+
+    # M5, and driven from a *home screen* on purpose. Tapping the leading tile
+    # while standing on the app it names changes nothing, so the obvious form
+    # of this check -- tap, then assert the workspace holds a window -- would be
+    # true whether or not the tap did anything. It was, for a whole release:
+    # `Toplevel.activate()`, which is what the tap used to send, is a no-op on
+    # this compositor. From a home screen the workspace has to move, and it has
+    # to move to the app the tile names.
+    timeout 8 omarchy-shell drawer close >/dev/null 2>&1; sleep 1
     timeout 8 omarchy-shell gestures swipe home >/dev/null 2>&1; sleep 2
-    timeout 8 omarchy-shell recents open >/dev/null 2>&1; sleep 2
-    e2_lead=$(timeout 8 omarchy-shell recents list 2>/dev/null | head -1 | awk '{print $1}')
-    sudo -n "$touch_bin" tap 360 704 >/dev/null 2>&1
-    sleep 3
-    e2_focus=$(focused_app)
-    # A shell app's card prints its plugin id and its window's app id is the
-    # shell process's own, so the two spellings have to be reconciled here
-    # (docs/gestures.md K9).
-    [[ $e2_lead == moarchy.* ]] && e2_lead_app=org.quickshell || e2_lead_app=$e2_lead
-    if [[ $(shell_state recents) == "closed" && -n $e2_lead \
-          && $e2_focus == "$e2_lead_app" ]]; then
-      okac E2 "tapping a card focuses that app ($e2_lead)"
+    timeout 8 omarchy-shell drawer open >/dev/null 2>&1; sleep 2
+    m5_lead=$(timeout 8 omarchy-shell drawer openApps 2>/dev/null | head -1 | awk '{print $1}')
+    m5_tile=$(timeout 8 omarchy-shell drawer openTarget 0 2>/dev/null)
+    m5_rect=$(tr ' ' '\n' <<<"$m5_tile" | sed -n 's/^rect=//p')
+    m5_size=$(tr ' ' '\n' <<<"$m5_tile" | sed -n 's/^size=//p')
+    if [[ -z $m5_rect || -z $m5_size ]]; then
+      noac M5 "openTarget answered '$m5_tile' from a home screen" \
+              "the shelf is what makes an open app reachable from the launcher"
     else
-      noac E2 "recents is $(shell_state recents), leading card '${e2_lead:-none}', focus '${e2_focus:-none}', workspace holds '$(ws_rep)'" \
-              "a tap that only closes the carousel looks like this when you were already on the app"
+      m5_cx=$(( (${m5_rect%%,*} + ${m5_size%%x*} / 2) * m_scale ))
+      m5_cy=$(( (${m5_rect#*,} + ${m5_size#*x} / 2 + m_bar) * m_scale ))
+      sudo -n "$touch_bin" tap "$m5_cx" "$m5_cy" >/dev/null 2>&1
+      sleep 3
+      m5_focus=$(focused_app)
+      # A shell app's line prints its plugin id and its window's app id is the
+      # shell process's own, so the two spellings are reconciled here
+      # (docs/gestures.md K9).
+      [[ $m5_lead == moarchy.* ]] && m5_lead_app=org.quickshell || m5_lead_app=$m5_lead
+      if [[ $(shell_state drawer) == "closed" && -n $m5_lead \
+            && $m5_focus == "$m5_lead_app" ]]; then
+        okac M5 "tapping a tile switches to that app ($m5_lead)"
+      else
+        noac M5 "drawer is $(shell_state drawer), leading tile '${m5_lead:-none}', focus '${m5_focus:-none}', workspace holds '$(ws_rep)'" \
+                "a tap that only closes the drawer looks like this when you were already on the app"
+      fi
     fi
 
     # --- A4/F. home --------------------------------------------------------
-    timeout 8 omarchy-shell recents close >/dev/null 2>&1; sleep 2
-    before=$(cards)
+    timeout 8 omarchy-shell drawer close >/dev/null 2>&1; sleep 2
+    before=$(windows)
     sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 860 2000 >/dev/null 2>&1
     sleep 3
     home_landed=0
-    if [[ -z $(ws_rep) ]] && [[ $(shell_state recents) == "closed" ]]; then
+    if [[ -z $(ws_rep) ]] && [[ $(shell_state drawer) == "closed" ]]; then
       okac A4 "the home band lands on a blank workspace"
       home_landed=1
     else
@@ -1207,7 +1253,7 @@ print(found[0] if found else "")'; }
     # Requiring the count to be unchanged also fails when something unrelated
     # launches mid-run -- a leftover app finishing its start-up was enough --
     # and that is not what this criterion is about.
-    after=$(cards)
+    after=$(windows)
     if (( after >= before )); then
       okac F2 "going home closed nothing ($before apps still open)"
     else
@@ -1222,7 +1268,7 @@ print(found[0] if found else "")'; }
     # homeHint, so its trace opens `100:0` -- which is exactly what a snap looks
     # like, and reading it as one turns an unrelated A4 failure into a second
     # red line pointing at the wrong thing.
-    retire=$(timeout 8 omarchy-shell recents retireTrace 2>/dev/null)
+    retire=$(timeout 8 omarchy-shell drawer retireTrace 2>/dev/null)
     f4_first_hint=${retire%% *}; f4_first_hint=${f4_first_hint##*:}
     f4_decay=$(printf '%s' "$retire" | tr ' ' '\n' | cut -d: -f2 | sort -un | grep -c .)
     if (( home_landed == 0 )); then
@@ -1230,7 +1276,7 @@ print(found[0] if found else "")'; }
     elif [[ -z $retire ]]; then
       printf '  \033[90m%-4s\033[0m   \033[90mF4 skipped: the drag left no retire trace\033[0m\n' ""
     elif [[ ${f4_first_hint:-0} -gt 0 ]] && (( f4_decay >= 3 )); then
-      okac F4 "the carousel retires from the home band without flashing (${f4_first_hint} -> 0 over $f4_decay steps)"
+      okac F4 "the sheet retires from the home band without snapping (${f4_first_hint} -> 0 over $f4_decay steps)"
     else
       noac F4 "retire trace: $retire" \
               "homeHint at 0 in the first frame means it snapped while progress was still up, and the scrim flashed to full"
@@ -1483,7 +1529,7 @@ print(found[0] if found else "")'; }
     if ! ipc_present shade sheet; then
       printf '  \033[90m%-4s\033[0m   \033[90mS21 skipped: this shell has no `shade sheet`\033[0m\n' ""
     else
-      # key=value on one line, the form the carousel's preview already uses.
+      # key=value on one line, the form every diagnostic line here uses.
       sf() { timeout 8 omarchy-shell shade sheet 2>/dev/null | tr ' ' '\n' | sed -n "s/^$1=//p"; }
 
       # Reopened after each post, and that is not padding.
@@ -1553,13 +1599,13 @@ print(found[0] if found else "")'; }
 
     # --- G. back -----------------------------------------------------------
     # With the drawer up, back closes the overlay and leaves the apps alone.
-    before=$(cards)
+    before=$(windows)
     sudo -n "$touch_bin" swipe 4 700 200 700 300 >/dev/null 2>&1
     sleep 3
-    if [[ $(shell_state drawer) == "closed" ]] && (( $(cards) == before )); then
+    if [[ $(shell_state drawer) == "closed" ]] && (( $(windows) == before )); then
       okac G3 "back closes the overlay and leaves the apps alone"
     else
-      noac G3 "drawer is $(shell_state drawer), apps went $before -> $(cards)"
+      noac G3 "drawer is $(shell_state drawer), apps went $before -> $(windows)"
     fi
 
     # G2 before G4, because back is a priority order and the keyboard outranks
@@ -1572,14 +1618,14 @@ print(found[0] if found else "")'; }
     swaymsg '[app_id=moa-selftest] focus' >/dev/null 2>&1
     sleep 2
     osk true; sleep 2
-    before=$(cards)
+    before=$(windows)
     if [[ $(osk_visible) == *true* ]]; then
       sudo -n "$touch_bin" swipe 4 700 200 700 300 >/dev/null 2>&1
       sleep 3
-      if [[ $(osk_visible) != *true* ]] && (( $(cards) == before )); then
+      if [[ $(osk_visible) != *true* ]] && (( $(windows) == before )); then
         okac G2 "back dismisses the keyboard and leaves the app open"
       else
-        noac G2 "keyboard is $(osk_visible), apps went $before -> $(cards)" \
+        noac G2 "keyboard is $(osk_visible), apps went $before -> $(windows)" \
                 "the keyboard outranks the app; back must not close one to hide the other"
       fi
     else
@@ -1596,7 +1642,7 @@ print(found[0] if found else "")'; }
     swaymsg '[app_id=moa-selftest] focus' >/dev/null 2>&1
     sleep 2
     osk false; sleep 2
-    before=$(cards)
+    before=$(windows)
     # G4 needs a focused window, and that precondition can fail on its own.
     # Sway can end up with the workspace focused and no window inside it
     # focused -- `[app_id=...] focus` then reports success and changes
@@ -1609,10 +1655,10 @@ print(found[0] if found else "")'; }
     else
       sudo -n "$touch_bin" swipe 4 700 200 700 300 >/dev/null 2>&1
       sleep 3
-      if (( $(cards) == before - 1 )); then
-        okac G4 "back closes the focused app ($before -> $(cards))"
+      if (( $(windows) == before - 1 )); then
+        okac G4 "back closes the focused app ($before -> $(windows))"
       else
-        noac G4 "the app count went $before -> $(cards)" \
+        noac G4 "the app count went $before -> $(windows)" \
                 "a left-edge swipe on an app has to close it"
       fi
     fi
@@ -1621,10 +1667,10 @@ print(found[0] if found else "")'; }
     osk false; sleep 1
     swaymsg '[app_id=moa-selftest] focus' >/dev/null 2>&1
     sleep 2
-    before=$(cards)
+    before=$(windows)
     sudo -n "$touch_bin" swipe 4 700 30 700 300 >/dev/null 2>&1
     sleep 3
-    if (( $(cards) == before )); then
+    if (( $(windows) == before )); then
       okac G6 "brushing the edge closes nothing"
     else
       noac G6 "a 13-logical-px drag from the edge closed an app"
@@ -1669,111 +1715,11 @@ print(found[0] if found else "")'; }
     fi
     osk false
 
-    # --- J. the app you are leaving ---------------------------------------
-    # Last in the section on purpose. It is the only check here that has to
-    # sample a drag while it runs rather than read the state it left, so it
-    # holds the carousel open for several seconds; run earlier, that timing and
-    # the scroll position it leaves behind perturb E3 and D1, which assume they
-    # follow A1/A3 directly.
-    #
-    # moarchy-touch spends ~3s building its uinput device before the
-    # first event lands -- the same settle every other swipe in this file pays
-    # inside its `sleep` -- so the poll starts after that and not at t=0.
-    # Sampled before it, every field reads as its resting value, which looks
-    # exactly like a preview that never armed.
-    #
-    # And a window of its own on *this* workspace. The preview is a picture of
-    # the app you are leaving, and there is deliberately nothing to picture on
-    # a home screen (J10), so the gesture refuses to arm there -- correctly.
-    # Inheriting the previous check's workspace meant inheriting an empty one:
-    # G4 closes the focused app and F3 above ends by going home, so this read
-    # `armed=0` and reported a working preview as broken.
-    timeout 8 omarchy-shell recents close >/dev/null 2>&1; sleep 2
-    setsid foot --app-id=moa-selftest -e sh -c 'while :; do sleep 300; done' >/dev/null 2>&1 </dev/null &
-    sleep 4
-    swaymsg '[app_id=moa-selftest] focus' >/dev/null 2>&1
-    sleep 2
-
-    if [[ -z $(ws_rep) ]]; then
-      printf '  \033[90m%-4s\033[0m   \033[90mJ1/J3 skipped: no window on the focused workspace to preview\033[0m\n' ""
-    else
-    preview_log=""
-    sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 1120 4000 >/dev/null 2>&1 &
-    swipe_pid=$!
-    sleep 3.2
-    for _ in 1 2 3 4 5 6 7; do
-      preview_log+="$(timeout 5 omarchy-shell recents preview 2>/dev/null)"$'\n'
-    done
-    wait $swipe_pid 2>/dev/null
-    sleep 2
-
-    j_verdict=$(printf '%s' "$preview_log" | python3 -c '
-import sys
-
-armed = []
-landed = None
-for line in sys.stdin:
-    f = dict(p.split("=", 1) for p in line.split() if "=" in p)
-    if "landed" not in f:
-        continue
-    if landed is None:
-        landed = int(f["landed"])
-    if f.get("armed") == "true" and f.get("content") == "true":
-        armed.append((int(f["progress"]), int(f["track"]), int(f["scale"])))
-
-# J1, half one: at least one frame between full size and the card. Without it
-# "shrinks" is satisfied by something that jumps straight to the card.
-mid = sum(1 for _, _, sc in armed if landed < sc < 100)
-
-# J1, half two: it tracks the drag rather than easing toward it. The first
-# armed sample is exempt -- J4 is the catch-up from full size to wherever the
-# finger got to while the capture was in flight, and during it the two
-# deliberately disagree.
-lag = sum(1 for pr, tr, _ in armed[1:] if abs(tr - pr) > 2)
-
-# J3: where it comes to rest. Read from the samples at the carousel stop, not
-# from the state after the gesture -- by then the preview has disarmed and
-# every field is back to its resting value.
-at_stop = [sc for pr, _, sc in armed if pr >= 100]
-landed_ok = bool(at_stop) and all(sc == landed for sc in at_stop)
-
-print("armed=%d mid=%d lag=%d stop=%d landed_ok=%s landed=%s"
-      % (len(armed), mid, lag, len(at_stop), landed_ok, landed))
-')
-    j_armed=${j_verdict#armed=}; j_armed=${j_armed%% *}
-    j_mid=${j_verdict#*mid=}; j_mid=${j_mid%% *}
-    j_lag=${j_verdict#*lag=}; j_lag=${j_lag%% *}
-    j_stop=${j_verdict#*stop=}; j_stop=${j_stop%% *}
-    j_landed_ok=${j_verdict#*landed_ok=}; j_landed_ok=${j_landed_ok%% *}
-
-    if (( j_armed == 0 )); then
-      noac J1 "the preview never armed during the drag ($j_verdict)" \
-              "J8 says the gesture still works without a capture, but then J1 is untested"
-    elif (( j_mid > 0 )) && (( j_lag == 0 )); then
-      okac J1 "the app preview shrinks with the drag ($j_mid mid-shrink samples, none lagging)"
-    else
-      noac J1 "preview samples: $j_verdict" \
-              "mid=0 means it jumped rather than shrank; lag>0 means it trailed the finger"
-    fi
-
-    if (( j_stop == 0 )); then
-      noac J3 "the drag never reached the carousel stop ($j_verdict)" \
-              "J3 is about where the preview lands, so a drag that stops short cannot test it"
-    elif [[ $j_landed_ok == True ]]; then
-      okac J3 "the preview lands on the leading card's slot ($j_verdict)"
-    else
-      noac J3 "the preview did not settle on the card slot ($j_verdict)" \
-              "at the carousel stop its scale must equal the fit into card 0"
-    fi
-
-    timeout 8 omarchy-shell recents close >/dev/null 2>&1; sleep 1
-    fi
-
     # --- K. Settings is an app ---------------------------------------------
     # After everything else in this section, and that is not tidiness. Every
-    # count-based check above reads `recents list` and compares numbers, and a
-    # Settings left running adds a line to it -- so run earlier, these would
-    # make E3 and F2 fail as though a window had gone missing. This block
+    # count-based check above reads `drawer openApps` and compares numbers, and
+    # a Settings left running adds a line to it -- so run earlier, these would
+    # make M6 and F2 fail as though a window had gone missing. This block
     # closes Settings on the way in for the same reason, because the --settings
     # section is not guaranteed to have gone first.
     #
@@ -1793,8 +1739,8 @@ print("armed=%d mid=%d lag=%d stop=%d landed_ok=%s landed=%s"
 
     # `|| true`: grep exits 1 when it counts nothing, which under `set -e`
     # would end the run at the one moment the answer is legitimately zero.
-    settings_card() {
-      timeout 8 omarchy-shell recents list 2>/dev/null \
+    settings_tile() {
+      timeout 8 omarchy-shell drawer openApps 2>/dev/null \
         | grep -c '^moarchy\.settings' || true
     }
     # The window this shell drew, as sway sees it: one line per matching node,
@@ -1816,26 +1762,26 @@ walk(tree)' 2>/dev/null
     }
 
     # K1, K9. A toplevel sway holds, alone on a workspace that is not the one
-    # the app is on, with a card in the carousel. All of it at once, because
-    # each half alone is satisfied by something that is not this: a card is
-    # what the old stand-in produced with no window anywhere, and a workspace
-    # switch is what any summon does.
+    # the app is on, with a tile on the drawer's shelf. All of it at once,
+    # because each half alone is satisfied by something that is not this: a
+    # tile is what the old stand-in produced with no window anywhere, and a
+    # workspace switch is what any summon does.
     k_ws_before=$(ws)
     timeout 8 omarchy-shell settings open >/dev/null 2>&1
     sleep 3
     k1_node=$(settings_nodes)
     k1_ws=$(awk '{print $1}' <<<"$k1_node")
     if [[ $(wc -l <<<"$k1_node") == 1 && -n $k1_ws && $k1_ws != "$k_ws_before" \
-          && $(settings_card) == 1 ]]; then
-      okac K1 "Settings is a window of its own on workspace $k1_ws, with a card"
+          && $(settings_tile) == 1 ]]; then
+      okac K1 "Settings is a window of its own on workspace $k1_ws, with a tile"
     else
-      noac K1 "nodes='${k1_node:-none}' (was on $k_ws_before), cards=$(settings_card)" \
+      noac K1 "nodes='${k1_node:-none}' (was on $k_ws_before), cards=$(settings_tile)" \
               "app_id org.quickshell, one node, its own workspace -- a layer surface has none of the three"
     fi
 
     # K9. The title is the identity, because the app id cannot be: Qt sets one
     # per process. Asserted on the page, so that a title left at a stale page
-    # -- which is what the carousel would then print -- is a failure here.
+    # -- which is what the shelf would then print -- is a failure here.
     timeout 8 omarchy-shell settings goto appearance.bar >/dev/null 2>&1; sleep 2
     k9_title=$(settings_nodes | cut -d' ' -f2-)
     if [[ $k9_title == "Settings — Status bar" ]]; then
@@ -1868,66 +1814,60 @@ walk(tree)' 2>/dev/null
     k3_away=$(shell_state settings)
     swaymsg "workspace number $k1_ws" >/dev/null 2>&1; sleep 2
     if [[ $k3_away == "open" && $(shell_state settings) == "open" \
-          && $(settings_card) == 1 ]]; then
+          && $(settings_tile) == 1 ]]; then
       okac K3 "a plain workspace switch leaves Settings running and comes back to it"
     else
-      noac K3 "away=$k3_away, back=$(shell_state settings), cards=$(settings_card)" \
+      noac K3 "away=$k3_away, back=$(shell_state settings), cards=$(settings_tile)" \
               "nothing in this shell should have to be told about a workspace change"
     fi
 
-    # E1/K5. The card's three lines, of which the third is the page. Read off
-    # `recents list`, which prints the plugin id and the page for exactly this.
-    k5_line=$(timeout 8 omarchy-shell recents list 2>/dev/null | grep '^moarchy\.settings' || true)
+    # K5/M1. The shelf line's two fields, of which the second is the page.
+    # `drawer openApps` prints the plugin id and the page for exactly this.
+    k5_line=$(timeout 8 omarchy-shell drawer openApps 2>/dev/null | grep '^moarchy\.settings' || true)
     if [[ $k5_line == "moarchy.settings Status bar" ]]; then
-      okac K5 "the card names the page it will come back to ($k5_line)"
+      okac K5 "the shelf names the page it will come back to ($k5_line)"
     else
-      noac K5 "card line='${k5_line:-none}'" \
+      noac K5 "shelf line='${k5_line:-none}'" \
               "expected 'moarchy.settings Status bar'"
     fi
 
-    # E1, not a K of its own. The strip raises the carousel over Settings with
-    # its card leading, which is A1 and E1 applied to a window that happens to
-    # be ours -- and the point of K is that they apply with nothing added. It
-    # used to need a criterion here because the strip had a branch for it.
+    # M1 over Settings, not a K of its own: the strip raises the drawer over
+    # Settings with its tile leading the shelf, which is A1 and M1 applied to a
+    # window that happens to be ours -- and the point of K is that they apply
+    # with nothing added. It used to need a criterion here because the strip
+    # had a branch for it.
     sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 1120 2000 >/dev/null 2>&1
     sleep 3
-    lead=$(timeout 8 omarchy-shell recents list 2>/dev/null | head -1 | awk '{print $1}')
-    # And which end it leads from. `list` is model order either way, so it
-    # cannot see the row being drawn from the right; cardX reports where the
-    # first two cards actually landed. Card 1 left of card 0 is the mirroring.
-    # Both numbers or bust: "none" for card 1 means one app was open, which is
-    # a precondition failure here and not a pass.
-    read -r e1_x0 e1_x1 <<<"$(timeout 8 omarchy-shell recents cardX 2>/dev/null)"
-    if [[ $(shell_state recents) == "open" && $lead == "moarchy.settings" \
-          && $e1_x0 =~ ^-?[0-9]+$ && $e1_x1 =~ ^-?[0-9]+$ && $e1_x1 -lt $e1_x0 ]]; then
-      okac E1 "the strip raises the carousel with Settings leading, at the right of the row (card 1 at $e1_x1, card 0 at $e1_x0)"
+    lead=$(timeout 8 omarchy-shell drawer openApps 2>/dev/null | head -1 | awk '{print $1}')
+    if [[ $(shell_state drawer) == "open" && $lead == "moarchy.settings" ]]; then
+      okac M1 "the strip raises the drawer with Settings leading its shelf"
     else
-      noac E1 "recents=$(shell_state recents), leading card='${lead:-none}', cardX='${e1_x0:-none} ${e1_x1:-none}'" \
-              "the strip does to Settings what it does to an app, Settings is what you just left, and its card sits at the right-hand end -- a 'none' for card 1 is the scratch foot opened at the top of K having gone, which is a precondition and not the row failing to mirror"
+      noac M1 "drawer=$(shell_state drawer), leading tile='${lead:-none}'" \
+              "the strip does to Settings what it does to an app, and Settings is what you just left"
     fi
 
-    # E5, for the same reason. Kept from the old K8: the obvious way to
-    # implement the line above is to put Settings away as the carousel opens,
-    # and that fails only here.
-    timeout 8 omarchy-shell recents close >/dev/null 2>&1
+    # A7/K4 read together. The obvious way to implement the line above is to
+    # put Settings away as the drawer opens, and that fails only here: the
+    # drawer is a sheet over a window that is still running underneath it.
+    timeout 8 omarchy-shell drawer close >/dev/null 2>&1
     sleep 2
     if [[ $(shell_state settings) == "open" ]]; then
-      okac E5 "dismissing the carousel puts you back on Settings"
+      okac K4 "dismissing the drawer puts you back on Settings"
     else
-      noac E5 "settings=$(shell_state settings) after dismissing the carousel" \
+      noac K4 "settings=$(shell_state settings) after dismissing the drawer" \
               "a dismissal returns you to what was on screen, and that was Settings"
     fi
 
     # K4. Carried into the home band. Running and closed differ in what is left
-    # behind, so the card and the window are asserted alongside the workspace --
+    # behind, so the tile and the window are asserted alongside the workspace --
     # `representation` alone is equally satisfied by a Settings that was closed
     # outright, which is the other way to get this wrong.
     sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 860 2000 >/dev/null 2>&1
     sleep 3
-    if [[ -z $(ws_rep) && $(shell_state settings) == "open" && $(settings_card) == 1 ]]; then
+    if [[ -z $(ws_rep) && $(shell_state settings) == "open" && $(settings_tile) == 1 ]]; then
       okac K4 "the home band lands on a home screen and leaves Settings running"
     else
-      noac K4 "settings=$(shell_state settings), workspace='$(ws_rep)', cards=$(settings_card)" \
+      noac K4 "settings=$(shell_state settings), workspace='$(ws_rep)', cards=$(settings_tile)" \
               "home leaves an app running, and Settings is an app"
     fi
 
@@ -1982,15 +1922,16 @@ walk(tree)' 2>/dev/null
               "one page per back, then the window, and exactly one window fewer"
     fi
 
-    # K6. Closing resets the stack and drops the card, whichever way it is
+    # K6. Closing resets the stack and drops the tile, whichever way it is
     # closed. The compositor's way is asserted here rather than the IPC one:
-    # `swaymsg kill` is xdg_toplevel.close, which is what the carousel's card
-    # flick sends and what a paired keyboard's close binding sends, and it is
+    # `swaymsg kill` is xdg_toplevel.close, which is what a flick on the
+    # drawer's shelf sends and what a paired keyboard's close binding sends,
+    # and it is
     # the path that does not run a line of this plugin's own code.
     timeout 8 omarchy-shell settings openAt appearance.bar >/dev/null 2>&1; sleep 3
     swaymsg '[app_id="^org\.quickshell$" title="^Settings"] kill' >/dev/null 2>&1
     sleep 3
-    k6_closed="$(shell_state settings) $(settings_card) $(settings_nodes)"
+    k6_closed="$(shell_state settings) $(settings_tile) $(settings_nodes)"
     # And it opens again afterwards. Quickshell keeps its own idea of `visible`
     # across a compositor close, so a screen that did not resync it could be
     # closed exactly once per shell restart and never reopened -- silently,
@@ -2005,7 +1946,7 @@ walk(tree)' 2>/dev/null
     fi
 
     timeout 8 omarchy-shell settings close >/dev/null 2>&1; sleep 1
-    timeout 8 omarchy-shell recents close >/dev/null 2>&1; sleep 1
+    timeout 8 omarchy-shell drawer close >/dev/null 2>&1; sleep 1
     fi
   fi
   # Closed through the compositor rather than by `pkill -f`. The pkill was not
@@ -2064,7 +2005,7 @@ walk(tree)' 2>/dev/null
       # L1/L2 together, and they have to be one check: L2 is about what the
       # same touch did NOT do, so a separate run would be asserting a different
       # gesture.
-      l_cards=$(cards)
+      l_cards=$(windows)
       sudo -n "$touch_bin" hold "$l_cx" "$l_cy" 900 >/dev/null 2>&1
       sleep 4
       l_held=$(l_field id)
@@ -2074,10 +2015,10 @@ walk(tree)' 2>/dev/null
         noac L1 "the hold left detail='${l_held:-empty}', wanted $l_id" \
                 "the timer never fired, or travel cancelled it -- check dragSlop against the injector's jitter"
       fi
-      if [[ $(cards) -eq $l_cards ]]; then
+      if [[ $(windows) -eq $l_cards ]]; then
         okac L2 "the hold did not also launch it ($l_cards cards either side)"
       else
-        noac L2 "cards went $l_cards -> $(cards)" \
+        noac L2 "cards went $l_cards -> $(windows)" \
                 "the click Qt delivers after the release is still reaching launch()"
       fi
 
@@ -2240,16 +2181,18 @@ walk(tree)' 2>/dev/null
   # An AC with no check here is a gap, and a gap nobody can see is the same as
   # a gap nobody fixed. These are the ones this suite does not prove:
   #
-  #   A6      carousel open, drag up again -> home
+  #   A6      drawer open, drag up again -> home
   #   A8      shade down, up-flick puts it away
-  #   A9      no apps open at all -> nothing. Needs every window on the device
-  #           closed, including the user's, so it is not run here.
   #   B2      a curved thumb swipe still resolves
   #   D2/D3   drawer springs back; a drag on an app does nothing
   #   D4      sideways/down on the home screen do nothing
-  #   E1/E4   card order and paging -- both visual
-  #   E6      the last card going home
-  #   E7/G5   absences, and a close-request that only a prompting app shows
+  #   M2/M3   the shelf hidden with nothing open, and hidden by a query. The
+  #           first needs every window on the device closed, including the
+  #           user's, so it is not run here.
+  #   M4      the running dot -- visual
+  #   M9/M10  closing the last tile, and a window that refuses to close
+  #   M11/M12 absences: the grid unchanged, and no bulk clear-all
+  #   G5      a close-request that only a prompting app shows
   #   F1      home picks the lowest free workspace
   #   G7/G8/G9 constants, not behaviour
   #   G10a    the dead column outside the band -- it is D3 restated, and D3
@@ -2265,7 +2208,7 @@ walk(tree)' 2>/dev/null
   #   L5a     the card keeps the grid's SCROLL POSITION. The back ladder and
   #           the drawer staying open are checked as L5; the scroll offset
   #           itself is not readable over IPC.
-  printf '  \033[90m%-4s\033[0m   \033[90mnot covered: A6 A8 A9 B2 D2 D3 D4 E4 E6 E7 F1 G5 G7 G8 G9 G10a J2 J4 J5 J6 J7 J8 J9 J10 K8 K10 L4 L5a\033[0m\n' ""
+  printf '  \033[90m%-4s\033[0m   \033[90mnot covered: A6 A8 B2 D2 D3 D4 F1 G5 G7 G8 G9 G10a K8 K10 L4 L5a M2 M3 M4 M9 M10 M11 M12\033[0m\n' ""
 fi
 
 # ---------------------------------------------------------------------------
@@ -2317,7 +2260,7 @@ if [[ ${1:-} == "--settings" ]]; then
     || no "A1 open did not land on root" "page=$(s page) state=$(s state)"
 
   others=""
-  for p in shade drawer recents themes; do
+  for p in shade drawer themes; do
     [[ $(timeout 5 omarchy-shell "$p" state 2>/dev/null) == open ]] && others="$others $p"
   done
   [[ -z $others ]] && ok "A2 no other full-screen surface is up" \
@@ -3417,7 +3360,7 @@ ICONS
     # records the command instead of taking a screenshot and firing a
     # notification -- `lastLaunch` is what proves the row was chosen, and
     # `running` is what proves nothing was left behind: had the surface mapped,
-    # it would still be running with a carousel card (K1).
+    # it would still be running with a tile on the drawer's shelf (K1).
     s dryRun 1 >/dev/null
     d type screenshot >/dev/null; sleep 2
     o_act=$(d activateResult tools/screenshot); sleep 3
@@ -3609,7 +3552,7 @@ PY
   fi
   printf '  \033[90m%-4s\033[0m   \033[90mnot covered here: A3 A5 B5 B7 C5 C7 C8 D3 D4 E2 E5 E6 E7 E8 F1 F2 F3 F4 F5 F6 F7 G4 H1 I4 J11 O4a\033[0m\n' ""
   # A3     needs a real finger or the touch injector
-  # B4     is a gesture, and --gestures proves it as K4/K11 with a real swipe
+  # B4     is a gesture, and --gestures proves it as M1/K4 with a real swipe
   # A5     needs every reader stubbed slow
   # C5/C7/C8  need a blank, a systemd unit and an sshd flip
   # D3     Zed is absent on a base install; D6/D7 are checked above

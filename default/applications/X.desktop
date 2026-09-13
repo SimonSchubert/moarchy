@@ -20,7 +20,7 @@ StartupWMClass=org.gnome.Epiphany.WebApp_x_com
 # Epiphany profile named org.gnome.Epiphany.WebApp_<host with dots underscored>
 # (bin/omarchy-launch-webapp says why it must be named that), and that is the
 # app id its window arrives with. The shell indexes entries by their startup
-# class, so without this line the recents card and the shade's notification
+# class, so without this line the drawer's open-app tile and the shade's notification
 # card for X would have no entry to take a name or an icon from, and the card
 # would read org.gnome.Epiphany.WebApp_x_com.
 #

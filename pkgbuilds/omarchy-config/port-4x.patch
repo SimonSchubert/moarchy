@@ -13,7 +13,7 @@ index e6202da..b16db36 100644
            "verticalFormat": "HH\n\u2014\nmm"
          },
          {
-@@ -60,7 +60,39 @@
+@@ -60,7 +60,36 @@
            "id": "omarchy.power"
          }
        ]
@@ -28,9 +28,6 @@ index e6202da..b16db36 100644
 +    },
 +    {
 +      "id": "moarchy.drawer"
-+    },
-+    {
-+      "id": "moarchy.recents"
 +    },
 +    {
 +      "id": "moarchy.shade"
@@ -479,7 +476,7 @@ index 0cc0575..235daf6 100644
 +  // that has no panelLoaders, no openPanelIds and no callIfLoaded at all.
 +  //
 +  // moarchy's phone UI is not a third-party plugin. It IS the shell -- the bar,
-+  // the drawer, the shade, the recents switcher and the edge gestures that
++  // the drawer, the shade and the edge gestures that
 +  // drive all of them ship in the image and replace what upstream draws
 +  // (docs/structure.md, the plugin contract). It is third-party only in the
 +  // bookkeeping sense that PluginRegistry scans /usr/share/moarchy/plugins with

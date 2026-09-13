@@ -22,7 +22,7 @@
 // ---------------------------------------------------------------------------
 // The three surfaces, and why each sits on the layer it does
 // ---------------------------------------------------------------------------
-//   strip     Overlay, bottom, 20px, exclusive.  Recents and home (A, B).
+//   strip     Overlay, bottom, 20px, exclusive.  The drawer and home (A, B).
 //             Overlay because moarchy-keyboard is on Top with an exclusive zone, so
 //             anything lower loses the bottom edge to the keyboard.
 //   home      Bottom, full screen, no exclusion.  The drawer (D).
@@ -46,11 +46,19 @@
 // What the up-drag from the strip means
 // ---------------------------------------------------------------------------
 //   0 ---- 40% -------- 75% ---- 100%   of pullTravel
-//   app    RECENTS       HOME
+//   app    DRAWER        HOME
 //
-// It never opens the drawer (A5). The drawer is one drag up on the home screen
-// itself (D1), which is the Android split: the nav area is the overview, the
-// home screen is the launcher.
+// One drag, two stops, and the first one is the launcher from wherever you
+// are: over an app, over a home screen, over nothing. The home screen's own
+// up-drag (D1) raises the same sheet and differs only in tracking the finger
+// 1:1, because there the thing under the thumb *is* the sheet.
+//
+// It used to be the carousel in that first band, with the drawer reachable
+// only from a blank workspace (the Android split: nav area is the overview,
+// home screen is the launcher). The carousel is gone: the drawer shows what is
+// open along its top (M), so a switcher that could only switch was a second
+// surface, a second model of what is running, and a gesture whose meaning
+// depended on whether anything was.
 import QtQuick
 import Quickshell
 import Quickshell.I3
@@ -180,10 +188,16 @@ Item {
   readonly property real pullTravel:
     Math.max(1, (strip.screen ? strip.screen.height : 720) * 0.45)
 
-  // A1-A4. The carousel is fully up at 40%, which leaves the rest of the drag
-  // to mean "keep going"; 75% is far enough that landing on home is deliberate.
-  readonly property real recentsFull: 0.40
-  readonly property real recentsCommit: 0.15
+  // A1-A4. The drawer is fully up at 40% of the strip's travel, which leaves
+  // the rest of the drag to mean "keep going"; 75% is far enough that landing
+  // on home is deliberate.
+  //
+  // The numbers are the carousel's, unchanged, because the gesture is: one
+  // drag, two stops, the first of which is now the launcher rather than a
+  // switcher. What changed is that there is nothing left to decide on press
+  // about *which* sheet the drag raises.
+  readonly property real stripFull: 0.40
+  readonly property real stripCommit: 0.15
   readonly property real homeCommit: 0.75
 
   // D1-D2. The drawer's own thresholds, matching the shade so the two drags
@@ -194,7 +208,7 @@ Item {
   // D2a. What one pixel of finger is worth to the sheet being dragged.
   //
   // The strip keeps pullTravel: it is a fixed band that does not move under the
-  // thumb, so a shorter travel there only means the carousel arrives without a
+  // thumb, so a shorter travel there only means the drawer arrives without a
   // full-screen reach -- the pill is not the thing being dragged.
   //
   // The drawer is the opposite case, and it was getting the strip's number. Its
@@ -208,8 +222,11 @@ Item {
   // cannot drift apart -- `closeTravel` is the property its own drag divides
   // by. Falls back to pullTravel when the drawer is not the thing being
   // dragged, or has not published one.
+  // Both surfaces raise the drawer now, so the source and not the target is
+  // what picks the ratio.
   function targetTravel(): real {
-    if (root.dragMode === "drawer" && root.dragTarget) {
+    if (root.dragSource === "strip") return root.pullTravel
+    if (root.dragTarget) {
       var travel = Number(root.dragTarget.closeTravel)
       if (isFinite(travel) && travel > 1) return travel
     }
@@ -226,11 +243,19 @@ Item {
   property real lastY: 0
   property real lastT: 0
 
-  // Which overlay this gesture drives: "none", "drawer" or "recents". Latched
-  // on the first clearly-upward movement and held for the rest of the gesture,
-  // so a swipe that starts up and drifts sideways cannot hand the sheet back
-  // mid-pull and change workspace instead.
+  // Whether this gesture has latched onto the drawer: "none" or "drawer".
+  // Latched on the first clearly-upward movement and held for the rest of the
+  // gesture, so a swipe that starts up and drifts sideways cannot hand the
+  // sheet back mid-pull and change workspace instead.
+  //
+  // It used to name which of two overlays was being dragged. There is one.
   property string dragMode: "none"
+
+  // Which surface is driving: "strip" or "home". They raise the same sheet and
+  // differ in exactly two ways -- how much finger a full sheet costs (D2a),
+  // and whether there is a second stop past it (A4). A home screen has no home
+  // to go to.
+  property string dragSource: ""
 
   // What the surface decided on press, before it was known the gesture was
   // even upward.
@@ -249,7 +274,8 @@ Item {
   property real pull: 0
 
   readonly property bool homeArmed:
-    root.dragMode === "recents" && root.pull >= root.homeCommit
+    root.dragSource === "strip" && root.dragMode !== "none"
+    && root.pull >= root.homeCommit
 
   // Host-injected. Neither may be `readonly` or `required`: readonly makes the
   // assignment throw, required makes the component fail to instantiate at all,
@@ -275,7 +301,7 @@ Item {
   // E2, K12. Focus a window. Every caller in this shell lands here, so there is
   // one answer to "how do you focus something" and one place to change it.
   //
-  // NOT `Toplevel.activate()`, which is what the carousel used and what this
+  // NOT `Toplevel.activate()`, which is what the shelf's tap used to send and
   // replaced. The foreign-toplevel activate request does nothing on this
   // compositor: measured 2026-09-08 from inside the running shell, against
   // `foot` on another workspace and against one of this shell's own windows,
@@ -284,7 +310,7 @@ Item {
   // this is sway's activate path and not a dead protocol -- sway 1.12 matches
   // the request's seat against its own seats and drops it when nothing matches.
   //
-  // It had been silently broken for as long as the carousel has existed. E2
+  // It had been silently broken for as long as a tap on a card was a thing. E2
   // passed throughout, because it asserted that the workspace the tap landed on
   // holds a window -- which is also true when the tap changed nothing and you
   // were already looking at one.
@@ -328,7 +354,6 @@ Item {
   readonly property var overlayIds: [
     "moarchy.shade",
     "moarchy.drawer",
-    "moarchy.recents",
     "moarchy.themes"
   ]
 
@@ -345,19 +370,20 @@ Item {
   //
   // Derived from overlayIds rather than written out again: a second list of
   // ids is exactly how Settings and Themes came to be missing from the back
-  // gesture. Minus the carousel, which a second drag continues into the home
-  // band rather than clears (A6).
+  // gesture. Minus the drawer, which a second drag continues into the home
+  // band rather than clears (A6) -- the exemption the carousel used to hold,
+  // moved to the sheet that took its place in the gesture.
   //
   // Vendored popups are deliberately not consulted here, unlike in
   // topmostOverlay(). That branch reads the host's openPanelIds, which carries
   // every mounted `omarchy.` surface and not only the popups. A false positive
   // costs nothing where it is used today -- by then we have already decided to
   // clear something -- but as this gate it would stop the strip ever raising
-  // the carousel at all.
+  // the drawer at all.
   function coveringSheet(): bool {
     for (var i = 0; i < root.overlayIds.length; i++) {
       var id = root.overlayIds[i]
-      if (id === "moarchy.recents") continue
+      if (id === "moarchy.drawer") continue
       if (root.isOpen(id)) return true
     }
     return false
@@ -450,29 +476,13 @@ Item {
     return true
   }
 
-  // Every window, this shell's three screens included (K1).
-  function hasWindows(): bool {
-    var list = ToplevelManager.toplevels ? ToplevelManager.toplevels.values : []
-    return list.length > 0
-  }
-
-  // A9. Nothing open anywhere means the strip's up-swipe has nothing to show.
-  //
-  // One question again. This used to ask the carousel a second one -- "is a
-  // shell app running" -- because Settings was an app without being a window
-  // and ToplevelManager could not see it. Since K1 it can, and hasWindows() is
-  // the whole answer.
-  function hasApps(): bool {
-    return root.hasWindows()
-  }
-
   // The window a back gesture would close.
   //
   // NOT ToplevelManager.activeToplevel on its own. That reads null here even
   // with a window plainly focused -- the back gesture ran, found nothing, and
   // closed nothing, while `toplevels` was populated the whole time. The
   // per-toplevel `activated` flag is the one that demonstrably tracks focus:
-  // it is what puts the accent border on the right card in the carousel. So
+  // it is what puts the drawer's own shelf in the right order (M1). So
   // prefer the singleton when it answers and fall back to the flag that
   // works, rather than depending on a derived property that does not.
   function focusedToplevel() {
@@ -487,7 +497,7 @@ Item {
   //
   // This used to ask each workspace whether its `representation` was empty,
   // and that was wrong for the same reason it was wrong when the strip used it
-  // to choose between the carousel and the drawer: `representation` changes on
+  // to choose which sheet to raise: `representation` changes on
   // *window* events and I3 refreshes workspaces on *workspace* events, so a
   // workspace that gained a window still reads empty. Home then switched
   // straight onto an occupied workspace. It failed as
@@ -547,53 +557,28 @@ Item {
     if (!loader || !loader.item) return
     root.dragTarget = loader.item
     var progress = Number(loader.item.progress) || 0
-    // The drawer's progress *is* the pull. The carousel reaches its stop at
-    // 40% of the travel, so an open one starts the next drag already there --
-    // which is what lets a second swipe carry straight on into the home band
-    // (A6).
-    root.dragStartPull = id === "moarchy.recents"
-      ? progress * root.recentsFull
+    // Where the next drag starts from, and it differs by source for the same
+    // reason the travel does. From the home screen the drawer's progress *is*
+    // the pull. From the strip the sheet is full at 40% of the travel, so an
+    // already-open drawer starts the next drag there -- which is what lets a
+    // second swipe carry straight on into the home band (A6) instead of
+    // starting over at the bottom of a sheet that is already up.
+    root.dragStartPull = root.dragSource === "strip"
+      ? progress * root.stripFull
       : progress
-  }
-
-  // ------------------------------------------------------------- J. preview
-  //
-  // The carousel paints a still of the app being put away (docs/gestures.md
-  // J). Armed at the latch rather than at the press: the capture needs the
-  // carousel's surface mapped, and that only happens once progress leaves 0.
-  //
-  // Only when there is actually an app on screen to picture. A6 -- a second
-  // drag with the carousel already up -- is a drag over the switcher, and the
-  // app it would capture is already behind it.
-  function armPreview(): void {
-    if (root.dragMode !== "recents" || !root.dragTarget) return
-    if (!root.dragTarget.armPreview) return
-    if (root.isOpen("moarchy.recents")) return
-    // K11. A shell app is a window, so this one question covers it too. It used
-    // to need a second clause: an exclusive-focus layer surface deactivates the
-    // window beneath it, so with Settings up every toplevel read unfocused and
-    // focusedToplevel() alone refused to arm.
-    if (!root.focusedToplevel()) return
-    root.dragTarget.armPreview()
-  }
-
-  // `restore` true means the gesture changed nothing and the app goes back to
-  // full size (J5); false means it was put away and the preview stays where
-  // the finger left it (J6).
-  function disarmPreview(restore): void {
-    if (!root.dragTarget || !root.dragTarget.disarmPreview) return
-    root.dragTarget.disarmPreview(restore)
   }
 
   function setTargetProgress(pull: real): void {
     if (!root.dragTarget) return
     root.dragTarget.dragging = true
-    if (root.dragMode === "recents") {
-      root.dragTarget.progress = Math.max(0, Math.min(1, pull / root.recentsFull))
-      // Past the carousel's stop the rest of the drag has to mean something,
-      // so hand it over as a 0..1 ramp the cards fade and travel with.
+    if (root.dragSource === "strip") {
+      root.dragTarget.progress = Math.max(0, Math.min(1, pull / root.stripFull))
+      // Past the drawer's stop the rest of the drag has to mean something, so
+      // hand it over as a 0..1 ramp the sheet fades with. Without it the last
+      // third of the drag moves nothing at all and the only cue that letting
+      // go now goes somewhere else is a pill the sheet is drawn over.
       root.dragTarget.homeHint = Math.max(0, Math.min(1,
-        (pull - root.recentsFull) / (root.homeCommit - root.recentsFull)))
+        (pull - root.stripFull) / (root.homeCommit - root.stripFull)))
     } else {
       root.dragTarget.progress = Math.max(0, Math.min(1, pull))
     }
@@ -604,12 +589,19 @@ Item {
   // toggling the wrong way.
   function releaseTarget(open): void {
     if (!root.dragTarget) return
-    var id = root.dragMode === "recents" ? "moarchy.recents"
-                                         : "moarchy.drawer"
     root.dragTarget.dragging = false
-    if (root.dragMode === "recents" && !open) root.dragTarget.homeHint = 0
-    if (open && root.shell) root.shell.summon(id, "{}")
-    else if (root.shell) root.shell.hide(id)
+    // Zeroed on every strip release, open or not, and the `open` case is the
+    // one that bites: a drag released in the drawer band at, say, 55% leaves
+    // homeHint at 0.43, and a hint nobody retires is a sheet that settles and
+    // stays 34px above where it belongs. The carousel got away with carrying
+    // this only because `summon` re-entered its open() every time; a sheet
+    // that is *already* open may never see that call.
+    //
+    // After `dragging = false`, so the Behavior is live and this eases rather
+    // than snaps -- which is the whole of F4.
+    if (root.dragSource === "strip") root.dragTarget.homeHint = 0
+    if (open && root.shell) root.shell.summon("moarchy.drawer", "{}")
+    else if (root.shell) root.shell.hide("moarchy.drawer")
     else root.dragTarget.progress = open ? 1 : 0
   }
 
@@ -633,8 +625,7 @@ Item {
     }
   }
 
-  // Every compositor call lives here, including the IPC ones and the one the
-  // carousel fires when its last card is closed.
+  // Every compositor call lives here, including the IPC ones.
   //
   //   next/prev  `*_on_output` keeps the switch on this screen, and matches
   //              what lisgd bound, so muscle memory carries over.
@@ -676,8 +667,8 @@ Item {
       root.hideKeyboard()
 
       // K4. A shell app goes where an app goes: nowhere. It stays mapped on its
-      // own workspace, its card stays in the carousel, and this gesture leaves
-      // it the way it leaves `foot` -- by going somewhere else.
+      // own workspace, it keeps its tile on the drawer's shelf, and this
+      // gesture leaves it the way it leaves `foot` -- by going somewhere else.
       //
       // Already on a home screen: no toplevel is activated when focus is on an
       // empty workspace, which makes this the one reliable "is this workspace
@@ -808,6 +799,7 @@ Item {
     root.tracking = false
     root.dragMode = "none"
     root.pendingMode = "none"
+    root.dragSource = ""
     root.dragTarget = null
     root.dragStartPull = 0
     root.pull = 0
@@ -824,12 +816,8 @@ Item {
     id: watchdog
     interval: 4000
     onTriggered: {
-      if (root.dragMode !== "none") {
-        // A dropped touch changed nothing, so the app goes back (J5) -- and
-        // this is the path that catches a capture which never arrived.
-        root.disarmPreview(true)
-        root.releaseTarget(false)
-      }
+      // A dropped touch changed nothing, so the sheet goes back where it was.
+      if (root.dragMode !== "none") root.releaseTarget(false)
       root.reset()
     }
   }
@@ -846,14 +834,18 @@ Item {
       if (direction === "home") { root.run("home"); return "ok: home" }
       if (direction === "up") {
         // The same choice a real strip swipe makes, so this exercises the
-        // decision and not just one branch of it.
+        // decision and not just one branch of it. Both branches of it, now:
+        // the third case -- "nothing is open, so there is nothing to show" --
+        // went with the carousel (A9).
         if (root.coveringSheet()) {
           root.run("clear")
           return "ok: cleared"
         }
-        if (!root.hasApps()) return "ok: nothing (no apps open)"
-        if (root.shell) root.shell.summon("moarchy.recents", "{}")
-        return "ok: recents"
+        // Distance is what picks the second stop (A4) and an IPC verb has no
+        // distance, so this one always means the first. `swipe home` is the
+        // other one, and it is already here.
+        if (root.shell) root.shell.summon("moarchy.drawer", "{}")
+        return "ok: drawer"
       }
       return "usage: swipe left|right|up|home"
     }
@@ -948,9 +940,9 @@ Item {
       x: (parent.width - width) / 2 + root.pillOffset
 
       // Brightens while tracking, and stretches as an upward swipe approaches
-      // the first stop. Armed for home it goes accent -- once the carousel
-      // covers the screen the pill is the only cue left that letting go now
-      // goes somewhere else.
+      // the first stop. Armed for home it goes accent, and the drawer dims
+      // with it (homeHint): between them they are the cue that letting go now
+      // goes somewhere else than the sheet you are looking at.
       color: root.homeArmed ? Color.accent
                             : Util.alpha(Color.foreground, root.tracking ? 0.9 : 0.3)
       scale: root.homeArmed ? 1.6
@@ -987,28 +979,24 @@ Item {
         root.dragMode = "none"
         root.dragTarget = null
 
-        // The whole decision, and it never mentions the drawer (A5).
+        // The whole decision, and it is now two lines:
         //
-        //   a sheet covering the screen -> the release clears it (A7, A8)
-        //   the carousel already up     -> keep dragging it, on to home (A6)
-        //   apps open                   -> the carousel (A1-A4)
-        //   nothing open at all         -> nothing (A9)
+        //   a sheet covering the screen -> the release clears it (A8)
+        //   anything else               -> the drawer (A1-A4)
         //
-        // The first line used to name the shade and the drawer and nothing
-        // else, which left Settings to fall through to it -- and only when no
-        // window was open, because with one the third line claimed the gesture
-        // first and raised the carousel over the top of Settings, leaving it
-        // there. Settings is a window now (K1), so the third line claims it in
-        // both cases with no clause of its own; the theme picker and any other
-        // sheet reach the first one in both cases, which they did not before.
-        if (root.coveringSheet())
-          root.pendingMode = "none"
-        else if (root.isOpen("moarchy.recents") || root.hasApps())
-          root.pendingMode = "recents"
-        else
-          root.pendingMode = "none"
-
-        if (root.pendingMode === "recents") root.resolveTarget("moarchy.recents")
+        // Four cases became two when the carousel went. "The carousel is
+        // already up" is gone because the drawer is not a special case of
+        // itself -- coveringSheet() exempts it, so a second drag continues
+        // into the home band (A6). "Is anything open at all" is gone with A9:
+        // the drawer opens over an app, over a home screen and over nothing,
+        // so there is no state left to ask the compositor about.
+        //
+        // What survives from the old note is why the first line is a
+        // *derived* list: it used to name the shade and the drawer by hand,
+        // which left Settings and the theme picker falling through it.
+        root.dragSource = "strip"
+        root.pendingMode = root.coveringSheet() ? "none" : "drawer"
+        if (root.pendingMode === "drawer") root.resolveTarget("moarchy.drawer")
         watchdog.restart()
       }
 
@@ -1031,7 +1019,6 @@ Item {
         if (root.dragMode === "none" && root.dragTarget && root.pendingMode !== "none"
             && root.dy < -root.slop && Math.abs(root.dy) > Math.abs(root.dx)) {
           root.dragMode = root.pendingMode
-          root.armPreview()
         }
 
         if (root.dragMode !== "none") {
@@ -1050,23 +1037,20 @@ Item {
 
       onReleased: pts => {
         if (!root.tracking) return
-        if (root.dragMode === "recents") {
+        if (root.dragMode !== "none") {
           // A2-A4. Distance alone decides home. A fling is allowed to rescue a
-          // short, fast flick into the recents band -- people do that when they
+          // short, fast flick into the drawer band -- people do that when they
           // know where they are going -- but never to carry the drag past a
           // stop the finger did not reach, or the destination stops being
           // predictable.
           if (root.pull >= root.homeCommit) {
-            root.disarmPreview(false)
             root.releaseTarget(false)
             root.run("home")
-          } else if (root.pull >= root.recentsCommit || root.velocity >= root.fling) {
-            root.disarmPreview(false)
+          } else if (root.pull >= root.stripCommit || root.velocity >= root.fling) {
             root.releaseTarget(true)
           } else {
-            // A2: nothing happened, so the app comes back rather than
-            // appearing to have been put somewhere.
-            root.disarmPreview(true)
+            // A2: nothing happened, so what was on screen comes back rather
+            // than appearing to have been put somewhere.
             root.releaseTarget(false)
           }
         } else {
@@ -1076,10 +1060,7 @@ Item {
       }
 
       onCanceled: pts => {
-        if (root.dragMode !== "none") {
-          root.disarmPreview(true)
-          root.releaseTarget(false)
-        }
+        if (root.dragMode !== "none") root.releaseTarget(false)
         root.reset()
       }
     }
@@ -1133,7 +1114,7 @@ Item {
     // Underneath is the whole trick, and it is why this costs nothing anywhere
     // else. Bottom is below every window, so on an occupied workspace this is
     // covered except in the band no window is drawn in; and it is below every
-    // sheet, so the drawer, the shade, the carousel and the theme picker draw
+    // sheet, so the drawer, the shade and the theme picker draw
     // over it exactly as before. Painting the band from the *strip* instead
     // would have put it over all four.
     //
@@ -1170,6 +1151,9 @@ Item {
         root.tracking = true
         root.dragMode = "none"
         root.pendingMode = "drawer"
+        // Set before resolveTarget, which reads it to decide where this drag
+        // starts from.
+        root.dragSource = "home"
         root.resolveTarget("moarchy.drawer")
         watchdog.restart()
       }
@@ -1223,8 +1207,8 @@ Item {
   //
   // G. The one surface here that takes touch ahead of an app, which is why it
   // is 16px and why it never grows. Overlay rather than Top so it sits above
-  // the drawer and the carousel and can close them (G3) -- on Top they would
-  // map later and win.
+  // the drawer and the shade and can close them (G3) -- on Top they would map
+  // later and win.
   PanelWindow {
     id: backEdge
 

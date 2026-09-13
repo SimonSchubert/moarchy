@@ -20,7 +20,7 @@ visible.
 | **reader** | The command a `switch` or `choice` page reads its state from. |
 | **bridged launch** | Running an upstream `omarchy-*` command unchanged, in a TUI terminal or the browser. |
 | **the shade** | The pull-down (`moarchy.shade`), which owns the radios and sliders. |
-| **running** | The window is mapped. It stays mapped while you are on another workspace, and has a carousel card for exactly that span (`gestures.md` K1). |
+| **running** | The window is mapped. It stays mapped while you are on another workspace, and has a tile on the drawer's shelf for exactly that span (`gestures.md` K1). |
 | **closed** | Not running. The window is gone, the card with it, and the stack is back at the root. |
 
 There is no *hidden*. It was the state a layer surface needed to stand for "off
@@ -89,9 +89,9 @@ and migrations upstream's script does and delivering an upgrade.
 **A1** The shade's gear opens Settings at the root page.
 → `omarchy-shell settings state` == `open`; `omarchy-shell settings page` == `root`
 
-**A2** Opening Settings puts away the shade, drawer, carousel and theme picker, so
+**A2** Opening Settings puts away the shade, drawer and theme picker, so
 nothing of the shell's is drawn over the window it just mapped.
-→ each of `omarchy-shell {shade,drawer,recents,themes} state` == `closed`
+→ each of `omarchy-shell {shade,drawer,themes} state` == `closed`
 
 Sheets only, and Wi-Fi and Bluetooth are deliberately not in that list any more:
 they are windows on their own workspaces (`gestures.md` K1) and putting them
@@ -134,7 +134,8 @@ This does not touch A6: closing clears the stack, so a reopen after a close is
 still the root.
 → from another workspace and from `appearance.bar`, `settings open` leaves the
 focused workspace holding the Settings window, `settings page` still
-`appearance.bar`, and `recents list` with exactly one `moarchy.settings` line
+`appearance.bar`, and `drawer openApps` with exactly one `moarchy.settings`
+line
 
 ## B. The page stack and back
 
@@ -148,13 +149,14 @@ focused workspace holding the Settings window, `settings page` still
 root is on top. It never closes the app underneath.
 → from depth 2: `settings page` moves up one and the open-window count is unchanged
 
-**B4** An up-swipe from the strip treats Settings as the app it is: the carousel
-rises over it with the Settings card leading, and a drag carried on into the
-home band lands on a home screen with Settings left running on its own workspace
-(`gestures.md` K4). Nothing is closed — the card is still there to come back to.
-→ `recents list`'s first line is `moarchy.settings`; after the home band the
+**B4** An up-swipe from the strip treats Settings as the app it is: the drawer
+rises over it with the Settings tile leading its shelf, and a drag carried on
+into the home band lands on a home screen with Settings left running on its own
+workspace (`gestures.md` K4). Nothing is closed — the tile is still there to
+come back to.
+→ `drawer openApps`'s first line is `moarchy.settings`; after the home band the
 focused workspace's `representation` is empty, that line is still in
-`recents list`, and `settings state` is still `open`
+`drawer openApps`, and `settings state` is still `open`
 
 This replaces a criterion that was only ever half true. It read "an up-swipe
 puts Settings away and does nothing else — A8 applied to this surface", and the
@@ -164,12 +166,12 @@ surface. With an app running, the same swipe raised the carousel *over*
 Settings and left it there, so the sheet was still up the moment the carousel
 was dismissed. The fix is not to clear Settings in both cases — it is that the
 two cases were disagreeing about whether Settings is an app, and K answers
-that.
+that. The strip has had one meaning in every state since the carousel was
+deleted (`gestures.md` A5), so the disagreement has nowhere left to live.
 
 Left running rather than closed is the half of this that is a decision rather
-than a repair. An up-swipe on an app leaves it running and in the carousel;
-doing anything else to Settings would make "treated as an app" stop at the
-card.
+than a repair. An up-swipe on an app leaves it running and on the shelf; doing
+anything else to Settings would make "treated as an app" stop at the tile.
 
 **B5** The back gesture dismisses whichever overlay is topmost, including vendored
 ones. `HyprlandFocusGrab` is stubbed in this port, so no vendored popup dismisses
@@ -383,7 +385,7 @@ underneath the terminal and taking no touches
 terminal it launched are both cards and the row you came from is one tap away.
 The terminal is not covered, because a window does not cover another window
 (`gestures.md` K8).
-→ after `settings activate`, `recents list` holds both `moarchy.settings` and
+→ after `settings activate`, `drawer openApps` holds both `moarchy.settings` and
 the terminal, and `settings state` == `open`
 
 Settings used to hide itself here, and the hide was the only thing making the
@@ -857,7 +859,8 @@ lastLaunch` == `moarchy-capture-screenshot`, and `drawer state` == `closed`
 
 `running` is the load-bearing half. `state` says the surface is not up now;
 `running` says it never was, because a Settings that had mapped would still be
-running with a carousel card behind it (K1). The other half of this AC is the
+running with a tile on the drawer's shelf behind it (K1). The other half of
+this AC is the
 effect rather than the cause -- that the PNG holds a wallpaper or an app and not
 a half-drawn sheet -- and no IPC can answer it: it needs a real `grim` against a
 running shell, which is why the selftest runs O4 under `dryRun` and takes no

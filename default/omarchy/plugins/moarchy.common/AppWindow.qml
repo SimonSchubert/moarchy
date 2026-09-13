@@ -15,7 +15,7 @@
 // Why a window and not a layer surface
 // ---------------------------------------------------------------------------
 // docs/gestures.md K. Settings, Wi-Fi and Bluetooth are screens you sit in, and
-// for two releases the shell emulated an app around each of them: a carousel
+// for two releases the shell emulated an app around each of them: a switcher
 // card built by hand, a workspace claimed on their behalf, a hide fired from a
 // focus watcher. Every one of those re-implemented something sway already does
 // for every window on the phone, and the emulation stopped one gesture short --
@@ -25,7 +25,8 @@
 // Quickshell's FloatingWindow is an xdg toplevel owned by the shell's own
 // process. Sway tiles it, bin/moarchy-one-app-per-workspace moves it to a free
 // workspace and focuses it, and ToplevelManager reports it -- including to the
-// process that created it, which is what makes the carousel card a real card.
+// process that created it, which is what puts a real tile on the drawer's
+// shelf (M1) rather than one this file has to draw.
 // (Measured on the device before any of this was written: n=0 on the first
 // poll and then the window's own handle, appId "org.quickshell". The first
 // answer is the manager still connecting, not an exclusion.)
@@ -49,8 +50,9 @@
 // ---------------------------------------------------------------------------
 // `visible` is driven, never bound
 // ---------------------------------------------------------------------------
-// A window can be closed from outside -- xdg_toplevel.close, which is what the
-// carousel's card flick sends -- and Quickshell answers that by setting
+// A window can be closed from outside -- xdg_toplevel.close, which is what a
+// flick on the drawer's shelf sends (M6) -- and Quickshell answers that by
+// setting
 // `visible` false. A QML binding assigned to from C++ is *broken*, not
 // re-evaluated, so a screen whose `visible: root.opened` had been overwritten
 // once would never map again however many times it was summoned afterwards.
@@ -74,7 +76,7 @@ FloatingWindow {
   // falls back to a request this compositor ignores.
   property var shell: null
 
-  // What the carousel calls this screen, and the first half of the title.
+  // What the drawer's shelf calls this screen, and the first half of the title.
   property string appName: ""
 
   // The page inside it, or "" at the top level. The card's third line
@@ -126,7 +128,7 @@ FloatingWindow {
   implicitHeight: win.screen ? win.screen.height : 720
 
   // The compositor's handle on this window, or null while it is unmapped.
-  // Everything the carousel and the back gesture ask of a shell app goes
+  // Everything the drawer's shelf and the back gesture ask of a shell app goes
   // through this, so it is the one piece of resolution in the shell.
   property var toplevel: null
 
@@ -154,7 +156,7 @@ FloatingWindow {
   // The false is not redundant, and leaving it out bricks the screen.
   //
   // When the compositor closes the window -- xdg_toplevel.close, which is what
-  // the carousel's card flick sends and what `swaymsg kill` and a paired
+  // a flick on the drawer's shelf sends and what `swaymsg kill` and a paired
   // keyboard's close binding send -- Quickshell drops the backing window and
   // emits visibleChanged, so this property *reads* false. Its stored value does
   // not follow: the next `visible = true` compares equal to what it thinks it

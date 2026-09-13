@@ -25,7 +25,7 @@ comment in its header claimed it mirrored every other screen in the shell.
 
 | Term | What it means |
 | --- | --- |
-| **surface** | One screen this shell draws: the bar, the drawer, the shade, Settings, Themes, Wi-Fi, Bluetooth, Device, the carousel, the splash. |
+| **surface** | One screen this shell draws: the bar, the drawer, the shade, Settings, Themes, Wi-Fi, Bluetooth, Device, the splash. |
 | **token** | A value read from `Style` or `Color` rather than written as a number. |
 | **chrome** | What is drawn to say a control is there: the pill, the circle, the track. |
 | **target** | The region that answers a tap. Not the same object as the chrome, and this file spends §E on the difference. |
@@ -115,7 +115,7 @@ edge rather than centred may stay a plain `Text`.
 | Layer | Source | Surfaces |
 | --- | --- | --- |
 | bar | `Color.bar.*` | `moarchy.bar` |
-| full-screen | `Color.menu.*` | drawer, Settings, Themes, carousel |
+| full-screen | `Color.menu.*` | drawer, Settings, Themes |
 | popup / pull-down | `Color.popups.*` | shade, Wi-Fi, Bluetooth |
 
 **C2** Each surface declares the same six roles at the top of the file, and the
@@ -154,7 +154,7 @@ is available. Anywhere else it is a colour that will not follow a theme change.
 | Radius | Value | What it is |
 | --- | --- | --- |
 | sheet | `Style.space(28)` | A full-width surface that slides in: the shade sheet, the drawer sheet. |
-| tile | `Style.space(20)` | Something in a grid or a row that you tap as a unit: shade tiles, theme cells, carousel cards. |
+| tile | `Style.space(20)` | Something in a grid or a row that you tap as a unit: shade tiles, theme cells, the drawer's open-app tiles. |
 | card | `Style.space(18)` | A stacked panel or list row: Settings rows, Wi-Fi rows, notification cards, the confirm card, Device's panels. |
 | pill / circle | `height / 2`, `width / 2` | Anything fully rounded: search field, switches, action buttons, the back chevron. |
 
@@ -312,7 +312,8 @@ worked example.
 
 **G4** Move things with `y`/`x`, not `scale`. A translation is free and a scale
 re-rasters every glyph and icon under it. The one exception is a single textured
-quad with nothing to re-raster — the carousel's app preview — where the cost is
+quad with nothing to re-raster — the carousel's app preview, while that
+existed — where the cost is
 the blit and a shrinking quad blits less.
 
 **G5** A `Behavior` on a property that a finger is currently driving is turned
@@ -504,7 +505,8 @@ done has pointed GTK at nothing.
 
 The shell cannot see it, which is why it went unnoticed for so long:
 Quickshell walks the icon directories itself, so the drawer's grid, the
-carousel's cards and this shade's notification icons (`shade.md` S25) have
+the drawer's shelf tiles and this shade's notification icons (`shade.md` S25)
+have
 always resolved correctly whatever this setting said. The one surface this
 project looks at hardest is the one surface the bug cannot reach.
 
@@ -539,7 +541,6 @@ numbers.
 | `moarchy.drawer` | search field | fills its pill | ok, F1–F5 |
 | `moarchy.themes` | theme cell | half-width grid cell | ok |
 | `moarchy.themes` | header back | 38 drawn, 44 answering | ok, E2 |
-| `moarchy.recents` | carousel card | card-sized | ok |
 | `moarchy.wifi` | network row, Join / Disconnect / Forget | ≥ 44 | ok |
 | `moarchy.wifi` | header back | 38 drawn, 44 answering | ok, E2 |
 | `moarchy.wifi` | radio switch | 52 × 30 drawn, 44 tall answering | ok, E2 |
@@ -607,9 +608,9 @@ line at the same time, and five things moved:
   have: Wi-Fi's rows and Device's two panels are `card` (18) now, next to
   Settings' rows rather than 4px off them.
 - Two more wrote their radius as a bare number where the name says which of the
-  four was meant: the drawer's sheet, the carousel's card. Themes called its
+  four was meant: the drawer's sheet, its detail card. Themes called its
   grid cell a `card` at the tile radius; it is a `radiusTile`, same value.
-- The drawer's app labels and the carousel's two lines were the last text in the
+- The drawer's app labels were the last text in the
   shell still at Regular. Both surfaces now carry `textWeight`.
 - Wi-Fi's reveal eye was a plain `Text` centred in a 44px circle, which is the
   case B5 exists for. It is an `Ui.OpticalGlyph` now, like the gear and the four

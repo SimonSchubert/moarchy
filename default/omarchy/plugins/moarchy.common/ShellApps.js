@@ -4,7 +4,7 @@
 //     import "../moarchy.common/ShellApps.js" as ShellApps
 //
 // One list, in one file. It used to be two: `shellAppIds` in moarchy.gestures
-// and three named properties in moarchy.recents, kept in step by hand. They
+// and three named properties in the carousel, kept in step by hand. They
 // went out of step -- gestures named only `moarchy.settings` for a release
 // after Wi-Fi and Bluetooth had become shell apps, which is what sent a back
 // swipe over Wi-Fi through to closing the window *behind* it. A second list is
@@ -44,8 +44,9 @@ function forToplevel(shell, tl) {
 // Focus a window -- any window, not only a shell app.
 //
 // It lives beside the shell-app helpers because both of this file's importers
-// need it and neither owns a compositor connection: moarchy.recents when a card
-// is tapped, moarchy.common/AppWindow when a screen that is already running is
+// need it and neither owns a compositor connection: moarchy.drawer when a tile
+// on its shelf is tapped, moarchy.common/AppWindow when a screen is already
+// running and is
 // summoned again. The call is handed to moarchy.gestures, which is where every
 // other compositor call in this shell already lives.
 //

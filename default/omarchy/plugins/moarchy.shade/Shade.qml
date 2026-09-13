@@ -460,7 +460,8 @@ Item {
     // a pixel comparison against a theme -- the kind of check I1 had to be
     // rewritten to stop being.
     //
-    // key=value, the form the carousel's preview line already uses. Each field
+    // key=value, the form every other diagnostic line in this shell uses. Each
+    // field
     // earns its place:
     //   height/wanted/max  the whole cap story. height == wanted below the cap,
     //                      both == max at it. A sheet that stretched would show

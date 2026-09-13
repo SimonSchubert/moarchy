@@ -233,7 +233,7 @@ commits. The low-coupling bet is paying, and E2 is why.
 
 **E4** `refactor.md` §F still applies and is still the largest slimming win
 inside our own layer — four surfaces carry their own drag tracker (`shade` 62
-lines of drag vocabulary, `drawer` 48, `recents` 40, `gestures` 32). It is not
+lines of drag vocabulary, `drawer` 48, `gestures` 32). It is not
 restated here; it is not an upstream-boundary problem.
 
 ---

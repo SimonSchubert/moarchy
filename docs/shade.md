@@ -131,7 +131,8 @@ on-screen keyboard has. Three things it still could not be:
   against the 44 `style.md` E1 asks for. Every tap is a near miss between two
   devices.
 - **Part of the shell.** A terminal is a *window*: it takes a workspace, it
-  gets a card in the carousel, and it is themed by foot's own palette rather
+  gets a tile on the drawer's shelf, and it is themed by foot's own palette
+  rather
   than by `Color.popups.*`. Holding one tile gave you a screen and holding the
   other gave you an app.
 - **Able to say what the tile already says.** Battery level, "Connecting…",
