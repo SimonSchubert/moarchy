@@ -9,7 +9,8 @@
 #
 # Covers: A1/A2/A3 (no literals), B1 (family), B3 (weight), B5 (glyph slots),
 # C4 (no stray hex), D1 (four named radii), H1/H6 (a pressed state on every
-# control, guarded where the control is also a drag handle).
+# control, guarded where the control is also a drag handle). Plus one thing
+# that is not an AC at all: that every SVG this project ships still parses.
 #
 # Does NOT cover E (touch targets) or F (text inputs): a hit area is a runtime
 # rectangle, and the accessors that answer for it -- `omarchy-shell drawer
@@ -221,6 +222,51 @@ if [[ -z $e7 ]]; then
   [[ -n $E7_EXEMPT ]] && printf '        still to migrate: %s\n' "$E7_EXEMPT"
 else
   no "shared code written out again (E7)" "$e7"
+fi
+
+# --- the artwork parses ------------------------------------------------------
+# Every icon this project ships is a file rather than a theme name, argued at
+# length in moarchy.device/icon.svg, and each carries a paragraph of prose
+# saying why it is drawn the way it is. XML forbids a double hyphen inside a
+# comment, so one em dash rewritten as two hyphens makes the whole file
+# unparseable, and nothing says so: rsvg refuses it, Qt refuses it, the drawer
+# draws the label with an empty square above it, and no log anywhere mentions
+# it. It has now happened twice, in the same hour, in two files whose own
+# comments warn about it -- which is the definition of a rule that needs a
+# check rather than a paragraph.
+#
+# ElementTree and not xmllint: python3 is already what every check above runs
+# on, and a check that silently stops running on a machine without libxml2 is
+# the shape of thing this file exists to prevent.
+printf '\nartwork (not a style.md section)\n'
+svg_report=$(python3 - "$PLUGINS" default/agents <<'PY'
+import pathlib, sys
+import xml.etree.ElementTree as ET
+
+files = []
+for root in sys.argv[1:]:
+    files.extend(sorted(pathlib.Path(root).rglob("*.svg")))
+if not files:
+    print("!! no SVG found under " + " ".join(sys.argv[1:]))
+    raise SystemExit
+problems = []
+for path in files:
+    try:
+        ET.parse(path)
+    except ET.ParseError as exc:
+        problems.append(f"{path}  {exc}")
+print("%d|%s" % (len(files), "; ".join(problems)))
+PY
+)
+svg_n=${svg_report%%|*}
+svg_bad=${svg_report#*|}
+if [[ $svg_report == !!* || -z $svg_n || $svg_n == 0 ]]; then
+  no "${svg_report:-no SVG found}" "with nothing to read, this check reports every icon fine"
+elif [[ -z ${svg_bad// /} ]]; then
+  ok "every shipped SVG parses ($svg_n files)"
+else
+  no "unparseable SVG: $svg_bad" \
+     "a double hyphen inside an XML comment; the drawer draws the label and no icon"
 fi
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"

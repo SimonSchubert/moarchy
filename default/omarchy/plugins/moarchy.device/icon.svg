@@ -3,10 +3,16 @@
        `computer-symbolic` is a monochrome glyph the icon theme is free to paint
        near-black, and on a dark sheet the entry was there and invisible. A tile
        with a white glyph reads on any background the theme can produce, and it
-       does not depend on the icon theme carrying the name at all -- which is
-       not a given: the phone shipped on Yaru, which has no wireless icon.
+       does not depend on the icon theme carrying the name at all, which is not
+       a given: the phone shipped on Yaru, which had no wireless icon.
        AppLibrary.iconSource() returns a file URL for any `Icon=` starting with
        "/" and never consults the theme, which is what makes that true.
+
+       No double hyphen anywhere in here. XML forbids one inside a comment, and
+       the whole file is then unparseable: rsvg and Qt both refuse it, the
+       drawer draws a label with nothing above it, and nothing is logged. This
+       file shipped that way for one build because the sentence above it used
+       to have an em dash in it.
 
        This is the last of the three. Wi-Fi and Bluetooth had one each until
        their drawer entries went (docs/apps.md): both are settings screens the

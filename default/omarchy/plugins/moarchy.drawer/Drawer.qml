@@ -1436,8 +1436,9 @@ Item {
             color: root.subdued
           }
 
-          // Fills the pill, and the insets are padding rather than anchor
-          // margins (docs/style.md F1-F3). Both halves of that matter.
+          // Fills the pill up to the clear button, and the insets are padding
+          // rather than anchor margins (docs/style.md F1-F3). Both halves of
+          // that matter.
           //
           // A Ui.TextField with verticalPadding 0 and no background is exactly
           // one line of Style.font.body tall -- 16-22px of a 46px pill -- and
@@ -1454,6 +1455,7 @@ Item {
           // so on a theme whose two border widths differ the text used to jump
           // sideways the instant the field was tapped (F5). Vertical is safe as
           // it stands: top and bottom move together, so the centre holds.
+          //
           // Left/right rather than fill, so the clear button below keeps a
           // target of its own (docs/style.md F4, F6) -- the same shape as the
           // Wi-Fi passphrase and its reveal eye. With nothing typed the button
