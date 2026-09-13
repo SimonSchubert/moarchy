@@ -12,7 +12,9 @@
 # result is byte-identical to what the script produced. Every bump since is
 # regenerated the same way and held to the same test: it must apply with no
 # offset and no fuzz, so a moved upstream fails the build instead of landing a
-# hunk somewhere it was never aimed at.
+# hunk somewhere it was never aimed at. prepare() is what enforces that half --
+# `--fuzz=0` alone does not, and docs/upstream.md records the measurement that
+# showed it does not.
 #
 # It is 10 files, 264 insertions, 33 deletions -- small enough that
 # omarchy-config stays a package with a patch rather than becoming a fork
@@ -72,13 +74,55 @@ sha256sums=('25f8c87b89c97aef352ddae02d61902ad9d1a3a07ad44efec0e1436f1c65a5e5'
 # copy the sibling project carries, which is what keeps one patch rather than
 # two drifting ones.
 #
-# Both apply with no fuzz and no offset, so an upstream that has moved under
-# either fails the build and names the hunk rather than landing it somewhere it
-# was never aimed at.
+# Both must apply with no fuzz and no offset, and the two guards after them are
+# what makes that true. `--fuzz=0` was carrying the whole claim until
+# 2026-09-13 and it never could: it bounds FUZZ -- how many context lines may
+# mismatch -- and says nothing about OFFSET. A hunk that lands 48 lines from
+# where it was aimed is reported on stdout and exits 0, which in a build log is
+# indistinguishable from success.
+#
+# Measured that day against upstream's `quattro` branch, 363 commits past the
+# pin, in this container's own GNU patch 2.8: four hunks landed at offsets of
+# +19, +48, -15 and -15, the build succeeded, and the shell it produced still
+# had `import Quickshell.Hyprland` in shell/plugins/background/Background.qml --
+# a file that did not exist at the pin, so no hunk was ever aimed at it. That is
+# the failure the move from install/port-4x.sh to a patch was supposed to end,
+# surviving in a second form. docs/upstream.md is the full account; §A is these
+# six lines.
 prepare() {
   cd "omarchy-$_ref"
   patch -p1 --fuzz=0 < "$srcdir/port-4x.patch"
   patch -p1 --fuzz=0 < "$srcdir/notification-popups-bar-opt-out.patch"
+
+  # A1/A3. GNU patch's --backup-if-mismatch is on by default and writes a
+  # .orig for exactly the files that did not apply cleanly, so the signal for
+  # "landed at an offset" already exists and was merely unread. Reading it also
+  # keeps .orig and .rej out of the package, which package()'s `cp -a shell`
+  # would otherwise sweep up.
+  local stray
+  stray=$(find . \( -name '*.orig' -o -name '*.rej' \) -print)
+  if [ -n "$stray" ]; then
+    echo "==> ERROR: a hunk did not apply cleanly; upstream has moved under it:" >&2
+    echo "$stray" >&2
+    echo "==> Regenerate the patch against $_ver rather than shipping this." >&2
+    return 1
+  fi
+
+  # A2. The assertion a patch structurally cannot make: a patch only knows the
+  # files it names, and completeness of the port is a property of the whole
+  # tree. A new upstream file that imports Quickshell.Hyprland gets past every
+  # hunk in port-4x.patch without touching one of them.
+  #
+  # A grep rather than a parse, deliberately: qmllint is not on PATH under its
+  # own name, and an offscreen quickshell dies at the bar before it reaches
+  # most of this tree. The import is the thing that fails to resolve, so the
+  # import is the thing to look for.
+  if grep -rqE 'Quickshell\.Hyprland|\bHyprland\.' shell/; then
+    echo "==> ERROR: the Sway port is incomplete -- Hyprland survives in:" >&2
+    grep -rlE 'Quickshell\.Hyprland|\bHyprland\.' shell/ >&2
+    echo "==> Port these files and add them to port-4x.patch." >&2
+    return 1
+  fi
 }
 
 package() {
