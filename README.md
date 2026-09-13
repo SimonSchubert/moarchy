@@ -1,11 +1,12 @@
 # moarchy
 
 <p align="center">
-  <img src="docs/screenshots/system-drawer.png" width="19%" alt="The app drawer, filtered as you type, with the on-screen keyboard up">
-  <img src="docs/screenshots/system-center.png" width="19%" alt="The control centre: quick tiles, brightness and volume, the media player and notifications">
-  <img src="docs/screenshots/system-settings.png" width="19%" alt="The Settings suite's top level">
-  <img src="docs/screenshots/app-web.png" width="19%" alt="GNOME Web on omarchy.org, URL bar at the bottom, keyboard up">
-  <img src="docs/screenshots/app-lcl.png" width="19%" alt="Linux Command Library, an ordinary GTK app under the gesture strip">
+  <img src="docs/screenshots/system-drawer-open.png" width="16%" alt="The app drawer at rest, with a shelf of the four open apps along its top, each marked with a running dot">
+  <img src="docs/screenshots/system-drawer.png" width="16%" alt="The app drawer, filtered as you type, with the on-screen keyboard up">
+  <img src="docs/screenshots/system-center.png" width="16%" alt="The control centre: quick tiles, brightness and volume, the media player and notifications">
+  <img src="docs/screenshots/system-settings.png" width="16%" alt="The Settings suite's top level">
+  <img src="docs/screenshots/app-web.png" width="16%" alt="GNOME Web on omarchy.org, URL bar at the bottom, keyboard up">
+  <img src="docs/screenshots/app-lcl.png" width="16%" alt="Linux Command Library, an ordinary GTK app under the gesture strip">
 </p>
 
 Omarchy's look, keybindings and theming on an original **PinePhone**, running on

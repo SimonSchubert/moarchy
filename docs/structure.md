@@ -670,9 +670,10 @@ same manifest now agree.
 > the sway config points at a file that exists.
 >
 > The counts in that sentence were nine directories and eight plugins when it
-> was written and are eleven and ten today (`moarchy.wifi`, `moarchy.bluetooth`
-> and `moarchy.splash` arrived after). They are deliberately no longer written
-> down here: `default/omarchy/plugins/` and `port-4x.patch`'s `plugins[]` are
+> was written, grew to eleven and ten as `moarchy.wifi`, `moarchy.bluetooth` and
+> `moarchy.splash` arrived, and are ten and nine today — `moarchy.recents` was
+> deleted on 2026-09-13 when the drawer took over showing what is open
+> (`gestures.md` M). They are deliberately no longer written down here: `default/omarchy/plugins/` and `port-4x.patch`'s `plugins[]` are
 > the two places that answer it, and a third copy is the divergence P5 exists to
 > prevent.
 

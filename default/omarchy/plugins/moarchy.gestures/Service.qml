@@ -324,7 +324,7 @@ Item {
     else Quickshell.execDetached(["swaymsg", cmd])
   }
 
-  // E2, K12. Focus a window. Every caller in this shell lands here, so there is
+  // M5, K12. Focus a window. Every caller in this shell lands here, so there is
   // one answer to "how do you focus something" and one place to change it.
   //
   // NOT `Toplevel.activate()`, which is what the shelf's tap used to send and
@@ -336,7 +336,7 @@ Item {
   // this is sway's activate path and not a dead protocol -- sway 1.12 matches
   // the request's seat against its own seats and drops it when nothing matches.
   //
-  // It had been silently broken for as long as a tap on a card was a thing. E2
+  // It had been silently broken for as long as a tap on a card was a thing. M5
   // passed throughout, because it asserted that the workspace the tap landed on
   // holds a window -- which is also true when the tap changed nothing and you
   // were already looking at one.
