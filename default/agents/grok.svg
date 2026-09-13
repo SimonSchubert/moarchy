@@ -1,11 +1,24 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
   <!-- Butt caps, not round: the mark is slabs, and rounding them turns it into
        a generic X. The broken upper-left/lower-right arms are what make it one
-       letter rather than a multiplication sign. -->
+       letter rather than a multiplication sign.
+
+       Slate 400 to 700, which is the same ramp this tile always used, moved two
+       steps up it. At 700 to 950 the tile was #020617 at the bottom: mean
+       relative luminance 0.027 against 0.113-0.276 for the other nine, and
+       19.6:1 against a light theme's sheet. That is not a dark tile, it is a
+       hole punched in the grid, and it was the one icon of ours a light theme
+       showed as a black square. Brand-black is x.com's answer; a drawer that
+       has to work on both a cream sheet and a near-black one cannot take it.
+       Moved, the mean is 0.205, the middle of the family, and white on the
+       lightest end of the gradient is 2.6:1, which is where codex, omp and
+       setup already sit, so the mark reads exactly as well as theirs.
+       (No double hyphen anywhere in here: XML forbids one inside a comment,
+       and rsvg and xmllint both reject the file rather than the comment.) -->
   <defs>
     <linearGradient id="grokTile" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#334155"/>
-      <stop offset="1" stop-color="#020617"/>
+      <stop offset="0" stop-color="#94A3B8"/>
+      <stop offset="1" stop-color="#334155"/>
     </linearGradient>
   </defs>
   <rect width="128" height="128" rx="28" fill="url(#grokTile)"/>
