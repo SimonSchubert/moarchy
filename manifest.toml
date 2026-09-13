@@ -124,6 +124,29 @@ ref     = "ddc7dcad790e16b32c043a7632a810c6076d70d6"
 version = "0.1.0"
 pkgbuilddir = "aur/moarchy-keep"
 
+# What the phone is doing: processor, memory, storage, battery, network, and
+# what is using them. A default app rather than something to install, for the
+# same reason Keep is one -- a phone that cannot answer "what is eating the
+# battery" makes you guess, and the answers that exist on Linux are a terminal
+# program (btop, which does not fit a phone's terminal at 47 columns, which is
+# why `bottom` is in the set beside it) or a desktop window.
+#
+# It is the shape this file's Keep note asks the other two to grow into, and it
+# arrives that way rather than growing into it: `ref` pins the packaging, and
+# the PKGBUILD it names sources a release asset with a sha256sum, so the pin
+# names the exact code as well. Nothing here clones at HEAD.
+#
+# The ref is a commit and not the vitals-v0.1.0 tag on purpose. The tag is what
+# the tarball is built from, and the PKGBUILD that pins that tarball's checksum
+# is necessarily the commit AFTER it -- writing a checksum into a file the tag
+# contains would change the bytes the checksum names. So the tag names the code
+# and this names the recipe, which is the same split the paragraph above wants.
+[moarchy-vitals]
+url     = "https://github.com/SimonSchubert/moarchy-apps"
+ref     = "5f1257dfc307941673310c824bfd11226df8190f"
+version = "0.1.0"
+pkgbuilddir = "apps/vitals"
+
 # ---------------------------------------------------------------------------
 # AUR packages with no aarch64 binary anywhere -- neither in Arch Linux ARM nor
 # in Omarchy's own repo, which has no aarch64 tree at all

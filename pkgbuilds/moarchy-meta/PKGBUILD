@@ -331,6 +331,25 @@ depends=(
   # PKGBUILD its own repo carries (docs/structure.md B1-B2).
   'moarchy-keep'
 
+  # Ours too, and the same argument one step along: a phone that cannot answer
+  # "what is eating the battery" makes you guess, and guessing is how people end
+  # up power-cycling a phone that was fine. btop and bottom are three lines
+  # above and neither is an answer on a touchscreen -- they are terminal
+  # programs, so the answer costs a terminal and a keyboard covering half the
+  # screen, and btop does not fit that terminal at 47 columns anyway, which is
+  # why bottom is in the set beside it.
+  #
+  # Processor, memory, storage, battery and network on three pages with the
+  # switcher along the bottom, and a task list that groups an app's processes
+  # into one row and can end it. Pure Python on the same GTK4/libadwaita stack,
+  # 160 KB installed, and it depends on nothing that is not already here: every
+  # number in it is read out of /proc and /sys.
+  #
+  # Pinned in manifest.toml like Keep, the keyboard and the store, and built
+  # from the PKGBUILD moarchy-apps carries at apps/vitals -- which sources a
+  # release asset by sha256, so the pin names the code and not just the recipe.
+  'moarchy-vitals'
+
   'gnome-clocks'
   'gnome-text-editor'
   'loupe'
