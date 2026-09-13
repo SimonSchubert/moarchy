@@ -111,11 +111,20 @@ say "boot image"
 #   root=LABEL=   resolved by the initramfs's udev hook
 #   rw            systemd remounts anyway, but fsck wants it first
 #   rootwait      eMMC is not necessarily probed by the time init runs
-#   console=tty0  the panel IS the console here. This is what made the failed
-#                 pmOS boot readable on 2026-09-13 (devices.md §8.1) and it is
-#                 the whole reason a bad kernel on this device is debuggable
-#                 rather than silent. Do not remove it for a quieter boot.
-local CMDLINE=${CMDLINE:-"root=LABEL=$ROOT_LABEL rw rootwait console=tty0"}
+#
+# There is deliberately NO console= here, and adding one does nothing.
+# ABL STRIPS any console= from the boot image and appends its own console=null
+# (devices.md D23). Verified from a shell on the device: with console=tty0 in
+# the boot image, `grep -o "console=[^ ]*" /proc/cmdline` returns console=null
+# alone, and /proc/consoles lists only ttynull0. Every other parameter here --
+# root=, rw, rootwait -- arrives intact; console= is the exception.
+#
+# The cost is that nothing printed during boot is EVER visible on this device,
+# so a failing image and a working one look identical (penguins, then nothing).
+# postmarketOS hit the same wall and works around it by writing to /dev/tty0
+# directly; see their setup_log(). moarchy's initramfs will have to do the same
+# or bring up USB networking, which is the only debug channel that worked.
+local CMDLINE=${CMDLINE:-"root=LABEL=$ROOT_LABEL rw rootwait"}
 info "cmdline: $CMDLINE"
 
 python3 "$REPO/image/boot/android-image.py" bootimg \

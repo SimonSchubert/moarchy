@@ -3,14 +3,16 @@
 How moarchy stops being a PinePhone project and becomes a project that runs on
 phones, of which the PinePhone is one.
 
-Status: **D1–D13 built; sargo hardware proven; no image built for either
-device yet (2026-09-13).** The device-package abstraction exists and both
-phones are on it. On the Pixel 3a, mainline boots, the panel draws and touch
-works — §8.1 records what was measured rather than assumed. The kernel,
-firmware and device packages for sargo all build, and both boot backends and
-both verify backends exist. What has **not** happened: no image has been
-produced by either backend, and D7's PinePhone image has not been rebuilt or
-booted since D1–D6 (see the note below).
+Status: **moarchy boots on the Pixel 3a (2026-09-14).** The full stack runs:
+our kernel, our device and firmware packages, the Arch rootfs, systemd,
+autologin, sway and the shell. A sargo image builds, verifies and flashes.
+
+Two things are NOT finished, and §12 has the detail:
+
+1. **Our own initramfs does not work.** The phone currently boots on
+   postmarketOS's initramfs file set with our init grafted into it. That is
+   proof the system works, not a shippable artifact.
+2. **The PinePhone has not been re-verified** since D1–D6 (the ⚠ note below).
 
 The acceptance criteria are the contract to argue with; where one is my reading
 rather than your decision it is marked **?**.
@@ -495,3 +497,105 @@ booting, and this file should not say otherwise until one has.
   unchanged, is unverified.
 - **Calls.** sargo telephony needs `q6voiced` and `hexagonrpcd`, which have no
   Arch packages. Out of scope for a first boot; not out of scope forever.
+
+---
+
+## 12. Where the Pixel 3a work stands (2026-09-14)
+
+Written at the end of the session that first booted it, so the next one does
+not re-derive any of this.
+
+### 12.1 What is proven on hardware
+
+- `linux-moarchy-sdm670` 7.1.3 boots, drives the panel through `msm_dpu`, and
+  runs to a login prompt: `Arch Linux ARM 7.1.3-sdm670 (tty1)`.
+- The rootfs is correct — `blkid` on the device reports
+  `LABEL="moarchyroot" TYPE="ext4"` on `/dev/mmcblk0p72`, with `/sbin/init` →
+  systemd, a correct `fstab` and `/usr/lib/modules/7.1.3-sdm670`.
+- The boot image writer, vbmeta, and the sparse flash all work (23 chunks,
+  ~165 s).
+- The Adreno comes up and sway starts once `linux-firmware-qcom` is installed.
+
+### 12.2 D23 — there is no console, and there cannot be one
+
+**ABL strips `console=` from the boot image and appends `console=null`.**
+Verified from a shell on the device:
+
+```
+# grep -o "console=[^ ]*" /proc/cmdline
+console=null
+# cat /proc/consoles
+ttynull0             --- (EC     )  237:0
+```
+
+`root=`, `rw` and `rootwait` all arrive intact; only `console=` is replaced.
+Nothing printed during boot is ever visible, so **a failing image and a
+working one look identical** — fbcon's penguin logo, then silence.
+
+This cost most of a night. Nine boots were bisected against each other on
+initramfs size, gzip vs zstd, systemd vs busybox init, and `autodetect` —
+every one of them mute for this reason rather than for the reason under test.
+**Do not debug this device by changing things and watching the screen.**
+
+Two channels do work:
+
+- **USB networking.** postmarketOS's initramfs brings up a gadget macOS binds;
+  the phone answers on **172.16.42.1**, host at 172.16.42.2, with a telnet
+  debug shell on **port 23**. That shell is what found all of the above. Our
+  own initramfs should provide the same (D19).
+- **A getty on tty1 after switch_root.** Once the real root is running, its
+  getty writes to the VT and is visible — which is how the sway/Mesa failure
+  was read.
+
+There is no pstore/ramoops (`/dev/pmsg0`, `/proc/last_kmsg` and
+`/sys/fs/pstore/console-ramoops*` are all absent), so a previous boot's log
+cannot be recovered after the fact either.
+
+### 12.3 The open bug: our initramfs does not boot
+
+mkinitcpio's initramfs, as built by `backend_kernel`, does not reach
+`switch_root`. What is known:
+
+| tried | result |
+|---|---|
+| mkinitcpio, systemd hook, 18 MB | silent |
+| mkinitcpio, udev hook, 17.7 MB | silent |
+| mkinitcpio, `HOOKS=(base)`, 7 MB | silent |
+| pmOS file set + **our** init | **boots** |
+| mkinitcpio file set + our init | init runs, root mount fails |
+
+Ruled out, with evidence:
+
+- **Not size.** A 13.3 MB padded build failed; the 12.3 MB graft worked.
+- **Not compression or the early cpio.** gzip, zstd, and a single plain-gzip
+  archive all behaved the same.
+- **Not `autodetect`.** Removing it still yields zero modules, and that is
+  *correct* — `EXT4_FS`, `MMC_BLOCK`, `MMC_SDHCI_MSM` and `DRM_MSM` are all
+  `=y`, so the module hooks have nothing to add.
+- **Not the kernel.** The graft proves the same kernel boots.
+
+The live lead: with our file set, our init runs (it rebooted on schedule) but
+`mount -t ext4 /dev/mmcblk0p72 /newroot` fails, where the same init inside
+pmOS's ramdisk succeeds. So something their environment provides at mount time,
+ours does not. A device-wait loop was added and did not settle it.
+
+**Trap that wasted three boots:** hand-built test initramfses contained a
+*dynamically linked* busybox (`libc.so.6`, `libcrypt.so.2`,
+`/lib/ld-linux-aarch64.so.1`) with no libc and no loader, so the kernel could
+not exec `/init` at all. mkinitcpio's own images are fine — they ship
+`/lib → usr/lib` and the full closure. Never hand-roll one without the
+libraries, or use a static busybox.
+
+Also: `exec >/dev/tty0 2>&1` **exits the shell** if the node is missing, which
+looks exactly like the init never running. pmOS `tee`s instead, deliberately.
+
+### 12.4 Next steps, in order
+
+1. Give our initramfs a debug channel (D19) — USB CDC-ECM plus a telnet or
+   getty shell, mirroring pmOS's `setup_usb_network`. Without it, every
+   initramfs change is a blind guess, and that is the lesson of §12.2.
+2. With that channel, find why the root mount fails under our file set.
+3. Re-verify the PinePhone (the ⚠ note at the top of this file).
+4. `verify.sh` should assert the image can actually boot — at minimum that the
+   initramfs contains an `/init` whose interpreter and its libraries are all
+   present.
