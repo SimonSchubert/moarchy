@@ -68,20 +68,35 @@ printf '  rootfs %s\n' "$(du -h "$WORK/root.img" | cut -f1)"
 # The rootfs growing to fill its partition.
 verify_grow() {
 sec "behaviour: the rootfs grows to fill userdata"
-# NOT IMPLEMENTED, and reported as such rather than skipped silently.
+
+# Half of I7 on this device, and the other half must NOT happen. The PinePhone
+# grows in two steps -- sfdisk extends the last partition, resize2fs follows.
+# Here the partition is `userdata`, sized by the vendor and sitting in a GPT
+# beside xbl, abl, tz and the A/B slots, so only the filesystem grows.
+# docs/devices.md D22.
 #
-# The PinePhone grows in two steps -- sfdisk extends the last partition, then
-# resize2fs follows it -- because it is written to a card whose size is not
-# known until it is in a phone. sargo is different in kind: rootfs.img is
-# flashed to `userdata`, a partition whose size the vendor fixed, so there is
-# no partition to grow and only the resize2fs half applies.
-#
-# moarchy-grow-rootfs has not been taught that yet. Until it is, an image
-# flashed to this device uses ROOT_SLACK_MIB of headroom and leaves the rest of
-# a 64 GB partition unused -- which boots and runs, and quietly wastes most of
-# the phone.
-#
-# A `no` and not an `ok`: this is a real gap, and a verify that reports nothing
-# about it would let the gap ship looking verified.
-no "growth to fill userdata is not implemented (moarchy-grow-rootfs is card-shaped)"
+# The first check is the one that matters: sfdisk running on this device would
+# rewrite a vendor partition table on a phone with no removable storage and no
+# recovery image.
+grow=$(grep -h '^DEVICE_GROW=' "$R/usr/share/moarchy/device/device.conf" 2>/dev/null | cut -d= -f2)
+[ "$grow" = filesystem ] \
+  && ok "device.conf says DEVICE_GROW=filesystem (the vendor GPT is never rewritten)" \
+  || no "DEVICE_GROW is '${grow:-unset}', not filesystem -- this device would run sfdisk on a vendor partition table"
+
+# And the half that does happen, exercised directly on the real image with the
+# real command -- the same way the PinePhone backend does it, and for the same
+# reason: Docker Desktop's kernel has loop.max_part=0, so the script's own
+# device discovery cannot be driven here.
+before=$(dumpe2fs -h "$WORK/root.img" 2>/dev/null | awk -F: '/Block count/{gsub(/ /,"",$2); print $2}')
+truncate -s +64M "$WORK/root.img"
+if resize2fs "$WORK/root.img" >/dev/null 2>&1; then
+  after=$(dumpe2fs -h "$WORK/root.img" 2>/dev/null | awk -F: '/Block count/{gsub(/ /,"",$2); print $2}')
+  if [ -n "${before:-}" ] && [ -n "${after:-}" ] && [ "$after" -gt "$before" ]; then
+    ok "resize2fs grew the filesystem $(( before * 4096 / 1048576 ))M -> $(( after * 4096 / 1048576 ))M"
+  else
+    no "resize2fs did not grow the filesystem (${before:-?} -> ${after:-?} blocks)"
+  fi
+else
+  no "resize2fs failed on the rootfs image -- the growth half of I7 is NOT tested"
+fi
 }

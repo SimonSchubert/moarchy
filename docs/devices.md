@@ -441,6 +441,18 @@ Restated as a checklist, in build order. Each carries its state.
    `pil-squasher` is packaged for Arch; each replacement is ~40 lines with a
    test that fails when broken.
 
+   **D22** Growth is a per-device policy, not a probe. `DEVICE_GROW=partition`
+   on the PinePhone (a card of unknown size, and the GPT being rewritten is the
+   one `sunxi-gpt.sh` wrote); `DEVICE_GROW=filesystem` on sargo, where the
+   rootfs sits in `userdata` inside a vendor GPT that also holds `xbl`, `abl`,
+   `tz` and the A/B slots. Running `sfdisk` there would rewrite a vendor
+   partition table on a phone with no removable storage and no recovery image
+   — the one irreversible thing this project could do to a device. The key
+   meets §4.1's bar because "is it safe to rewrite this table" is a policy
+   about the hardware, not a fact readable from it, and
+   `moarchy-grow-rootfs` defaults to the **safe** value so a device package
+   that forgets the key costs storage rather than a partition table.
+
    **D21** The kernel is built on a **case-sensitive filesystem**, never in a
    macOS bind mount. `net/netfilter/` holds both `xt_TCPMSS.c` and
    `xt_tcpmss.c`; APFS keeps one. The build then dies twelve minutes in with
