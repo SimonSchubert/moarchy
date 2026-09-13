@@ -83,20 +83,37 @@ grow=$(grep -h '^DEVICE_GROW=' "$R/usr/share/moarchy/device/device.conf" 2>/dev/
   && ok "device.conf says DEVICE_GROW=filesystem (the vendor GPT is never rewritten)" \
   || no "DEVICE_GROW is '${grow:-unset}', not filesystem -- this device would run sfdisk on a vendor partition table"
 
-# And the half that does happen, exercised directly on the real image with the
-# real command -- the same way the PinePhone backend does it, and for the same
-# reason: Docker Desktop's kernel has loop.max_part=0, so the script's own
-# device discovery cannot be driven here.
-before=$(dumpe2fs -h "$WORK/root.img" 2>/dev/null | awk -F: '/Block count/{gsub(/ /,"",$2); print $2}')
-truncate -s +64M "$WORK/root.img"
-if resize2fs "$WORK/root.img" >/dev/null 2>&1; then
-  after=$(dumpe2fs -h "$WORK/root.img" 2>/dev/null | awk -F: '/Block count/{gsub(/ /,"",$2); print $2}')
-  if [ -n "${before:-}" ] && [ -n "${after:-}" ] && [ "$after" -gt "$before" ]; then
-    ok "resize2fs grew the filesystem $(( before * 4096 / 1048576 ))M -> $(( after * 4096 / 1048576 ))M"
-  else
-    no "resize2fs did not grow the filesystem (${before:-?} -> ${after:-?} blocks)"
-  fi
-else
-  no "resize2fs failed on the rootfs image -- the growth half of I7 is NOT tested"
-fi
+# And the half that does happen, exercised ONLINE -- on the mounted filesystem,
+# through the loop device backing it.
+#
+# That is not a workaround for the rootfs being mounted here; it is the more
+# faithful test. moarchy-grow-rootfs runs from a systemd unit during boot and
+# calls `resize2fs "$root_src"` against the device / is already mounted from,
+# so an online grow is exactly what happens on the phone. The first version of
+# this check ran resize2fs against $WORK/root.img while verify.sh had it
+# mounted, which simply fails.
+#
+# losetup -c is the part that is easy to miss: truncating the backing file does
+# not change the size the loop device reports, so resize2fs would find no new
+# room and report success having done nothing.
+loop=$(findmnt -no SOURCE "$R" 2>/dev/null)
+case "$loop" in
+  /dev/loop*)
+    before=$(dumpe2fs -h "$loop" 2>/dev/null | awk -F: '/Block count/{gsub(/ /,"",$2); print $2}')
+    truncate -s +64M "$WORK/root.img"
+    losetup -c "$loop" 2>/dev/null
+    if resize2fs "$loop" >/dev/null 2>&1; then
+      after=$(dumpe2fs -h "$loop" 2>/dev/null | awk -F: '/Block count/{gsub(/ /,"",$2); print $2}')
+      if [ -n "${before:-}" ] && [ -n "${after:-}" ] && [ "$after" -gt "$before" ]; then
+        ok "resize2fs grew the mounted rootfs $(( before * 4096 / 1048576 ))M -> $(( after * 4096 / 1048576 ))M"
+      else
+        no "resize2fs did not grow the filesystem (${before:-?} -> ${after:-?} blocks)"
+      fi
+    else
+      no "resize2fs failed on $loop -- the growth half of I7 is NOT tested"
+    fi ;;
+  *)
+    # Never silently skip: this is the half that reclaims 50 GB of a phone.
+    no "rootfs is not on a loop device (got '${loop:-none}') -- growth NOT tested" ;;
+esac
 }

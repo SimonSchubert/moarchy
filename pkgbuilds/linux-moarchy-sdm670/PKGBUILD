@@ -49,6 +49,17 @@ pkgdesc="Mainline Linux for Qualcomm SDM670 (Google Pixel 3a)"
 arch=('aarch64')
 url="$_url"
 license=('GPL-2.0-only')
+# A kernel that ships an mkinitcpio preset and does not depend on mkinitcpio is
+# a kernel whose initramfs never gets built. On the PinePhone this is invisible
+# -- DanctNIX's linux-megi pulls it in, so image/build.sh could call
+# `mkinitcpio -P` and have it work. A sargo rootfs installs no other kernel, so
+# the first DEVICE=sargo image got all the way to
+#   chroot: failed to run command 'mkinitcpio': No such file or directory
+# after a 5.7 GB pacstrap.
+#
+# kmod because the modules are useless without modprobe/depmod, coreutils
+# because Arch's own kernels declare it and the preset scripts assume it.
+depends=('coreutils' 'kmod' 'mkinitcpio')
 makedepends=('bc' 'bison' 'flex' 'openssl' 'kmod' 'cpio' 'perl' 'python' 'tar' 'xz' 'zstd')
 # !strip because stripping kernel modules with the default flags removes what
 # modinfo needs; the modules_install below strips them properly instead.
