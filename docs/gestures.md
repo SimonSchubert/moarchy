@@ -19,7 +19,7 @@ cites these ids, so an AC with no test is visible.
 | **shell app** | A screen this shell draws itself and maps as an ordinary window, so every criterion about apps applies to it. Three of them: Settings, Wi-Fi and Bluetooth (K). |
 | **drawer** | The searchable app grid, with a shelf of open apps along its top (`moarchy.drawer`). Every up-swipe raises this. |
 | **shade** | The pull-down from the top edge (`moarchy.shade`). |
-| **travel** | Drag distance as a fraction of 0.45 × screen height (~324 logical px). |
+| **travel** | Drag distance as a fraction of the sheet being dragged — the drawer's own height, ~694 logical px. One pixel of finger is one pixel of sheet, on every surface that drags it (D2a). |
 
 ---
 
@@ -28,8 +28,8 @@ cites these ids, so an AC with no test is visible.
 One drag, two stops, and the first one is the same sheet from everywhere:
 
 ```
-0 ---- 40% -------- 75% ---- 100%   of travel
-       DRAWER        HOME
+0 ------------ 35% ------------ 85% ---- 100%   of travel
+                DRAWER               HOME
 ```
 
 Until 2026-09-13 the first stop was a **carousel** — a row of cards, one per
@@ -48,16 +48,31 @@ rather than appearing at a threshold. From an app, from a home screen, with
 nothing open anywhere: one gesture, one meaning.
 → `omarchy-shell drawer dragTrace` leaves ≥ 8 samples
 
-**A2** Released under 15% travel, nothing happens and the drawer springs back.
+**A2** Released under 35% travel, nothing happens and the drawer springs back.
 → `omarchy-shell drawer state` == `closed`
 
-**A3** Released between 15% and 75% travel, the drawer stays open.
+**A3** Released between 35% and 85% travel, the drawer stays open.
 → `omarchy-shell drawer state` == `open`
 
-**A4** Released past 75% travel, focus lands on a home screen and the drawer is
-not shown. The sheet keeps travelling up through that band rather than standing
-still, so the second stop announces itself before you let go — the pill goes
-accent at the same point.
+**A3a** The strip's drag is the home screen's drag. Same ratio (1:1 with the
+finger, against the sheet's own height), same commit at 35%, same fling rule in
+both directions — the only thing the strip adds is the second stop.
+
+It was not, until 2026-09-13: the strip measured against 0.45 × screen and
+opened the sheet fully at 40% of *that*, so 130 logical px of finger gave a
+fully open drawer and 243 put you on a blank workspace. Reported as "too
+sensitive", and the failure it produces is landing on home when you meant to
+open the drawer. The old numbers were a switcher's — a glance, not a
+destination — and they came across with the gesture when the drawer took that
+band over. `pullTravel` no longer measures any real drag.
+→ a drag of *n* logical px from the strip leaves `drawer dragTrace` ending
+within a few percent of *n* / 694, the same figure D2a asserts for the
+wallpaper drag
+
+**A4** Released past 85% travel, focus lands on a home screen and the drawer is
+not shown. The sheet lifts through the last 15% before that point rather than
+standing still, so the second stop announces itself before you let go — the
+pill goes accent at the same place the lift completes.
 → focused workspace `representation` is empty; `drawer state` == `closed`
 
 **A5** The strip always opens the drawer, and it is the only thing the strip
@@ -68,17 +83,22 @@ had a carousel to raise instead.
 and from a home screen alike
 
 **A6** With the drawer already open, dragging up from the strip again carries on
-to home. The drag starts from where the sheet already is rather than from the
-bottom of a sheet that is up, so the second stop is one short pull away and not
-a whole screen.
-→ from an open drawer, a 40% drag leaves `representation` empty and
+to home. The drag starts from where the sheet already is — an open drawer is at
+100% — so home is **15% of the sheet further up**, not 85% from the bottom of
+one that is already at the top. Measured from where the drag began, so the
+gesture costs the same finger movement whether the drawer was up or not.
+→ from an open drawer, a 20% drag leaves `representation` empty and
 `drawer state` == `closed`
 
 **A7** A short up-swipe with the drawer already open leaves it open. The strip
 does not toggle it: up means "forward" — to the drawer, then to home — and
 never "back". What closes the drawer is a drag *down* on the sheet itself (H1)
 or the back gesture (G3).
-→ from an open drawer, a 20% drag leaves `drawer state` == `open`
+
+This is what A6's "measured from where the drag began" buys. Against a fixed
+85% an open drawer is already past the stop before the finger moves, so every
+touch on the strip would go home — including the ones that mean nothing.
+→ from an open drawer, a 5% drag leaves `drawer state` == `open`
 
 **A8** With the shade down, an up-swipe from the strip puts the shade away and
 does nothing else. Whatever is covering the screen, this gesture clears it.
@@ -164,11 +184,31 @@ finger movement therefore opened the drawer 2.2x faster than it closed it, and
 a drag from mid-screen arrived fully open with half the screen still to go.
 Android's launcher tracks 1:1 in both directions.
 → a drag of *n* logical px leaves `drawer dragTrace` ending within a few
-percent of `n / 720`; measured 300px→42%, 435px→63%, 635px→91%
+percent of `n / 694`; measured 300px→42%, 435px→63%, 635px→91%
 
-The strip keeps its shorter travel. It is a fixed band that does not move under
-the thumb, so a full-screen reach there would be a cost with nothing bought —
-the pill is not the thing being dragged.
+**D2b** The number that drag divides by is right **while the drawer is
+closed**, which is the only state an opening drag can start in. An unmapped
+layer-shell surface reports Qt's placeholder size, not the size it will have:
+`drawer geometry` answers `h=100` with the drawer down and `h=694` with it up,
+so a travel read straight off the window moves the sheet seven times finger
+speed until it maps — a jump on the first frames and then a visible retreat as
+the divisor corrects itself.
+
+It survived a release because it is invisible from outside and because the
+check above only reads where a drag *ends*. The drawer remembers its height the
+first time it is up and falls back to the screen's before that, so the first
+drag of a session is 3.6% off 1:1 — the bar's exclusive zone — and every one
+after it is exact.
+→ `omarchy-shell drawer geometry` reports `travel=720` before the drawer has
+ever been opened, and `travel=694` from then on, closed or open. It must never
+report 100
+
+**The strip no longer keeps a shorter travel** (A3a). This paragraph used to
+say it did, on the reasoning that the pill is not the thing being dragged, so a
+full-screen reach there would be a cost with nothing bought. That was true of
+the carousel, which the strip raised until 2026-09-13; it is false of the
+launcher, which is a sheet you pull onto the screen and then use. Both drags
+measure against the sheet now, and the criterion above covers both.
 
 **D3** On a workspace with an app, dragging on the app does nothing to the
 shell. The app receives the touch — everywhere except the left edge band, which

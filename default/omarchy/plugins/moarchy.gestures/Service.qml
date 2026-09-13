@@ -45,8 +45,8 @@
 // ---------------------------------------------------------------------------
 // What the up-drag from the strip means
 // ---------------------------------------------------------------------------
-//   0 ---- 40% -------- 75% ---- 100%   of pullTravel
-//   app    DRAWER        HOME
+//   0 ------------ 35% ------------ 85% ---- 100%   of the sheet's height
+//   app                 DRAWER              HOME
 //
 // One drag, two stops, and the first one is the launcher from wherever you
 // are: over an app, over a home screen, over nothing. The home screen's own
@@ -183,49 +183,61 @@ Item {
   // also cancel a hold-to-close; there is no hold any more (C1).
   readonly property int slop: Style.space(8)
 
-  // Travel that a full drag takes. Not the whole screen: dragging from the
-  // bottom edge to the top is a longer reach than a phone gesture should need.
+  // The old strip travel, kept only as the fallback in targetTravel() for a
+  // drawer that has not published a `closeTravel` yet -- during startup, or if
+  // the plugin failed to load. Nothing measures a real gesture against it any
+  // more (D2a): a sheet is dragged in units of itself.
   readonly property real pullTravel:
     Math.max(1, (strip.screen ? strip.screen.height : 720) * 0.45)
 
-  // A1-A4. The drawer is fully up at 40% of the strip's travel, which leaves
-  // the rest of the drag to mean "keep going"; 75% is far enough that landing
-  // on home is deliberate.
+  // A2-A4. Where the second stop is, as a fraction of the sheet's own height --
+  // the unit the drag from the home screen has always used, and since this
+  // change the only unit either drag uses (D2a).
   //
-  // The numbers are the carousel's, unchanged, because the gesture is: one
-  // drag, two stops, the first of which is now the launcher rather than a
-  // switcher. What changed is that there is nothing left to decide on press
-  // about *which* sheet the drag raises.
-  readonly property real stripFull: 0.40
-  readonly property real stripCommit: 0.15
-  readonly property real homeCommit: 0.75
+  // It was 0.75 of a travel that was itself 0.45 * screen, with the sheet full
+  // at 0.40 of it: 130 logical px of finger for a fully open drawer and 243 for
+  // the home band. Right for a switcher, which is a glance rather than a
+  // destination; wrong for the launcher, and reported as "too sensitive". The
+  // failure it produces is landing on a blank workspace when you meant to open
+  // the drawer.
+  //
+  // 85% is a deliberate sweep nearly to the top of the screen, which is where
+  // Android puts its home gesture too.
+  readonly property real homeCommit: 0.85
+
+  // A6, A7. How much *further* the finger has to travel to reach home when the
+  // sheet is already up. Without it `homeCommit` is behind the drag before it
+  // starts -- an open drawer sits at pull 1.0, which is past 0.85 -- so every
+  // touch on the strip would go home, including the ones that mean nothing.
+  // Measured from where this drag began rather than from the bottom of the
+  // sheet, so the gesture costs the same finger movement either way.
+  readonly property real homeExtra: 0.15
 
   // D1-D2. The drawer's own thresholds, matching the shade so the two drags
   // feel like one gesture in opposite directions.
   readonly property real drawerCommit: 0.35
   readonly property real fling: 0.6
 
-  // D2a. What one pixel of finger is worth to the sheet being dragged.
+  // D2a. What one pixel of finger is worth to the sheet being dragged: one
+  // pixel, on every surface that drags it.
   //
-  // The strip keeps pullTravel: it is a fixed band that does not move under the
-  // thumb, so a shorter travel there only means the drawer arrives without a
-  // full-screen reach -- the pill is not the thing being dragged.
+  // The drawer's *close* drag has always been 1:1 against the sheet's own
+  // height, because there the handle is the sheet. The open drag from the
+  // wallpaper was the first to match it -- before that the same finger movement
+  // opened the drawer 2.2x faster than it closed it, and a drag from mid-screen
+  // arrived fully open with half the screen still to go (measured: a 250px drag
+  // left it at 77%).
   //
-  // The drawer is the opposite case, and it was getting the strip's number. Its
-  // *close* drag is already 1:1 against the sheet's own height, because the
-  // handle is the sheet -- so with pullTravel opening it the same finger travel
-  // moved the drawer 2.2x faster out than in, and a drag from mid-screen
-  // arrived fully open with half the screen still to go. Measured on the
-  // device: a 250px drag left the drawer at 77%.
+  // The strip was the last holdout, on the reasoning that the pill is not the
+  // thing being dragged, so a full-screen reach there would cost something and
+  // buy nothing. That was a switcher's argument. Pulling a launcher onto the
+  // screen at 2.2x finger speed is the "too sensitive" this is the fix for.
   //
-  // Read off the drawer rather than recomputed here, so the two directions
-  // cannot drift apart -- `closeTravel` is the property its own drag divides
-  // by. Falls back to pullTravel when the drawer is not the thing being
-  // dragged, or has not published one.
-  // Both surfaces raise the drawer now, so the source and not the target is
-  // what picks the ratio.
+  // Read off the drawer rather than recomputed here, so no two drags on it can
+  // drift apart -- `closeTravel` is the property its own close divides by.
+  // pullTravel survives as the fallback for a drawer that has not published
+  // one, and as the unit the sideways gestures were tuned in.
   function targetTravel(): real {
-    if (root.dragSource === "strip") return root.pullTravel
     if (root.dragTarget) {
       var travel = Number(root.dragTarget.closeTravel)
       if (isFinite(travel) && travel > 1) return travel
@@ -270,12 +282,18 @@ Item {
   // a sheet back as well as pull it up.
   property real dragStartPull: 0
 
-  // The live pull, in units of pullTravel.
+  // The live pull, in units of the sheet's height (targetTravel()).
   property real pull: 0
+
+  // Where home commits for *this* drag: 85% of the sheet, or one homeExtra
+  // past wherever the drag began, whichever is further up.
+  function homeThreshold(): real {
+    return Math.max(root.homeCommit, root.dragStartPull + root.homeExtra)
+  }
 
   readonly property bool homeArmed:
     root.dragSource === "strip" && root.dragMode !== "none"
-    && root.pull >= root.homeCommit
+    && root.pull >= root.homeThreshold()
 
   // Host-injected. Neither may be `readonly` or `required`: readonly makes the
   // assignment throw, required makes the component fail to instantiate at all,
@@ -556,31 +574,26 @@ Item {
     var loader = root.shell.panelLoaders[id]
     if (!loader || !loader.item) return
     root.dragTarget = loader.item
-    var progress = Number(loader.item.progress) || 0
-    // Where the next drag starts from, and it differs by source for the same
-    // reason the travel does. From the home screen the drawer's progress *is*
-    // the pull. From the strip the sheet is full at 40% of the travel, so an
-    // already-open drawer starts the next drag there -- which is what lets a
-    // second swipe carry straight on into the home band (A6) instead of
-    // starting over at the bottom of a sheet that is already up.
-    root.dragStartPull = root.dragSource === "strip"
-      ? progress * root.stripFull
-      : progress
+    // The drawer's progress *is* the pull, on both surfaces, now that both
+    // measure against the same travel. An already-open drawer therefore starts
+    // the next drag at 1.0, which is what lets a second swipe carry straight on
+    // into the home band (A6) rather than starting over at the bottom of a
+    // sheet that is already up.
+    root.dragStartPull = Number(loader.item.progress) || 0
   }
 
   function setTargetProgress(pull: real): void {
     if (!root.dragTarget) return
     root.dragTarget.dragging = true
+    root.dragTarget.progress = Math.max(0, Math.min(1, pull))
+    // The approach to the home stop, as a 0..1 ramp the sheet lifts with. It
+    // runs over the last homeExtra *before* the stop rather than after it, so
+    // the cue arrives while the gesture can still be changed -- reaching full
+    // exactly where letting go starts meaning home.
     if (root.dragSource === "strip") {
-      root.dragTarget.progress = Math.max(0, Math.min(1, pull / root.stripFull))
-      // Past the drawer's stop the rest of the drag has to mean something, so
-      // hand it over as a 0..1 ramp the sheet fades with. Without it the last
-      // third of the drag moves nothing at all and the only cue that letting
-      // go now goes somewhere else is a pill the sheet is drawn over.
+      var arms = root.homeThreshold()
       root.dragTarget.homeHint = Math.max(0, Math.min(1,
-        (pull - root.stripFull) / (root.homeCommit - root.stripFull)))
-    } else {
-      root.dragTarget.progress = Math.max(0, Math.min(1, pull))
+        (pull - (arms - root.homeExtra)) / root.homeExtra))
     }
   }
 
@@ -940,9 +953,10 @@ Item {
       x: (parent.width - width) / 2 + root.pillOffset
 
       // Brightens while tracking, and stretches as an upward swipe approaches
-      // the first stop. Armed for home it goes accent, and the drawer dims
-      // with it (homeHint): between them they are the cue that letting go now
-      // goes somewhere else than the sheet you are looking at.
+      // the first stop. Armed for home it goes accent, and the sheet has been
+      // lifting for the last 15% of travel on its way there (homeHint):
+      // between them they are the cue that letting go now goes somewhere else
+      // than the sheet you are looking at.
       color: root.homeArmed ? Color.accent
                             : Util.alpha(Color.foreground, root.tracking ? 0.9 : 0.3)
       scale: root.homeArmed ? 1.6
@@ -1027,7 +1041,7 @@ Item {
           // read as a fling. Negative is upward, so the sign is flipped to
           // make "faster open" positive.
           root.velocity = root.velocity * 0.6 + ((root.lastY - y) / dt) * 0.4
-          root.pull = root.dragStartPull - root.dy / root.pullTravel
+          root.pull = root.dragStartPull - root.dy / root.targetTravel()
           root.setTargetProgress(root.pull)
         }
         root.lastY = y
@@ -1038,20 +1052,21 @@ Item {
       onReleased: pts => {
         if (!root.tracking) return
         if (root.dragMode !== "none") {
-          // A2-A4. Distance alone decides home. A fling is allowed to rescue a
-          // short, fast flick into the drawer band -- people do that when they
-          // know where they are going -- but never to carry the drag past a
-          // stop the finger did not reach, or the destination stops being
-          // predictable.
-          if (root.pull >= root.homeCommit) {
+          // A2-A4. Distance alone decides home: a fling may never carry the
+          // drag past a stop the finger did not reach, or the destination
+          // stops being predictable.
+          //
+          // Below it the release is the *same expression* the home screen's
+          // own drag uses -- travel past the commit, or a fling in either
+          // direction overriding it. That is the whole of "the same logic":
+          // one ratio, one commit, one fling rule, with a second stop on top
+          // that only the strip has.
+          if (root.pull >= root.homeThreshold()) {
             root.releaseTarget(false)
             root.run("home")
-          } else if (root.pull >= root.stripCommit || root.velocity >= root.fling) {
-            root.releaseTarget(true)
           } else {
-            // A2: nothing happened, so what was on screen comes back rather
-            // than appearing to have been put somewhere.
-            root.releaseTarget(false)
+            root.releaseTarget(root.velocity >= root.fling
+              || (root.velocity > -root.fling && root.pull >= root.drawerCommit))
           }
         } else {
           root.commit()

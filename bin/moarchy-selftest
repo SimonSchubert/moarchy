@@ -1000,13 +1000,17 @@ print(found[0] if found else "")'; }
   }
 
   # Panel pixels; the output is scaled 2, so every figure is twice the logical
-  # travel the plugin sees. Against a 324 logical pullTravel:
-  #   60  panel =  30 logical =  9%  -> under the 15% drawer commit
-  #   300 panel = 150 logical = 46%  -> drawer (tops out at 40%)
-  #   560 panel = 280 logical = 86%  -> home (commits at 75%)
-  # All dragged over 2000ms, ~0.08 logical px/ms, an order of magnitude under
-  # the 0.6 fling threshold -- so these test the distance bands, which is the
-  # whole point of the bands being distance-only.
+  # travel the plugin sees. Measured against the *sheet* since A3a -- the
+  # drawer's own height, 694 logical on this panel, which is what both drags on
+  # it now divide by:
+  #   120  panel =  60 logical =  9%  -> under the 35% commit, springs back
+  #   694  panel = 347 logical = 50%  -> drawer (commits at 35%)
+  #   1220 panel = 610 logical = 88%  -> home (commits at 85%)
+  #   300  panel = 150 logical = 22%  -> home *from an open drawer*, which
+  #                                      starts at 100% and needs 15% more
+  # All dragged over 2000ms, ~0.3 logical px/ms at the longest, under the 0.6
+  # fling threshold -- so these test the distance bands, which is the whole
+  # point of the bands being distance-only.
   STRIP_Y=1420
 
   ac() { printf '  \033[90m%-4s\033[0m ' "$1"; }
@@ -1129,8 +1133,20 @@ print(found[0] if found else "")'; }
     fi
 
     # --- A. strip, up ------------------------------------------------------
+    # D2b first, because every band below it is a fraction of this number and a
+    # travel of 100 -- the unmapped window's placeholder -- makes all of them
+    # meaningless while still going green on the ones that only check a state.
+    d2b_travel=$(timeout 8 omarchy-shell drawer geometry 2>/dev/null \
+                 | tr ' ' '\n' | sed -n 's/^travel=//p')
+    if [[ ${d2b_travel:-0} -gt 200 ]]; then
+      okac D2b "the closed drawer publishes a real travel (${d2b_travel})"
+    else
+      noac D2b "travel=${d2b_travel:-none} with the drawer closed" \
+              "an unmapped layer surface reports 100x100; a drag dividing by that is 7x finger speed"
+    fi
+
     timeout 8 omarchy-shell drawer close >/dev/null 2>&1; sleep 2
-    sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 1360 900 >/dev/null 2>&1
+    sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 1300 900 >/dev/null 2>&1
     sleep 3
     if [[ $(shell_state drawer) == "closed" ]]; then
       okac A2 "a short drag springs back"
@@ -1138,7 +1154,7 @@ print(found[0] if found else "")'; }
       noac A2 "a 9% drag left the drawer $(shell_state drawer)"
     fi
 
-    sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 1120 2000 >/dev/null 2>&1
+    sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 726 2000 >/dev/null 2>&1
     sleep 3
     samples=$(timeout 8 omarchy-shell drawer dragTrace 2>/dev/null | wc -w)
     if [[ $(shell_state drawer) == "open" ]] && (( samples >= 8 )); then
@@ -1240,7 +1256,7 @@ print(found[0] if found else "")'; }
     # --- A4/F. home --------------------------------------------------------
     timeout 8 omarchy-shell drawer close >/dev/null 2>&1; sleep 2
     before=$(windows)
-    sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 860 2000 >/dev/null 2>&1
+    sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 200 2000 >/dev/null 2>&1
     sleep 3
     home_landed=0
     if [[ -z $(ws_rep) ]] && [[ $(shell_state drawer) == "closed" ]]; then
@@ -1317,15 +1333,24 @@ print(found[0] if found else "")'; }
                "expected 69% give or take; the close drag is 1:1 and the open one has to match"
     fi
 
-    # --- A7. the strip clears what is covering the screen ------------------
-    # The drawer is up from D1. An up-flick from the strip has to put it away
-    # -- and, with A5, must never be able to bring it back.
-    sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 1160 600 >/dev/null 2>&1
+    # --- A6. a second drag carries on to home ------------------------------
+    # The drawer is up from D1, so this drag starts at 100% and needs one
+    # homeExtra -- 15% of the sheet -- to reach the stop. 22% of travel, an
+    # order of magnitude slower than the fling threshold, so it is the distance
+    # that decides.
+    #
+    # This line used to be A7, and asserted the opposite: that an up-flick from
+    # the strip *put the drawer away*. That was true while the strip could not
+    # open the drawer at all (the old A5) and an up-swipe over any sheet meant
+    # "clear it". The drawer is what the strip raises now, so up over it means
+    # forward, and A7 below is the short version of this drag.
+    sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 1120 2000 >/dev/null 2>&1
     sleep 3
-    if [[ $(shell_state drawer) == "closed" ]]; then
-      okac A7 "an up-flick from the strip puts the drawer away"
+    if [[ $(shell_state drawer) == "closed" && -z $(ws_rep) ]]; then
+      okac A6 "a second drag from the strip carries the open drawer to home"
     else
-      noac A7 "the drawer is $(shell_state drawer) after an up-flick"
+      noac A6 "drawer=$(shell_state drawer), workspace holds '$(ws_rep)'" \
+              "from an open drawer the home stop is 15% of the sheet further up"
     fi
     # Put it back for the G3 check below.
     sudo -n "$touch_bin" swipe 360 700 360 200 2000 >/dev/null 2>&1
@@ -1836,7 +1861,7 @@ walk(tree)' 2>/dev/null
     # window that happens to be ours -- and the point of K is that they apply
     # with nothing added. It used to need a criterion here because the strip
     # had a branch for it.
-    sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 1120 2000 >/dev/null 2>&1
+    sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 726 2000 >/dev/null 2>&1
     sleep 3
     lead=$(timeout 8 omarchy-shell drawer openApps 2>/dev/null | head -1 | awk '{print $1}')
     if [[ $(shell_state drawer) == "open" && $lead == "moarchy.settings" ]]; then
@@ -1862,7 +1887,7 @@ walk(tree)' 2>/dev/null
     # behind, so the tile and the window are asserted alongside the workspace --
     # `representation` alone is equally satisfied by a Settings that was closed
     # outright, which is the other way to get this wrong.
-    sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 860 2000 >/dev/null 2>&1
+    sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 200 2000 >/dev/null 2>&1
     sleep 3
     if [[ -z $(ws_rep) && $(shell_state settings) == "open" && $(settings_tile) == 1 ]]; then
       okac K4 "the home band lands on a home screen and leaves Settings running"
@@ -2181,7 +2206,6 @@ walk(tree)' 2>/dev/null
   # An AC with no check here is a gap, and a gap nobody can see is the same as
   # a gap nobody fixed. These are the ones this suite does not prove:
   #
-  #   A6      drawer open, drag up again -> home
   #   A8      shade down, up-flick puts it away
   #   B2      a curved thumb swipe still resolves
   #   D2/D3   drawer springs back; a drag on an app does nothing
@@ -2208,7 +2232,7 @@ walk(tree)' 2>/dev/null
   #   L5a     the card keeps the grid's SCROLL POSITION. The back ladder and
   #           the drawer staying open are checked as L5; the scroll offset
   #           itself is not readable over IPC.
-  printf '  \033[90m%-4s\033[0m   \033[90mnot covered: A6 A8 B2 D2 D3 D4 F1 G5 G7 G8 G9 G10a K8 K10 L4 L5a M2 M3 M4 M9 M10 M11 M12\033[0m\n' ""
+  printf '  \033[90m%-4s\033[0m   \033[90mnot covered: A8 B2 D2 D3 D4 F1 G5 G7 G8 G9 G10a K8 K10 L4 L5a M2 M3 M4 M9 M10 M11 M12\033[0m\n' ""
 fi
 
 # ---------------------------------------------------------------------------

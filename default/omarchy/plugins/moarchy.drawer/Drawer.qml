@@ -141,7 +141,24 @@ Item {
   //
   // The open drag can use a shorter travel because it is driven from the
   // gesture strip, which does not move.
-  readonly property real closeTravel: Math.max(1, drawerWindow.height)
+  // Not `drawerWindow.height`, and that is the whole of this note: a
+  // layer-shell window that is not mapped reports Qt's default 100x100.
+  // Measured on the device -- `drawer geometry` answers `w=100 h=100` with the
+  // drawer down and `w=360 h=694` with it up -- and the drag that *opens* this
+  // sheet necessarily starts while it is down. Dividing a drag by 100 moves the
+  // sheet seven times finger speed until the surface maps, which is a jump on
+  // the first frames and then a visible retreat as the divisor corrects.
+  //
+  // So: the screen until this window has been up once, its own height ever
+  // after. The two differ by the bar's exclusive zone -- 26px of 720 here -- so
+  // the first drag of a session is 3.6% off 1:1 and every one after it is
+  // exact. The alternative, hard-coding the screen, is wrong by that much
+  // forever and silently wrong on a device with a different bar.
+  property real sheetHeight: 0
+
+  readonly property real closeTravel: Math.max(1,
+    root.sheetHeight > 0 ? root.sheetHeight
+                         : (drawerWindow.screen ? drawerWindow.screen.height : 720))
   readonly property real closeCommit: 0.7
 
   // H1. Travel past which a touch on the sheet stops being a tap and starts
@@ -1239,6 +1256,10 @@ Item {
       var gap = Math.round(drawerWindow.height - last.mapToItem(null, 0, last.height).y + pad)
       return "w=" + drawerWindow.width
            + " h=" + drawerWindow.height
+           // What a drag on this sheet divides by (D2a). Unlike `h` it is
+           // meaningful while the drawer is closed -- which is the state it
+           // has to be right in, because that is where an opening drag starts.
+           + " travel=" + Math.round(root.closeTravel)
            + " margin=" + drawerWindow.margins.bottom
            + " strip=" + root.gestureStrip
            + " gap=" + gap
@@ -1506,6 +1527,11 @@ Item {
 
   PanelWindow {
     id: drawerWindow
+
+    // The one place `sheetHeight` is written. Guarded on a number that could
+    // only be the placeholder: 100 is what an unmapped layer surface reports,
+    // and no phone this runs on has a 200px-tall sheet.
+    onHeightChanged: if (drawerWindow.height > 200) root.sheetHeight = drawerWindow.height
 
     visible: root.progress > 0
     anchors { top: true; bottom: true; left: true; right: true }
