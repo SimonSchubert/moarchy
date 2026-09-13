@@ -1,8 +1,14 @@
 # Touch gestures — specification
 
 What the phone's touch gestures must do. Written to the rule in
-[`README.md`](README.md); `bin/moarchy-selftest --gestures` cites these ids, so
-a criterion with no test is visible.
+[`README.md`](README.md).
+
+`bin/moarchy-selftest --gestures` and `--surfaces` cite these ids. A criterion
+is in one of three states, and the difference matters: **run** — it has a `→`
+check and a suite executes it; **written** — it has a `→` check that nothing
+runs; **stated** — it has no check at all. 62 of the 101 below are run. The
+other 39, and the six the suites run without a `→` line here, are listed under
+[Coverage](#coverage) at the foot.
 
 ## Vocabulary
 
@@ -62,10 +68,13 @@ the launcher" from "go home": measured on the device, an unremarkable flick up
 from the strip runs to **92% of the sheet at 2.5 px/ms**.
 → focused workspace `representation` is empty; `drawer state` == `closed`
 
-**A5** The strip always opens the drawer, and it is the only thing the strip
-opens.
+**A5** The drawer is the only thing the strip opens — from an app, from a home
+screen, with nothing open anywhere. The one exception is a sheet already
+covering the screen, which the same swipe clears instead of opening anything
+over it (A8).
 → `drawer state` goes `closed` → `open` across a strip up-gesture, from an app
-and from a home screen alike
+and from a home screen alike; with the shade down it stays `closed` and
+`shade state` goes to `closed`
 
 **A6** With the drawer already open, dragging up from the strip again carries on
 to home: **15% of the sheet further up**, measured from where the drag began.
@@ -433,8 +442,8 @@ Every check below takes the height from `geometry`'s `strip` field rather than
 assuming one — including the ones in `bin/moarchy-selftest`, whose comments
 quote a number they measured on the theme of the day and not a constant.
 
-**I1** With the drawer, Settings, the theme picker or the keyboard up, the
-surface reaches the bottom row of the screen. No band of wallpaper, and no band
+**I1** With the drawer, the theme picker or the keyboard up, the surface
+reaches the bottom row of the screen. No band of wallpaper, and no band
 of the app underneath, shows beneath it. The keyboard is `moarchy-keyboard`'s
 own surface and gets there its own way -- see its SPEC.md 45-48 -- but the
 result this asks for is the same.
@@ -451,7 +460,7 @@ else. Bottom is below every window, so the fill can only be seen in the band no
 window is drawn in; and it is below every sheet, so the drawer, the shade and
 the theme picker draw over it exactly as they did. Filling the band from the
 *strip* instead — the obvious place, since the strip is what reserves it —
-would have painted over all four. Only the band, and not the whole surface
+would have painted over all three. Only the band, and not the whole surface
 underneath: a workspace with gaps on, or two windows tiled side by side, leaves
 gutters where the wallpaper is meant to show.
 
@@ -518,8 +527,9 @@ is on Overlay and draws over us. With the keyboard up it is the keyboard, which
 is on Top like the drawer and mapped earlier, so the drawer wins the overlap and
 paints over it — the whole `qwertyuiop` row reduced to a sliver under the
 drawer's app labels.
-→ `drawer geometry` reports `margin=0` while the search field has focus and
-`margin=-<strip>` otherwise
+→ `drawer geometry` reports `margin=0` while the search field has focus.
+`margin=-<strip>` holds only when neither this nor I5e's condition is true —
+the gate is the union of the two, not this one alone
 
 **I5b** The keyboard reserves the same space whether or not it draws under the
 strip. sway reduces the usable area by `exclusive_zone + margin.bottom`, so a
@@ -601,21 +611,22 @@ by a tap, `drawer geometry` reports `margin=0` while `searchTarget` reports
 `focused=false`. Forced, because a tap would focus the field and hand the answer
 to the term this AC exists to check the *other* one against
 
-**I6** The pill still works over all four, and none of them needs a mask to
-manage it. All four are on Top -- the keyboard included, deliberately, because
+**I6** The pill still works over all three, and none of them needs a mask to
+manage it. All three are on Top -- the keyboard included, deliberately, because
 on Overlay it would map before the strip and take the bottom exclusive zone the
 pill needs (`windows.md` W5, `moarchy-keyboard/src/panel.cpp`) -- the strip is
 on Overlay, and every Overlay surface sits above every Top one. So the strip
-takes those touches before any of the four sees them.
+takes those touches before any of the three sees them. A shell app needs no
+clause here: it is a window, and the strip reserves its band off every window.
 
 The mask the keyboard does carry is for the **left** edge, not this one: the
 back-gesture band is on Overlay with `ExclusionMode.Ignore`, and the keyboard
 excludes that column from its input region so the gesture that dismisses it is
 never swallowed. The shade is the surface that needs a mask for the pill, and
 only because it is on Overlay itself.
-→ A7 with the drawer; `omarchy-shell {settings,themes} state` == `closed` after
-an up-flick from the strip; and, with the keyboard up, an up-flick still goes
-home
+→ A7 with the drawer; `omarchy-shell themes state` == `closed` after an
+up-flick from the strip; and, with the keyboard up, an up-flick still goes home.
+Not `settings` — an up-flick leaves a shell app running on its workspace (K4)
 
 **I7** Drawing a sheet under the pill does not make the pill harder to see than
 it already was.
@@ -1072,3 +1083,38 @@ Not acceptance criteria — the boundaries any implementation works inside.
   the keyboard. What is left is a narrower claim rather than a softer one — a
   control in the leftmost 16px *between* the two insets is still dead.
 - **The right edge stays unclaimed.**
+
+---
+
+## Coverage
+
+Not criteria — the record of which criteria are actually verified, so that
+"written down" is never mistaken for "checked". Regenerate with:
+
+```sh
+sed -n '942,2316p;3674,4001p' bin/moarchy-selftest > /tmp/g.sh
+grep -ohE '\b(okac|noac|skipac) +([A-Z][0-9]+[a-z]?)\b' /tmp/g.sh | awk '{print $2}' | sort -u
+```
+
+**Written, but nothing runs it** (22). Each has a `→` check that no suite
+executes, so it is as unverified as one with no check at all:
+
+> A3 · A3a · A8 · C1 · C3 · C4 · C5 · G10b · H1 · H4 · I5a · I5b · I6 · I7 ·
+> K8 · L8 · M2 · M3 · M7 · M7a · M8 · M9
+
+All of §C is here: the hold cannot be fired by a suite without installing an
+agent, which is C's own note. All of §I's assertable half is here too, and that
+is not deliberate — I6 is covered in substance by A7 (`bin/moarchy-selftest`
+notes this at the `--surfaces` end), but I5a, I5b, I7 and I1's companions are
+simply unrun.
+
+**Stated, with no check** (23). Behavioural claims with nothing to settle them
+from a terminal; several are hand checks on glass by nature:
+
+> B2 · D2 · D3 · D4 · F1 · G1 · G5 · G7 · G8 · G9 · G10a · H3 · H5 · H6 · H7a ·
+> H7b · H8 · K10 · L4 · M4 · M10 · M11 · M12
+
+**Run, with no `→` line here** (6). The suites check these; the doc understates
+itself, and each should gain the check it is already being held to:
+
+> G6 · K5 · L7 · L9 · L10 · L13
