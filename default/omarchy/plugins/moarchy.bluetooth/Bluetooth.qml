@@ -10,9 +10,10 @@
 //
 //   * a list row is one terminal line, ~17 logical px on the 60x41 grid
 //     moarchy-launch-tui gives, against the 44 docs/style.md E1 asks for;
-//   * a terminal is a *window* -- its own workspace, its own card in the
-//     carousel, foot's palette instead of Color.popups.*, so holding one wide
-//     tile gave you a screen and holding the other gave you an app;
+//   * a terminal carries foot's palette instead of Color.popups.*, so the
+//     tile that opened it landed you somewhere that did not look like the
+//     shell. This screen is a window too now (docs/gestures.md K1), so what
+//     separates them is the palette and the touch targets, not the workspace;
 //   * and it cannot show what BlueZ already knows and this shell already
 //     draws: battery level, "Connecting...", which device owns the audio.
 //
@@ -25,8 +26,9 @@
 // `bar-widget`. This phone replaces the bar wholesale with moarchy.bar, so the
 // widget is never instantiated and the panel it owns can never be summoned.
 //
-// So this is a screen of its own, the same shape as moarchy.wifi: an overlay
-// plugin, summoned by the shade's tile and by Settings, with a back chevron.
+// So this is a screen of its own, the same shape as moarchy.wifi: a window the
+// shell draws and maps (docs/gestures.md K1, K10), summoned by the shade's tile
+// and by Settings, with a back chevron.
 //
 // ---------------------------------------------------------------------------
 // The one place this differs from moarchy.wifi
@@ -494,9 +496,9 @@ Item {
 
   function close() { bluetoothWindow.hide() }
 
-  // K6. Kept as a name because the carousel and the back gesture ask for it by
-  // name. Unmapping the window is closing the app, and there is no second,
-  // gentler thing it could mean now that it is a window.
+  // K6. Kept as a name because the back gesture asks for it by name. Unmapping
+  // the window is closing the app, and there is no second, gentler thing it
+  // could mean now that it is a window.
   function quit(): void { root.close() }
 
   function dismiss() {
