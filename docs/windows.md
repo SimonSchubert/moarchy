@@ -24,7 +24,7 @@ workspace's `rect`
 **W2** That is `gaps inner 0` doing it, not the border. Sway applies inner gaps
 at the workspace edge as well as between windows, so `gaps inner 3` cost 6px of
 a 360px width and 6px of a ~660px height on every app.
-→ `default/sway/pinephone.conf` sets `gaps inner 0` and `gaps outer 0`
+→ `pkgbuilds/moarchy-device-pinephone/sway.conf` sets `gaps inner 0` and `gaps outer 0`
 
 Worth knowing before you go looking for a bug: **`swaymsg reload` does not apply
 a changed `gaps` to workspaces that already exist.** The config value is what a
@@ -60,7 +60,7 @@ strip and claims the bottom exclusive zone the pill needs
 zones, so even a keyboard that stayed visible would cover the prompt instead of
 pushing it up. Fullscreen stays available on `$mod+Shift+f`, as a thing the
 user asks for and can undo.
-→ no `fullscreen enable` rule in `default/sway/pinephone.conf`, and
+→ no `fullscreen enable` rule in `pkgbuilds/moarchy-device-pinephone/sway.conf`, and
 `swaymsg -t get_tree` reports `fullscreen_mode: 0` for a window opened by
 `moarchy-launch-tui`; with its prompt focused, a tap on a key of the raised
 keyboard reaches the terminal

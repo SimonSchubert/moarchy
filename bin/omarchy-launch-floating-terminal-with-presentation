@@ -18,7 +18,7 @@
 # turned out to be the price: a fullscreen view draws above the Top layer the
 # keyboard is on, so rows that ask a question -- `install.aur`, `passwd`, every
 # gum prompt -- put one on screen with no way to answer it. See
-# default/sway/pinephone.conf.
+# pkgbuilds/moarchy-device-pinephone/sway.conf.
 
 # Theme the gum widgets to the current theme. Absent on a partial install, and a
 # missing prompt style is not worth refusing to run the command over.

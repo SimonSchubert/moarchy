@@ -22,58 +22,41 @@ no()   { printf '  \033[31mFAIL\033[0m %s\n' "$*"; FAIL=1; }
 sec()  { printf '\n\033[1m== %s\033[0m\n' "$*"; }
 chk()  { if [ "$1" = 0 ]; then ok "$2"; else no "$2"; fi; }
 
-rm -rf "$WORK"; mkdir -p "$WORK"
-IMG="$WORK/image.img"
-
-sec "decompress"
-# A raw .img is accepted too, so the negative control (image/negative-test.sh)
-# can tamper with a copy without paying for a compress/decompress round trip.
-case "$IMG_XZ" in
-  *.xz) xz -dc "$IMG_XZ" > "$IMG"
-        printf '  raw %s, compressed %s\n' \
-          "$(du -h "$IMG" | cut -f1)" "$(du -h "$IMG_XZ" | cut -f1)" ;;
-  *)    cp "$IMG_XZ" "$IMG"
-        printf '  raw %s (uncompressed input)\n' "$(du -h "$IMG" | cut -f1)" ;;
+# Which artifact is this? Inferred from the name rather than passed in, so
+# `verify-image.sh <thing>` keeps working for both shapes without a flag
+# nobody would remember. Both backends name their output moarchy-<device>-...
+# (image/build.sh NAME), which is the one piece of structure they share.
+#
+# DEVICE in the environment wins, and that is not a convenience flag.
+# image/negative-test.sh deliberately hands this a file called `bad.img` -- it
+# takes a good image, breaks five specific things and asserts that each one is
+# caught. Inference alone would have refused that file before running a single
+# check, and the suite whose entire job is proving the checks can FAIL would
+# itself have failed for a reason that has nothing to do with the image.
+_base=$(basename "$IMG_XZ")
+case "${DEVICE:-$_base}" in
+  pinephone|moarchy-pinephone-*) DEVICE=pinephone; BACKEND=sunxi-gpt ;;
+  sargo|moarchy-sargo-*)         DEVICE=sargo;     BACKEND=android-bootimg ;;
+  *) printf "  \033[31mFAIL\033[0m cannot tell what device %s is for; set DEVICE=\n" "$_base"; exit 1 ;;
 esac
-
-# ---------------------------------------------------------------------------
-sec "structure"
-
-# The SPL, where the Allwinner BROM looks for it. eGON.BT0 sits at offset 4 of
-# the SPL header, so the magic is at 131072 + 4.
-magic=$(dd if="$IMG" bs=1 skip=131076 count=8 status=none)
-[ "$magic" = "eGON.BT0" ] && ok "eGON.BT0 at byte 131076 (SPL at 128 KiB)" \
-                          || no "no eGON.BT0 at byte 131076 -- got '$magic'"
-
-# Partition table. The layout has to match DanctNIX's, because their u-boot is
-# what reads it.
-sfdisk -d "$IMG" > "$WORK/table.txt" 2>/dev/null
-grep -q 'label: gpt' "$WORK/table.txt" && ok "GPT label" || no "not a GPT label"
-grep -qE 'start= *16384,.*name="boot"'   "$WORK/table.txt" && ok "boot at LBA 16384"   || no "boot not at LBA 16384"
-grep -qE 'start= *266240,.*name="rootfs"' "$WORK/table.txt" && ok "rootfs at LBA 266240" || no "rootfs not at LBA 266240"
-
-BOOT_OFF=$((16384*512)); ROOT_OFF=$((266240*512))
-BOOT_SZ=$(( $(grep -oE 'start= *16384, size= *[0-9]+' "$WORK/table.txt" | grep -oE '[0-9]+$') * 512 ))
-
-dd if="$IMG" of="$WORK/boot.img" bs=1M skip=$((BOOT_OFF/1048576)) count=$((BOOT_SZ/1048576)) status=none
-dd if="$IMG" of="$WORK/root.img" bs=1M skip=$((ROOT_OFF/1048576)) status=none
-
-# ---------------------------------------------------------------------------
-sec "boot partition"
-mdir -i "$WORK/boot.img" -b :: > "$WORK/bootls.txt" 2>/dev/null
-for f in Image.gz boot.scr initramfs-linux.img dtbs; do
-  grep -qi "/$f" "$WORK/bootls.txt" && ok "$f" || no "$f missing from the boot partition"
+_here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+. "$_here/verify/$BACKEND.sh"
+# The repo list comes from the same manifest image/configure.sh writes from, so
+# this file cannot check for a repo the image was never told to carry -- which
+# is how [moarchy-apps] went missing from every image while this suite passed.
+. "$_here/../scripts/manifest.sh"
+_repos=$(manifest_repos) || _repos=""
+for _hook in verify_artifact verify_grow; do
+  declare -F "$_hook" >/dev/null || { printf "  \033[31mFAIL\033[0m verify/%s.sh defines no %s\n" "$BACKEND" "$_hook"; exit 1; }
 done
-# u-boot loads the DTB by name from boot.txt; the wrong name is a black screen.
-mdir -i "$WORK/boot.img" -b ::/dtbs/allwinner 2>/dev/null | grep -q 'sun50i-a64-pinephone-1.2.dtb' \
-  && ok "sun50i-a64-pinephone-1.2.dtb present" || no "PinePhone 1.2 DTB missing"
-# boot.scr is a u-boot legacy image; the magic is what mkimage stamps.
-mcopy -i "$WORK/boot.img" ::/boot.scr "$WORK/boot.scr" 2>/dev/null
-if [ -f "$WORK/boot.scr" ]; then
-  hdr=$(dd if="$WORK/boot.scr" bs=1 count=4 status=none | od -An -tx1 | tr -d ' \n')
-  [ "$hdr" = "27051956" ] && ok "boot.scr carries the u-boot image magic" \
-                          || no "boot.scr is not a u-boot image (magic $hdr)"
-fi
+printf "\n  device %s, backend %s\n" "$DEVICE" "$BACKEND"
+
+rm -rf "$WORK"; mkdir -p "$WORK"
+
+# Unpack the artifact and assert everything only THIS artifact shape can be
+# asked about: a GPT and an SPL, or a boot header and a vbmeta. Leaves a
+# mountable filesystem at $WORK/root.img for the shared checks below.
+verify_artifact
 
 # ---------------------------------------------------------------------------
 sec "rootfs contents"
@@ -147,13 +130,26 @@ else
   no "the moarchy key is not in /etc/pacman.d/gnupg -- pacman-key --populate did not run, and pacman -Syu will refuse the repo"
 fi
 have /usr/share/libalpm/hooks/50-moarchy-shell-reload.hook
-# The update path in one check: without the stanza a phone can only be upgraded
-# by reflashing, which is the thing the repo exists to stop.
-if grep -q '^\[moarchy\]' "$R/etc/pacman.conf" 2>/dev/null; then
-  ok "pacman.conf carries the [moarchy] repo ($(grep -A2 '^\[moarchy\]' "$R/etc/pacman.conf" | sed -n 's/^SigLevel = //p'))"
-else
-  no "no [moarchy] repo in pacman.conf -- the phone could only be updated by reflashing"
-fi
+# The update path, checked for every repo the manifest names rather than for
+# [moarchy] alone. Without a stanza a phone can only be upgraded by reflashing,
+# which is what the repo exists to stop -- and for [moarchy-apps] it is worse
+# than that: the store lists its packages, so a missing stanza is an Install
+# button that fails on a phone whose owner did nothing wrong.
+#
+# Looped rather than repeated, because a hardcoded name here is exactly the bug
+# this section is checking for on the other side.
+# An empty list here is a failure, not zero work: a `for` over nothing prints
+# nothing and passes, which is the exact shape of the bug this section exists
+# to catch. negative-test.sh is the other half of that lesson.
+[ -n "$_repos" ] || no "could not read any repo from manifest.toml -- the stanza checks did not run"
+for _sec in $_repos; do
+  _name=$(manifest_get "$_sec" name) || continue
+  if grep -q "^\[$_name\]" "$R/etc/pacman.conf" 2>/dev/null; then
+    ok "pacman.conf carries [$_name] ($(grep -A2 "^\[$_name\]" "$R/etc/pacman.conf" | sed -n 's/^SigLevel = //p'))"
+  else
+    no "no [$_name] repo in pacman.conf -- nothing from it can be installed or updated"
+  fi
+done
 # The cached database, and whether it is signed. This is the check that was
 # missing while the bug it catches shipped twice.
 #
@@ -169,14 +165,18 @@ fi
 # failed silently for two different reasons in one evening (no DNS in the
 # chroot, then no Landlock on the build host). Both were invisible here,
 # because nothing looked.
-_db="$R/var/lib/pacman/sync/moarchy.db"
-if [ ! -f "$_db" ]; then
-  no "no cached moarchy.db -- the first install on this phone must sync first"
-elif [ -f "$_db.sig" ]; then
-  ok "cached moarchy.db is signed ($(stat -c %s "$_db.sig" 2>/dev/null) byte .sig) -- installs work on first boot"
-else
-  no "cached moarchy.db has NO .sig -- SigLevel = Required will refuse it, and every install dies until 'pacman -Sy'"
-fi
+[ -n "$_repos" ] || no "could not read any repo from manifest.toml -- the database checks did not run"
+for _sec in $_repos; do
+  _name=$(manifest_get "$_sec" name) || continue
+  _db="$R/var/lib/pacman/sync/$_name.db"
+  if [ ! -f "$_db" ]; then
+    no "no cached $_name.db -- the first install from it must sync first"
+  elif [ -f "$_db.sig" ]; then
+    ok "cached $_name.db is signed ($(stat -c %s "$_db.sig" 2>/dev/null) byte .sig) -- installs work on first boot"
+  else
+    no "cached $_name.db has NO .sig -- SigLevel = Required will refuse it, and every install dies until 'pacman -Sy'"
+  fi
+done
 have /usr/bin/xdg-user-dirs-update
 # Without /var/log/journal, a boot that fails leaves nothing to read next time.
 have /var/log/journal
@@ -483,57 +483,10 @@ else
   done
 fi
 
-sec "behaviour: the rootfs grows onto a bigger card"
-
-# I7 runs exactly once, on a card, on first boot -- so without a test here the
-# first execution is on someone's phone.
-#
-# It cannot be tested the obvious way. moarchy-grow-rootfs takes a partition
-# device, and Docker Desktop's kernel has loop.max_part=0, so `losetup -P`
-# attaches the disk but /dev/loopNp2 is never created -- no partition nodes
-# exist to hand it, whatever the image contains. Reporting that as a failed
-# growth test would blame the image for the harness.
-#
-# So the two operations the script performs are exercised directly, on the real
-# image, with the same commands: sfdisk grows the last partition, resize2fs
-# follows it. What is left untested is only the script's device discovery
-# (findmnt / lsblk), which needs a booted system.
-GROW="$WORK/grow.img"
-cp --sparse=always "$IMG" "$GROW"
-truncate -s "+2G" "$GROW"          # what a bigger card looks like
-
-before_end=$(sfdisk -d "$GROW" | sed -n 's/.*start= *266240, size= *\([0-9]*\).*/\1/p')
-
-# The backup GPT header is stranded mid-disk after the file grows; sfdisk will
-# not extend a partition past it until it is moved to the new end.
-sgdisk -e "$GROW" >/dev/null 2>&1 || true
-# The same command moarchy-grow-rootfs runs, against partition 2.
-echo ", +" | sfdisk --no-reread --force -N 2 "$GROW" >/dev/null 2>&1 || true
-
-after_end=$(sfdisk -d "$GROW" | sed -n 's/.*start= *266240, size= *\([0-9]*\).*/\1/p')
-if [ "${after_end:-0}" -gt "${before_end:-0}" ]; then
-  ok "sfdisk grew the rootfs partition $(( before_end / 2048 ))M -> $(( after_end / 2048 ))M"
-else
-  no "sfdisk did not grow the partition (${before_end:-?} -> ${after_end:-?} sectors)"
-fi
-
-# And resize2fs follows it -- the half that actually gives you the space. The
-# rootfs is attached at its offset, with no sizelimit, so the filesystem sees
-# the grown partition.
-if LOOP=$(losetup -o $((266240*512)) --show -f "$GROW" 2>/dev/null); then
-  fs_before=$(dumpe2fs -h "$LOOP" 2>/dev/null | sed -n 's/^Block count: *//p')
-  e2fsck -fp "$LOOP" >/dev/null 2>&1 || true
-  resize2fs "$LOOP" >/dev/null 2>&1 || true
-  fs_after=$(dumpe2fs -h "$LOOP" 2>/dev/null | sed -n 's/^Block count: *//p')
-  losetup -d "$LOOP" 2>/dev/null
-  if [ "${fs_after:-0}" -gt "${fs_before:-0}" ]; then
-    ok "resize2fs grew the filesystem $(( fs_before * 4096 / 1048576 ))M -> $(( fs_after * 4096 / 1048576 ))M"
-  else
-    no "resize2fs did not grow the filesystem (${fs_before:-?} -> ${fs_after:-?} blocks)"
-  fi
-else
-  no "could not attach the rootfs to a loop device -- I7 filesystem half NOT tested"
-fi
+# How this device grows into the storage it was flashed onto. A card that may
+# be bigger than the image, or a fixed vendor partition -- different enough
+# that the backend owns it (docs/devices.md D12).
+verify_grow
 
 sec "result"
 if [ $FAIL = 0 ]; then

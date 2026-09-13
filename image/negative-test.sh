@@ -38,7 +38,11 @@ rm -f $W/r/etc/systemd/system/sysinit.target.wants/moarchy-grow-rootfs.service
 umount $W/r
 
 echo "==> running verify.sh against it (it MUST fail)"
-WORK=/ntverify bash /repo/image/verify.sh $W/bad.img > $W/out.txt 2>&1
+# DEVICE is explicit because this file is called bad.img on purpose -- verify.sh
+# otherwise infers the device from the artifact's name (docs/devices.md D12) and
+# would refuse it before running any of the five checks below, so this suite
+# would fail without ever testing what it exists to test.
+DEVICE=pinephone WORK=/ntverify bash /repo/image/verify.sh $W/bad.img > $W/out.txt 2>&1
 rc=$?
 sed -e 's/\x1b\[[0-9;]*m//g' $W/out.txt > $W/plain.txt
 

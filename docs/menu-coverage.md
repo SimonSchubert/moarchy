@@ -217,7 +217,7 @@ Native 25 · Bridged 14 · Unsupported 23
 | id | label | class | lands at | note |
 | --- | --- | --- | --- | --- |
 | `setup` | Setup | Native | dissolved: Network, Apps & defaults, Security, Shell & plugins |  |
-| `setup.monitors` | Monitors | Unsupported | -- | edits `~/.config/hypr/monitors.lua`; the single output is set in `default/sway/pinephone.conf` |
+| `setup.monitors` | Monitors | Unsupported | -- | edits `~/.config/hypr/monitors.lua`; the single output is set in `pkgbuilds/moarchy-device-pinephone/sway.conf` |
 | `setup.keybindings` | Keybindings | Unsupported | -- | guard `[[ -f ~/.config/hypr/bindings.lua ]]` is false; bindings live in `default/sway/bindings.conf` |
 | `setup.input` | Input | Unsupported | -- | guard `[[ -f ~/.config/hypr/input.lua ]]` is false; input lives in `default/sway/input.conf` |
 | `setup.network` | Network | Native | Network & internet |  |

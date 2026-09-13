@@ -1,15 +1,17 @@
 #!/bin/bash
-# Build moarchy-pinephone-<version>-<date>.img.xz -- a GPT disk image to write
-# with dd.
+# Build a moarchy image for $DEVICE.
 #
 # Runs inside image/Dockerfile with no phone attached (docs/structure.md I1).
 #
-# Layout, measured off DanctNIX's own image and kept identical so their u-boot
-# finds what it expects (§1.1, I3):
+# This file builds a ROOTFS, which is the same for every device moarchy
+# supports, and then hands it to a boot backend that turns it into something
+# that device can boot (docs/devices.md D8). What comes out the far end differs
+# in shape, not just in content, and D10 says that is kept rather than hidden:
 #
-#   byte 131072   u-boot SPL          (bs=128k seek=1, the GPT path)
-#   LBA 16384     boot   FAT32 122M   Image.gz, dtbs, boot.scr, initramfs
-#   LBA 266240    rootfs ext4         sized to contents + slack, grows on first boot
+#   pinephone  -> sunxi-gpt        one moarchy-pinephone-<ver>-<date>.img.xz
+#                                  to dd onto a card
+#   sargo      -> android-bootimg  boot.img + rootfs.img + vbmeta.img + a
+#                                  flash.sh, to fastboot onto a phone
 #
 # No loop devices: mkfs.ext4 -d and mcopy populate a filesystem image from a
 # directory without mounting it. Only mkinitcpio needs a chroot, which is why
@@ -21,16 +23,54 @@ WORK=${WORK:-/work}
 REPO=${REPO:-/repo}
 PKGS=${PKGS:-/pkgs}
 
-BOOT_LBA=16384
-BOOT_MIB=122
-ROOT_LBA=266240
-SECTOR=512
-SPL_VARIANT=${SPL_VARIANT:-528}      # update-u-boot's own default_freq
+# Which phone this image is for (docs/devices.md D11). It selects the device
+# package pacstrap installs, the boot backend that assembles the artifact, and
+# the artifact's name.
+DEVICE=${DEVICE:-pinephone}
+[ -d "$REPO/pkgbuilds/moarchy-device-$DEVICE" ] ||
+  { printf '\033[31m!! no pkgbuilds/moarchy-device-%s\033[0m\n' "$DEVICE" >&2; exit 1; }
+
+# Device to boot backend. A case rather than a key in the device package's
+# device.conf, because this is a BUILD-time fact and that file is a RUNTIME
+# one -- it is installed into the rootfs and read by moarchy-firstboot on the
+# phone, where "which script assembled my image" is not a question anything
+# can ask. Two concerns, two homes.
+#
+# The list is short and adding to it is the point: a third Qualcomm handset is
+# a line here and a device package, not a new backend (D0 -- the Android case
+# is the general one).
+case "$DEVICE" in
+  pinephone) BACKEND=sunxi-gpt ;;
+  sargo)     BACKEND=android-bootimg ;;
+  *) printf '\033[31m!! DEVICE=%s has no boot backend; add one to the case in %s\033[0m\n' \
+       "$DEVICE" "$0" >&2; exit 1 ;;
+esac
+[ -f "$REPO/image/boot/$BACKEND.sh" ] ||
+  { printf '\033[31m!! no image/boot/%s.sh\033[0m\n' "$BACKEND" >&2; exit 1; }
+# Exported because the rootfs build and the backends both read them, and
+# because a build log that does not say which phone it was for is a log that
+# has to be guessed at later.
+export DEVICE BACKEND
+
+# How much room above the rootfs contents. Shared: both backends size a
+# filesystem to its contents and both want it to boot and run growpart once.
+# The partition geometry that is NOT shared moved into the backends with the
+# code that reads it.
 ROOT_SLACK_MIB=${ROOT_SLACK_MIB:-350}
 
 say() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 info() { printf '    %s\n' "$*"; }
 die() { printf '\033[31m!! %s\033[0m\n' "$*" >&2; exit 1; }
+
+# The boot backend (docs/devices.md D8, D9). Sourced AFTER say/info/die, which
+# its hook bodies call, and after the variables above, which they read -- it
+# defines three functions and runs nothing at source time.
+. "$REPO/image/boot/$BACKEND.sh"
+for _hook in backend_kernel backend_fstab backend_image; do
+  declare -F "$_hook" >/dev/null ||
+    die "$BACKEND.sh defines no $_hook -- a backend owes all three (D8)"
+done
+info "device $DEVICE, boot backend $BACKEND"
 
 # The release version, from manifest.toml -- the file that already answers
 # "what version of anything" (V1). Four images carrying only a date landed in
@@ -38,8 +78,7 @@ die() { printf '\033[31m!! %s\033[0m\n' "$*" >&2; exit 1; }
 # manifest beside each.
 _version=$(. "$REPO/scripts/manifest.sh" && manifest_get moarchy version) || _version=0.0.0
 STAMP=$(date +%Y%m%d)
-NAME="moarchy-pinephone-$_version-$STAMP"
-IMG="$WORK/$NAME.img"
+NAME="moarchy-$DEVICE-$_version-$STAMP"
 ROOTDIR="$WORK/rootfs"
 
 rm -rf "$WORK"; mkdir -p "$WORK" "$OUT"
@@ -183,11 +222,17 @@ say "pacstrap the rootfs"
 # build silently shipped jack2 alongside pipewire. Naming it removes the prompt
 # and matches DanctNIX's list.
 #
-# device-pine64-pinephone is their device meta package and pulls the lot --
-# danctnix-tweaks, linux-megi, uboot-pinephone, linux-firmware-realtek,
-# anx7688-firmware, ov5640-firmware, eg25-manager -- plus the brightness and
-# proximity udev rules and the suspend hook. Depending on it rather than on its
-# contents means a device fix from DanctNIX arrives without an edit here.
+# The hardware is named ONCE, in moarchy-device-$DEVICE, and this line installs
+# that package rather than its contents (docs/devices.md D2). DanctNIX's
+# device-pine64-pinephone -- linux-megi, uboot-pinephone, linux-firmware-realtek
+# and the rest -- moved into its depends, along with the note about why picking
+# that list by hand loses the wifi.
+#
+# moarchy-meta depends on the VIRTUAL name `moarchy-device` (D5), so naming the
+# concrete package here is what decides which phone this image is for. It is
+# also deliberately explicit: pacman could resolve the virtual name on its own
+# while exactly one provider exists in the repo, and would silently start
+# guessing on the day a second one lands.
 mkdir -p "$ROOTDIR"
 # -c uses the HOST's package cache (a bind mount from the repo's .cache/) rather
 # than downloading into the target root. Without it every build re-fetched
@@ -200,7 +245,7 @@ attempt=1
 until pacstrap -c -C "$WORK/pacman.conf" -M "$ROOTDIR" \
   base \
   archlinuxarm-keyring danctnix-keyring \
-  device-pine64-pinephone danctnix-usb-tethering \
+  "moarchy-device-$DEVICE" \
   linux-firmware \
   networkmanager wpa_supplicant iw dhcpcd \
   pipewire-audio pipewire-alsa pipewire-pulse pipewire-jack \
@@ -217,40 +262,10 @@ done
 info "rootfs: $(du -sh "$ROOTDIR" | cut -f1)"
 
 # ---------------------------------------------------------------------------
-say "kernel, initramfs and boot script"
-# The rootfs ships /etc/resolv.conf as a symlink to systemd-resolved's stub --
-# `filesystem` owns it -- and in a chroot nothing is running to create
-# /run/systemd/resolve. So `cp` followed the symlink, tried to write through it
-# into a directory that is not there, and failed; the `2>/dev/null || true`
-# that used to be on this line then hid it.
-#
-# What that cost: the chroot had no DNS at all, which is invisible until
-# something inside it wants the network. The one thing that does is the
-# database refresh in configure.sh, whose entire job is to leave a *signed*
-# moarchy.db in the image -- so it failed on every build, and the image it
-# produced was the one where nothing installs until somebody runs `pacman -Sy`
-# by hand. That is the exact failure 4ad66d1 was written to end.
-#
-# Replace the symlink rather than write through it, and say so if even that
-# does not work.
-rm -f "$ROOTDIR/etc/resolv.conf"
-cp /etc/resolv.conf "$ROOTDIR/etc/resolv.conf" ||
-  say "!! no resolv.conf for the chroot -- anything in it that needs DNS fails"
-
-# mkinitcpio prints "ERROR: failed to detect root filesystem" here, twice, and
-# it is benign -- but it looks exactly like a build that just produced an
-# unbootable image, so: the `fsck` hook is asking what filesystem / is, and in a
-# chroot there is no answer. The consequences are that boot-time fsck of root is
-# skipped, and that `autodetect` cannot narrow the module set, so it includes
-# more rather than less -- our initramfs is 23.1 MB against DanctNIX's 18.0 MB.
-#
-# Root still mounts: ext4 is built into megi's kernel rather than shipped as a
-# module (there is no ext4*.ko under /usr/lib/modules), and boot.txt passes
-# root=/dev/mmcblk${linux_mmcdev}p${rootpart} with rootwait on the cmdline.
-arch-chroot "$ROOTDIR" mkinitcpio -P
-( cd "$ROOTDIR/boot" && ./mkscr >/dev/null ) || die "mkscr failed -- is uboot-tools in the rootfs?"
-[ -f "$ROOTDIR/boot/boot.scr" ] || die "boot.scr not generated"
-info "boot.scr $(stat -c%s "$ROOTDIR/boot/boot.scr") bytes, Image.gz $(stat -c%s "$ROOTDIR/boot/Image.gz") bytes"
+# The initramfs, and whatever boot script this device's bootloader reads.
+# PinePhone: mkinitcpio -P then mkscr. sargo: mkinitcpio -p and a DTB appended
+# to the kernel. Nothing in common but the word "boot" (docs/devices.md D8).
+backend_kernel
 
 # ---------------------------------------------------------------------------
 say "recording provenance"
@@ -268,6 +283,15 @@ info "commit ${COMMIT:0:12}, dirty=$DIRTY"
 say "first-boot configuration"
 "$REPO/image/configure.sh" "$ROOTDIR"
 
+# The disk layout, from the backend that is about to create it (D8). Written
+# here rather than inside configure.sh so that script stays device-independent
+# and needs no backend of its own.
+#
+# By label rather than UUID on both devices: the backend sets the label at mkfs
+# time, so this and the thing it describes are decided in one place.
+backend_fstab > "$ROOTDIR/etc/fstab"
+info "fstab: $(wc -l < "$ROOTDIR/etc/fstab") entries from $BACKEND"
+
 # ---------------------------------------------------------------------------
 say "trim the rootfs"
 # pacstrap leaves every downloaded package in /var/cache/pacman/pkg -- 1.26 GiB
@@ -284,68 +308,7 @@ ln -sf ../run/systemd/resolve/stub-resolv.conf "$ROOTDIR/etc/resolv.conf"
 info "after trim: $(du -sh "$ROOTDIR" | cut -f1)"
 
 # ---------------------------------------------------------------------------
-say "filesystem images"
-# boot: everything under /boot. u-boot reads Image.gz, the dtbs and boot.scr
-# from here; the SPL itself lives before the partition table, not in it.
-BOOTIMG="$WORK/boot.img"
-truncate -s "${BOOT_MIB}M" "$BOOTIMG"
-mkfs.vfat -F 32 -n BOOT "$BOOTIMG" >/dev/null
-( cd "$ROOTDIR/boot" && mcopy -i "$BOOTIMG" -s -Q ./* :: )
-
-# rootfs: sized to contents plus slack. It grows to fill the card on first boot
-# (I7), so this only has to be big enough to boot and run growpart once.
-ROOT_USED_MIB=$(du -sm "$ROOTDIR" | cut -f1)
-ROOT_MIB=$(( ROOT_USED_MIB + ROOT_SLACK_MIB ))
-ROOTIMG="$WORK/root.img"
-truncate -s "${ROOT_MIB}M" "$ROOTIMG"
-# -d populates from a directory with no mount and no loop device.
-mkfs.ext4 -q -L rootfs -d "$ROOTDIR" -O ^has_journal,^metadata_csum_seed "$ROOTIMG"
-tune2fs -O has_journal "$ROOTIMG" >/dev/null
-info "boot ${BOOT_MIB}M, rootfs ${ROOT_MIB}M (used ${ROOT_USED_MIB}M + ${ROOT_SLACK_MIB}M slack)"
-
-# ---------------------------------------------------------------------------
-say "assemble the disk image"
-TOTAL_MIB=$(( ROOT_LBA * SECTOR / 1024 / 1024 + ROOT_MIB + 1 ))
-truncate -s "${TOTAL_MIB}M" "$IMG"
-
-# All fields named. Mixing positional (start,size,type) with name= is what
-# sfdisk rejects as "line 1: unsupported command", and it says so without
-# naming the field, so the shape of the line is the thing to check.
-sfdisk --quiet "$IMG" <<EOF
-label: gpt
-unit: sectors
-start=${BOOT_LBA}, size=$(( BOOT_MIB * 1024 * 1024 / SECTOR )), type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B, name="boot"
-start=${ROOT_LBA}, size=$(( ROOT_MIB * 1024 * 1024 / SECTOR )), type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name="rootfs"
-EOF
-
-dd if="$BOOTIMG" of="$IMG" bs=$SECTOR seek=$BOOT_LBA conv=notrunc status=none
-dd if="$ROOTIMG" of="$IMG" bs=$SECTOR seek=$ROOT_LBA conv=notrunc status=none
-
-# The SPL, before the partition table. bs=128k seek=1 is what update-u-boot
-# uses for a GPT label -- the 8k offset in its other branch is the DOS path.
-SPL="$ROOTDIR/boot/u-boot-sunxi-with-spl-pinephone-$SPL_VARIANT.bin"
-[ -f "$SPL" ] || die "missing $SPL"
-dd if="$SPL" of="$IMG" bs=128k seek=1 conv=notrunc status=none
-info "SPL: $(basename "$SPL") at byte 131072"
-
-# Prove it landed where the BROM will look, rather than trusting dd's status.
-magic=$(dd if="$IMG" bs=1 skip=131076 count=8 status=none)
-[ "$magic" = "eGON.BT0" ] || die "no eGON.BT0 at byte 131076 -- the SPL is not where the BROM reads"
-info "verified eGON.BT0 at byte 131076"
-
-# ---------------------------------------------------------------------------
-say "compress"
-# -9 for a release, but it is the slowest step in the build by a wide margin on
-# a 6 GB image. XZ_LEVEL=1 turns a ~30 minute wait into a couple of minutes
-# while iterating on everything upstream of it.
-xz -T0 "-${XZ_LEVEL:-9}" --force --keep "$IMG"
-mv "$IMG.xz" "$OUT/$NAME.img.xz"
-( cd "$OUT" && sha256sum "$NAME.img.xz" > "$NAME.img.xz.sha256" )
-
-# What is actually in it (I2, V4).
-arch-chroot "$ROOTDIR" pacman -Q > "$OUT/$NAME.packages" 2>/dev/null ||
-  cp "$ROOTDIR/var/lib/pacman/local"/*/desc /dev/null 2>/dev/null || true
-
-say "done"
-ls -lh "$OUT/$NAME.img.xz" | awk '{print "    " $9 "  " $5}'
-info "$(wc -l < "$OUT/$NAME.packages" 2>/dev/null || echo '?') packages recorded in $NAME.packages"
+# The artifact itself: filesystems, partition table, bootloader, compression.
+# All of it differs completely between a PinePhone and an Android handset, so
+# all of it is the backend's (docs/devices.md D9, D10).
+backend_image

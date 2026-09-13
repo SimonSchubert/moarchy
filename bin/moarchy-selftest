@@ -4069,14 +4069,24 @@ print(" ".join(out))'; }
   }
 
   # --- W1, W2: the window area ---------------------------------------------
-  wconf="$MOARCHY_ROOT/default/sway/pinephone.conf"
+  # The device package's profile, not moarchy's -- the file moved there with
+  # docs/devices.md D6 and the path is now the same whatever phone this is.
+  # Amended rather than duplicated: W2 is still "an app is flush to its
+  # workspace", and that is still decided by `gaps inner 0`; only the file that
+  # says so has a new home.
+  #
+  # Worth noting what this check nearly became: reading the OLD path would have
+  # reported "does not set gaps inner 0" against a phone whose gaps are fine,
+  # which is the exact false negative §the MOARCHY_ROOT comment above records.
+  wconf="$MOARCHY_ROOT/device/sway.conf"
   if [[ ! -f $wconf ]]; then
-    w_no W2 "no pinephone.conf at $wconf" "W2 is about a file that is not there"
+    w_no W2 "no device sway.conf at $wconf" \
+            "no moarchy-device-* package is installed, or it shipped no profile"
   elif ! grep -q '^gaps inner 0' "$wconf"; then
-    w_no W2 "pinephone.conf does not set gaps inner 0" \
+    w_no W2 "device sway.conf does not set gaps inner 0" \
             "the installed config still insets every app"
   else
-    w_ok W2 "pinephone.conf sets gaps inner 0"
+    w_ok W2 "device sway.conf sets gaps inner 0"
   fi
 
   before_ids=$(con_ids)

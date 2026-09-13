@@ -88,7 +88,7 @@ pkgver=$_ver
 # that its next upgrade removes -- so this is precisely the case the rule is
 # for.
 pkgrel=3
-pkgdesc="Omarchy's look, keybindings and theming on a PinePhone, under Sway"
+pkgdesc="Omarchy's look, keybindings and theming on a phone, under Sway"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
 license=('MIT')

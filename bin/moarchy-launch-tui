@@ -9,7 +9,7 @@
 #
 # The font is the whole fix, and it is worth being precise about why: the bar
 # anchors top and the keyboard anchors bottom, so neither costs a column. This
-# window used to be fullscreened by a rule in default/sway/pinephone.conf, which
+# window used to be fullscreened by a rule in pkgbuilds/moarchy-device-pinephone/sway.conf, which
 # bought a few rows and hid both -- the keyboard included, since sway draws a
 # fullscreen view above the Top layer it lives on. An ordinary tiled window is
 # the same ~60 columns and can be typed into. See that file for the long version.
@@ -21,7 +21,7 @@ FONT_SIZE="${MOARCHY_TUI_FONT_SIZE:-7}"
 # passes it: every agent window shares org.omarchy.agent so a window rule or a
 # theme can single them out. bin/omarchy-launch-tui forwards here, so this is
 # where the flag has to be understood. No sway rule keys on moa-tui today
-# (default/sway/pinephone.conf says why the one that did is gone), so a
+# (pkgbuilds/moarchy-device-pinephone/sway.conf says why the one that did is gone), so a
 # different id costs nothing.
 APP_ID=moa-tui
 if [[ ${1:-} == --app-id=* ]]; then

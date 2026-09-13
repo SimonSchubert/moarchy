@@ -100,6 +100,17 @@ depends=(
   # Packages Omarchy installs that are x86_64-only are listed at the bottom as
   # comments, with the reason.
 
+  # --- The device -------------------------------------------------------------
+  # A virtual name, never a real one (docs/devices.md D5). Exactly one
+  # moarchy-device-* package provides it, and that package is the only thing in
+  # the project that names a kernel, a bootloader or a modem daemon.
+  #
+  # Depending on the virtual name is what keeps THIS list device-independent.
+  # It also turns "built a rootfs and forgot the device" into an unsatisfied
+  # dependency at pacstrap time -- a build failure with a name on it, rather
+  # than an image that boots to a shell at the wrong scale with no modem.
+  'moarchy-device'
+
   # --- Compositor and session -------------------------------------------------
   'sway'
   'swaybg'

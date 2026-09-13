@@ -3,7 +3,7 @@
 # omarchy-hyprland-window-gaps-toggle, inverted.
 #
 # Upstream's first press *removes* gaps, because a desktop has them. This phone
-# does not: default/sway/pinephone.conf sets `gaps inner 0` so an app is flush
+# does not: pkgbuilds/moarchy-device-pinephone/sway.conf sets `gaps inner 0` so an app is flush
 # to its workspace (docs/windows.md W1). Against that default the desktop
 # script's first press was a no-op and its second press added padding to a
 # phone, which is exactly backwards. So the state file says "on", and the first

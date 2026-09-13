@@ -71,21 +71,42 @@ echo 'LANG=en_US.UTF-8' > "$ROOTDIR/etc/locale.conf"
 # signature check the only thing between a download and the phone is HTTPS.
 # moarchy-keyring is in the package set, so the key is already trusted by the
 # time this repo is first consulted.
-_repo_name=$(. "$(dirname "$0")/../scripts/manifest.sh" && manifest_get repo name)
-_repo_server=$(. "$(dirname "$0")/../scripts/manifest.sh" && manifest_get repo server)
-if [ -n "$_repo_name" ] && [ -n "$_repo_server" ]; then
+# Every repository the manifest names, not just the first one. This used to be
+# a single hardcoded `manifest_get repo` lookup, which is why [moarchy-apps]
+# -- the repo every app in moarchy-store installs from -- was in no image at
+# all. A phone flashed from such an image lists apps in the store whose Install
+# button cannot work, because the helper execs `pacman -S` and the name is in
+# no sync database.
+#
+# Both are signed by the same key, which is what keeps this a stanza change:
+# moarchy-keyring ships `moarchy package signing` and trusts it, so nothing has
+# to be added to the keyring for the second repo to satisfy SigLevel.
+_repos_written=0
+for _repo_sec in $(. "$(dirname "$0")/../scripts/manifest.sh" && manifest_repos); do
+  _repo_name=$(. "$(dirname "$0")/../scripts/manifest.sh" && manifest_get "$_repo_sec" name) || continue
+  _repo_server=$(. "$(dirname "$0")/../scripts/manifest.sh" && manifest_get "$_repo_sec" server) || continue
+  [ -n "$_repo_name" ] && [ -n "$_repo_server" ] || continue
+
   # Appended, not inserted: pacman resolves in file order, and putting ours
   # after core/extra/alarm/danctnix means an upstream package of the same name
   # always wins. Nothing here should shadow the base system by accident.
+  #
+  # SigLevel = Required, and TrustedOnly is pacman's own default for the trust
+  # half -- so this is the same thing the moarchy-apps instructions spell out
+  # as `Required TrustedOnly`, not a weaker setting.
   cat >>"$ROOTDIR/etc/pacman.conf" <<EOF
 
 [$_repo_name]
 SigLevel = Required
 Server = $_repo_server
 EOF
-  say "pacman.conf carries [$_repo_name] -- pacman -Syu updates the phone UI"
+  say "pacman.conf carries [$_repo_name]"
+  _repos_written=$((_repos_written + 1))
+done
+if [ "$_repos_written" -eq 0 ]; then
+  say "!! could not read any repo from manifest.toml; pacman.conf left alone"
 else
-  say "!! could not read the repo from manifest.toml; pacman.conf left alone"
+  say "$_repos_written repo(s) configured -- pacman -Syu updates the phone UI and its apps"
 fi
 
 # --- DNS -------------------------------------------------------------------
@@ -122,7 +143,7 @@ say "systemd-resolved enabled (without it the image resolves no names)"
 # flashed phone can install something before it has ever been online. Warned
 # about rather than fatal: a build machine behind a proxy that cannot reach the
 # release URL still produces a usable image, one `pacman -Sy` away.
-if [ -n "$_repo_name" ] && [ -n "$_repo_server" ]; then
+if [ "$_repos_written" -gt 0 ]; then
   # Keeping stderr: this failing is the difference between an image that can
   # install something and one that cannot, and "could not refresh" on its own
   # does not say whether the release URL 404s, the proxy refused, or the chroot
@@ -141,8 +162,10 @@ if [ -n "$_repo_name" ] && [ -n "$_repo_server" ]; then
   # line on purpose: the phone's kernel does support it -- `pacman -Sy` sandboxes
   # fine on the device -- so DisableSandbox must not end up in the shipped
   # pacman.conf just to get past a build host's limitation.
+  # One -Sy covers every stanza written above, so the second repo's .db.sig is
+  # cached by the same call that caches the first.
   if _sy_err=$(arch-chroot "$ROOTDIR" pacman -Sy --disable-sandbox 2>&1 >/dev/null); then
-    say "package databases refreshed against [$_repo_name] (the .db.sig is in the image)"
+    say "package databases refreshed ($_repos_written repo(s); the .db.sig files are in the image)"
   else
     say "!! could not refresh the package databases -- the phone will need one"
     say "   \`sudo pacman -Sy\` before it can install anything"
@@ -293,9 +316,12 @@ else
 fi
 
 # --- fstab -----------------------------------------------------------------
-# By label, not UUID: mkfs.ext4 set them, and u-boot's boot.txt passes
-# root=/dev/mmcblkXpN itself, so nothing here has to know the device.
-cat >"$ROOTDIR/etc/fstab" <<'EOF'
-LABEL=rootfs  /       ext4  rw,relatime  0 1
-LABEL=BOOT    /boot   vfat  rw,relatime  0 2
-EOF
+# Moved to the boot backend (docs/devices.md D8). It used to be written here,
+# and it was the third device-specific thing hiding inside device-independent
+# code: these two lines describe a disk with a separate vfat /boot partition,
+# which is a PinePhone fact. sargo has no boot partition at all -- /boot is a
+# directory in the rootfs -- so an fstab written here would have mounted
+# something that does not exist.
+#
+# image/build.sh calls backend_fstab immediately after this script returns.
+# Nothing else in this file knows or cares what the disk looks like.

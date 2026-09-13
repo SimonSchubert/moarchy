@@ -64,11 +64,26 @@ systemctl daemon-reload
 systemctl enable --now NetworkManager bluetooth 2>/dev/null ||
   echo "!! could not enable/start NetworkManager/bluetooth" >&2
 
-# Telephony. eg25-manager owns modem power and the GPIO dance; DanctNIX enables
-# it already, but nothing else brings the modem up so make sure.
+# Telephony. Every phone moarchy targets has a modem of some kind, so
+# ModemManager is device-independent and stays here.
 systemctl enable --now ModemManager.service 2>/dev/null ||
   echo "!! could not enable/start ModemManager" >&2
-systemctl enable --now eg25-manager.service 2>/dev/null || true
+
+# Whatever else THIS board needs (docs/devices.md D2). On a PinePhone that is
+# eg25-manager, which owns the EG25-G's power rails and the GPIO startup dance;
+# on another device it is something else, or nothing. The list comes from the
+# installed device package, so adding a phone never means editing this script.
+#
+# :- on the expansion because this script runs under `set -u` and a device
+# package is entitled to ship no extra services at all -- an empty list is a
+# valid answer, not a missing one.
+if [[ -r /usr/share/moarchy/device/device.conf ]]; then
+  . /usr/share/moarchy/device/device.conf
+  for _svc in ${DEVICE_SERVICES:-}; do
+    systemctl enable --now "$_svc" 2>/dev/null ||
+      echo "!! could not enable/start $_svc" >&2
+  done
+fi
 
 install -d "$(dirname "$STAMP")"
 date -Iseconds >"$STAMP"

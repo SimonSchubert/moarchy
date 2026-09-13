@@ -199,7 +199,7 @@ moarchy-selftest --gestures   # drives real synthetic touch via /dev/uinput
 | `pkgbuilds/` | `moarchy`, `omarchy-config` (upstream + the Sway port as a patch), `moarchy-meta`, `moarchy-keyring` |
 | `pkgbuilds/moarchy-meta/PKGBUILD` | The aarch64 package set, as `depends`, with every omission explained |
 | `default/sway/bindings.conf` | Omarchy's bindings, translated to Sway, key-for-key |
-| `default/sway/pinephone.conf` | 720×1440 @ scale 2, touch, tightened gaps |
+| `pkgbuilds/moarchy-device-pinephone/sway.conf` | 720×1440 @ scale 2, touch, tightened gaps |
 | `default/themed/sway.conf.tpl` | The one file that themes Sway from any Omarchy theme |
 | `bin/moarchy-*` | Sway counterparts to Omarchy's Hyprland helpers |
 | `bin/omarchy-*` | Shims with upstream's names, so `omarchy-menu` keeps working |

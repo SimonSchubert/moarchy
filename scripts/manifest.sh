@@ -123,6 +123,46 @@ manifest_components() {
   printf '%s\n' "$_manifest_comps"
 }
 
+# manifest_repos -- the sections that name a `server`, in file order.
+#
+# The package repositories the phone's /etc/pacman.conf carries. Derived rather
+# than listed, for the same reason manifest_components is: image/configure.sh
+# wrote exactly one stanza from a hardcoded `manifest_get repo` lookup, so the
+# second repository this project publishes could not be in an image however
+# carefully it was built and signed. It was not in one, and the way that showed
+# up was moarchy-store listing apps whose Install button could not work on a
+# freshly flashed phone -- while the developer's own handset installed them
+# fine, because somebody had added the stanza there by hand.
+#
+# `server` is the marker because it is the thing that makes a section a repo:
+# [danctnix] has a `url` and is an image to flash, not a repo to sync.
+manifest_repos() {
+  if [ ! -f "$MANIFEST_FILE" ]; then
+    echo "manifest: no such file: $MANIFEST_FILE" >&2
+    return 1
+  fi
+
+  _manifest_repos=$(awk '
+    /^[ \t]*#/ { next }
+    /^[ \t]*\[/ {
+      sec = $0
+      sub(/^[ \t]*\[/, "", sec)
+      sub(/\][ \t]*$/, "", sec)
+      next
+    }
+    /^[ \t]*server[ \t]*=/ { if (sec != "") print sec }
+  ' "$MANIFEST_FILE")
+
+  # Empty means the file was unreadable or its shape moved, never that the
+  # phone syncs from nowhere.
+  if [ -z "$_manifest_repos" ]; then
+    echo "manifest: no sections with a server in $MANIFEST_FILE" >&2
+    return 1
+  fi
+
+  printf '%s\n' "$_manifest_repos"
+}
+
 manifest_aur_packages() {
   if [ ! -f "$MANIFEST_FILE" ]; then
     echo "manifest: no such file: $MANIFEST_FILE" >&2
