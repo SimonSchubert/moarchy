@@ -80,20 +80,43 @@ docker run --rm --privileged --platform linux/arm64 \
   -e "MOARCHY_SSH_KEY=${MOARCHY_SSH_KEY:+/key.pub}" \
   -e "COMMIT=$COMMIT" -e "DIRTY=$DIRTY" \
   -e "ALLOW_DIRTY=${ALLOW_DIRTY:-0}" \
+  -e "DEVICE=${DEVICE:-pinephone}" \
   ${MOARCHY_SSH_KEY:+-v "$MOARCHY_SSH_KEY:/key.pub:ro"} \
   moarchy-image
 
-# Resolve the real filename rather than printing a placeholder: this line is
+# Resolve the real artifact rather than printing a placeholder: these lines are
 # meant to be pasted.
-BUILT=$(ls -t "$OUTDIR"/moarchy-pinephone-*.img.xz 2>/dev/null | head -1)
+#
+# The two backends produce different SHAPES, not just different names
+# (docs/devices.md D10), so this cannot be one glob. A PinePhone image is a
+# single .img.xz you dd to a card; an Android image is a directory of boot.img,
+# rootfs.img, vbmeta.img and a flash.sh you run with the phone in fastboot.
+# This line said moarchy-pinephone-*.img.xz until the second device existed,
+# which would have reported "no image produced" about a sargo build that had
+# just succeeded.
+_dev=${DEVICE:-pinephone}
 echo
-if [ -n "$BUILT" ]; then
-  echo "==> verify it:"
-  echo "     ./scripts/verify-image.sh"
-  echo
-  echo "==> flash it (find N with: diskutil list external physical):"
-  echo "     IMAGE_FILE=\"$BUILT\" ./scripts/flash-sd.sh /dev/diskN"
-else
-  echo "!! no image produced" >&2
+case "$_dev" in
+  pinephone)
+    BUILT=$(ls -td "$OUTDIR"/moarchy-"$_dev"-*.img.xz 2>/dev/null | head -1)
+    if [ -n "$BUILT" ]; then
+      echo "==> verify it:"
+      echo "     ./scripts/verify-image.sh"
+      echo
+      echo "==> flash it (find N with: diskutil list external physical):"
+      echo "     IMAGE_FILE=\"$BUILT\" ./scripts/flash-sd.sh /dev/diskN"
+    fi ;;
+  *)
+    BUILT=$(ls -td "$OUTDIR"/moarchy-"$_dev"-*/ 2>/dev/null | head -1)
+    if [ -n "$BUILT" ]; then
+      echo "==> verify it:"
+      echo "     ./scripts/verify-image.sh \"${BUILT%/}\""
+      echo
+      echo "==> flash it (phone in fastboot, bootloader unlocked):"
+      echo "     ${BUILT}flash.sh"
+    fi ;;
+esac
+if [ -z "$BUILT" ]; then
+  echo "!! no image produced for $_dev" >&2
   exit 1
 fi
