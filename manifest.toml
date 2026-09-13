@@ -88,11 +88,24 @@ pkgbuilddir = "packaging"
 # around by editing someone else's PKGBUILD from this side.
 [moarchy-store]
 url     = "https://github.com/SimonSchubert/moarchy-store"
-ref     = "c08a07379171bb0a4998cb94f07f4bfb2370c78f"
+ref     = "7479798928af47cc7fba66ca8d5e79982fd77d78"
 pkgname = "moarchy-store-git"
 version = "0.1.0"
 # Its PKGBUILD is at the repo root, unlike the keyboard's.
 pkgbuilddir = "."
+#
+# Moved off c08a0737 because of what the paragraph above predicted, seen on a
+# phone: the package installed there called itself 0.1.0.r58.effa05e and had no
+# icon in it. makepkg had re-cloned the code at HEAD, which is where the App
+# Store's own artwork has lived since 6f5858d -- but the RECIPE was still
+# c08a0737's, and c08a0737's package() does not install it. So the drawer drew
+# the App Store as a label with an empty square above it, and the version
+# string said the fix was already in.
+#
+# That is the shape of the gap, not a one-off: a version that names one commit
+# and a package() from another. This pin now names a PKGBUILD that installs the
+# icon; it still does not pin the code, and `#commit=` in that repo's source
+# array is still the only thing that would.
 
 # Notes and checklists, kept on the device. A default app rather than something
 # to install, because a phone with no way to write a note down is missing
