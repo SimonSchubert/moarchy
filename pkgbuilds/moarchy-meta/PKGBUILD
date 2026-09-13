@@ -71,6 +71,16 @@ pkgver=$_ver
 # amberol, alligator, htop, neovim, songrec, wiremix -- and a removal under an
 # unchanged version is the invisible case §above names explicitly: the phone
 # would keep all six forever, since pacman compares versions and not depends.
+#
+# It also ADDS two, and the line stays at 3 for both. moarchy-vitals came in at
+# the same 3, and gst-plugins-good moved up out of optdepends because amberol
+# was the only thing hard-depending on it (see the entry). Neither buys a 4: the
+# rule is "changed since the last PUBLISHED artifact", the published one is
+# still 0.2.2-1, and 3 is already different from it. A -3 installed by hand on
+# the dev phone half an hour ago is not what ended the waiver for -2 either --
+# what ended that was a flashed IMAGE, which is an artifact that leaves the
+# building. Reinstalling the same version over itself on a phone I am holding
+# costs one `pacman -U` and hides nothing from anyone.
 pkgrel=3
 pkgdesc="The moarchy package set -- install this and you have the phone"
 arch=('any')
@@ -157,6 +167,22 @@ depends=(
   'wireplumber'
   'pamixer'
   'playerctl'
+  # The browser's media decoding, and it is here rather than in optdepends
+  # BECAUSE amberol left the set. webkitgtk-6.0 and webkit2gtk-4.1 both list
+  # gst-plugins-good as an *optional* dependency ("media decoding"), and
+  # pacstrap does not install optdepends -- so while amberol was here it was the
+  # only thing hard-depending on this, and Epiphany was decoding web video on a
+  # library a music player happened to drag in. Remove amberol without this line
+  # and `pacman -Rs` takes gst-plugins-good with it, correctly by its own rules
+  # and disastrously by ours: the next image would have a browser that plays no
+  # audio and no video, with nothing anywhere saying why.
+  #
+  # Caught on the device before it shipped -- `pacman -Qi gst-plugins-good` said
+  # "Required By: amberol" and "Optional For: moarchy-meta webkit2gtk-4.1
+  # webkitgtk-6.0", which is the whole bug in three lines. It stays off
+  # gst-plugins-ugly and gst-libav, which are the patent-encumbered and
+  # nonfree halves and are still optdepends below.
+  'gst-plugins-good'
   # No wiremix. It was the audio mixer until moarchy.settings grew two screens
   # of its own (Pages.js "sound.output"/"sound.input", and bin/moarchy-audio
   # behind them), and both files already say in their headers that they replaced
@@ -582,7 +608,8 @@ optdepends=(
   # are ~100 MB for a feature that records silence anyway while the microphone
   # reads RMS 0. Stills need none of them.
   'python-gobject'
-  'gst-plugins-good'
+  # gst-plugins-good moved up into depends when amberol left -- see there. Only
+  # the ugly half is optional now.
   'gst-plugins-ugly'
 
   # Not installed by default. All verified available for aarch64, but each is
