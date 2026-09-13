@@ -129,10 +129,27 @@ for path in sorted(pathlib.Path(sys.argv[1]).glob("*/*.qml")):
     # H6. On the two surfaces whose controls are also the sheet's drag handle,
     # `pressed` stays true for the whole drag -- so an unguarded read lights
     # every tile a scrolling thumb crosses.
+    #
+    # Read over the following three lines and not the one, because an `on:`
+    # expression with three terms wraps, and the guard is as likely to be on the
+    # continuation as on the head. The shade's notification card is the case
+    # that forced it: it drags sideways rather than opening the sheet, so its
+    # guard is the card's own displacement and it sits on line two of the
+    # binding. Line-by-line, that read as an unguarded press on a control that
+    # has been guarded since it was written.
+    #
+    # `drag guard (style.md H6)` is the third spelling, for a control whose
+    # guard is neither of the two named ones -- declared in a comment, the same
+    # way H7 declares a non-control above, because the alternative is teaching
+    # this regex one bespoke property name per surface until it matches
+    # anything with an `&&` in it.
     if path.name in ("Shade.qml", "Drawer.qml"):
         for n, line in enumerate(lines, 1):
-            if (re.search(r"\w+\.pressed\b", line)
-                    and not re.search(r"sheetDragging|handedOver", line)):
+            if not re.search(r"\w+\.pressed\b", line):
+                continue
+            window = "\n".join(lines[n - 1:n + 3])
+            if not re.search(r"sheetDragging|handedOver"
+                             r"|//\s*drag guard \(style\.md H6\)", window):
                 problems.append(f"{path}:{n}  press state on a sheet-drag "
                                 "MouseArea with no drag guard (H6)")
 

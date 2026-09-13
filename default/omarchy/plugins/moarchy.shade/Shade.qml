@@ -1936,6 +1936,9 @@ Item {
                 anchors.fill: parent
                 radius: root.radiusCard
                 on: cardArea.pressed && card.action !== "none"
+                    // drag guard (style.md H6): this card's drag is sideways,
+                    // so the sheet's own flag never rises for it and the
+                    // displacement is what says a swipe has begun.
                     && Math.abs(sheetCard.x) < 2
               }
 
