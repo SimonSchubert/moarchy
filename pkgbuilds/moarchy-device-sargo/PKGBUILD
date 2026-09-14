@@ -24,7 +24,12 @@ _ver=$(manifest_get moarchy version) || return 1
 
 pkgname=moarchy-device-sargo
 pkgver=$_ver
-pkgrel=1
+# 2: gained a qbootctl dependency and the unit that marks the boot slot
+# successful. The contents changed while pkgver did not, and pkgver comes from
+# manifest.toml -- so without this bump docker/build-packages.sh keeps
+# yesterday's file (it compares pkgver-pkgrel against PKGDEST) and a phone in
+# the field sees no upgrade to take.
+pkgrel=2
 pkgdesc="Google Pixel 3a (sargo) hardware support for moarchy"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
