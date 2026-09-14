@@ -14,8 +14,9 @@
 #                                  flash.sh, to fastboot onto a phone
 #
 # No loop devices: mkfs.ext4 -d and mcopy populate a filesystem image from a
-# directory without mounting it. Only mkinitcpio needs a chroot, which is why
-# the container wants --privileged.
+# directory without mounting it. The chroot is what wants --privileged --
+# configure.sh runs useradd, locale-gen and a package-database refresh inside
+# the rootfs, and the PinePhone backend builds an initramfs there.
 set -euo pipefail
 
 OUT=${OUT:-/out}
@@ -262,9 +263,10 @@ done
 info "rootfs: $(du -sh "$ROOTDIR" | cut -f1)"
 
 # ---------------------------------------------------------------------------
-# The initramfs, and whatever boot script this device's bootloader reads.
-# PinePhone: mkinitcpio -P then mkscr. sargo: mkinitcpio -p and a DTB appended
-# to the kernel. Nothing in common but the word "boot" (docs/devices.md D8).
+# Whatever this device needs doing to the kernel before the image is built.
+# PinePhone: mkinitcpio -P then mkscr. sargo: nothing but checks -- that kernel
+# mounts root itself and ships no initramfs (D24). Nothing in common but the
+# word "boot" (docs/devices.md D8).
 backend_kernel
 
 # ---------------------------------------------------------------------------

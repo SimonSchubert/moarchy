@@ -1,0 +1,94 @@
+# Qualcomm's bootctl HAL, ported to Linux -- the thing that tells an Android
+# A/B bootloader "this boot worked, stop counting down".
+#
+# WHY THIS EXISTS, because it is not obvious and it cost a night:
+#
+# An A/B bootloader does not simply boot the active slot. It decrements a retry
+# counter in the bootloader control block each time it hands off, and expects
+# the OS to call back and mark the boot successful. When the counter reaches
+# zero with no such call, the slot is marked UNBOOTABLE and the bootloader
+# stops booting it -- not just the image that failed, ANY image. Measured on
+# sargo 2026-09-14:
+#
+#   (bootloader) slot-retry-count:a:0
+#   (bootloader) slot-unbootable:a:yes
+#
+# In that state `fastboot boot` drops straight back to the bootloader, and a
+# postmarketOS image that had booted fine an hour earlier failed identically to
+# ours. On a device with no console (devices.md D23) that is indistinguishable
+# from a broken kernel, and it silently invalidates any A/B test of one boot
+# image against another -- the bisection on 2026-09-13 was partly measuring
+# this counter rather than the images under test.
+#
+# So without this package a flashed phone gets about three reboots and then
+# needs a host with fastboot to revive it. `qbootctl -m` is the callback.
+#
+# devices.md §2 is the licence for packaging it: upstream did the work, we
+# build it at a pin and carry no patches. It is the same trade as the kernel.
+#
+# NOT vendored as a script of our own, deliberately. The alternative was to
+# write the bootloader control block ourselves -- a packed struct plus a CRC32,
+# at an offset inside `misc`, on a phone with no recovery image. That is the
+# one irreversible thing this project could do to a device (the same reasoning
+# that makes DEVICE_GROW=filesystem on this phone), and upstream's version is
+# validated on a list of handsets ours would not be.
+
+. "$startdir/../../scripts/manifest.sh"
+_ver=$(manifest_get qbootctl version) || return 1
+_url=$(manifest_get qbootctl url) || return 1
+
+pkgname=qbootctl
+pkgver=$_ver
+pkgrel=1
+pkgdesc="Qualcomm bootctrl HAL port for Linux (marks A/B boot slots successful)"
+arch=('aarch64')
+url="$_url"
+license=('Apache-2.0')
+depends=('zlib')
+makedepends=('meson' 'ninja' 'linux-api-headers')
+
+# A tag, verified by its checksum rather than trusted (structure.md P10).
+source=("$pkgname-$pkgver.tar.gz::$_url/archive/refs/tags/$pkgver.tar.gz")
+sha256sums=('e66b361f86fac413f6a96974b4045a1fbc385f9eb6cee7fa8a26e0ca77c74a51')
+
+build() {
+  # meson setup, not the README's `meson build`, which is the deprecated
+  # spelling and warns on current meson.
+  arch-meson "$pkgname-$pkgver" build
+  meson compile -C build
+
+  # Asserted here and NOT in check(), because docker/build-packages.sh builds
+  # every in-repo package with --nocheck: a check() function in this repo never
+  # runs, and a test that cannot fail is worse than no test at all.
+  #
+  # What is provable without a phone is narrow: that the binary executes and
+  # reaches main(). Not `-h`, which looks like the obvious smoke test and is
+  # not one -- main() checks geteuid() and probes for A/B slots BEFORE parsing
+  # any argument, so on a build host `-h` prints "This program must be run as
+  # root!" and exits 1. Either of those two refusals is the binary working;
+  # anything else is a link or architecture failure, which is what this catches.
+  #
+  # `|| true` because this program EXITS 1 on both of the refusals below, and
+  # makepkg runs build() under `set -e`: without it the assignment inherits the
+  # non-zero status and the build dies having proved the very thing it was
+  # checking for.
+  local _out
+  _out=$(./build/qbootctl -h 2>&1 || true)
+  case "$_out" in
+    *"must be run as root"*|*"No slots found"*|*"qcom bootctrl HAL port"*)
+      echo "==> qbootctl runs: ${_out%%$'\n'*}" ;;
+    *)
+      echo "!! qbootctl built but does not execute -- got: $_out"; return 1 ;;
+  esac
+
+  # And that it is a binary for the phone rather than for the builder, which a
+  # cross-configured meson would get wrong silently.
+  readelf -h ./build/qbootctl | grep -q 'AArch64' ||
+    { echo "!! qbootctl is not an AArch64 binary"; return 1; }
+}
+
+package() {
+  meson install -C build --destdir "$pkgdir"
+  install -Dm644 "$pkgname-$pkgver/LICENSE" \
+    "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

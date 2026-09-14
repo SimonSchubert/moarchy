@@ -142,7 +142,10 @@ def _main(argv):
 
     b = sub.add_parser("bootimg")
     b.add_argument("--kernel", required=True)
-    b.add_argument("--ramdisk", required=True)
+    # Optional: the Android backend ships no ramdisk (docs/devices.md D24).
+    # A zero-length one gives ramdisk_size = 0, which mkbootimg also writes,
+    # and make_bootimg() needs no special case for it.
+    b.add_argument("--ramdisk", help="omitted for a kernel that mounts root itself")
     b.add_argument("--dtb", help="appended to the kernel (sargo: required)")
     b.add_argument("--cmdline", default="")
     b.add_argument("--pagesize", type=int, default=4096)
@@ -159,11 +162,12 @@ def _main(argv):
         kernel = open(a.kernel, "rb").read()
         if a.dtb:
             kernel += open(a.dtb, "rb").read()
-        ramdisk = open(a.ramdisk, "rb").read()
+        ramdisk = open(a.ramdisk, "rb").read() if a.ramdisk else b""
         img = make_bootimg(kernel, ramdisk, a.cmdline, page_size=a.pagesize)
         open(a.out, "wb").write(img)
+        rd = f"ramdisk {len(ramdisk)}" if ramdisk else "no ramdisk"
         print(f"boot.img: {len(img)} bytes "
-              f"(kernel {len(kernel)}, ramdisk {len(ramdisk)}, page {a.pagesize})")
+              f"(kernel {len(kernel)}, {rd}, page {a.pagesize})")
     else:
         img = make_vbmeta(a.flags, a.padding)
         open(a.out, "wb").write(img)

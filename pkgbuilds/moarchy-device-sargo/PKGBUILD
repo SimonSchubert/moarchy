@@ -56,15 +56,23 @@ conflicts=('moarchy-device')
 # Adreno needs on top of that free microcode, plus adsp, cdsp, ipa_fws, venus
 # and wlanmdsp -- every path the device tree names except the modem pair, which
 # waits for the daemons that would drive it.
+#
+# qbootctl is what stops this phone bricking itself. An A/B bootloader counts
+# down a retry counter on every handoff and marks the slot unbootable at zero
+# unless the OS calls back; measured here as slot-retry-count:a:0 and
+# slot-unbootable:a:yes, in which state the bootloader boots NOTHING -- a
+# postmarketOS image that had worked an hour before failed the same way ours
+# did (D26).
 depends=(
   'linux-moarchy-sdm670'
   'linux-firmware'
   'linux-firmware-qcom'
   'firmware-moarchy-sargo'
+  'qbootctl'
 )
 
-source=('sway.conf' 'device.conf')
-sha256sums=('SKIP' 'SKIP')
+source=('sway.conf' 'device.conf' 'qbootctl-mark-successful.service')
+sha256sums=('SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm644 "$srcdir/sway.conf"   "$pkgdir/usr/share/moarchy/device/sway.conf"
@@ -72,4 +80,19 @@ package() {
 
   printf 'codename=sargo\n' > "$srcdir/build-info"
   install -Dm644 "$srcdir/build-info" "$pkgdir/usr/share/moarchy/device/build-info"
+
+  # Shipped ENABLED, by the symlink systemctl would create, rather than left to
+  # moarchy-firstboot and DEVICE_SERVICES like the PinePhone's modem daemon.
+  #
+  # The difference is what failure costs. A modem that does not come up is a
+  # phone with no calls; a slot that is never marked is a phone that stops
+  # booting three reboots later, needing a computer with fastboot to revive.
+  # DEVICE_SERVICES runs once, on the first boot, from a script that can fail
+  # -- this must be true from the moment the package is installed, including in
+  # an image that never completes a first boot.
+  install -Dm644 "$srcdir/qbootctl-mark-successful.service" \
+    "$pkgdir/usr/lib/systemd/system/qbootctl-mark-successful.service"
+  install -d "$pkgdir/usr/lib/systemd/system/multi-user.target.wants"
+  ln -s ../qbootctl-mark-successful.service \
+    "$pkgdir/usr/lib/systemd/system/multi-user.target.wants/qbootctl-mark-successful.service"
 }

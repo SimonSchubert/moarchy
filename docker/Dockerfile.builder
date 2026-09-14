@@ -35,8 +35,14 @@ RUN sed -i '/^\[options\]/a DisableSandbox' /etc/pacman.conf
 # objtool. pahole is deliberately NOT here: it only enables DEBUG_INFO_BTF,
 # which olddefconfig turns off anyway on a GCC build, and it would add a
 # toolchain dependency for a debugging feature a phone does not use.
+#
+# meson and ninja are qbootctl's, and they are here for the same reason bc is:
+# build-packages.sh builds with --nodeps, so a package's makedepends are
+# DECLARED and never installed. Omitting a build tool is not a missing
+# dependency error, it is whatever confusing thing the build system says when
+# its own driver is absent.
 RUN pacman-key --init && pacman-key --populate archlinuxarm && \
-    pacman -Syu --noconfirm git go base-devel sudo bc libelf
+    pacman -Syu --noconfirm git go base-devel sudo bc libelf meson ninja
 
 # makepkg refuses to run as root.
 RUN useradd -m builder && \

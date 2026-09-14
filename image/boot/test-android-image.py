@@ -134,9 +134,44 @@ def test_bootimg_roundtrip():
           f"mine {rebuilt[576:596].hex()} orig {orig[576:596].hex()}")
 
 
+def test_bootimg_no_ramdisk():
+    """The shape every sargo image actually has: a kernel and nothing else.
+
+    The round-trip fixture has a ramdisk, so without this the only path the
+    Android backend uses in production is covered by nothing -- and it SKIPS
+    when the 24 MB fixture is absent, which is most runs.
+
+    Note the positional call. make_bootimg()'s second argument is the ramdisk
+    and must stay there: giving it a default and moving it after `cmdline`
+    would make the round-trip above silently pass a ramdisk as a cmdline.
+    """
+    kernel = b"\x1f\x8b" + bytes(range(256)) * 97      # not a page multiple
+    img = ai.make_bootimg(kernel, b"", "root=PARTLABEL=userdata ro")
+
+    rdsz = struct.unpack_from("<I", img, 16)[0]
+    check("no-ramdisk image reports ramdisk_size 0", rdsz == 0, f"got {rdsz}")
+
+    want = 4096 + (len(kernel) + 4095) // 4096 * 4096
+    check("no-ramdisk image is header + padded kernel, nothing after",
+          len(img) == want, f"{len(img)} bytes, expected {want}")
+
+    # mkbootimg folds an absent section into id[] as its (empty) contents plus
+    # a little-endian zero length, exactly as it already does for `second`.
+    sha = hashlib.sha1()
+    for part in (kernel, b"", b""):
+        sha.update(part)
+        sha.update(struct.pack("<I", len(part)))
+    check("no-ramdisk id[] hashes the empty section like mkbootimg",
+          img[576:596] == sha.digest(), f"got {img[576:596].hex()}")
+
+    check("the kernel still lands at page 1",
+          img[4096:4096 + len(kernel)] == kernel)
+
+
 def main():
     print("android-image.py")
     test_vbmeta()
+    test_bootimg_no_ramdisk()
     test_bootimg_roundtrip()
     print()
     if _failures:

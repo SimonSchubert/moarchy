@@ -17,9 +17,14 @@
 # image/boot/test-android-image.py reproduces that image byte-for-byte from its
 # own parts. None of it came from a wiki.
 
-# The DTB this device's bootloader needs appended to the kernel. The one
-# device-specific string in the whole backend, which is the point -- a second
-# Qualcomm phone adds a line here and changes nothing else.
+# The two device-specific strings in the whole backend, which is the point -- a
+# second Qualcomm phone adds a line here and changes nothing else.
+#
+#   DTB_NAME        the device tree appended to the kernel
+#   ROOT_PARTLABEL  the GPT partition the rootfs is flashed to, and the name the
+#                   kernel is given to find it again at boot (D24). A vendor
+#                   fact: we do not choose it, we read it -- `blkid` on the
+#                   handset reports PARTLABEL="userdata" for /dev/mmcblk0p72.
 #
 # Resolved in a function called BY THE HOOKS, not at source time. It was a bare
 # `case` with a ${DTB_NAME:?} default, which meant sourcing this file with an
@@ -28,31 +33,36 @@
 # backend with no hooks at all, which is a far more alarming thing than the
 # wrong device name. Sourcing a backend must never have side effects; it
 # defines functions and does nothing else.
-_set_dtb_name() {
+_set_device_facts() {
   case "${DEVICE:-}" in
-    sargo) DTB_NAME=sdm670-google-sargo ;;
+    sargo) DTB_NAME=sdm670-google-sargo; ROOT_PARTLABEL=userdata ;;
     *) die "android-bootimg: no DTB known for DEVICE=${DEVICE:-unset}" ;;
   esac
 }
 
-# The filesystem label the kernel is told to look for.
+# The ext4 label, set by mkfs in backend_image and read by /etc/fstab.
 #
-# LABEL and not a partition path, deliberately. The rootfs is flashed to
-# `userdata`, which is /dev/mmcblk0p72 on the handset this was developed
-# against -- a number read off one phone, on a device family where the
-# partition table is whatever the vendor shipped. The label is set by mkfs
-# below, so the cmdline and the thing it names are decided in one place.
+# It is NOT what the kernel is told to look for. `root=LABEL=` needs a udev
+# that reads filesystem superblocks, which is an initramfs, and this backend
+# has none (D24); the kernel resolves `root=PARTLABEL=` out of the GPT on its
+# own. So the boot image names the partition and fstab names the filesystem
+# inside it -- two identifiers for one device, each in the only form its reader
+# can resolve.
 ROOT_LABEL=${ROOT_LABEL:-moarchyroot}
 
 # ---------------------------------------------------------------------------
-# After pacstrap: the initramfs.
+# After pacstrap: check the kernel is there, and that it can mount root alone.
 #
-# No boot script here, unlike sunxi-gpt -- there is no u-boot to read one. The
-# bootloader jumps straight into the kernel with the cmdline baked into the
-# boot image, which backend_image assembles.
+# This backend builds NO initramfs (D24) and writes no boot script -- there is
+# no u-boot to read one. The bootloader jumps straight into the kernel with the
+# cmdline baked into the boot image, which backend_image assembles.
+#
+# The hook stays because build.sh requires all three of them (D8), and because
+# the checks below turn a missing package into one sentence rather than into a
+# phone that shows two penguins and stops.
 backend_kernel() {
-_set_dtb_name
-say "kernel and initramfs"
+_set_device_facts
+say "kernel"
 
 KREL=$(cat "$ROOTDIR/usr/share/kernel/moarchy-sdm670/kernel.release" 2>/dev/null) ||
   die "no kernel.release in the rootfs -- is linux-moarchy-sdm670 installed?"
@@ -65,19 +75,31 @@ info "kernel $KREL"
 # The same resolv.conf trap image/build.sh documents at length: `filesystem`
 # ships it as a symlink into systemd-resolved's runtime directory, which does
 # not exist in a chroot, so a plain cp writes through a dangling link and fails.
+#
+# Nothing in THIS hook needs DNS any more -- but image/configure.sh runs after
+# it and refreshes the package database in the same chroot, and it has no
+# resolv.conf handling of its own. sunxi-gpt.sh says what removing this costs:
+# an image whose moarchy.db has no signature, where nothing installs until
+# somebody runs `pacman -Sy` by hand.
 rm -f "$ROOTDIR/etc/resolv.conf"
 cp /etc/resolv.conf "$ROOTDIR/etc/resolv.conf" ||
   say "!! no resolv.conf for the chroot -- anything in it that needs DNS fails"
 
-# -p and not -P: the kernel package ships a preset naming ALL_kver, so this
-# builds an initramfs for THIS kernel rather than for whatever else is
-# installed. `mkinitcpio -P` on a rootfs with two kernels silently builds both
-# and the boot image would then carry a coin toss.
-arch-chroot "$ROOTDIR" mkinitcpio -p moarchy-sdm670 ||
-  die "mkinitcpio failed -- see above"
-[ -f "$ROOTDIR/boot/initramfs-moarchy-sdm670.img" ] ||
-  die "mkinitcpio produced no initramfs-moarchy-sdm670.img"
-info "initramfs $(stat -c%s "$ROOTDIR/boot/initramfs-moarchy-sdm670.img") bytes"
+# The whole of D24 rests on three symbols being built INTO this kernel rather
+# than shipped as modules, and they are decided in another package's config
+# file. Asserted here because the failure mode is otherwise a mute phone: with
+# no initramfs there is nothing to load a module from and nothing to print, so
+# `CONFIG_EXT4_FS=m` would present exactly as a bad flash.
+#
+# modules.builtin is a list of the .ko files this kernel does NOT ship, which
+# is precisely the question being asked.
+local _builtin="$ROOTDIR/usr/lib/modules/$KREL/modules.builtin"
+[ -f "$_builtin" ] || die "no modules.builtin for $KREL -- cannot check what is built in"
+for _ko in fs/ext4/ext4.ko drivers/mmc/core/mmc_block.ko drivers/mmc/host/sdhci-msm.ko; do
+  grep -qF "$_ko" "$_builtin" ||
+    die "$_ko is a module, not built in -- this kernel cannot mount root without an initramfs (D24)"
+done
+info "ext4, mmc_block and sdhci-msm are built in; no initramfs needed"
 }
 
 # ---------------------------------------------------------------------------
@@ -85,9 +107,19 @@ info "initramfs $(stat -c%s "$ROOTDIR/boot/initramfs-moarchy-sdm670.img") bytes"
 #
 # One line, and the absence of a second is the device fact: sargo has no
 # separate boot partition. /boot is a directory inside the rootfs, and the
-# bootloader never reads it -- the kernel and initramfs it runs were copied
-# into boot.img at build time. An entry for a vfat /boot, as the PinePhone
-# has, would mount something that does not exist.
+# bootloader never reads it -- the kernel it runs was copied into boot.img at
+# build time. An entry for a vfat /boot, as the PinePhone has, would mount
+# something that does not exist.
+#
+# `rw` here is load-bearing and not decoration. The kernel mounts root READ-ONLY
+# (backend_image's cmdline says so, and the bootloader says so too) precisely so
+# that systemd-fsck-root can run -- its ConditionPathIsReadWrite=!/ means a root
+# already mounted rw is a root that is never checked. systemd-remount-fs then
+# remounts / with the options on THIS line. If it said `ro`, the phone would
+# stay read-only for the rest of its life.
+#
+# passno 1 for the same reason: systemd-fstab-generator only pulls in
+# systemd-fsck-root.service when the root entry has a non-zero pass.
 backend_fstab() {
 cat <<EOF
 LABEL=$ROOT_LABEL  /  ext4  rw,relatime  0 1
@@ -107,30 +139,47 @@ say "boot image"
 # the kernel payload; a boot.img with the DTB in the `second` area instead is a
 # black screen with nothing to read.
 #
-# The cmdline:
-#   root=LABEL=   resolved by the initramfs's udev hook
-#   rw            systemd remounts anyway, but fsck wants it first
-#   rootwait      eMMC is not necessarily probed by the time init runs
+# The cmdline. ABL does not pass this through; it BUILDS one, putting ~40
+# androidboot.* parameters of its own first, this string next, and console=null
+# last (devices.md D23, D25). What that means for every line below is that ABL
+# has already set some of them, earlier, to values meant for Android -- and the
+# kernel's __setup handlers keep the LAST occurrence, so these win.
 #
-# There is deliberately NO console= here, and adding one does nothing.
-# ABL STRIPS any console= from the boot image and appends its own console=null
-# (devices.md D23). Verified from a shell on the device: with console=tty0 in
-# the boot image, `grep -o "console=[^ ]*" /proc/cmdline` returns console=null
-# alone, and /proc/consoles lists only ttynull0. Every other parameter here --
-# root=, rw, rootwait -- arrives intact; console= is the exception.
+#   root=PARTLABEL=  the GPT name, resolved by the kernel itself out of the
+#                    partition table. Not LABEL=, which needs a udev that reads
+#                    superblocks, which needs an initramfs (D24). ABL passes its
+#                    own root=PARTUUID= for the Android system partition; this
+#                    overrides it.
+#   ro               so systemd-fsck-root can check the root before anything
+#                    writes to it; /etc/fstab then remounts it rw. ABL sets ro
+#                    too, but relying on that would be relying on a bootloader.
+#   rootwait         eMMC is not necessarily probed by the time init runs.
+#                    rootwait retries the WHOLE lookup, PARTLABEL included --
+#                    devt_from_partlabel returns -ENODEV, not -EINVAL, so the
+#                    wait is not disabled.
+#   rootfstype=ext4  f2fs is built into this kernel too and registers first, so
+#                    without this the kernel tries and fails f2fs before ext4.
+#                    Harmless, and unreadable on a device with no console.
+#   init=/sbin/init  THE one that is not optional. ABL appends init=/init, which
+#                    is right for an Android ramdisk and wrong for every rootfs
+#                    we will ever ship. An Arch root has no /init, and a failed
+#                    init= is a kernel panic() with no fallback to /sbin/init --
+#                    so the phone mounted root correctly and died one exec
+#                    later, showing two penguins and nothing else, for a whole
+#                    night. Do not remove this line.
 #
-# The cost is that nothing printed during boot is EVER visible on this device,
-# so a failing image and a working one look identical (penguins, then nothing).
-# postmarketOS hit the same wall and works around it by writing to /dev/tty0
-# directly; see their setup_log(). moarchy's initramfs will have to do the same
-# or bring up USB networking, which is the only debug channel that worked.
-local CMDLINE=${CMDLINE:-"root=LABEL=$ROOT_LABEL rw rootwait"}
+# There is deliberately NO console= here, and adding one does nothing: ABL
+# strips it and appends console=null. Verified from a shell on the device --
+# `grep -o "console=[^ ]*" /proc/cmdline` returns console=null alone and
+# /proc/consoles lists only ttynull0. Nothing printed during boot is ever
+# visible here, which is why the assertions in this file exist at all.
+local CMDLINE=${CMDLINE:-"root=PARTLABEL=$ROOT_PARTLABEL ro rootwait rootfstype=ext4 init=/sbin/init"}
 info "cmdline: $CMDLINE"
 
+# No --ramdisk: this kernel mounts root itself (D24).
 python3 "$REPO/image/boot/android-image.py" bootimg \
   --kernel  "$ROOTDIR/boot/Image.gz" \
   --dtb     "$ROOTDIR/boot/dtbs/qcom/$DTB_NAME.dtb" \
-  --ramdisk "$ROOTDIR/boot/initramfs-moarchy-sdm670.img" \
   --cmdline "$CMDLINE" \
   --pagesize 4096 \
   --out "$OUTDIR/boot.img" || die "boot.img generation failed"
@@ -140,7 +189,11 @@ python3 "$REPO/image/boot/android-image.py" bootimg \
 local hdr
 hdr=$(dd if="$OUTDIR/boot.img" bs=8 count=1 status=none)
 [ "$hdr" = "ANDROID!" ] || die "boot.img does not start with ANDROID!"
-info "boot.img $(stat -c%s "$OUTDIR/boot.img") bytes"
+# ramdisk_size, a little-endian u32 at byte 16. Zero is the point of D24, and a
+# non-zero value here means an initramfs crept back in.
+rdsz=$(od -An -tu4 -j16 -N4 "$OUTDIR/boot.img" | tr -d " ")
+[ "$rdsz" = 0 ] || die "boot.img carries a $rdsz-byte ramdisk; this backend ships none (D24)"
+info "boot.img $(stat -c%s "$OUTDIR/boot.img") bytes, no ramdisk"
 
 say "vbmeta"
 # An Android 12 bootloader refuses an unsigned kernel unless the vbmeta it has
@@ -191,8 +244,16 @@ smagic=$(dd if="$OUTDIR/rootfs.simg" bs=4 count=1 status=none | od -An -tx1 | tr
 say "flash script"
 # Written rather than documented, because the ORDER is load-bearing and a
 # README gets read afterwards.
-cat > "$OUTDIR/flash.sh" <<'FLASH'
+cat > "$OUTDIR/flash.sh" <<FLASH
 #!/bin/bash
+# The one fact this script shares with the boot image: the partition the rootfs
+# is flashed to is the partition root=PARTLABEL= names. Interpolated here, on
+# its own line, so the rest of the script can stay a QUOTED heredoc -- an
+# unquoted one would expand \$(dirname "\$0") and \$unlocked below at build
+# time and write a script that flashes from whatever directory built it.
+ROOTPART=$ROOT_PARTLABEL
+FLASH
+cat >> "$OUTDIR/flash.sh" <<'FLASH'
 # Flash moarchy to a Pixel 3a (sargo) over fastboot.
 #
 # The phone must be UNLOCKED and in fastboot: power off, then hold Volume Down
@@ -220,10 +281,35 @@ fastboot flash boot boot.img
 
 # Far larger than max-download-size (256 MiB on this device), so fastboot
 # splits the sparse image into chunks. Expect several minutes.
-echo "==> userdata (the rootfs -- this is the slow one)"
+echo "==> $ROOTPART (the rootfs -- this is the slow one)"
 # A SPARSE image. fastboot refuses a raw one over 4 GiB with "Failed reading
 # from userdata", which sounds like a read error and is a size limit.
-fastboot flash userdata rootfs.simg
+fastboot flash "$ROOTPART" rootfs.simg
+
+# Reset the slot's retry counter and clear any "unbootable" flag.
+#
+# Not optional, and not tidiness. An A/B bootloader counts down a retry counter
+# on every handoff and marks the slot unbootable at zero unless the OS calls
+# back to say the boot worked. A phone that has been flashed a few times, or
+# that failed to boot a few times, arrives here with the counter already spent
+# -- and then refuses to boot the image you have just written, exactly as if
+# the flash had failed. Measured on sargo 2026-09-14 (devices.md D26):
+#
+#   (bootloader) slot-retry-count:a:0
+#   (bootloader) slot-unbootable:a:yes
+#
+# --set-active is the only thing that clears that flag. It erases nothing.
+#
+# Staying on the CURRENT slot is the point (D17): the other one keeps whatever
+# was there, so a bad flash is recoverable by switching back in the bootloader.
+echo "==> marking the current slot bootable"
+slot=$(fastboot getvar current-slot 2>&1 | sed -n 's/^current-slot: *//p' | head -1)
+if [ -n "$slot" ]; then
+  fastboot --set-active="$slot"
+else
+  echo "!! could not read current-slot; if the phone does not boot, run:" >&2
+  echo "   fastboot --set-active=a" >&2
+fi
 
 echo "==> done; rebooting"
 fastboot reboot

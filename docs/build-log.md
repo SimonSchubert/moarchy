@@ -1864,6 +1864,52 @@ and a screenshot taken too early looks like the old bug; and applying a theme
 resets the background to the theme's first, which is worth knowing before
 blaming a wallpaper for changing on its own.
 
+## 6u. The Pixel 3a booted, after a night spent measuring the wrong thing (2026-09-13/14)
+
+The decisions are `docs/devices.md` D23–D26; this is what it cost to find them,
+because the shape of the mistake is more reusable than the answers.
+
+**The device cannot talk.** ABL replaces `console=` with `console=null` and
+there is no pstore, so nothing before userspace is ever visible. A failing boot
+and a working one are the same picture: two penguins, then silence. Nine images
+were bisected against each other overnight — initramfs size, gzip vs zstd,
+systemd vs busybox init, `autodetect` — and every one of them was mute for that
+reason rather than for the reason under test.
+
+**Three separate things were wrong, and each one hid the others.**
+
+1. **`init=/init`.** ABL does not pass a cmdline through, it *builds* one, and
+   its own `init=/init` goes in front of ours. An Arch rootfs has no `/init`,
+   and a failed `init=` is a `panic()` with no fallback. Root had been mounting
+   correctly the entire time; the kernel died one `execve` later.
+2. **The A/B retry counter.** The bootloader counts down on every handoff and
+   marks the slot unbootable at zero unless the OS calls back. By the time it
+   read `slot-retry-count:a:0`, it was booting *nothing* — and the proof was
+   that postmarketOS's own image, which had worked an hour earlier, failed
+   identically. Every image tested after that point was "failing" for a reason
+   that had nothing to do with the image.
+3. **The initramfs itself**, which was the thing being blamed, and which turned
+   out to be unnecessary — the kernel has ext4, mmc and GPT built in and
+   resolves `root=PARTLABEL=` without help.
+
+**What actually found them** was a shell, not a theory: `fastboot boot` the pmOS
+image, telnet to 172.16.42.1:23, and read the running system. `/proc/cmdline`
+showed the injected `init=/init` in one line. `blkid` showed the rootfs mounting
+clean both `ro` and `rw`, which killed the filesystem-corruption theory before
+any time went into it. `fastboot getvar all` showed the retry counter.
+
+**Two traps that produced the same misleading silence**, worth writing down
+because both look exactly like "init never ran": a hand-built initramfs
+containing a *dynamically linked* busybox with no libc and no loader cannot be
+`exec`'d at all; and `exec >/dev/tty0 2>&1` **exits the shell** when the node is
+missing, which is why pmOS `tee`s instead.
+
+**The rule this leaves behind.** On a device with no console, a boot that
+produces no output is not evidence about the thing you changed. Establish a
+channel first — and check `fastboot getvar slot-unbootable:a` before believing
+any A/B result at all, because that one silently invalidates every measurement
+taken after it flips.
+
 ## 7. Hardware status
 
 | | |

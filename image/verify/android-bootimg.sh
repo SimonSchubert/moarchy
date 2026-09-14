@@ -21,6 +21,13 @@ for f in boot.img vbmeta.img rootfs.simg flash.sh; do
 done
 [ -x "$IMG_XZ/flash.sh" ] && ok "flash.sh is executable" || no "flash.sh is not executable"
 
+# The retry counter (D26). Without a --set-active the bootloader may refuse the
+# image that was just flashed, with nothing on screen to say why -- so the one
+# line that clears it is asserted rather than assumed to have survived an edit.
+grep -q -- '--set-active' "$IMG_XZ/flash.sh" \
+  && ok "flash.sh resets the slot retry counter" \
+  || no "flash.sh never runs --set-active; a spent retry counter refuses the new image (D26)"
+
 sec "boot image"
 # The v0 header, at the offsets image/boot/android-image.py writes and that
 # were measured off an image which demonstrably boots this device.
@@ -33,11 +40,71 @@ hver=$(od -An -tu4 -j40 -N4 "$IMG_XZ/boot.img" 2>/dev/null | tr -d ' ')
 [ "$psize" = 4096 ] && ok "page size 4096" || no "page size is $psize, not 4096"
 [ "$hver" = 0 ] && ok "header version 0" || no "header version is $hver, not 0"
 
+# ramdisk_size, a little-endian u32 at byte 16. This backend ships no initramfs
+# (D24) -- the kernel mounts root itself -- and a non-zero value here means one
+# crept back in, which on this device is 18 MB of code that cannot print.
+rdsz=$(od -An -tu4 -j16 -N4 "$IMG_XZ/boot.img" 2>/dev/null | tr -d ' ')
+[ "$rdsz" = 0 ] && ok "no ramdisk (the kernel mounts root itself)" \
+                || no "boot.img carries a ${rdsz:-?}-byte ramdisk; this backend ships none (D24)"
+
+# kernel_size, a little-endian u32 at byte 8. Read here because the size check
+# below needs it and so does the DTB extraction further down.
+ksize=$(od -An -tu4 -j8 -N4 "$IMG_XZ/boot.img" 2>/dev/null | tr -d ' ')
+
+# The whole file should then be the header page plus the padded kernel, with
+# nothing after it. Catches a stray page or a truncated kernel, both of which
+# boot into silence.
+want=$(( 4096 + (ksize + 4095) / 4096 * 4096 ))
+have=$(stat -c%s "$IMG_XZ/boot.img")
+[ "$have" = "$want" ] && ok "boot.img is header + kernel, $have bytes" \
+                      || no "boot.img is $have bytes, not the $want a header plus a padded kernel makes"
+
+sec "boot cmdline"
+# Read back out of the artifact rather than trusted from the script that wrote
+# it. Every line of this is a thing that, if wrong, gives two penguins and
+# silence -- there is no console on this device to say which (D23).
+#
+# The v0 header splits the cmdline: 512 bytes at offset 64, the rest at 608.
+cmdline=$(dd if="$IMG_XZ/boot.img" bs=1 skip=64 count=512 status=none 2>/dev/null | tr -d '\0')
+cmdline="$cmdline$(dd if="$IMG_XZ/boot.img" bs=1 skip=608 count=1024 status=none 2>/dev/null | tr -d '\0')"
+printf '  cmdline: %s\n' "$cmdline"
+
+case "$cmdline" in
+  *root=PARTLABEL=*) ok "root=PARTLABEL= (the kernel resolves this without udev)" ;;
+  *root=LABEL=*) no "root=LABEL= needs an initramfs to resolve a filesystem label; this image has none" ;;
+  *) no "no root= in the cmdline -- the kernel would use whatever the bootloader passes" ;;
+esac
+
+# The one that cost a night. ABL appends init=/init, which is right for an
+# Android ramdisk and wrong for an Arch rootfs, and a failed init= is a panic
+# with no fallback. Ours must come after it, so it must be here.
+case " $cmdline " in
+  *" init=/sbin/init "*) ok "init=/sbin/init overrides the bootloader's init=/init (D25)" ;;
+  *" init="*) no "init= is set to something other than /sbin/init -- check it exists in the rootfs" ;;
+  *) no "no init= -- ABL appends init=/init, an Arch root has no /init, and the kernel panics (D25)" ;;
+esac
+
+case " $cmdline " in
+  *" ro "*) ok "root starts read-only, so systemd-fsck-root can check it" ;;
+  *) no "root is not mounted ro; systemd-fsck-root has ConditionPathIsReadWrite=!/ and will never run" ;;
+esac
+case " $cmdline " in
+  *" rootwait "*) ok "rootwait (the eMMC is not probed when init runs)" ;;
+  *) no "no rootwait -- the root device is not necessarily there yet" ;;
+esac
+
+# One fact, one spelling: the partition the kernel is told to boot from is the
+# partition flash.sh writes the rootfs to.
+cmdpart=${cmdline##*root=PARTLABEL=}; cmdpart=${cmdpart%% *}
+flashpart=$(sed -n 's/^ROOTPART=//p' "$IMG_XZ/flash.sh" | head -1)
+[ -n "$cmdpart" ] && [ "$cmdpart" = "$flashpart" ] \
+  && ok "boot cmdline and flash.sh agree on '$cmdpart'" \
+  || no "cmdline boots from '${cmdpart:-?}' but flash.sh writes the rootfs to '${flashpart:-?}'"
+
 # The kernel payload must carry an appended DTB: sargo's deviceinfo sets
 # append_dtb=true, and a boot image without one is a black screen with nothing
 # to read. FDT magic is d00dfeed, big-endian, and it should appear AFTER the
 # gzip magic that starts the kernel.
-ksize=$(od -An -tu4 -j8 -N4 "$IMG_XZ/boot.img" 2>/dev/null | tr -d ' ')
 dd if="$IMG_XZ/boot.img" of="$WORK/kernel.bin" bs=1 skip=4096 count="${ksize:-0}" status=none 2>/dev/null
 kmagic=$(dd if="$WORK/kernel.bin" bs=2 count=1 status=none 2>/dev/null | od -An -tx1 | tr -d ' \n')
 [ "$kmagic" = "1f8b" ] && ok "kernel payload is gzip (Image.gz)" || no "kernel payload is not gzip (magic $kmagic)"

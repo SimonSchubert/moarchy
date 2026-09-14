@@ -148,6 +148,25 @@ version = "0.1.0"
 pkgbuilddir = "apps/vitals"
 
 # ---------------------------------------------------------------------------
+# Qualcomm's bootctl HAL, ported to Linux. The callback an Android A/B
+# bootloader waits for: without it the retry counter in the bootloader control
+# block runs down and the slot is marked unbootable, after which the phone
+# boots nothing at all until a host runs `fastboot --set-active`. Measured on
+# sargo 2026-09-14 (devices.md D26).
+#
+# A tag rather than a commit -- upstream tags releases and 0.2.2 is the newest.
+# The tarball's sha256 lives in the PKGBUILD, so a moved tag stops the build
+# rather than changing what a phone runs.
+#
+# Not device-scoped, though only sargo pulls it in today: nothing in it is
+# sargo-specific, and the Fairphone is the same shape (devices.md D0).
+# ---------------------------------------------------------------------------
+[qbootctl]
+url     = "https://github.com/linux-msm/qbootctl"
+ref     = "0.2.2"
+version = "0.2.2"
+
+# ---------------------------------------------------------------------------
 # AUR packages with no aarch64 binary anywhere -- neither in Arch Linux ARM nor
 # in Omarchy's own repo, which has no aarch64 tree at all
 # (pkgs.omarchy.org/stable/aarch64/omarchy.db -> 404).

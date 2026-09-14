@@ -57,9 +57,11 @@ mkdir -p "$OUTDIR"
 echo "==> building the image container"
 docker build --platform linux/arm64 -f image/Dockerfile -t moarchy-image . >/dev/null
 
-# --privileged: arch-chroot bind-mounts /proc, /sys and /dev so mkinitcpio can
-# run inside the rootfs. Everything else in build.sh deliberately avoids loop
-# devices, which Docker Desktop's VM does not give us.
+# --privileged: arch-chroot bind-mounts /proc, /sys and /dev so configure.sh
+# can run useradd, locale-gen and a pacman refresh inside the rootfs (and so
+# the PinePhone backend can build an initramfs there). Everything else in
+# build.sh deliberately avoids loop devices, which Docker Desktop's VM does not
+# give us.
 #
 # WIFI_PSK is passed through the environment, never as an argument, so it stays
 # out of `docker inspect` and the shell history.

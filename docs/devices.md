@@ -3,16 +3,14 @@
 How moarchy stops being a PinePhone project and becomes a project that runs on
 phones, of which the PinePhone is one.
 
-Status: **moarchy boots on the Pixel 3a (2026-09-14).** The full stack runs:
-our kernel, our device and firmware packages, the Arch rootfs, systemd,
-autologin, sway and the shell. A sargo image builds, verifies and flashes.
+Status: **moarchy boots on the Pixel 3a from a boot image this repo produces
+(2026-09-14).** The full stack runs: our kernel, our device and firmware
+packages, the Arch rootfs, systemd, autologin, sway and the shell, reached
+through `fastboot boot` of an image built by `image/boot/android-bootimg.sh`
+with nothing of postmarketOS's in it. There is no initramfs at all (D24).
 
-Two things are NOT finished, and §12 has the detail:
-
-1. **Our own initramfs does not work.** The phone currently boots on
-   postmarketOS's initramfs file set with our init grafted into it. That is
-   proof the system works, not a shippable artifact.
-2. **The PinePhone has not been re-verified** since D1–D6 (the ⚠ note below).
+**The PinePhone has not been re-verified** since D1–D6 — the ⚠ note below, and
+the one thing here still owed.
 
 The acceptance criteria are the contract to argue with; where one is my reading
 rather than your decision it is marked **?**.
@@ -251,7 +249,9 @@ with no initramfs. The device-specific work **interleaves**:
 Between (1) and (3) sit provenance, `configure.sh` and the rootfs trim, all
 device-independent. So a backend is **three hooks, not one tail**:
 
-- `backend_kernel` — after pacstrap: initramfs, and any boot script
+- `backend_kernel` — after pacstrap: whatever this device needs doing to the
+  kernel. An initramfs and a boot script on the PinePhone; on sargo, checks
+  only, because that backend ships neither (D24)
 - `backend_fstab`  — what `/etc/fstab` should say; the disk layout is the
   backend's business, and sargo has no separate `/boot` partition to mount
 - `backend_image`  — after the trim: assemble and compress the artifact
@@ -278,6 +278,25 @@ files and a script you run with the phone in fastboot. Forcing both into
 **D11** The backend is chosen by `DEVICE=<codename>`, defaulting to `pinephone`
 until the second device ships. `scripts/build-image.sh` passes it through and
 refuses a codename with no `pkgbuilds/moarchy-device-<codename>/`.
+
+**D24** *Added 2026-09-14.* The `android-bootimg` backend ships **no
+initramfs**. The kernel mounts root itself: `root=PARTLABEL=` is resolved out
+of the GPT by `early_lookup_bdev()`, and `EXT4_FS`, `MMC_BLOCK`,
+`MMC_SDHCI_MSM`, `EFI_PARTITION` and `DEVTMPFS_MOUNT` are all `=y` in the
+pinned config, so nothing is left for an early userspace to do.
+`backend_kernel` asserts the first three against `modules.builtin` rather than
+trusting a config file in another package, because the failure is otherwise a
+phone that shows two penguins and stops.
+
+> The initramfs was only ever resolving `root=LABEL=` through udev, and it
+> resolved it into a night: eighteen megabytes of pre-userspace code on the one
+> device in the project that cannot print (D23), where every failure looks
+> exactly like every other failure. `PARTLABEL=` needs no udev, so the
+> dependency and the debugging surface go together.
+>
+> `sunxi-gpt` keeps `mkinitcpio -P`, and the asymmetry is not an inconsistency:
+> the PinePhone boots from a card of unknown geometry, which is the case an
+> initramfs is actually for.
 
 **D12** `image/verify.sh` splits the same way. Its partition-table and
 `eGON.BT0` assertions are `sunxi-gpt` facts; the Android backend asserts its
@@ -314,7 +333,7 @@ Measured on the device (serial `987AY139XT`), not read off a wiki.
 | codename / SoC | `sargo` / SDM670, 4 GB LPDDR4X, 64 GB eMMC |
 | panel | 1080×2220, density 440 → **scale 3** gives 360×740 logical |
 | bootloader | `b4s4-0.4-8048689`, `secure-boot: PRODUCTION`, now **unlocked** |
-| slots | A/B, `current-slot: a`, both bootable |
+| slots | A/B, `current-slot: a`; bootable is a *countdown*, not a state — D26 |
 | dynamic partitions | **retrofit** — no `super`; `system_a`=p68, `system_b`=p69 |
 | `max-download-size` | `0x10000000` (256 MiB) → rootfs must flash sparse |
 | flash targets | kernel→`boot`, rootfs→`userdata`, plus `vbmeta` |
@@ -336,7 +355,7 @@ built around them. All of it held:
 | boot image format | **yes** — the header reverse-engineered in D15 was accepted and jumped to |
 | display / DRM / KMS | **yes** — `msm_dpu ae01000.display-controller` drove the full 1080×2220 panel with a rendered UI |
 | touch | **yes** — a tap on the on-screen keyboard registered at the shell |
-| iteration loop | **yes** — `fastboot boot` writes nothing, so a bad kernel costs a power cycle |
+| iteration loop | **yes** — `fastboot boot` writes nothing, so a bad kernel costs a power cycle. It still spends a slot retry (D26) |
 
 Three things this changed, each of which was a stated risk:
 
@@ -354,16 +373,17 @@ both in upstream `linux-firmware`, which `image/build.sh` already pacstraps.
 They were missing only because a pmOS *initramfs* is minimal. Of the Adreno
 firmware only `a615_zap.mbn` needs the proprietary blob and `pil-squasher`.
 
-**"There is no console" was wrong, twice.** This kernel prints to the panel,
-and pmOS's initramfs puts a usable debug shell *with an on-screen keyboard* on
-it. Our initramfs should do the same. A failed boot here is readable.
+**D19** Any USB network gadget moarchy raises on this device is **CDC-ECM or
+NCM, never RNDIS.** pmOS's initramfs comes up as RNDIS (`idProduct 0x4EE3`,
+`serial "postmarketOS"`), macOS binds no driver, and a phone offering a debug
+network that the only machine on the desk cannot speak to is a debug channel
+that does not exist. The pinned config already sets `USB_CONFIGFS_ECM=y` and
+`USB_CONFIGFS_NCM=y`, so this costs nothing but choosing correctly.
 
-**D19** The USB network gadget is **CDC-ECM or NCM, never RNDIS.** pmOS's
-initramfs came up as RNDIS (`idProduct 0x4EE3`, `serial "postmarketOS"`), macOS
-bound no driver, and a phone offering a debug network that the only machine on
-the desk cannot speak to is a debug channel that does not exist. The pinned
-config already sets `USB_CONFIGFS_ECM=y` and `USB_CONFIGFS_NCM=y`, so this
-costs nothing but choosing correctly — and both are what macOS binds natively.
+Nothing raises one today — the rootfs presents no gadget, so a running phone is
+invisible over the cable and the shell in D23 is postmarketOS's rather than
+ours. That is the gap worth closing next, and it belongs in the rootfs as a
+systemd unit now that there is no initramfs to put it in. **?**
 
 **D15** AVB must be defeated or the Android 12 bootloader rejects an unsigned
 kernel. The backend generates an empty vbmeta with the verification-disabled
@@ -377,10 +397,69 @@ overrides neither `flash_fastboot_partition_rootfs` nor `_system` is
 and the logical-partition machinery entirely. **?** — it also gives up the
 `system_a`/`system_b` space, which is a real cost if 64 GB ever gets tight.
 
-**D17** A/B slots are not used. We flash the current slot and leave the other
-alone, so a bricked flash can be recovered by switching slots in the
-bootloader. Seamless updates are explicitly not a goal; `pacman -Syu` is the
-update path here as it is on the PinePhone.
+**D17** *Amended 2026-09-14.* We flash the current slot and leave the other
+alone, so a bad flash is recoverable by switching slots in the bootloader.
+Seamless updates are explicitly not a goal; `pacman -Syu` is the update path
+here as it is on the PinePhone.
+
+This AC used to open "A/B slots are not used", and that was wrong in a way that
+costs a phone. The slots are not optional machinery you can decline to operate
+— see D26.
+
+**D25** The boot image's cmdline ends with **`init=/sbin/init`**, and removing
+it stops the phone booting. ABL does not pass our cmdline through; it builds
+one, putting its own `androidboot.*` parameters first — `init=/init` among them
+— then ours, then `console=null`. `init=` is last-wins in the kernel
+(`init/main.c`, `init_setup`), so ours must be present to win. An Arch rootfs
+has no `/init`, and a failed `init=` is a `panic()` with **no fallback** to
+`/sbin/init` (`init/main.c:1633-1637`).
+
+> This is what D23 was hiding. Root mounted correctly and the kernel died one
+> `execve` later, on every image tried, looking identical to a kernel that
+> never found its disk. The same rule applies to `root=`: ABL passes a
+> `root=PARTUUID=` of its own for the Android system partition, and ours wins
+> only by coming after it.
+
+**D26** Something must mark the boot successful on **every** boot, or the phone
+stops booting. `moarchy-device-sargo` depends on `qbootctl` and ships
+`qbootctl-mark-successful.service` **already enabled**, by the symlink rather
+than through `DEVICE_SERVICES`, so it is true from the moment the package is
+installed rather than from the moment a first-boot script succeeds.
+
+> An A/B bootloader decrements a retry counter every time it hands off to a
+> slot and marks the slot **unbootable** when it reaches zero with no callback.
+> On 2026-09-14 this handset read `slot-retry-count:a:0`,
+> `slot-unbootable:a:yes`, and in that state it booted **nothing** — a
+> postmarketOS image that had worked an hour earlier failed exactly as ours
+> did, which is how the counter was found rather than the image blamed. About
+> three reboots of headroom, then a phone that needs a computer with `fastboot`
+> to revive.
+>
+> `flash.sh` runs `fastboot --set-active` for the same reason: it is the only
+> thing that clears the unbootable flag, and without it a freshly flashed
+> phone can refuse the image just written to it.
+
+**D23** **There is no console on this device, and there cannot be one.** ABL
+strips any `console=` from the boot image and appends its own `console=null`.
+Verified from a shell on the handset: with `console=tty0` in the boot image,
+`grep -o "console=[^ ]*" /proc/cmdline` returns `console=null` alone and
+`/proc/consoles` lists only `ttynull0`. There is no pstore either — `/dev/pmsg0`,
+`/proc/last_kmsg` and `/sys/fs/pstore/console-ramoops*` are all absent — so a
+previous boot's log cannot be recovered after the fact.
+
+Nothing printed before userspace is ever visible, so **a failing image and a
+working one look identical**: fbcon's penguins, then silence. Do not debug this
+device by changing something and watching the screen. What works instead:
+
+- **USB networking.** postmarketOS's initramfs raises a gadget macOS binds; the
+  phone answers on 172.16.42.1 with a telnet shell on port 23, host at
+  172.16.42.2. `fastboot boot` their image, mount the rootfs, and read it from
+  there. This is how D25 and D26 were both found.
+- **A getty on tty1 after boot.** Once the real root is running its getty writes
+  to the VT and is visible.
+- **The assertions in `image/verify/android-bootimg.sh`**, which read the
+  cmdline back out of the artifact. On a device that cannot tell you what went
+  wrong, a check before the flash is worth more than any amount of looking.
 
 **D18** The GLES 2.0 ceiling is a PinePhone fact, not a moarchy fact. The shell
 keeps targeting GLES 2.0 so one QML codebase serves every device — but this is
@@ -422,18 +501,36 @@ Restated as a checklist, in build order. Each carries its state.
    at the structure, not at an edit. `image/verify.sh` splits the same way into
    `image/verify/$BACKEND.sh` (`verify_artifact`, `verify_grow`), inferring the
    device from the artifact name; its two moved bodies were checked verbatim
-   too (49 and 65 lines). *No image has been produced by either backend yet, so
-   all of this is built and not run.*
+   too (49 and 65 lines). *Run on sargo 2026-09-14; the PinePhone half is still
+   only built (AC 1).*
 6. **D13 — DONE.** `manifest.toml` carries `[device.sargo]` with the kernel
    tag, real SHA256s and the config's provenance; `manifest_get` reads all five
    keys and the existing `manifest_components`/`manifest_aur_packages` scans
    are unaffected. `linux-moarchy-sdm670` and `moarchy-device-sargo` both
    build.
-7. **D15-D17 — packages done, image not built.** `linux-moarchy-sdm670`
-   (7.1.3, pruned to three SDM670 DTBs), `firmware-moarchy-sargo` (six blobs at
-   the paths the device tree names) and `moarchy-device-sargo` (`scale 3`) all
-   build. The remaining step is the first `DEVICE=sargo` image, then flashing
-   it and booting to the shell with touch working.
+7. **D15-D17, D23-D26 — DONE, booted.** On 2026-09-14 moarchy came up on the
+   handset from a boot image this repo produced: `linux-moarchy-sdm670` 7.1.3,
+   no ramdisk, `root=PARTLABEL=userdata ro rootwait rootfstype=ext4
+   init=/sbin/init`, through `fastboot boot` so that nothing was written while
+   it was still a question. The panel, touch, autologin, sway and the shell all
+   ran; the Adreno needs `linux-firmware-qcom`, which is why
+   `moarchy-device-sargo` depends on it by name (Arch splits `linux-firmware`
+   per vendor and the plain package carries every vendor but Qualcomm).
+
+   Three of those criteria were found by booting and could not have been found
+   any other way. **D25** (`init=/sbin/init`) is the one that cost a night:
+   root was mounting correctly the whole time and the kernel panicked one
+   `execve` later, which on a device with no console (D23) is the same picture.
+   **D26** (the A/B retry counter) invalidated part of the measurement that
+   preceded it — once `slot-unbootable:a:yes` is set the bootloader boots
+   nothing, so a run of images tested after that point were all "failing"
+   identically for a reason that had nothing to do with any of them. **D24**
+   (no initramfs) removed the component all of it was being blamed on.
+
+   The lesson worth keeping: on this device, a boot that produces no output is
+   not evidence about the thing you changed. Check
+   `fastboot getvar slot-unbootable:a` first, and get a shell — pmOS's
+   initramfs at 172.16.42.1:23 — before forming a theory.
 
    Two tools were written rather than depended on, and both are checked against
    artifacts instead of trusted: `image/boot/android-image.py` reproduces
@@ -472,8 +569,9 @@ Restated as a checklist, in build order. Each carries its state.
    `include/generated/timeconst.h ... Error 127` — make's code for "command not
    found", about a header, four directories from the missing tool.
 
-AC 7 is the one that can fail for reasons none of the others predict, which is
-why it is last and why nothing above it depends on owning a Pixel 3a.
+AC 7 was the one that could fail for reasons none of the others predicted,
+which is why it was last and why nothing above it depended on owning a Pixel
+3a. It did fail that way, three times over, and D24–D26 are what came back.
 
 AC 1 is the one most likely to be declared done without being done. The
 packages building and the metadata being right is not the same as a phone
@@ -495,107 +593,22 @@ booting, and this file should not say otherwise until one has.
 - **Fairphone codename and tier.** FP4 and FP5 are both pmOS community, both
   fastboot; which one, and whether the `android-bootimg` backend covers it
   unchanged, is unverified.
-- **Calls.** sargo telephony needs `q6voiced` and `hexagonrpcd`, which have no
-  Arch packages. Out of scope for a first boot; not out of scope forever.
+- **Calls, Wi-Fi and Bluetooth — one decision, not three.** **?** On SDM670 the
+  Wi-Fi chip lives *on the modem DSP*: `ath10k_snoc` reaches WCN3990 over QMI,
+  and `wlanmdsp.mbn` — which `firmware-moarchy-sargo` already ships — is loaded
+  by the modem remoteproc, not by the driver alone. So Wi-Fi needs `mba.mbn` and
+  `modem.mbn`, deliberately absent, plus `rmtfs`, `pd-mapper` and `tqftpserv`,
+  none packaged for Arch. Telephony needs all of that and then `q6voiced` and
+  `hexagonrpcd` on top. That is why the phone has no Wi-Fi and no calls today,
+  and it is *one* missing piece rather than two unrelated ones.
 
----
+  Bluetooth is not part of it: WCN3990's BT is a UART controller driven by
+  `hci_qca`, wanting `qca/crbtfw21.tlv` and `qca/crnv21.bin` from
+  `linux-firmware-atheros` and a BD address the vendor keeps outside the
+  filesystem. Cheaper than the modem stack and independent of it.
 
-## 12. Where the Pixel 3a work stands (2026-09-14)
+  Unbudgeted, and the shape of the work is now known rather than guessed:
+  `qbootctl` is the precedent — an upstream C project, pinned and packaged, at
+  the price of being the ones who notice when it moves. Three more of those,
+  plus the two blobs, and the radios come up together.
 
-Written at the end of the session that first booted it, so the next one does
-not re-derive any of this.
-
-### 12.1 What is proven on hardware
-
-- `linux-moarchy-sdm670` 7.1.3 boots, drives the panel through `msm_dpu`, and
-  runs to a login prompt: `Arch Linux ARM 7.1.3-sdm670 (tty1)`.
-- The rootfs is correct — `blkid` on the device reports
-  `LABEL="moarchyroot" TYPE="ext4"` on `/dev/mmcblk0p72`, with `/sbin/init` →
-  systemd, a correct `fstab` and `/usr/lib/modules/7.1.3-sdm670`.
-- The boot image writer, vbmeta, and the sparse flash all work (23 chunks,
-  ~165 s).
-- The Adreno comes up and sway starts once `linux-firmware-qcom` is installed.
-
-### 12.2 D23 — there is no console, and there cannot be one
-
-**ABL strips `console=` from the boot image and appends `console=null`.**
-Verified from a shell on the device:
-
-```
-# grep -o "console=[^ ]*" /proc/cmdline
-console=null
-# cat /proc/consoles
-ttynull0             --- (EC     )  237:0
-```
-
-`root=`, `rw` and `rootwait` all arrive intact; only `console=` is replaced.
-Nothing printed during boot is ever visible, so **a failing image and a
-working one look identical** — fbcon's penguin logo, then silence.
-
-This cost most of a night. Nine boots were bisected against each other on
-initramfs size, gzip vs zstd, systemd vs busybox init, and `autodetect` —
-every one of them mute for this reason rather than for the reason under test.
-**Do not debug this device by changing things and watching the screen.**
-
-Two channels do work:
-
-- **USB networking.** postmarketOS's initramfs brings up a gadget macOS binds;
-  the phone answers on **172.16.42.1**, host at 172.16.42.2, with a telnet
-  debug shell on **port 23**. That shell is what found all of the above. Our
-  own initramfs should provide the same (D19).
-- **A getty on tty1 after switch_root.** Once the real root is running, its
-  getty writes to the VT and is visible — which is how the sway/Mesa failure
-  was read.
-
-There is no pstore/ramoops (`/dev/pmsg0`, `/proc/last_kmsg` and
-`/sys/fs/pstore/console-ramoops*` are all absent), so a previous boot's log
-cannot be recovered after the fact either.
-
-### 12.3 The open bug: our initramfs does not boot
-
-mkinitcpio's initramfs, as built by `backend_kernel`, does not reach
-`switch_root`. What is known:
-
-| tried | result |
-|---|---|
-| mkinitcpio, systemd hook, 18 MB | silent |
-| mkinitcpio, udev hook, 17.7 MB | silent |
-| mkinitcpio, `HOOKS=(base)`, 7 MB | silent |
-| pmOS file set + **our** init | **boots** |
-| mkinitcpio file set + our init | init runs, root mount fails |
-
-Ruled out, with evidence:
-
-- **Not size.** A 13.3 MB padded build failed; the 12.3 MB graft worked.
-- **Not compression or the early cpio.** gzip, zstd, and a single plain-gzip
-  archive all behaved the same.
-- **Not `autodetect`.** Removing it still yields zero modules, and that is
-  *correct* — `EXT4_FS`, `MMC_BLOCK`, `MMC_SDHCI_MSM` and `DRM_MSM` are all
-  `=y`, so the module hooks have nothing to add.
-- **Not the kernel.** The graft proves the same kernel boots.
-
-The live lead: with our file set, our init runs (it rebooted on schedule) but
-`mount -t ext4 /dev/mmcblk0p72 /newroot` fails, where the same init inside
-pmOS's ramdisk succeeds. So something their environment provides at mount time,
-ours does not. A device-wait loop was added and did not settle it.
-
-**Trap that wasted three boots:** hand-built test initramfses contained a
-*dynamically linked* busybox (`libc.so.6`, `libcrypt.so.2`,
-`/lib/ld-linux-aarch64.so.1`) with no libc and no loader, so the kernel could
-not exec `/init` at all. mkinitcpio's own images are fine — they ship
-`/lib → usr/lib` and the full closure. Never hand-roll one without the
-libraries, or use a static busybox.
-
-Also: `exec >/dev/tty0 2>&1` **exits the shell** if the node is missing, which
-looks exactly like the init never running. pmOS `tee`s instead, deliberately.
-
-### 12.4 Next steps, in order
-
-1. Give our initramfs a debug channel (D19) — USB CDC-ECM plus a telnet or
-   getty shell, mirroring pmOS's `setup_usb_network`. Without it, every
-   initramfs change is a blind guess, and that is the lesson of §12.2.
-2. With that channel, find why the root mount fails under our file set.
-3. Re-verify the PinePhone (the ⚠ note at the top of this file).
-4. `verify.sh` should assert the image can actually boot — at minimum that the
-   initramfs contains an `/init` whose interpreter and its libraries are all
-   present.

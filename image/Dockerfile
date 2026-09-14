@@ -4,7 +4,7 @@
 #   ./image/build.sh
 #
 # Needs --privileged, because arch-chroot bind-mounts /proc, /sys and /dev to
-# run mkinitcpio inside the rootfs. Everything else avoids loop devices on
+# run configure.sh inside the rootfs. Everything else avoids loop devices on
 # purpose -- `mkfs.ext4 -d` and `mcopy` populate a filesystem image from a
 # directory without mounting it, which Docker Desktop's VM cannot do reliably.
 FROM --platform=linux/arm64 menci/archlinuxarm@sha256:f7c6f64c0f246f41775e01793340c49f8e9abf3991141c25405361d56b100ccb
