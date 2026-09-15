@@ -3,12 +3,22 @@
 How moarchy stops being a PinePhone project and becomes a project that runs on
 phones, of which the PinePhone is one.
 
-Status: **moarchy runs on the Pixel 3a, flashed (2026-09-15).**
-`moarchy-sargo-0.2.2-20260915` was built by `image/build.sh`, verified (108
+Status: **the Pixel 3a is a phone (2026-09-15).**
+`moarchy-sargo-0.2.2-20260915` was built by `image/build.sh`, verified (132
 checks), flashed over fastboot, and booted to the shell from a clean rootfs
 with nothing of postmarketOS's anywhere in it. Our kernel, our device and
 firmware packages, systemd, autologin, sway. There is no initramfs at all
 (D24), and the bootloader confirms the slot is marked successful (D26).
+
+On that image, measured rather than reported: **Wi-Fi, Bluetooth, sound,
+camera, vibration, NFC, calls with voice on them, and SMS in both
+directions** — D27 through D32. All of it from packages, with nothing
+installed by hand. `pacman -S` works too, which it did not before
+(`SECURITY_LANDLOCK`).
+
+What is open on this device is quality rather than absence: a matrix-only
+camera profile with no HueSatMap or look table, and telephony on an operator
+with no circuit-switched fallback, which needs a SIM nobody here has.
 
 **The PinePhone has not been re-verified** since D1–D6 — the ⚠ note below, and
 the one thing here still owed.
