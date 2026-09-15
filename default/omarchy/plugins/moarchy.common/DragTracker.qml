@@ -272,11 +272,14 @@ Item {
     drag.finished(drag.progress, drag.velocity)
   }
 
+  // Fired whether or not the gesture ever latched, unlike `finished`. A
+  // surface's cancel path is where it gets back to rest, and a touch that was
+  // taken away before it latched still has state to clear -- the strip's does,
+  // and losing that was how a cancelled sideways swipe left the pill offset.
   function cancel(): void {
     watchdog.stop()
     if (!drag.active) return
     drag.active = false
-    if (!drag.latched) return
     drag.latched = false
     drag.canceled(drag.startProgress)
   }

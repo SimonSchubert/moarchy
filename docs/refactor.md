@@ -338,28 +338,73 @@ shade, `grim` mid-hold, and the Silent tile lifts by 12% of its own ink
 
 ## F. One drag tracker
 
+**Done, 2026-09-15**, across six input areas on four surfaces: the strip and
+the wallpaper in `moarchy.gestures`, the sheet and the handle strip in
+`moarchy.drawer`, the sheet and the status-bar band in `moarchy.shade`. The
+component is `moarchy.common/DragTracker.qml`.
+
 **F1** There is one component that turns a touch sequence into `progress`,
-`velocity` and a latch, and the four surfaces that need one use it:
-`Service.qml:803` (strip), `Service.qml:951` (home), `Drawer.qml:864` (handle),
-`Shade.qml:1885` (band).
+`velocity` and a latch, and every surface that needs one uses it.
+→ `scripts/style-check.sh` finds `velocity * 0.6` in one file, and that file
+is the tracker
 
-Each re-derives the same machinery: start coordinates, `lastY`/`lastT`, the
-identical smoothing `v * 0.6 + (dy / dt) * 0.4`, a slop latch, a 0..1 clamp, a
-fling threshold, and commit-versus-spring-back.
+**F2** The watchdog comes with it, so a stranded touch cannot park a sheet
+half-open on any of them.
+→ a touch held on the drawer's handle past the watchdog leaves
+`omarchy-shell drawer state` == `open` and `drawer dragTrace` ending `-2`; a
+real cancel ends `-1`
 
-**F2** The watchdog comes with it. Two of the four have one (`Service.qml:672`,
-`Shade.qml:494`) and two do not, so a stranded touch leaves the drawer parked
-where a stranded touch on the shade does not. `Drawer.qml:887` handles cancel
-but not the touch that never ends.
+**F3** Thresholds stay with the surface, not the tracker. `homeCommit`,
+`drawerCommit`, `closeCommit`, `openFraction`, `closeFraction` and the fling
+limits are per-gesture decisions recorded in `gestures.md`, and `finished`
+hands back two numbers and says nothing about what they mean.
+→ `grep -nE 'Commit|Fraction|fling|homeExtra'` over `DragTracker.qml` matches
+only comments, which `scripts/style-check.sh` asserts
 
-**F3** Thresholds stay with the surface, not the tracker. `recentsFull`,
-`homeCommit`, `drawerCommit`, `closeCommit`, `openFraction`, `closeFraction`
-are per-gesture decisions recorded in `gestures.md`; the tracker owns none of
-them.
+**F4** `targetTravel()` survives unchanged in meaning: the drawer divides by
+its own `closeTravel` and the strip by `pullTravel`, and the tracker takes the
+travel as an input rather than choosing it.
+→ `grep -nE 'closeTravel|sheetHeight|pullTravel|screen\.height'` over
+`DragTracker.qml` matches only comments
 
-**F4** `targetTravel()` (`Service.qml:151`) survives unchanged in meaning: the
-drawer divides by its own `closeTravel` and the strip by `pullTravel`, and the
-tracker takes the travel as an input rather than choosing it.
+**F5** The tracker publishes both a clamped `progress` and an unclamped
+`travelled`. A6's second stop is *past* a full sheet, at pull 1.15, so a
+tracker that clamped would leave every sheet working and the home gesture
+unreachable — which is the shape of defect that is found by hand a week later
+rather than by a check.
+→ `omarchy-shell gestures status` mid-drag reports `pull` above 100 when the
+finger is past a full sheet
+
+**F6** The tracker publishes; it never assigns another surface's `progress` and
+never reaches for the host. The gestures plugin drives the drawer through a
+direct object reference frame by frame, and a shared component that went
+through `shell.callIfLoaded` would marshal a string per touch event on the one
+path that cannot afford it.
+→ `grep -nE 'panelLoaders|shell\.|execDetached|Quickshell\.'` over
+`DragTracker.qml` matches only comments
+
+**F7** Latching and moving are separate. A surface whose whole area is a
+handle — the drawer's grab bar, the shade's band — claims the gesture on the
+press, because `dragging` from the touch is what keeps the shade's input mask
+off and the drawer's `opened` honest for the length of the pull; it still
+crosses a slop before anything moves. Collapsing the two lets a 2px wobble on
+the status bar start opening the shade.
+
+### Still open
+
+The drawer's handle commits on distance alone where its sheet also takes a
+fling (`gestures.md` A3). The two are separate tracker instances, which is what
+lets them differ; whether the handle *should* differ is a real question and
+not one a refactor may answer (G4).
+
+The four-line quartet each control on a sheet opts into —
+`onPressed`/`onPositionChanged`/`onReleased`/`onCanceled` — is written out
+eight times in `Shade.qml` and four in `Drawer.qml`. A control that omits it
+silently cannot be dragged, which is a live failure mode and not a tidiness
+question. A sheet-wide handler cannot replace it: `Drawer.qml` and `Shade.qml`
+both record, from measurement, that a `DragHandler` over the content gets one
+translation event per gesture because every content `MouseArea` holds the
+exclusive grab.
 
 ---
 
@@ -404,7 +449,14 @@ Ordered by value over risk, not by section number.
    E9 unverified.* **§E4, E5** and the last two plugins remain: E4 needs a
    singleton mechanism nothing has tested, E5 and the two files need the
    session that owns them.
-6. **§F** — the largest win and the largest risk; last, on top of a green G1.
+6. **§B6** — the layer rule, and the two defects on either side of it.
+   *Done 2026-09-15.*
+7. **§F** — the largest win and the largest risk; last, on top of a green G1.
+   *Done 2026-09-15*, in the order shade, drawer, gestures: the shade first
+   because it is the only surface exercising both latch directions, a non-zero
+   start, a freeze-on-begin and a hand-over, so it proves the component before
+   anything irreversible; the gestures plugin last because every `gestures.md`
+   criterion runs through it.
 
 **Verified on the device, 2026-09-07** (192.168.0.18, plugin and bins deployed
 into `/usr/share/moarchy` and `/usr/lib/moarchy/bin`, shell restarted through

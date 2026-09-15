@@ -66,6 +66,7 @@ import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
 import "../moarchy.common/ShellApps.js" as ShellApps
+import "../moarchy.common" as Shared
 
 Item {
   id: root
@@ -257,14 +258,23 @@ Item {
   }
 
   // ---------------------------------------------------------- shared state
-  property bool tracking: false
-  property real startX: 0
-  property real startY: 0
-  property real dx: 0
-  property real dy: 0
-  property real velocity: 0
-  property real lastY: 0
-  property real lastT: 0
+  //
+  // Two surfaces drag the same sheet -- the strip and the wallpaper -- and
+  // each has a DragTracker of its own, because each keeps its own origin (a
+  // touch on one must not clobber the other's) and the wallpaper has no second
+  // stop past the sheet. What they share is everything below, which is read by
+  // the pill, by commit(), by homeArmed and by status().
+  //
+  // `lastDrag` is whichever of them the current gesture belongs to, set on
+  // press and cleared by reset(). Keyed on that rather than on `active` so the
+  // numbers survive the release: the commit decision runs between the finger
+  // lifting and reset(), and an alias that went to 0 at the lift would decide
+  // every gesture as a zero-travel one.
+  property var lastDrag: null
+  readonly property bool tracking: root.lastDrag !== null
+  readonly property real dx: root.lastDrag ? root.lastDrag.dx : 0
+  readonly property real dy: root.lastDrag ? root.lastDrag.dy : 0
+  readonly property real velocity: root.lastDrag ? root.lastDrag.velocity : 0
 
   // Whether this gesture has latched onto the drawer: "none" or "drawer".
   // Latched on the first clearly-upward movement and held for the rest of the
@@ -293,8 +303,10 @@ Item {
   // a sheet back as well as pull it up.
   property real dragStartPull: 0
 
-  // The live pull, in units of the sheet's height (targetTravel()).
-  property real pull: 0
+  // The live pull, in units of the sheet's height (targetTravel()). The
+  // tracker's *unclamped* travel, because A4's second stop is past 1.0 and a
+  // clamped one cannot reach it.
+  readonly property real pull: root.lastDrag ? root.lastDrag.travelled : 0
 
   // Where home commits for *this* drag: 85% of the sheet, or one homeExtra
   // past wherever the drag began, whichever is further up.
@@ -976,38 +988,96 @@ Item {
 
   // Back to rest. Every path out of a gesture goes through this.
   function reset(): void {
-    watchdog.stop()
-    root.tracking = false
-    // After `tracking = false`, so the pill's Behavior is live again and a
-    // shake that was in flight springs back to centre instead of snapping
-    // there. holdFired is deliberately NOT cleared here: the release path has
-    // already read it by the time this runs, and clearing it on the way out
-    // would leave the flag false for a touch that has not started yet. The
-    // next press retires it (C3), which is L2's correction over again.
+    // Clearing `lastDrag` retires `tracking`, `pull`, `velocity`, `dx` and
+    // `dy` in one assignment, which is what they were zeroed one by one for.
+    // Before cancelHold(), so the pill's Behavior is live again and a shake
+    // that was in flight springs back to centre instead of snapping there.
+    //
+    // holdFired is deliberately NOT cleared here: the release path has already
+    // read it by the time this runs, and clearing it on the way out would
+    // leave the flag false for a touch that has not started yet. The next
+    // press retires it (C3), which is L2's correction over again.
+    root.lastDrag = null
     root.cancelHold()
     root.dragMode = "none"
     root.pendingMode = "none"
     root.dragSource = ""
     root.dragTarget = null
     root.dragStartPull = 0
-    root.pull = 0
-    root.velocity = 0
-    root.dx = 0
-    root.dy = 0
+  }
+
+  // A2-A4, A6. What a release on the strip means, in one place rather than in
+  // the strip's own handler: travel past the home stop goes home, and below it
+  // the sheet commits on travel or on a fling in either direction.
+  //
+  // Distance alone decides home. A fling may never carry the drag past a stop
+  // the finger did not reach, or the destination stops being predictable.
+  function releaseStrip(): void {
+    if (root.pull >= root.homeThreshold()) {
+      root.releaseTarget(false)
+      root.run("home")
+    } else {
+      root.releaseTarget(root.velocity >= root.fling
+        || (root.velocity > -root.fling && root.pull >= root.drawerCommit))
+    }
   }
 
   // A touch sequence normally ends in released or canceled, but a compositor
   // restart or a lost seat can strand one mid-gesture. Nothing dangerous
   // happens if it does -- no surface here grows, so input is never trapped --
   // but a sheet would sit parked half-open with nothing left to finish it.
-  Timer {
-    id: watchdog
-    interval: 4000
-    onTriggered: {
-      // A dropped touch changed nothing, so the sheet goes back where it was.
-      if (root.dragMode !== "none") root.releaseTarget(false)
-      root.reset()
-    }
+  //
+  // It is DragTracker's now, and arrives with it on all four surfaces rather
+  // than on the two that remembered (F2).
+  function dropDrag(): void {
+    // A dropped touch changed nothing, so the sheet goes back where it was.
+    if (root.dragMode !== "none") root.releaseTarget(false)
+    root.reset()
+  }
+
+  // A6. The strip continues an already-open sheet rather than restarting it,
+  // so a second drag runs on into the home band. resolveTarget() reads
+  // dragSource to decide that, which is why both are set before this is.
+  Shared.DragTracker {
+    id: stripDrag
+    travel: root.targetTravel()
+    openDirection: -1
+    latchAxis: "up"
+    // B2. A sideways swipe on this strip is a different gesture and must never
+    // latch this one, however far the thumb's arc wanders vertically.
+    axisDominant: true
+    slop: root.slop
+    // C3. A hold that has fired takes the rest of the touch with it: the agent
+    // is on its way and the sheets are already swept, so a finger that wanders
+    // afterwards must not also arrive at the drawer it just put away.
+    latchable: !root.holdFired && root.dragTarget !== null
+               && root.pendingMode !== "none"
+    startFrom: root.dragStartPull
+
+    onBegan: root.dragMode = root.pendingMode
+    onMoved: p => root.setTargetProgress(stripDrag.travelled)
+    onFinished: (p, v) => root.releaseStrip()
+    onCanceled: from => root.dropDrag()
+  }
+
+  // D. The wallpaper raises the same sheet with the same rule and has no
+  // second stop: a home screen has nowhere further to go.
+  Shared.DragTracker {
+    id: homeDrag
+    travel: root.targetTravel()
+    openDirection: -1
+    latchAxis: "up"
+    axisDominant: true
+    slop: root.slop
+    latchable: root.dragTarget !== null && root.dragStartPull < 1
+    startFrom: root.dragStartPull
+
+    onBegan: root.dragMode = "drawer"
+    onMoved: p => root.setTargetProgress(homeDrag.travelled)
+    onFinished: (p, v) => root.releaseTarget(
+      root.velocity >= root.fling
+      || (root.velocity > -root.fling && root.pull >= root.drawerCommit))
+    onCanceled: from => root.dropDrag()
   }
 
   // Lets the wiring be tested without a finger:
@@ -1228,15 +1298,6 @@ Item {
 
       onPressed: pts => {
         if (pts.length === 0) return
-        root.startX = pts[0].sceneX
-        root.startY = pts[0].sceneY
-        root.lastY = pts[0].sceneY
-        root.lastT = Date.now()
-        root.dx = 0
-        root.dy = 0
-        root.pull = 0
-        root.velocity = 0
-        root.tracking = true
         root.dragMode = "none"
         root.dragTarget = null
 
@@ -1264,90 +1325,44 @@ Item {
         // every press and cancelled by the first pixel past the slop, so the
         // cost to a swipe is a timer that never reaches 500ms.
         root.armHold()
-        watchdog.restart()
+
+        root.lastDrag = stripDrag
+        stripDrag.press(pts[0].sceneX, pts[0].sceneY)
       }
 
       onUpdated: pts => {
         if (pts.length === 0 || !root.tracking) return
-        var y = pts[0].sceneY
-        // Declared here, not inside the latched branch below. `var` is
-        // function-scoped, so a declaration inside the `if` is hoisted but
-        // stays undefined until that branch runs -- and `root.lastT = now` at
-        // the bottom then assigns undefined to a double on every un-latched
-        // move. QML rejects it and logs, so lastT kept a stale value and the
-        // first latched frame measured its velocity over the wrong interval.
-        var now = Date.now()
-        root.dx = pts[0].sceneX - root.startX
-        root.dy = y - root.startY
+        stripDrag.move(pts[0].sceneX, pts[0].sceneY)
 
-        // C3. Travel cancels the hold, on either axis and in either direction.
-        // The latch below cannot do this job: a sideways swipe never latches --
-        // dragMode stays "none" for the whole of B -- so a thumb that has
-        // crossed half the screen would still be sitting on a running timer.
+        // C3. Travel cancels the hold, on either axis and in either direction,
+        // and it cannot be the tracker's latch that does it: a sideways swipe
+        // never latches -- the whole of B runs un-latched -- so a thumb that
+        // had crossed half the screen would still be sitting on a live timer.
+        // The tracker publishes dx and dy before it decides anything, which is
+        // what makes them readable here.
         if (Math.abs(root.dx) > root.slop || Math.abs(root.dy) > root.slop)
           root.cancelHold()
-
-        // B2. Re-tested every frame rather than only at the first movement, so
-        // a thumb that starts its arc sideways still latches once the upward
-        // travel dominates, instead of falling through to a workspace switch.
-        //
-        // C3. A hold that has fired takes the rest of the touch with it: the
-        // agent is already on its way and the sheets have already been swept,
-        // so a finger that wanders afterwards must not also arrive at the
-        // drawer it just put away.
-        if (root.dragMode === "none" && !root.holdFired
-            && root.dragTarget && root.pendingMode !== "none"
-            && root.dy < -root.slop && Math.abs(root.dy) > Math.abs(root.dx)) {
-          root.dragMode = root.pendingMode
-        }
-
-        if (root.dragMode !== "none") {
-          var dt = Math.max(1, now - root.lastT)
-          // Smoothed, so one jittery frame at the end of a slow drag cannot
-          // read as a fling. Negative is upward, so the sign is flipped to
-          // make "faster open" positive.
-          root.velocity = root.velocity * 0.6 + ((root.lastY - y) / dt) * 0.4
-          root.pull = root.dragStartPull - root.dy / root.targetTravel()
-          root.setTargetProgress(root.pull)
-        }
-        root.lastY = y
-        root.lastT = now
-        watchdog.restart()
       }
 
       onReleased: pts => {
         if (!root.tracking) return
-        if (root.dragMode !== "none") {
-          // A2-A4. Distance alone decides home: a fling may never carry the
-          // drag past a stop the finger did not reach, or the destination
-          // stops being predictable.
-          //
-          // Below it the release is the *same expression* the home screen's
-          // own drag uses -- travel past the commit, or a fling in either
-          // direction overriding it. That is the whole of "the same logic":
-          // one ratio, one commit, one fling rule, with a second stop on top
-          // that only the strip has.
-          if (root.pull >= root.homeThreshold()) {
-            root.releaseTarget(false)
-            root.run("home")
-          } else {
-            root.releaseTarget(root.velocity >= root.fling
-              || (root.velocity > -root.fling && root.pull >= root.drawerCommit))
-          }
-        } else if (!root.holdFired) {
-          // C3. Reached only when the hold did not fire. A fired one has
-          // consumed the press, and the lift after it means nothing -- which
-          // is what keeps a 500ms press that drifted 6px from also changing
-          // workspace on the way out.
-          root.commit()
-        }
+        // Read before release(), which clears it.
+        var latched = stripDrag.latched
+        // Commits through onFinished when it latched; A2-A4 live in
+        // releaseStrip().
+        stripDrag.release()
+        // C3. Reached only when the hold did not fire. A fired one has
+        // consumed the press, and the lift after it means nothing -- which is
+        // what keeps a 500ms press that drifted 6px from also changing
+        // workspace on the way out.
+        if (!latched && !root.holdFired) root.commit()
         root.reset()
       }
 
-      onCanceled: pts => {
-        if (root.dragMode !== "none") root.releaseTarget(false)
-        root.reset()
-      }
+      // dropDrag() is the tracker's canceled handler, so this needs no body
+      // beyond handing the cancel on -- including the stranded case, which
+      // arrives the same way.
+      onCanceled: pts => stripDrag.cancel()
     }
   }
 
@@ -1418,73 +1433,35 @@ Item {
       anchors.fill: parent
       maximumTouchPoints: 1
 
-      // Its own start coordinates, because this surface and the strip can both
-      // be mid-gesture in principle and sharing them would let one clobber the
-      // other's origin.
-      property real homeStartY: 0
-      property real homeStartX: 0
-      property bool homeDragging: false
-
+      // Its own tracker, because this surface and the strip can both be
+      // mid-gesture in principle and one origin shared between them would let
+      // either clobber the other's.
       onPressed: pts => {
         if (pts.length === 0) return
-        homeStartX = pts[0].sceneX
-        homeStartY = pts[0].sceneY
-        homeDragging = false
-        root.lastY = pts[0].sceneY
-        root.lastT = Date.now()
-        root.velocity = 0
-        root.tracking = true
         root.dragMode = "none"
         root.pendingMode = "drawer"
         // Set before resolveTarget, which reads it to decide where this drag
         // starts from.
         root.dragSource = "home"
         root.resolveTarget("moarchy.drawer")
-        watchdog.restart()
+
+        root.lastDrag = homeDrag
+        homeDrag.press(pts[0].sceneX, pts[0].sceneY)
       }
 
       onUpdated: pts => {
-        if (pts.length === 0 || !root.tracking) return
-        var y = pts[0].sceneY
-        var now = Date.now()
-        root.dx = pts[0].sceneX - homeStartX
-        root.dy = y - homeStartY
-
-        if (!homeDragging && root.dragTarget && root.dragStartPull < 1
-            && root.dy < -root.slop && Math.abs(root.dy) > Math.abs(root.dx)) {
-          homeDragging = true
-          root.dragMode = "drawer"
-        }
-
-        if (homeDragging) {
-          var dt = Math.max(1, now - root.lastT)
-          root.velocity = root.velocity * 0.6 + ((root.lastY - y) / dt) * 0.4
-          root.pull = root.dragStartPull - root.dy / root.targetTravel()
-          root.setTargetProgress(root.pull)
-        }
-        root.lastY = y
-        root.lastT = now
-        watchdog.restart()
+        if (pts.length > 0) homeDrag.move(pts[0].sceneX, pts[0].sceneY)
       }
 
+      // D4. Sideways and downward do nothing here, so there is no commit()
+      // fallback -- an un-latched gesture on the wallpaper simply ends.
       onReleased: pts => {
         if (!root.tracking) return
-        // D4. Sideways and downward do nothing here, so there is no commit()
-        // fallback -- an un-latched gesture on the wallpaper simply ends.
-        if (homeDragging) {
-          var open = root.velocity >= root.fling
-                     || (root.velocity > -root.fling && root.pull >= root.drawerCommit)
-          root.releaseTarget(open)
-        }
-        homeDragging = false
+        homeDrag.release()
         root.reset()
       }
 
-      onCanceled: pts => {
-        if (homeDragging) root.releaseTarget(false)
-        homeDragging = false
-        root.reset()
-      }
+      onCanceled: pts => homeDrag.cancel()
     }
   }
 

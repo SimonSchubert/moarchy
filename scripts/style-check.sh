@@ -224,6 +224,42 @@ else
   no "shared code written out again (E7)" "$e7"
 fi
 
+# --- F1-F4, F6: one drag tracker, and it stays one -------------------------
+# docs/refactor.md §F. Four surfaces each re-derived the same machinery and two
+# of the four remembered a watchdog. The component is one file now; these are
+# what stop it becoming five again, and what stop it growing the things it
+# deliberately does not own.
+#
+# Greps rather than behaviour, and that is the genre: §F is a contract about
+# the shape of the code. What the gestures still *do* is bin/moarchy-selftest
+# --gestures, which §G makes the acceptance condition for the whole section.
+printf '\nF. one drag tracker\n'
+TRACKER="$PLUGINS/moarchy.common/DragTracker.qml"
+f=""
+[[ -f $TRACKER ]] || f+="  $TRACKER is missing; every surface below has nothing to call"$'\n'
+
+# F1. The smoothing is the fingerprint: one copy, in the tracker.
+smoothing=$(grep -rln 'velocity \* 0\.6' "$PLUGINS" | grep -v 'moarchy.common/DragTracker.qml' || true)
+[[ -n $smoothing ]] && f+="  the velocity smoothing is written out again in:"$'\n'"$smoothing"$'\n'
+
+# F3. Thresholds belong to the surface that decided them.
+thresholds=$(grep -nE 'Commit|Fraction|fling|homeExtra' "$TRACKER" | grep -v '^\s*[0-9]*:\s*//' | grep -vE ':\s*//' || true)
+[[ -n $thresholds ]] && f+="  the tracker names a threshold (F3):"$'\n'"$thresholds"$'\n'
+
+# F4. Travel is an input, never a choice.
+travel=$(grep -nE 'closeTravel|sheetHeight|pullTravel|screen\.height' "$TRACKER" | grep -vE ':\s*//' || true)
+[[ -n $travel ]] && f+="  the tracker picks its own travel (F4):"$'\n'"$travel"$'\n'
+
+# F6. Nothing forks or marshals at touch-event rate.
+host=$(grep -nE 'panelLoaders|shell\.|execDetached|Quickshell\.' "$TRACKER" | grep -vE ':\s*//' || true)
+[[ -n $host ]] && f+="  the tracker reaches for the host (F6):"$'\n'"$host"$'\n'
+
+if [[ -z $f ]]; then
+  ok "the drag machinery exists once, owns no threshold and no travel (F1, F3, F4, F6)"
+else
+  no "the drag tracker has drifted (F)" "$f"
+fi
+
 # --- gestures.md M4: a shell app's tile wears its own glyph -------------------
 # Not a style.md section. A shell app's window carries the shell process's own
 # app id, so the drawer's shelf has no desktop entry to take an icon from and
