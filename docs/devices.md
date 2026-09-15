@@ -649,50 +649,52 @@ ships the PCM numbers it needs.
 > not install `depends` either, so a library a package links against has to be
 > in the container too.
 
-**D30** *Added 2026-09-15.* **The camera works; its colour does not.** Both
-sensors enumerate (`imx363` rear, `imx355` front, `lc898219xi` focus actuator,
-`qcom-camss` bound, `/dev/video0-13`), `megapixels` ships a real device config
-(`google,b4s4-sdm670.conf`) with the full media-controller pipeline, and the
-preview is live and correctly framed and focused. It is heavily green.
+**D30** *Added 2026-09-15, revised the same day.* **The camera works; its
+colour does not, and megapixels 2.1.0 cannot currently be told otherwise.**
+Both sensors enumerate (`imx363` rear, `imx355` front, `lc898219xi` focus
+actuator, `qcom-camss` bound, `/dev/video0-13`), `libmegapixels` ships a real
+device config with the full media-controller pipeline, and the preview is live,
+framed and focused. It is heavily green.
 
-> The package ships `pine64,pinephone,front.dcp` and `...,rear.dcp` — about a
-> megabyte each of DNG camera profile — and for sargo only a `.conf`. Without a
-> colour profile there is no white balance and no colour matrix, and a Bayer
-> mosaic has twice as many green photosites as red or blue, so an uncorrected
-> debayer is green. That is the whole of it: a calibration file, not a driver.
+> **Why green.** `src/process_pipeline.c` falls back to IDENTITY colour
+> matrices and an sRGB forward matrix when it finds no profile. A Bayer mosaic
+> has twice as many green photosites as red or blue, so an uncorrected debayer
+> is green. It is a calibration file, not a driver.
 >
-> Generating one means photographing a colour target and running `dcamprof`.
-> Unbudgeted, and cosmetic next to D29. **?**
-
-**D31** *Added 2026-09-15, measured.* **The modem works, and the only thing
-missing is a SIM.** Shipping `mba.mbn`/`modem.mbn` for Wi-Fi (D27) turned out to
-deliver telephony's hardest prerequisite as a side effect: ModemManager sees a
-real modem.
-
+> **The profile is solved.** `pkgbuilds/moarchy-device-sargo/make-dcp.py`
+> generates `google,b4s4-sdm670,{rear,front}.dcp` from Google's own matrices —
+> read out of a Pixel 3a DNG published on raw.pixls.us under CC0, because every
+> DNG the stock camera wrote carries `ColorMatrix1/2` in its tags. That DNG has
+> no `ForwardMatrix`, so the script derives both per the DNG 1.4 spec
+> (`FM = CA(W→D50) · CM⁻¹ · diag(CM·W)`, Bradford adaptation) and asserts the
+> spec's own property — that `FM · [1,1,1]` is the XYZ of D50 — before writing.
+> Generated rather than committed: a `.dcp` is a small TIFF whose payload is
+> nine numbers twice over, and as a binary the only reviewable part would be
+> unreadable in a diff.
+>
+> **What blocks it is two bugs in megapixels' own lookup,** in 2.1.0 and still
+> on upstream `master`:
+>
+> ```c
+> // 1. hunts for a .conf while looking for a calibration profile,
+> //    and omits the sensor from the name
+> snprintf(conffile, maxlen, "%s/megapixels/config/%s.conf", config_home, model);
+>
+> // 2. walks the BYTES of the first format string, not the array of paths
+> for (const char *fmt = paths[0]; fmt; fmt++) {
 > ```
-> /org/freedesktop/ModemManager1/Modem/0 [QUALCOMM INCORPORATED]
-> firmware revision: MPSS.AT.4.0.2.c4.1-00145-SDM670_GEN_PACK-1.466700.3
-> imei: 359678094838687     plugin: qcom-soc     primary port: qrtr0
-> supported: gsm-umts, lte / cdma-evdo, lte / lte
-> state: failed            failed reason: sim-missing
-> ```
 >
-> `qrtr-lookup` lists the modem's QMI services including Voice, WMS and the
-> embedded filesystem service. Slot 1 (the tray) is empty; slot 2 is the eSIM,
-> reporting the placeholder ICCID `8900000000000000003` — hardware present, no
-> profile. **Nothing else about telephony is testable until a SIM goes in.**
+> The second one matches `~/.config` — a directory — and stops, so
+> `/usr/share/megapixels/config/*.dcp` is never reached. The observable
+> symptom is megapixels printing `Found calibration file at .config`.
 >
-> Do NOT probe this with `mmcli --set-primary-sim-slot`. Switching slots on a
-> modem with no SIM wedges its SIM subsystem: ModemManager recreates the modem
-> on restart, per its own journal, and `mmcli -L` still says "No modems were
-> found" while the remoteproc stays `running` and QRTR still lists every
-> service. A reboot clears it; a `systemctl restart ModemManager` does not.
->
-> §10's claim that telephony needs "q6voiced and hexagonrpcd" is half wrong and
-> is corrected there: `hexagonrpcd` is the sensors/FastRPC daemon, not a
-> telephony one. What telephony actually needs, in order, is a SIM, then
-> `q6voiced` for call audio, then `81voltd` for any network without a
-> circuit-switched fallback.
+> The profiles are shipped at the correct path anyway: that is where they
+> belong, and where a fixed megapixels will look. **Open:** whether to carry a
+> patched megapixels, or route around it — giving the app a working directory
+> of `/usr/share/megapixels` makes upstream's own first path,
+> `config/%s,%s.dcp`, resolve to our files before the broken loop runs, which
+> is the least invasive workaround and needs no patch. Reporting it upstream
+> costs nothing and should happen either way. **?**
 
 **D23** **There is no console on this device, and there cannot be one.** ABL
 strips any `console=` from the boot image and appends its own `console=null`.
