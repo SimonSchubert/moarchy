@@ -740,10 +740,22 @@ none
 
 ## K. One connect-list
 
-**K1** Wi-Fi and Bluetooth share their skeleton. 273 of about 600 normalised
-code lines are identical and in the same order: a list of things to connect to,
-a row that expands, an error line under it, a field for a secret. Two screens,
-one shape, and the second was written by copying the first.
+**K1** Wi-Fi and Bluetooth share their skeleton: a list of things to connect to,
+a row that expands, an error line under it, a field for a secret. The second was
+written by copying the first.
+
+> **Not started, and it wants the phone.** Re-measured after §I3 and §J2 took
+> their share: 194 identical in-order code lines out of 560 and 575, but in
+> **19 runs of 6 to 22 lines** rather than one block — the row's head, the two
+> action buttons, the error line, the expanded-height arithmetic. A component
+> holding those takes the model, the row's identity field (`ssid` against
+> `address`), the secret's label, three or four action signals and the detail
+> text, which is around ten properties; the honest net is somewhere between 30
+> and 60 lines, against the widest behavioural surface of anything in this file
+> and two screens that `settings.md` covers in detail.
+>
+> That trade is worth making with the device attached and not before. It is the
+> one section here where the risk is larger than the diff.
 → `grep -c 'Shared.ConnectList' moarchy.wifi/Wifi.qml
 moarchy.bluetooth/Bluetooth.qml` is 1 apiece
 
@@ -924,7 +936,25 @@ Ordered by value over risk, not by section number.
     above; they go whenever the phone is not needed for something else.
 13. The code map in `docs/README.md`, and the durable content §B6 is holding.
     Before this file can be deleted, not after: `refactor.md` is the only record
-    of the layer rule, and this file has an end.
+    of the layer rule, and this file has an end. *Done 2026-09-15.*
+
+**What the second pass actually did, 2026-09-15.** §N, §H1–H3 and H5, §I3, §B1,
+§B2, §I1–I2, §J1a, §J2, §J6 and §J8 landed; §H4, §I4, §E5, §J1 and §J7 are
+withdrawn with the measurement that withdrew each; §J3–J5, §K, §L and §M are not
+started.
+
+Five withdrawals out of twenty is the number worth keeping. Each of the five was
+written from a survey that matched on *shape* — three inline slop tests, five
+`open()` guards, eight colour blocks, two margins, two JS libraries — and in each
+case reading the code showed the shapes were not copies. A refactor spec written
+from greps will overstate its own scope; the ones that survived were the ones
+where the duplicated text was identical rather than merely similar.
+
+The four that paid best were not the four that looked biggest: the twelve drag
+quartets (a failure mode that was invisible on screen), the four sheet headers,
+the five sheet lists (which turned up a defect in four screens), and 43 injected
+properties nothing read. Between them, about 250 code lines and five checks that
+did not exist.
 
 **Verified on the device, 2026-09-07** (192.168.0.18, plugin and bins deployed
 into `/usr/share/moarchy` and `/usr/lib/moarchy/bin`, shell restarted through
