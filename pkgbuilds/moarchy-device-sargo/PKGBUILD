@@ -30,7 +30,8 @@ pkgver=$_ver
 # yesterday's file (it compares pkgver-pkgrel against PKGDEST) and a phone in
 # the field sees no upgrade to take.
 # 3: gained moarchy-qcom-modem, which is what gives this phone Wi-Fi (D27).
-pkgrel=3
+# 4: gained bootmac, which is what gives this phone Bluetooth (D28).
+pkgrel=4
 pkgdesc="Google Pixel 3a (sargo) hardware support for moarchy"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
@@ -77,6 +78,12 @@ conflicts=('moarchy-device')
 # against the real database rather than read off the upstream git tree, which
 # is the mistake that cost this device its GPU twice.
 #
+# bootmac is Bluetooth, for the same shape of reason moarchy-qcom-modem is
+# Wi-Fi: WCN3990's controller has no BD address Linux can see, and bluez does
+# not list an adapter that has none. hci0 exists, the firmware downloads, the
+# daemon runs, and `bluetoothctl` says "No default controller available".
+# Measured on the handset, and measured fixed (D28).
+#
 # qbootctl is what stops this phone bricking itself. An A/B bootloader counts
 # down a retry counter on every handoff and marks the slot unbootable at zero
 # unless the OS calls back; measured here as slot-retry-count:a:0 and
@@ -89,6 +96,7 @@ depends=(
   'linux-firmware-qcom'
   'firmware-moarchy-sargo'
   'moarchy-qcom-modem'
+  'bootmac'
   'qbootctl'
 )
 

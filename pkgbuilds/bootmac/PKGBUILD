@@ -1,0 +1,152 @@
+# Stable MAC addresses for both radios -- and on this phone, the thing that
+# makes Bluetooth exist at all.
+#
+# WHAT IT ACTUALLY FIXES, because "sets a MAC address" sounds cosmetic:
+#
+# WCN3990 has no BD address Linux can see. The vendor keeps it outside the
+# filesystem and `sdm670-google-common.dtsi`'s bluetooth node carries no
+# `local-bd-address`, so hci0 comes up with nothing. Bluez treats an adapter
+# with no address as UNCONFIGURED rather than broken, and an unconfigured
+# adapter is not in the index list that `btmgmt info` and `bluetoothctl` read.
+#
+# The result is a failure that points nowhere. Measured on the handset before
+# this package existed:
+#
+#   /sys/class/bluetooth/hci0            <- exists
+#   dmesg: QCA Downloading qca/crbtfw21.tlv
+#   dmesg: QCA Downloading qca/crnv21.bin
+#   dmesg: QCA setup on UART is completed  <- firmware loaded fine
+#   rfkill: hci0 Bluetooth, soft no, hard no   <- not blocked
+#   systemctl is-active bluetooth: active      <- daemon running
+#   btmgmt info: Index list with 0 items       <- and yet nothing
+#   bluetoothctl show: No default controller available
+#
+# Every component reports success and the radio is missing. Nothing in that
+# picture contains the word "address".
+#
+# One `btmgmt --index 0 public-addr 02:00:ff:14:0f:1b` turned it into a powered
+# Primary controller that discovered ten devices, which is what makes this a
+# verified fix rather than a plausible one (devices.md D27).
+#
+# Wi-Fi has the same gap with a milder symptom:
+#
+#   ath10k_snoc 18800000.wifi: invalid MAC address; choosing random
+#
+# so wlan0 associates, but the phone is a different device to the router on
+# every boot -- no DHCP reservation, no MAC-based rule, and a new lease each
+# time. That cost an hour of this phone being "lost" when it came back from a
+# reboot on a new address.
+#
+# bootmac does NOT fix that, and package() deletes its Wi-Fi udev rule for
+# reasons measured on the device -- see the note there. Bluetooth is the half
+# that works, and it is the half that matters.
+#
+# --- How it decides what the address is -------------------------------------
+#
+# sha256 of the bootloader's `androidboot.serialno` plus "-WLAN" or "-BT",
+# truncated and prefixed `0200` -- the locally-administered bit, which is the
+# correct thing to set when you are making one up. So it is stable across
+# reboots and reflashes, and differs between two handsets. It falls back to
+# /etc/machine-id where there is no serial number, which IS stable across
+# reboots but changes on reflash; sargo has the serial, so this phone gets the
+# good branch.
+#
+# --- Not device-scoped ------------------------------------------------------
+#
+# postmarketOS gives this to every Qualcomm device through `soc-qcom`, and
+# nothing in it is sargo-specific. It is in `moarchy-device-sargo`'s depends
+# rather than the base package set because a PinePhone has a real MAC in its
+# EEPROM and does not need it.
+
+. "$startdir/../../scripts/manifest.sh"
+_url=$(manifest_get bootmac url) || return 1
+_ref=$(manifest_get bootmac ref) || return 1
+_ver=$(manifest_get bootmac version) || return 1
+
+pkgname=bootmac
+pkgver=$_ver
+pkgrel=1
+pkgdesc="A stable Bluetooth address at boot, for a controller with none of its own"
+arch=('any')
+url="$_url"
+license=('GPL-3.0-or-later')
+
+# All five are things the script actually runs, checked against it rather than
+# copied from Alpine's APKBUILD:
+#   btmgmt      bluez-utils            -- sets the BD address (the whole point)
+#   hciconfig   bluez-deprecated-tools -- brings hci0 down first; Arch moved it
+#                                         out of bluez-utils, so naming
+#                                         bluez-utils alone gets a script that
+#                                         fails on its third line
+#   rfkill, logger  util-linux
+#   ip          iproute2
+#   sha256sum   coreutils
+depends=('bash' 'bluez-utils' 'bluez-deprecated-tools' 'util-linux' 'iproute2'
+         'coreutils' 'gawk')
+makedepends=('meson' 'ninja')
+
+source=("$pkgname-$_ver.tar.gz::$_url/-/archive/$_ref/$pkgname-$_ref.tar.gz")
+sha256sums=('679779ef447b020115776a4f4adf2170f9f1f593cf8ee1fd6bb969e2f8fedf27')
+
+build() {
+  # -Dsystemd_units=true rather than letting meson decide from systemd.pc.
+  # Without it the units install only if the BUILDER happens to have systemd
+  # installed -- so the phone's behaviour would depend on a package in the
+  # container, and the way that shows up is udev firing
+  # `bootmac@bluetooth.service` that does not exist.
+  arch-meson "$pkgname-$_ref" build -Dsystemd_units=true
+  meson compile -C build
+}
+
+package() {
+  DESTDIR="$pkgdir" meson install -C build --no-rebuild
+
+  # The Wi-Fi rule is REMOVED, and this is a measurement rather than caution.
+  #
+  # bootmac runs and reports success -- "setting WLAN MAC to 02:00:f4:bd:25:e7
+  # ... WLAN MAC address configured successfully" is in the journal -- and then
+  # `ip -br link` shows 6a:d2:e6:40:ab:7a. NetworkManager applies its own
+  # cloned MAC when it activates the connection, which is after udev, so the
+  # address bootmac sets is overwritten every time.
+  #
+  # So the Wi-Fi half changes nothing it claims to change, and a udev rule that
+  # takes an interface down and up for no effect is worth deleting rather than
+  # shipping. Bluetooth has no such layer above it and is why this package is
+  # here at all.
+  #
+  # Making Wi-Fi stable is a NetworkManager setting (wifi.cloned-mac-address),
+  # not a bootmac one, and it is a privacy-versus-convenience decision that
+  # belongs somewhere a person can see it.
+  rm -f "$pkgdir/usr/lib/udev/rules.d/90-bootmac-wifi.rules"
+
+  # The three files that have to be there, asserted rather than assumed: this
+  # package is entirely data -- a script, a udev rule and a template unit --
+  # so there is no compiler to fail if a path moves upstream. A silent
+  # rename here gives a phone with no Bluetooth and a clean build log.
+  local f
+  for f in usr/bin/bootmac \
+           usr/lib/udev/rules.d/90-bootmac-bluetooth.rules \
+           usr/lib/systemd/system/bootmac@.service; do
+    [ -s "$pkgdir/$f" ] || { echo "!! $f was not installed"; return 1; }
+  done
+
+  # The udev rules name the unit by template instance. If upstream ever renames
+  # the unit, the rules and the unit drift apart and nothing runs -- with no
+  # error, because udev is asking systemd for something that is simply absent.
+  grep -q 'bootmac@bluetooth.service' \
+    "$pkgdir/usr/lib/udev/rules.d/90-bootmac-bluetooth.rules" ||
+    { echo "!! the bluetooth rule does not start bootmac@bluetooth.service"; return 1; }
+  # `if`, not `[ -e ... ] && { ... }`: package() runs under set -e, so the
+  # short-circuit form returns 1 in the GOOD case (file correctly absent) and
+  # kills the build.
+  if [ -e "$pkgdir/usr/lib/udev/rules.d/90-bootmac-wifi.rules" ]; then
+    echo "!! the wifi rule is still installed; see the note above"; return 1
+  fi
+
+  # No enable symlink, and that is not an omission: bootmac@.service is a
+  # TEMPLATE with no [Install] section, started by udev when hci0 appears.
+  # Enabling it is neither possible nor wanted -- the udev rule this package
+  # ships is the activation.
+  install -Dm644 "$srcdir/$pkgname-$_ref/LICENSE" \
+    "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

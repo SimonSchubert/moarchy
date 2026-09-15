@@ -519,6 +519,83 @@ rmtfs, tqftpserv), whose two units ship **enabled** by their own symlinks.
 > and no `hci0` at all means something earlier and unguessed. Writing bootmac
 > before asking would be packaging on a hunch.
 
+**D28** *Added 2026-09-15, measured on the handset.* **Bluetooth needs an
+address, and nothing else.** `moarchy-device-sargo` depends on `bootmac`, whose
+udev rule sets `hci0`'s public address from the bootloader's
+`androidboot.serialno` when the controller appears.
+
+> The failure this closes points nowhere. Every component reported success:
+>
+> ```
+> /sys/class/bluetooth/hci0                    exists
+> dmesg: QCA Downloading qca/crbtfw21.tlv      firmware loads
+> dmesg: QCA setup on UART is completed        controller is up
+> rfkill: hci0 Bluetooth  soft no  hard no     not blocked
+> systemctl is-active bluetooth: active        daemon running
+> btmgmt info: Index list with 0 items         ...and no adapter
+> ```
+>
+> WCN3990 has no BD address Linux can see and the DT has no `local-bd-address`,
+> so bluez classes the adapter **unconfigured** — and an unconfigured adapter is
+> not in the index list `bluetoothctl` reads. Nothing in that picture contains
+> the word "address".
+>
+> `btmgmt --index 0 public-addr 02:00:ff:14:0f:1b` turned it into a powered
+> Primary controller that discovered ten devices, and after packaging it the
+> same address came back **by itself across a reboot**. Verified fix, not a
+> plausible one.
+>
+> **`bootmac`'s Wi-Fi half is deliberately not shipped.** It runs, logs
+> `WLAN MAC address configured successfully`, and `ip -br link` then shows a
+> different address: NetworkManager applies its own cloned MAC when it activates
+> the connection, after udev. So `package()` deletes that udev rule. Making the
+> Wi-Fi MAC stable is a NetworkManager setting, not a bootmac one — and it is
+> worth doing, because a phone that takes a new address every boot is a phone
+> you have to hunt for on the LAN. **?**
+
+**D29** *Added 2026-09-15.* **Sound does not work, and it is not a packaging
+problem.** `/proc/asound/cards` is empty; PipeWire has only a Dummy Output.
+
+> ```
+> qcom-q6afe aprsvc:service:4:4: AFE set params failed -110
+> msm8916-wcd-digital-codec 62ec0000.audio-codec: failed to enable mclk -110
+> msm8916-wcd-digital-codec ... probe ... failed with error -110
+> platform sound: deferred probe pending: snd-sm8250: Internal MI2S Playback: codec dai not found
+> ```
+>
+> The ADSP boots (`remoteproc2: remote processor adsp is now up`) and registers
+> its APR audio services. The digital codec then asks the AFE to enable its
+> MCLK — `&lpass_codec` takes `clocks = <&q6afecc LPASS_CLK_ID_INT_MCLK_0>` —
+> and the ADSP never answers. `-110` is ETIMEDOUT at APR's 3-second timeout.
+> Codec probe fails, so the card's DAI link has no codec, so the card is
+> deferred forever and never registers.
+>
+> Two things follow, and only the second is ours to fix cheaply:
+>
+> 1. The AFE timeout is a bring-up bug, above this project's line (§2 — we do
+>    not do bring-up). It belongs upstream at `sdm670-mainline`.
+> 2. **Even once a card exists there is no routing for it.** Arch's
+>    `alsa-ucm-conf` carries `Qualcomm/sdm845` and `sc7180` and no sdm670;
+>    postmarketOS packages `alsa-ucm-conf-qcom-sdm670` from
+>    `gitlab.com/sdm670-mainline/alsa-ucm-conf` at a pinned commit. That one is
+>    a package like any other here, and it is worth having ready so that when
+>    the kernel side lands there is nothing else in the way. **?**
+
+**D30** *Added 2026-09-15.* **The camera works; its colour does not.** Both
+sensors enumerate (`imx363` rear, `imx355` front, `lc898219xi` focus actuator,
+`qcom-camss` bound, `/dev/video0-13`), `megapixels` ships a real device config
+(`google,b4s4-sdm670.conf`) with the full media-controller pipeline, and the
+preview is live and correctly framed and focused. It is heavily green.
+
+> The package ships `pine64,pinephone,front.dcp` and `...,rear.dcp` — about a
+> megabyte each of DNG camera profile — and for sargo only a `.conf`. Without a
+> colour profile there is no white balance and no colour matrix, and a Bayer
+> mosaic has twice as many green photosites as red or blue, so an uncorrected
+> debayer is green. That is the whole of it: a calibration file, not a driver.
+>
+> Generating one means photographing a colour target and running `dcamprof`.
+> Unbudgeted, and cosmetic next to D29. **?**
+
 **D23** **There is no console on this device, and there cannot be one.** ABL
 strips any `console=` from the boot image and appends its own `console=null`.
 Verified from a shell on the handset: with `console=tty0` in the boot image,
@@ -668,8 +745,22 @@ Restated as a checklist, in build order. Each carries its state.
    — a skipped `ConditionPathExists` and a failed firmware load look nothing
    alike and both end as "no Wi-Fi".
 
-   Bluetooth carries no AC here because nothing was changed for it: D27's last
-   paragraph says why, and the next step for it is a measurement, not a build.
+9. **D27–D30 — MEASURED ON THE HANDSET 2026-09-15.** The flashed image was
+   booted and every claim below was read off the device rather than inferred.
+
+   **Works:** Wi-Fi (associated, −55 dBm, `rmtfs`/`tqftpserv` active, all three
+   remoteprocs `running`); Bluetooth (`hci0` a powered Primary controller after
+   `bootmac`, ten devices discovered, survives a reboot); camera (live preview,
+   both sensors); vibration (`drv2624:haptics`, confirmed by hand); NFC
+   (`nfc0`); battery and charger (`qcom-battery`, `pm660-charger`); the Venus
+   decoder (visible to PipeWire); touch, display and GPU.
+
+   **Does not work:** sound and microphone — no card registers at all (D29).
+
+   **Works but wrong:** camera colour (D30).
+
+   The Bluetooth AC that the previous revision of this file declined to write
+   is now written, because the measurement it was waiting for has been taken.
 
 AC 7 was the one that could fail for reasons none of the others predicted,
 which is why it was last and why nothing above it depended on owning a Pixel

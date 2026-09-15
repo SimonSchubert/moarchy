@@ -209,6 +209,35 @@ ref     = "v1.2"
 version = "1.2"
 
 # ---------------------------------------------------------------------------
+# Stable MAC addresses for both radios, which on this SoC is not cosmetic for
+# Bluetooth -- it is the difference between having Bluetooth and not.
+#
+# WCN3990 has no BD address of its own that Linux can see: the vendor keeps it
+# outside the filesystem and sdm670-google-common.dtsi carries no
+# `local-bd-address`. So hci0 probes, downloads qca/crbtfw21.tlv and
+# qca/crnv21.bin, reports "QCA setup on UART is completed" -- and bluez lists
+# ZERO controllers, because an adapter with no address is "unconfigured" rather
+# than broken. `bluetoothctl show` says "No default controller available" and
+# nothing anywhere says the word address.
+#
+# Measured on the handset 2026-09-15: one `btmgmt public-addr` took it from
+# "Index list with 0 items" to a powered Primary controller that discovered ten
+# devices. This package is that command, made to survive a reboot.
+#
+# Wi-Fi has the same gap with a milder symptom -- `ath10k_snoc ... invalid MAC
+# address; choosing random`, so wlan0 works but is a different device to the
+# router on every boot. The same tool fixes both, which is why it is one
+# package and one pin.
+#
+# postmarketOS's, and every Qualcomm device there depends on it through
+# soc-qcom. A tag, verified by its sha256 in the PKGBUILD.
+# ---------------------------------------------------------------------------
+[bootmac]
+url     = "https://gitlab.postmarketos.org/postmarketOS/bootmac"
+ref     = "v0.7.1"
+version = "0.7.1"
+
+# ---------------------------------------------------------------------------
 # AUR packages with no aarch64 binary anywhere -- neither in Arch Linux ARM nor
 # in Omarchy's own repo, which has no aarch64 tree at all
 # (pkgs.omarchy.org/stable/aarch64/omarchy.db -> 404).

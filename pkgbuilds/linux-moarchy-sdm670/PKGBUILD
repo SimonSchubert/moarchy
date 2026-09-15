@@ -24,8 +24,31 @@
 #   TMPFS_POSIX_ACL, TMPFS_XATTR, AUTOFS_FS, EXT4_FS
 #
 # All present. FHANDLE and DEVTMPFS_MOUNT are the two that usually bite and
-# both are set, so this config needs no fragment of ours. AUTOFS4_FS reads as
-# absent and that is correct -- it was renamed AUTOFS_FS upstream.
+# both are set. AUTOFS4_FS reads as absent and that is correct -- it was
+# renamed AUTOFS_FS upstream.
+#
+# --- The one the audit missed: SECURITY_LANDLOCK ----------------------------
+#
+# Set to =y HERE, against the vendored file, and it is the only symbol this
+# project changes. pmOS's config has `# CONFIG_SECURITY_LANDLOCK is not set`,
+# which is right for Alpine and wrong under an Arch userspace, because pacman
+# sandboxes its download user with Landlock and has no fallback:
+#
+#   error: restricting filesystem access failed because Landlock is not
+#          supported by the kernel!
+#   error: switching to sandbox user 'alpm' failed!
+#   error: failed to commit transaction (failed to retrieve some files)
+#
+# Every `pacman -S` on the phone, and therefore moarchy-store's Install button,
+# which execs one. `pacman -U` on a local file still works, which is why an
+# image full of packages installs and boots perfectly and the defect only shows
+# up the first time somebody installs something.
+#
+# This is a one-symbol config change, not a patch: the tree is untouched, and
+# `CONFIG_LSM` already listed "landlock" first (an unavailable LSM in that list
+# is skipped silently, which is part of why nothing complained). It belongs on
+# the list above -- the audit asked "what does systemd need" and should have
+# asked "what does an Arch userspace need", which is a superset.
 #
 # Two more that are set, and that the boot backend depends on:
 #   USB_CONFIGFS_ECM / _NCM  -- a USB network gadget macOS can actually bind.
@@ -44,7 +67,10 @@ pkgname=linux-moarchy-sdm670
 # twice, so a moved pin cannot leave a package claiming the old number -- the
 # exact trap manifest.toml exists to close.
 pkgver=${_tag#sdm670-v}
-pkgrel=2
+# 3: SECURITY_LANDLOCK=y, without which pacman cannot install anything on the
+# phone. The tag has not moved and pkgver comes from it, so without this bump
+# docker/build-packages.sh keeps the old kernel and the fix ships as nothing.
+pkgrel=3
 pkgdesc="Mainline Linux for Qualcomm SDM670 (Google Pixel 3a)"
 arch=('aarch64')
 url="$_url"
@@ -75,7 +101,7 @@ source=("linux-$_tag.tar.gz::$_url/-/archive/$_tag/linux-$_tag.tar.gz"
 # Real hashes, not SKIP. A tag can be moved by whoever owns the repo; the
 # checksum is the only thing that notices when it is (structure.md P10).
 sha256sums=('8113d2acbb65f02845af0bfd4c6c8999f6602edd39f598c5079d98bb6c74fae4'
-            'cfc0c9aa48de7606854a6bd1b65e51c99dacb8b9daf8df6c1b48063055cadf51')
+            'f7f32f8587057d8b5bd419058da45a658b6bba3cab052e496b7f67d3b8604084')
 
 # --- Do not build this on a macOS bind mount --------------------------------
 #
