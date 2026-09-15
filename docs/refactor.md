@@ -297,13 +297,15 @@ not enforced once.
 > no qmldir*; adding one changes the shape and has to be proved on the device
 > before six files depend on it. Deliberately left rather than guessed.
 
-**E5** The extended-sheet margin (`gestures.md` I5a) is written once. **Closed
-by §I4**, which is the same block of the same files: the margin belongs to the
-sheet header, and a second component for it would be a second place to forget.
+**E5** *Closed as nothing to do,* and §I4 records the reading that got there.
 
-> **Amended 2026-09-15: two, not five.** As with E4, three of the five named
-> here are shell apps now and have no margin to write. What is left is the theme
-> picker and the drawer.
+> **Amended 2026-09-15: two, not five, and then neither.** Three of the five
+> named here are shell apps now and have no margin to write. The two that are
+> left are one line each and are not the same line -- the drawer drops the inset
+> while the keyboard is up and the theme picker has no keyboard -- so there is no
+> copy to remove. Five copies of a shared expression was the premise; it was
+> true when it was written and stopped being true without anyone doing the
+> work.
 
 **E6** `style.md` C2 is amended to match. It currently justifies per-surface
 palette blocks with "a shared singleton can only serve one of them" — true of a
@@ -551,11 +553,29 @@ its veil and its glyph. Four copies at about thirty-five lines each.
 → `grep -rn 'id: backButton' default/omarchy/plugins/` matches only the common
 dir
 
-**I4** The extended-sheet margin arrives with the header. This is **E5**, which
-is the same block of the same four files; it is closed here rather than beside
-here.
-→ `grep -rn 'extendedMargin\|Style.space(20) +' default/omarchy/plugins/`
-matches only the common dir
+> **`moarchy.device` is a fifth header and stays its own.** Its circle is 40 drawn
+> and answers over 44 with a 2px margin where these four are 38 over 44 with 3,
+> it carries no fill behind the glyph, and it sits in a `RowLayout` rather than
+> on anchors -- so it is the same *idea* at three different measurements, each
+> argued in place against the 16px margins of the screen it is on. Converting it
+> is a visual change to a screen nothing here needs to touch. If a sixth header
+> arrives, the numbers are what should converge first.
+
+**I4** *Withdrawn.* This said the extended-sheet margin arrives with the header,
+on the assumption that E5's copies sat in the block I3 was moving. They do not,
+and **E5 has nothing left to share**: what remains is one line in the theme
+picker (`margins.bottom: -root.gestureStrip`) and one in the drawer, which is a
+different expression -- the drawer drops the inset while the keyboard is up
+(`gestures.md` I5e), and dropping it is the whole point of its version.
+
+> A component for one line that differs between its two callers is a worse
+> answer than two lines. What *is* duplicated there is the argument -- fifteen
+> lines on why a negative layer-shell margin is legal rather than a trick -- and
+> that stays in both, because it passes the re-break test in both: a reader of
+> either file who does not see it deletes the margin as a hack. `gestures.md` I1
+> and I5a already hold the canonical version, and both sites cite it.
+→ `grep -rn 'margins.bottom: .*gestureStrip' default/omarchy/plugins/` matches
+the theme picker and the drawer, and each cites `gestures.md` I1
 
 ---
 

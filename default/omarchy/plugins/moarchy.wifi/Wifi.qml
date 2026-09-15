@@ -105,6 +105,14 @@ Item {
   // surface's own, which is the half a shared type cannot know (style.md H2).
   component PressVeil: Shared.PressVeil { ink: root.textOnSurface }
 
+  // I3. The sheet's own header, bound to this surface's roles once (E2's shape).
+  component SheetHeader: Shared.SheetHeader {
+    ink: root.textOnSurface
+    fill: root.container
+    titleWeight: root.textWeight
+    onBack: root.dismiss()
+  }
+
   // ------------------------------------------------------------------ data
   readonly property var wifiDevice: {
     var devices = Networking.devices ? Networking.devices.values : []
@@ -469,48 +477,8 @@ Item {
         spacing: Style.space(10)
 
         // --------------------------------------------------------- header
-        Item {
-          width: parent.width
-          height: Style.space(44)
-
-          Rectangle {
-            id: backButton
-            anchors.left: parent.left
-            anchors.verticalCenter: parent.verticalCenter
-            width: Style.space(38)
-            height: width
-            radius: width / 2
-            color: root.container
-
-            PressVeil { anchors.fill: parent; radius: parent.radius; on: backArea.pressed }
-
-            Ui.OpticalGlyph {
-              anchors.fill: parent
-              text: ""
-              fontFamily: Style.font.family
-              fontSize: Style.font.icon
-              color: root.textOnSurface
-            }
-            // 38 drawn, 44 answering -- the same 3px as the Settings header,
-            // and for the same reasons (docs/style.md E1, E2).
-            MouseArea {
-              id: backArea
-              anchors.fill: parent
-              anchors.margins: -Style.space(3)
-              onClicked: root.dismiss()
-            }
-          }
-
-          Text {
-            anchors.left: backButton.right
-            anchors.leftMargin: Style.space(12)
-            anchors.verticalCenter: parent.verticalCenter
-            text: "Wi-Fi"
-            font.family: Style.font.family
-            font.pixelSize: Style.font.heading
-            font.weight: root.textWeight
-            color: root.textOnSurface
-          }
+        SheetHeader {
+          title: "Wi-Fi"
 
           // The radio switch. A pill rather than a checkbox: it is the one
           // control on this screen that is not a list row, and it has to read

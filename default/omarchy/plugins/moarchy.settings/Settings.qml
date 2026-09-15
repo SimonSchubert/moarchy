@@ -215,6 +215,14 @@ Item {
   // measurements behind DemiBold rather than Medium.
   readonly property int textWeight: Font.DemiBold
 
+  // I3. The sheet's own header, bound to this surface's roles once (E2's shape).
+  component SheetHeader: Shared.SheetHeader {
+    ink: root.textOnSurface
+    fill: root.container
+    titleWeight: root.textWeight
+    onBack: { if (!root.goBack()) root.dismiss() }
+  }
+
   readonly property var pageDef: Pages.page(root.currentPage)
   readonly property string pageTitle: root.pageDef ? root.pageDef.title : "Settings"
 
@@ -1187,58 +1195,8 @@ Item {
         anchors.bottomMargin: Style.space(8)
         spacing: Style.space(10)
 
-        Item {
-          width: parent.width
-          height: Style.space(44)
-
-          Rectangle {
-            id: backButton
-            anchors.left: parent.left
-            anchors.verticalCenter: parent.verticalCenter
-            width: Style.space(38)
-            height: width
-            radius: width / 2
-            color: root.container
-
-            PressVeil { anchors.fill: parent; radius: parent.radius; on: backArea.pressed }
-
-            // fa-angle-left, and centred on its ink rather than on its advance
-            // -- both for the same reason the row chevron is. `anchors.centerIn`
-            // centres the box the font reserves, and a Nerd Font glyph is rarely
-            // centred inside that box; measured on this circle the gear in the
-            // shade's matching button sat 4 device pixels right of centre.
-            Ui.OpticalGlyph {
-              anchors.fill: parent
-              text: ""
-              fontFamily: Style.font.family
-              fontSize: Style.font.icon
-              color: root.textOnSurface
-            }
-            // Answers over 44 while staying drawn at 38 (docs/style.md E1,
-            // E2). The header is 44 tall and the circle is centred in it,
-            // so the 3px is already there vertically; horizontally it eats into
-            // the surface margin on one side and the 12px before the title on
-            // the other, and neither takes a tap.
-            MouseArea {
-              id: backArea
-              anchors.fill: parent
-              anchors.margins: -Style.space(3)
-              onClicked: { if (!root.goBack()) root.dismiss() }
-            }
-          }
-
-          Text {
-            anchors.left: backButton.right
-            anchors.leftMargin: Style.space(12)
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            text: root.pageTitle
-            font.family: Style.font.family
-            font.pixelSize: Style.font.heading
-            font.weight: root.textWeight
-            color: root.textOnSurface
-            elide: Text.ElideRight
-          }
+        SheetHeader {
+          title: root.pageTitle
         }
 
         ListView {
