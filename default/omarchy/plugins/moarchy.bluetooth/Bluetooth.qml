@@ -63,6 +63,7 @@ import qs.Commons
 import qs.Ui as Ui
 import "../moarchy.common/Theme.js" as Theme
 import "../moarchy.common" as Shared
+import "../moarchy.common/Sheet.js" as Sheet
 
 Item {
   id: root
@@ -483,23 +484,16 @@ Item {
 
   // ------------------------------------------------------------- lifecycle
   function open(payloadJson) {
-    if (root.shell && typeof root.shell.isPluginOpen === "function") {
-      if (root.shell.isPluginOpen("moarchy.shade")) root.shell.hide("moarchy.shade")
-      if (root.shell.isPluginOpen("moarchy.drawer")) root.shell.hide("moarchy.drawer")
-    }
+    Sheet.cover(root.shell, root.pluginId, Sheet.WINDOW)
     bluetoothWindow.show()
     root.returnTo = ""
     root.returnPage = ""
     root.expandedAddress = ""
     root.errorAddress = ""
     root.errorText = ""
-    try {
-      var payload = JSON.parse(String(payloadJson || "{}"))
-      if (payload && payload.returnTo) root.returnTo = String(payload.returnTo)
-      if (payload && payload.page) root.returnPage = String(payload.page)
-    } catch (e) {
-      // A malformed payload is not worth refusing to open over.
-    }
+    var payload = Sheet.payload(payloadJson)
+    if (payload.returnTo) root.returnTo = String(payload.returnTo)
+    if (payload.page) root.returnPage = String(payload.page)
   }
 
   function close() { bluetoothWindow.hide() }
@@ -524,10 +518,7 @@ Item {
     target: "bluetooth"
 
     function state(): string { return root.opened ? "open" : "closed" }
-    function open(): string {
-      if (root.shell) root.shell.summon(root.pluginId, "{}")
-      return "ok"
-    }
+    function open(): string { Sheet.summon(root.shell, root.pluginId); return "ok" }
     function close(): string { root.dismiss(); return "ok" }
     function enabled(): string {
       if (!root.adapter) return "no-adapter"

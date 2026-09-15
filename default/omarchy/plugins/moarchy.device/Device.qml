@@ -27,6 +27,7 @@ import qs.Commons
 import qs.Ui as Ui
 import "../moarchy.common/Theme.js" as Theme
 import "../moarchy.common" as Shared
+import "../moarchy.common/Sheet.js" as Sheet
 
 Item {
   id: root
@@ -72,16 +73,8 @@ Item {
   function open(payloadJson) {
     // Only one full-screen plugin should be up at a time, or the one underneath
     // keeps its keyboard grab and swallows the back gesture.
-    if (root.shell && typeof root.shell.isPluginOpen === "function") {
-      if (root.shell.isPluginOpen("moarchy.shade")) root.shell.hide("moarchy.shade")
-      if (root.shell.isPluginOpen("moarchy.drawer")) root.shell.hide("moarchy.drawer")
-    }
-    try {
-      const payload = payloadJson ? JSON.parse(payloadJson) : {}
-      root.returnTo = payload.returnTo || ""
-    } catch (e) {
-      root.returnTo = ""
-    }
+    Sheet.cover(root.shell, root.pluginId, Sheet.TOP)
+    root.returnTo = Sheet.payload(payloadJson).returnTo || ""
     root.opened = true
     probe.running = true
     ticker.start()
@@ -121,10 +114,7 @@ Item {
     target: "device"
 
     function state(): string { return root.opened ? "open" : "closed" }
-    function open(): string {
-      if (root.shell) root.shell.summon(root.pluginId, "{}")
-      return "ok"
-    }
+    function open(): string { Sheet.summon(root.shell, root.pluginId); return "ok" }
     function close(): string { root.dismiss(); return "ok" }
 
     // The control for docs/gestures.md I2. This surface takes no bottom margin,

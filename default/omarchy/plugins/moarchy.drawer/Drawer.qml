@@ -70,6 +70,7 @@ import "../moarchy.settings/Search.js" as Search
 import "../moarchy.settings/Guards.js" as Guards
 import "../moarchy.common/Theme.js" as Theme
 import "../moarchy.common/ShellApps.js" as ShellApps
+import "../moarchy.common/Sheet.js" as Sheet
 import "../moarchy.common" as Shared
 
 Item {
@@ -1134,10 +1135,11 @@ Item {
     //
     // Asking the host rather than tracking it here means this still holds when
     // a sheet was raised by its own drag and this plugin never heard about it.
-    if (root.shell && typeof root.shell.isPluginOpen === "function") {
-      if (root.shell.isPluginOpen("moarchy.shade")) root.shell.hide("moarchy.shade")
-      if (root.shell.isPluginOpen("moarchy.themes")) root.shell.hide("moarchy.themes")
-    }
+    //
+    // Which sheets those are is Sheet.js' single list, read from the rank rather
+    // than named here (I2): five screens named their own pair and gave three
+    // different answers.
+    Sheet.cover(root.shell, root.pluginId, Sheet.TOP)
 
     root.query = ""
     searchField.text = ""

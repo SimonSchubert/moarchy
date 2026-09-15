@@ -839,7 +839,7 @@ Item {
     root.lastAction = "picker"
     root.lastLaunch = id
     if (root.shell && typeof root.shell.summon === "function")
-      root.shell.summon(id, JSON.stringify({ returnTo: "moarchy.shade" }))
+      root.shell.summon(id, JSON.stringify({ returnTo: root.pluginId }))
   }
 
   function openWifi() { root.openScreen("moarchy.wifi") }

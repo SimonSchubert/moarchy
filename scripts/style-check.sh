@@ -27,6 +27,10 @@ pass=0
 fail=0
 ok() { printf '  \033[32mPASS\033[0m  %s\n' "$1"; pass=$((pass + 1)); }
 no() { printf '  \033[31mFAIL\033[0m  %s\n' "$1"; [[ -n ${2:-} ]] && printf '%s\n' "$2"; fail=$((fail + 1)); }
+# Counted as neither. A check that cannot run here says so on the way past,
+# rather than passing and reading as coverage it is not.
+skipped=0
+skip() { printf '  \033[33mSKIP\033[0m  %s\n' "$1"; skipped=$((skipped + 1)); }
 
 # --- A1, A2, A3: nothing is written as a number -----------------------------
 # `|| true` on purpose: a grep that matches nothing exits 1, and that would
@@ -240,6 +244,37 @@ else
   no "shared code written out again (E7)" "$e7"
 fi
 
+# --- B1, I2: one list of sheets --------------------------------------------
+# docs/refactor.md B1, B6, I1, I2. Five screens kept their own answer to "which
+# sheets do I cover" and gave three different ones, which gestures.md A8 records
+# as already having cost Settings and Themes their place in the back gesture.
+# The list is moarchy.common/Sheet.js now; this is what stops a sixth screen
+# writing its own again.
+printf '\nB. one list of sheets\n'
+sheets=$(grep -rn 'isPluginOpen("moarchy\.\|hide("moarchy\.' "$PLUGINS" \
+         | grep -v 'moarchy.common/Sheet.js' | grep -vE ':\s*//' || true)
+if [[ -z $sheets ]]; then
+  ok "no plugin names another sheet's id: the list is Sheet.js (B1, I2)"
+else
+  no "a sheet id is written outside Sheet.js (B1)" "$sheets"
+fi
+
+# I1a. Sheet.js is plain JavaScript with the host handed in, so the rule that
+# decides what leaves the screen can be run without the phone.
+#
+# Skipped out loud rather than passed quietly when node is absent -- it is a
+# development dependency and is not on the device, and a check that stops
+# running where nobody looks is the thing this file exists to prevent.
+if command -v node >/dev/null 2>&1; then
+  if sheet_out=$(node scripts/sheet-test.js 2>&1); then
+    ok "Sheet.js covers what B6 says it covers ($(grep -c 'ok' <<<"$sheet_out") cases, I1a)"
+  else
+    no "the sheet rule is broken (I1a)" "$sheet_out"
+  fi
+else
+  skip "the Sheet.js cases need node, which is not installed here (I1a)"
+fi
+
 # --- F1-F4, F6: one drag tracker, and it stays one -------------------------
 # docs/refactor.md §F. Four surfaces each re-derived the same machinery and two
 # of the four remembered a watchdog. The component is one file now; these are
@@ -381,6 +416,8 @@ else
      "a double hyphen inside an XML comment; the drawer draws the label and no icon"
 fi
 
-printf '\n%d passed, %d failed\n' "$pass" "$fail"
+printf '\n%d passed, %d failed' "$pass" "$fail"
+[[ $skipped -gt 0 ]] && printf ', %d skipped' "$skipped"
+printf '\n'
 printf 'E (touch targets) and F (text inputs) are not checked here -- they need the phone.\n'
 [[ $fail -eq 0 ]]

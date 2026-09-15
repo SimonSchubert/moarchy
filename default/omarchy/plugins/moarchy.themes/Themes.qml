@@ -35,6 +35,7 @@ import qs.Commons
 import qs.Ui as Ui
 import "../moarchy.common/Theme.js" as Theme
 import "../moarchy.common" as Shared
+import "../moarchy.common/Sheet.js" as Sheet
 
 Item {
   id: root
@@ -117,22 +118,15 @@ Item {
   readonly property int textWeight: Font.DemiBold
 
   function open(payloadJson) {
-    if (root.shell && typeof root.shell.isPluginOpen === "function") {
-      if (root.shell.isPluginOpen("moarchy.shade")) root.shell.hide("moarchy.shade")
-      if (root.shell.isPluginOpen("moarchy.drawer")) root.shell.hide("moarchy.drawer")
-    }
+    Sheet.cover(root.shell, root.pluginId, Sheet.TOP)
     root.opened = true
     root.returnTo = ""
     // A hand-off that never reached an unmap must not silence the next real
     // close (I5d).
     root.returnPage = ""
-    try {
-      var payload = JSON.parse(String(payloadJson || "{}"))
-      if (payload && payload.returnTo) root.returnTo = String(payload.returnTo)
-      if (payload && payload.page) root.returnPage = String(payload.page)
-    } catch (e) {
-      // A malformed payload is not worth refusing to open over.
-    }
+    var payload = Sheet.payload(payloadJson)
+    if (payload.returnTo) root.returnTo = String(payload.returnTo)
+    if (payload.page) root.returnPage = String(payload.page)
     root.scan()
   }
 
@@ -260,10 +254,7 @@ Item {
     target: "themes"
 
     function state(): string { return root.opened ? "open" : "closed" }
-    function open(): string {
-      if (root.shell) root.shell.summon(root.pluginId, "{}")
-      return "ok"
-    }
+    function open(): string { Sheet.summon(root.shell, root.pluginId); return "ok" }
     function close(): string { root.dismiss(); return "ok" }
 
     // What the compositor actually granted this surface. Nothing else can

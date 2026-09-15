@@ -67,6 +67,7 @@ import Quickshell.Wayland
 import qs.Commons
 import qs.Ui as Ui
 import "../moarchy.common/ShellApps.js" as ShellApps
+import "../moarchy.common/Sheet.js" as Sheet
 import "../moarchy.common" as Shared
 
 Item {
@@ -429,11 +430,11 @@ Item {
   // (docs/gestures.md K1), the compositor puts them away and brings them back,
   // and every function below that walks this list would close one if it were
   // still here.
-  readonly property var overlayIds: [
-    "moarchy.shade",
-    "moarchy.drawer",
-    "moarchy.themes"
-  ]
+  // B1, I2: the list itself is `moarchy.common/Sheet.js`, which every plugin's
+  // own `open()` now reads through the same rank. This was the fourth copy of
+  // it, and the one whose order carries the meaning above -- so it is read from
+  // there rather than restated here, topmost first.
+  readonly property var overlayIds: Sheet.ids()
 
   // K7. The shell app whose window is focused, or null.
   //
@@ -461,7 +462,7 @@ Item {
   function coveringSheet(): bool {
     for (var i = 0; i < root.overlayIds.length; i++) {
       var id = root.overlayIds[i]
-      if (id === "moarchy.drawer") continue
+      if (id === Sheet.DRAWER) continue
       if (root.isOpen(id)) return true
     }
     return false
@@ -722,8 +723,8 @@ Item {
     // After `dragging = false`, so the Behavior is live and this eases rather
     // than snaps -- which is the whole of F4.
     if (root.dragSource === "strip") root.dragTarget.homeHint = 0
-    if (open && root.shell) root.shell.summon("moarchy.drawer", "{}")
-    else if (root.shell) root.shell.hide("moarchy.drawer")
+    if (open) Sheet.summon(root.shell, Sheet.DRAWER)
+    else if (root.shell) root.shell.hide(Sheet.DRAWER)
     else root.dragTarget.progress = open ? 1 : 0
   }
 
@@ -1189,7 +1190,7 @@ Item {
         // Distance is what picks the second stop (A4) and an IPC verb has no
         // distance, so this one always means the first. `swipe home` is the
         // other one, and it is already here.
-        if (root.shell) root.shell.summon("moarchy.drawer", "{}")
+        Sheet.summon(root.shell, Sheet.DRAWER)
         return "ok: drawer"
       }
       return "usage: swipe left|right|up|home"
@@ -1416,7 +1417,7 @@ Item {
         // which left Settings and the theme picker falling through it.
         root.dragSource = "strip"
         root.pendingMode = root.coveringSheet() ? "none" : "drawer"
-        if (root.pendingMode === "drawer") root.resolveTarget("moarchy.drawer")
+        if (root.pendingMode === "drawer") root.resolveTarget(Sheet.DRAWER)
 
         // C1. And the clock, which is the only thing on this strip that starts
         // anything without being told which way the finger went. It is armed on
@@ -1541,7 +1542,7 @@ Item {
         // Set before resolveTarget, which reads it to decide where this drag
         // starts from.
         root.dragSource = "home"
-        root.resolveTarget("moarchy.drawer")
+        root.resolveTarget(Sheet.DRAWER)
 
         root.lastDrag = homeDrag
         homeDrag.press(pts[0].sceneX, pts[0].sceneY)

@@ -35,6 +35,7 @@ import Quickshell.Io
 import qs.Commons
 import qs.Ui as Ui
 import "../moarchy.common" as Shared
+import "../moarchy.common/Sheet.js" as Sheet
 import "Pages.js" as Pages
 import "Guards.js" as Guards
 
@@ -376,11 +377,7 @@ Item {
 
   // ------------------------------------------------------------ lifecycle
   function open(payloadJson) {
-    if (root.shell && typeof root.shell.isPluginOpen === "function") {
-      var others = ["moarchy.shade", "moarchy.drawer", "moarchy.themes"]
-      for (var i = 0; i < others.length; i++)
-        if (root.shell.isPluginOpen(others[i])) root.shell.hide(others[i])
-    }
+    Sheet.cover(root.shell, root.pluginId, Sheet.WINDOW)
 
     root.returnTo = ""
     // A hand-off that never reached an unmap must not silence the next real

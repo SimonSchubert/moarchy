@@ -29,6 +29,7 @@ import qs.Commons
 import qs.Ui as Ui
 import "../moarchy.common/Theme.js" as Theme
 import "../moarchy.common" as Shared
+import "../moarchy.common/Sheet.js" as Sheet
 
 Item {
   id: root
@@ -128,21 +129,14 @@ Item {
   // sheets down first -- opening a screen underneath the shade is how you get a
   // keypad you cannot see but can still type into.
   function open(payloadJson) {
-    if (root.shell && typeof root.shell.isPluginOpen === "function") {
-      if (root.shell.isPluginOpen("moarchy.shade")) root.shell.hide("moarchy.shade")
-      if (root.shell.isPluginOpen("moarchy.drawer")) root.shell.hide("moarchy.drawer")
-    }
+    Sheet.cover(root.shell, root.pluginId, Sheet.WINDOW)
     simWindow.show()
     root.returnTo = ""
     root.pin = ""
     root.errorText = ""
     root.refresh()
-    try {
-      var payload = JSON.parse(String(payloadJson || "{}"))
-      if (payload && payload.returnTo) root.returnTo = String(payload.returnTo)
-    } catch (e) {
-      // A malformed payload is not worth refusing to open over.
-    }
+    var payload = Sheet.payload(payloadJson)
+    if (payload.returnTo) root.returnTo = String(payload.returnTo)
   }
 
   function close() { simWindow.hide() }

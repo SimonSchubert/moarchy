@@ -59,6 +59,11 @@ having happened once.
 **B1** There is one canonical list of overlay ids and one canonical list of
 shell apps, and neither is written twice.
 
+**Done for the shell apps 2026-09-08; done for the sheets 2026-09-15 in §I2**,
+which is where the fourth copy of the sheet list -- this plugin's own
+`overlayIds` -- went. `overlayIds` is now `Sheet.ids()` and keeps its order,
+because the order is what the back gesture means by "topmost".
+
 **Done, 2026-09-08.** The shell-app list is
 `moarchy.common/ShellApps.js`, imported by both plugins that need it; the
 overlay list stays `moarchy.gestures`' `overlayIds` and is now sheets only,
@@ -71,7 +76,9 @@ comment reading "One, and deliberately so", while `moarchy.recents` held
 three. The carousel was right and the gestures plugin was a version behind it.
 
 **B2** The "put the other surfaces away" guard in each plugin's `open()` derives
-from B1's list rather than naming ids. Four spellings exist today:
+from B1's list rather than naming ids. *Done 2026-09-15, in §I2.* The table below
+is the drift as it stood; the line numbers in it had already rotted by the time
+it was read back, which is what the citation rule in `docs/README.md` is about.
 
 | Plugin | What it puts away |
 | --- | --- |
@@ -535,18 +542,52 @@ guard inside it. §B2 tabulated the guard and §B6 found its rule — the layer 
 sheet sits on, not a list of ids — and both were held for §E1 to answer. It is
 answered.
 
-**I1** The sheet lifecycle is one component. `open`, `close`, `dismiss` and
-`returnTo` live in the common dir, and a sheet declares which layer it is on
-rather than naming the sheets it displaces.
-→ `grep -rn 'hide("moarchy' default/omarchy/plugins/` matches only the common
-dir
+**I1** What every sheet's `open()` does identically lives in one place, and what
+it does for itself stays with it. Three things were identical in six or seven
+screens: the guard that puts away what this one covers, the `try`/`catch` around
+the summon payload, and the `open` IPC verb that asks the host to summon. The
+rest of each `open()` -- what it resets, what it starts scanning, whether it
+shows a window or raises a flag -- is that screen's own and is not shared.
 
-**I2** No plugin spells another sheet's id inside its own `open()`. §B2's table
-is four spellings of one rule; this closes it by deriving the answer rather than
-by correcting the four.
-→ the same grep as I1, and `omarchy-shell themes open` with the drawer up leaves
-`drawer state` == `closed` while `shade open` over the drawer leaves it `open`
-(§B6, both directions)
+> **Not one lifecycle component, and the reading is why.** This AC asked for
+> `open`/`close`/`dismiss` in the common dir. Reading the seven, the bodies have
+> almost nothing in common: the theme picker scans, `moarchy.device` starts a
+> ticker and a probe, the three shell apps show a window where the two sheets set
+> a flag, and every `dismiss()` hands back differently. A component owning all of
+> that would take a callback per screen, which is the same code with an indirect
+> jump added. `moarchy.common/Sheet.js` takes the three that were copies.
+→ `grep -rn 'JSON.parse(String(payloadJson' default/omarchy/plugins/` matches
+nothing, and `Sheet.cover` appears once in each of the seven screens
+
+**I1a** *The list is unit-tested, which is new for this repo.* `Sheet.js` is
+plain JS with `shell` handed in, so `node` runs it: seven stacking cases
+including the shade covering nothing and a window covering all three, a half-built
+host, and six payloads. B6's rule was argued in prose and implemented four times;
+it is now implemented once and the argument is executable.
+→ `node scripts/sheet-test.js` is green, and `scripts/style-check.sh` runs it
+when node is there and prints SKIP when it is not. The failing branch was run:
+dropping the rank term makes the shade cover the two sheets below it, and the
+first case says so
+
+**I2** No plugin spells another sheet's id at all. §B2's table was four
+spellings of one rule and §B1 asked for one list; both are closed by deriving the
+answer from the caller's rank. The ids themselves are named in `Sheet.js` too, so
+the strip's swipe up says `Sheet.DRAWER` rather than spelling it a sixth time.
+→ `scripts/style-check.sh` fails when a plugin outside `Sheet.js` names a sheet
+id, and `omarchy-shell themes open` with the drawer up leaves `drawer state` ==
+`closed` while `shade open` over the drawer leaves it `open` (§B6, both
+directions)
+
+**I2a — a behaviour change, and the fourth instance of §B6's defect.** A shell
+app opening now puts the theme picker away, where it put away only the shade and
+the drawer. Wi-Fi, Bluetooth, SIM and `moarchy.device` each named the same two
+ids; Settings named three. Settings was right: the theme picker is a Top layer
+surface with `Exclusive` keyboard focus, so a window opening under it is a window
+nobody can see — the same fault §B6 found in both directions between the drawer
+and the shade, and §B4 before that. Naming it here because §G4 requires a
+behaviour change to be named, and deriving the list is what made it visible.
+→ `omarchy-shell themes open`, then `omarchy-shell wifi open`: Wi-Fi is on screen
+and `themes state` is `closed`. Pre-fix the picker stays up and Wi-Fi is under it
 
 **I3** The sheet header is one component — the title, the circular back button,
 its veil and its glyph. Four copies at about thirty-five lines each.
