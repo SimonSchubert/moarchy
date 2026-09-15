@@ -596,6 +596,36 @@ preview is live and correctly framed and focused. It is heavily green.
 > Generating one means photographing a colour target and running `dcamprof`.
 > Unbudgeted, and cosmetic next to D29. **?**
 
+**D31** *Added 2026-09-15, measured.* **The modem works, and the only thing
+missing is a SIM.** Shipping `mba.mbn`/`modem.mbn` for Wi-Fi (D27) turned out to
+deliver telephony's hardest prerequisite as a side effect: ModemManager sees a
+real modem.
+
+> ```
+> /org/freedesktop/ModemManager1/Modem/0 [QUALCOMM INCORPORATED]
+> firmware revision: MPSS.AT.4.0.2.c4.1-00145-SDM670_GEN_PACK-1.466700.3
+> imei: 359678094838687     plugin: qcom-soc     primary port: qrtr0
+> supported: gsm-umts, lte / cdma-evdo, lte / lte
+> state: failed            failed reason: sim-missing
+> ```
+>
+> `qrtr-lookup` lists the modem's QMI services including Voice, WMS and the
+> embedded filesystem service. Slot 1 (the tray) is empty; slot 2 is the eSIM,
+> reporting the placeholder ICCID `8900000000000000003` — hardware present, no
+> profile. **Nothing else about telephony is testable until a SIM goes in.**
+>
+> Do NOT probe this with `mmcli --set-primary-sim-slot`. Switching slots on a
+> modem with no SIM wedges its SIM subsystem: ModemManager recreates the modem
+> on restart, per its own journal, and `mmcli -L` still says "No modems were
+> found" while the remoteproc stays `running` and QRTR still lists every
+> service. A reboot clears it; a `systemctl restart ModemManager` does not.
+>
+> §10's claim that telephony needs "q6voiced and hexagonrpcd" is half wrong and
+> is corrected there: `hexagonrpcd` is the sensors/FastRPC daemon, not a
+> telephony one. What telephony actually needs, in order, is a SIM, then
+> `q6voiced` for call audio, then `81voltd` for any network without a
+> circuit-switched fallback.
+
 **D23** **There is no console on this device, and there cannot be one.** ABL
 strips any `console=` from the boot image and appends its own `console=null`.
 Verified from a shell on the handset: with `console=tty0` in the boot image,
@@ -799,11 +829,35 @@ booting, and this file should not say otherwise until one has.
   **Still open:** whether any of it works. Nothing has run on the handset, and
   D27 is "built, not measured" until it has.
 
-  **Telephony is still open on its own terms.** It needs everything above and
-  then `q6voiced` and `hexagonrpcd`, neither packaged for Arch, so the empty
-  `DEVICE_SERVICES` in `moarchy-device-sargo` stays empty. What changed is only
-  that Wi-Fi no longer waits behind it: the two were one decision because they
-  shared the blob, not because they shared the work.
+  **Telephony is closer than this file claimed, and the order is now known.**
+  D31: the modem is alive and ModemManager drives it; it fails only on
+  `sim-missing`. Correcting the earlier sentence — `hexagonrpcd` is the
+  sensors/FastRPC daemon and has nothing to do with calls. What is actually
+  needed, cheapest first:
+
+  1. **A SIM.** Everything below is untestable without one, and this project
+     does not ship claims it has not measured.
+  2. **`q6voiced`** — call audio, routing voice to the ADSP. Note it is blocked
+     behind D29 regardless: with no sound card there is no call audio either,
+     so the audio bring-up bug gates calls as well as media.
+  3. **`81voltd`** (`gitlab.com/flamingradian/81voltd`, GPL-2.0, in pmaports as
+     `temp/81voltd`) — a host-side implementation of the QMI IMS Data service.
+     LTE carries no circuit-switched voice, so on a network with no 2G/3G
+     fallback the modem must register with IMS, and it will not until something
+     answers its request for an IMS PDN. Its only deps are `mm-glib` and
+     `libqrtr` — and `moarchy-qcom-modem` already ships `libqrtr`, so this is a
+     small package rather than a new stack. Same upstream author as the sargo
+     modem firmware this project pins.
+  4. **The IMS bearer's netdev**, which ModemManager creates and does not
+     configure. Bringing it up with the bearer's own address is reportedly what
+     turns an outbound SMS from a 25 s `WmsMessageDeliveryFailure` into a
+     one-second success.
+
+  Points 3 and 4 are read from a sibling project's notes on a OnePlus 6T
+  (sdm845), not measured here — recorded as a map, not as fact. Its author
+  reports 81voltd working on a Pixel 3a, which is encouraging and still
+  second-hand. The userspace above all this is already in the image:
+  ModemManager 1.24.2, libqmi 1.38, gnome-calls, chatty, mmsd-tng, callaudiod.
 
   **Bluetooth was never part of it,** and that is now a finding rather than a
   guess. Nothing identifiable is missing: the kernel has `BT_HCIUART_QCA` and
