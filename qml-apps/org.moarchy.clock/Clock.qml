@@ -57,7 +57,15 @@ Item {
   // `colours` and not `palette`: QQuickItem already has a `palette`, and
   // shadowing it makes a binding resolve to whichever the compiler picked.
   readonly property var colours: themeFile.colours
+  readonly property int radiusCard: uiFile.radiusCard
   property int bodySize: Metrics.BODY
+
+  // The kit pill, with this app's defaults. Colour still comes in per call.
+  component Pill: Chrome.Pill {
+    implicitHeight: Metrics.TARGET + 6
+    pad: 18
+    bodySize: root.bodySize
+  }
 
   Component.onCompleted: {
     root.bodySize = Metrics.shellBody(root)
@@ -886,6 +894,7 @@ Item {
   }
 
   Chrome.ThemeFile { id: themeFile }
+  Chrome.UiFile { id: uiFile }
 
   IpcHandler {
     target: "clock"
@@ -1239,7 +1248,7 @@ Item {
                     x: 12
                     width: parent.width - 24
                     height: Math.max(Metrics.TARGET, noteText.implicitHeight + 20)
-                    radius: Metrics.CARD_RADIUS
+                    radius: root.radiusCard
                     color: root.wash(root.hue("orange"), 0.16)
 
                     Chrome.TypedText {
@@ -1285,7 +1294,7 @@ Item {
                       anchors.rightMargin: 12
                       anchors.topMargin: 4
                       anchors.bottomMargin: 4
-                      radius: Metrics.CARD_RADIUS
+                      radius: root.radiusCard
                       // An alarm that is off is drawn on a fainter card as well
                       // as with a switch to the left. One signal is a switch
                       // somebody has to look for.
@@ -1368,7 +1377,7 @@ Item {
                           }
                         }
 
-                        Toggle {
+                        Chrome.Switch {
                           anchors.verticalCenter: parent.verticalCenter
                           checked: alarmRow.modelData.enabled
                           accent: root.accent
@@ -2180,6 +2189,7 @@ Item {
         foreground: root.ink
         danger: root.danger
         bodySize: root.bodySize
+        radiusCard: root.radiusCard
         onDismissed: root.menuOpen = false
 
         Chrome.MenuItem {

@@ -49,6 +49,7 @@ Item {
   // `colours` and not `palette`: QQuickItem already has a `palette`, and
   // shadowing it makes a binding resolve to whichever the compiler picked.
   readonly property var colours: themeFile.colours
+  readonly property int radiusCard: uiFile.radiusCard
   property int bodySize: Metrics.BODY
 
   // The real home is where the trash is and where user-dirs.dirs lives.
@@ -551,6 +552,7 @@ Item {
   }
 
   Chrome.ThemeFile { id: themeFile }
+  Chrome.UiFile { id: uiFile }
 
   IpcHandler {
     target: "files"
@@ -799,11 +801,10 @@ Item {
               maximumLineCount: 1
             }
 
-            Pill {
+            Chrome.Pill {
               Layout.alignment: Qt.AlignVCenter
               text: root.busyText().length ? root.busyText() : "Paste here"
-              filled: true
-              accent: root.accent
+              color: root.accent
               ink: root.colours.dark ? root.textOnSurface : root.background
               bodySize: root.bodySize
               onClicked: root.paste()
@@ -1077,6 +1078,7 @@ Item {
         foreground: root.textOnSurface
         danger: root.hueColor("red")
         bodySize: root.bodySize
+        radiusCard: root.radiusCard
         menuWidth: 248
         onDismissed: root.menuFor = null
 
@@ -1146,6 +1148,7 @@ Item {
         line: root.line
         foreground: root.textOnSurface
         bodySize: root.bodySize
+        radiusCard: root.radiusCard
         onDismissed: root.overflow = false
 
         Chrome.MenuItem {
@@ -1218,7 +1221,7 @@ Item {
           anchors.centerIn: parent
           width: parent.width - 48
           height: sheetCol.height + 28
-          radius: Metrics.CARD_RADIUS
+          radius: root.radiusCard
           color: root.surface
           border.width: 1
           border.color: root.line
@@ -1282,18 +1285,19 @@ Item {
               anchors.right: parent.right
               spacing: 8
 
-              Pill {
+              Chrome.Pill {
                 text: "Cancel"
+                outlined: true
+                color: "transparent"
                 ink: root.textOnSurface
                 line: root.line
                 bodySize: root.bodySize
                 onClicked: root.dialog = ""
               }
 
-              Pill {
+              Chrome.Pill {
                 text: root.dialog === "purge" ? "Delete" : "Save"
-                filled: true
-                accent: root.dialog === "purge" ? root.hueColor("red") : root.accent
+                color: root.dialog === "purge" ? root.hueColor("red") : root.accent
                 ink: root.dialog === "purge" || root.colours.dark
                      ? "#ffffff" : root.background
                 bodySize: root.bodySize

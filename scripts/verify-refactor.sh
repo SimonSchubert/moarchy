@@ -99,9 +99,19 @@ echo "== G14a: tapping the drawer's search field raises the keyboard =="
 rect_h() { swaymsg -t get_workspaces | python3 -c 'import json,sys
 print(next((w["rect"]["height"] for w in json.load(sys.stdin) if w["focused"]), 0))'; }
 touch_bin=/usr/lib/moarchy/bin/moarchy-touch
+# G14: close is not a hide. Put the keyboard down ourselves so the tap is
+# measured against a known floor rather than leftover state from an earlier
+# surface.
+busctl --user call sm.puri.OSK0 /sm/puri/OSK0 sm.puri.OSK0 SetVisible b false >/dev/null 2>&1
 sh_ -q drawer close >/dev/null; sleep 1
 osk_down=$(rect_h)
 sh_ -q drawer open >/dev/null; sleep 2
+osk_open=$(rect_h)
+if [ "$osk_open" = "$osk_down" ]; then
+  ok "opening the drawer left the keyboard down ($osk_open)"
+else
+  no "rect $osk_down -> $osk_open on open" "the drawer raised the keyboard by itself"
+fi
 field=$(sh_ drawer searchTarget | tr ' ' '\n' | sed -n 's/^field=//p')
 fx=$(printf '%s' "$field" | cut -d, -f1); fy=$(printf '%s' "$field" | cut -d, -f2)
 if [ -n "$fx" ] && [ -n "$fy" ]; then
@@ -115,8 +125,8 @@ if [ -n "$fx" ] && [ -n "$fy" ]; then
   else
     no "focused=$focused rect $osk_down -> $osk_up" "expected focus and a lower rect"
   fi
-  [ "$osk_after" = "$osk_down" ] && ok "closing the drawer put it back ($osk_after)" \
-    || no "rect is $osk_after after closing, was $osk_down before" "the drawer left its keyboard up"
+  [ "$osk_after" = "$osk_up" ] && ok "closing the drawer left the keyboard up ($osk_after)" \
+    || no "rect is $osk_after after closing, was $osk_up with the keyboard up" "the drawer hid the keyboard"
 else
   no "drawer searchTarget gave no field centre" "$(sh_ drawer searchTarget)"
 fi

@@ -38,6 +38,7 @@ Item {
   // that could silently draw the wrong thing. (A comment must not open with
   // the linter's own name: it reads the rest of the line as a directive.)
   readonly property var colours: themeFile.colours
+  readonly property int radiusCard: uiFile.radiusCard
   // The shell's text size when the shell is there to ask, 16 otherwise.
   property int bodySize: Metrics.BODY
   Component.onCompleted: root.bodySize = Metrics.shellBody(root)
@@ -300,6 +301,7 @@ Item {
   }
 
   Chrome.ThemeFile { id: themeFile }
+  Chrome.UiFile { id: uiFile }
 
   IpcHandler {
     target: "launches"

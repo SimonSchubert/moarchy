@@ -257,6 +257,12 @@ package() {
   install -m644 "$_repo"/default/themed/*.tpl \
     "$pkgdir/usr/share/omarchy/default/themed/"
 
+  # The documented default for ~/.config/omarchy/ui.toml. Not copied into a
+  # home (P1): missing is the same values, and the first write from
+  # moarchy-ui or the theme switcher creates the user file.
+  install -Dm644 "$_repo/default/omarchy/ui.toml" \
+    "$pkgdir/usr/share/moarchy/ui.toml"
+
   # --- /etc ----------------------------------------------------------------
   install -Dm644 "$_repo/default/etc/profile.d/zz-moarchy.sh" \
     "$pkgdir/etc/profile.d/zz-moarchy.sh"

@@ -59,7 +59,8 @@ Item {
   // the checker's header says happened to moarchy.device once: every comment in
   // it claimed to mirror the others while it mirrored none of them.
   readonly property int textWeight: Font.DemiBold
-  readonly property int radiusTile: Style.space(20)
+  Shared.UiFile { id: ui }
+  readonly property int radiusTile: ui.radiusTile
   // The theme's own red, not a chosen one: `Color.urgent` is what upstream's
   // polkit error text falls back to, so a theme that sets a red gets its red
   // here (style.md C4 -- this was a literal, and the only one left in the

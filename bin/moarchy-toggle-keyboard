@@ -3,8 +3,9 @@
 #
 # One of the two ways it moves at all. moarchy-keyboard does not raise itself:
 # text focus writes nothing (its SPEC.md AC 50), so the keyboard comes up when
-# the restore handle is tapped or when something drives this bus name, and goes
-# down the same two ways. The back gesture uses the same call.
+# the restore handle is tapped, when a text field is tapped, or when something
+# drives this bus name, and goes down only the same way as the back gesture.
+# Opening a surface or switching apps writes nothing.
 #
 # Driven over DBus, not by signal. moarchy-keyboard owns `sm.puri.OSK0` -- the
 # same interface Phosh drives, kept deliberately so this script and anything

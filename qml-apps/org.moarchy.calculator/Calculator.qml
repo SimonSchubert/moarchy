@@ -47,6 +47,7 @@ Item {
 
   property string returnTo: ""
   readonly property var colours: themeFile.colours
+  readonly property int radiusCard: uiFile.radiusCard
   property int bodySize: Metrics.BODY
   Component.onCompleted: root.bodySize = Metrics.shellBody(root)
 
@@ -292,6 +293,7 @@ Item {
   }
 
   Chrome.ThemeFile { id: themeFile }
+  Chrome.UiFile { id: uiFile }
 
   IpcHandler {
     target: "calculator"

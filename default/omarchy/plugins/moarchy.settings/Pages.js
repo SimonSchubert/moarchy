@@ -245,6 +245,7 @@ var PAGES = {
 "appearance": { title: "Appearance", rows: [
   { id: "theme", type: "plugin", plugin: "moarchy.themes", glyph: "󰸌",
     label: "Theme", detailCmd: "omarchy-theme-current",
+    keywords: "rounded corners radius square modest shade fade slider tiles compact roomy size",
     covers: { "style.theme": "N" } },
   { id: "background", type: "nav", page: "appearance.background", glyph: "",
     label: "Wallpaper", detailCmd: "basename \"$(omarchy-theme-bg-current)\"",

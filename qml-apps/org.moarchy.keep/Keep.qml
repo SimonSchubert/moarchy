@@ -76,7 +76,7 @@ Item {
       if (root.editing.items[i].done) n++
     return n
   }
-  readonly property int radiusCard: 12
+  readonly property int radiusCard: uiFile.radiusCard
   readonly property string noteFont: "Adwaita Sans"
 
   readonly property color pageColor: root.editing
@@ -269,12 +269,6 @@ Item {
     return Notes.fill(root.colours, key)
   }
 
-  function hideKeyboard() {
-    Quickshell.execDetached(["busctl", "--user", "call", "sm.puri.OSK0",
-                             "/sm/puri/OSK0", "sm.puri.OSK0", "SetVisible",
-                             "b", "false"])
-  }
-
   IpcHandler {
     target: "keep"
     function state(): string { return root.opened ? "open" : "closed" }
@@ -311,6 +305,7 @@ Item {
   }
 
   Chrome.ThemeFile { id: themeFile }
+  Chrome.UiFile { id: uiFile }
 
   Chrome.AppWindow {
     id: keepWindow
@@ -323,7 +318,6 @@ Item {
     onUnmapped: {
       root.leaveEditor()
       root.menuOpen = false
-      root.hideKeyboard()
     }
 
     Rectangle {
@@ -559,6 +553,15 @@ Item {
                 font.pixelSize: Math.round(root.bodySize * 1.05)
                 font.weight: Font.Normal
                 wrapMode: TextEdit.Wrap
+                Chrome.Osk { id: bodyOsk }
+                MouseArea {
+                  anchors.fill: parent
+                  propagateComposedEvents: true
+                  onPressed: mouse => {
+                    bodyOsk.show()
+                    mouse.accepted = false
+                  }
+                }
                 onTextChanged: {
                   if (!root.editing || root.editing.kind === "list") return
                   if (text === root.editing.body) return
@@ -695,28 +698,17 @@ Item {
 
       }
 
-      Rectangle {
+      Chrome.Fab {
         visible: !root.editing
-        width: 56
-        height: 56
-        radius: 28
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.rightMargin: 16
         anchors.bottomMargin: 16
-        color: root.accent
-        Chrome.Icon {
-          anchors.centerIn: parent
-          slot: 56
-          size: 22
-          color: root.textOnAccent
-          names: ["list-add-symbolic"]
-        }
-        MouseArea {
-          anchors.fill: parent
-          onClicked: root.newNote("text")
-          onPressAndHold: root.newNote("list")
-        }
+        accent: root.accent
+        foreground: root.textOnAccent
+        names: ["list-add-symbolic"]
+        onClicked: root.newNote("text")
+        onPressAndHold: root.newNote("list")
       }
 
       // --- card menu (GTK popover, not a sheet) ---------------------------

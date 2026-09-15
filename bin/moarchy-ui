@@ -1,0 +1,187 @@
+#!/bin/bash
+# Read and write ~/.config/omarchy/ui.toml -- corners and shade control sizes.
+#
+# Colours stay in the staged theme (omarchy-theme-set / colors.toml). This
+# file is the half that is a preference: how round cards are, how tall the
+# shade's sliders and tiles are. The theme switcher, Settings, and an agent
+# that edits the path all write the same keys; FileView picks the change up
+# with no restart.
+#
+#   moarchy-ui                         print current "key=value" lines
+#   moarchy-ui get corners             large | modest | square
+#   moarchy-ui get corners-label       Large | Modest | Square
+#   moarchy-ui get shade               roomy | compact
+#   moarchy-ui get shade-label         Roomy | Compact
+#   moarchy-ui corners modest
+#   moarchy-ui shade compact
+#   moarchy-ui set sheet 16            numeric override (logical px)
+
+set -euo pipefail
+
+FILE="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy/ui.toml"
+
+norm_corners() {
+  case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
+    large|round|rounded|big) echo large ;;
+    modest|small|little|soft) echo modest ;;
+    square|none|off|flat|0) echo square ;;
+    *) echo large ;;
+  esac
+}
+
+norm_shade() {
+  case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
+    roomy|comfortable|large|big|huge) echo roomy ;;
+    compact|small|dense|tight) echo compact ;;
+    *) echo roomy ;;
+  esac
+}
+
+label_corners() {
+  case "$(norm_corners "$1")" in
+    modest) echo Modest ;;
+    square) echo Square ;;
+    *) echo Large ;;
+  esac
+}
+
+label_shade() {
+  case "$(norm_shade "$1")" in
+    compact) echo Compact ;;
+    *) echo Roomy ;;
+  esac
+}
+
+# Defaults match Ui.js fallback().
+corners=large
+shade=roomy
+sheet=""
+tile=""
+card=""
+shade_tile=""
+shade_slider=""
+shade_round=""
+
+read_file() {
+  [[ -f $FILE ]] || return 0
+  local key raw
+  while IFS= read -r line || [[ -n $line ]]; do
+    line="${line%%#*}"
+    line="${line#"${line%%[![:space:]]*}"}"
+    line="${line%"${line##*[![:space:]]}"}"
+    [[ -n $line && $line != [* ]] || continue
+    key="${line%%=*}"
+    raw="${line#*=}"
+    key="${key%"${key##*[![:space:]]}"}"
+    raw="${raw#"${raw%%[![:space:]]*}"}"
+    raw="${raw%\"}"
+    raw="${raw#\"}"
+    raw="${raw%\'}"
+    raw="${raw#\'}"
+    case $key in
+      corners) corners=$(norm_corners "$raw") ;;
+      shade|density) shade=$(norm_shade "$raw") ;;
+      sheet) sheet=$raw ;;
+      tile) tile=$raw ;;
+      card) card=$raw ;;
+      shade_tile|shadeTile) shade_tile=$raw ;;
+      shade_slider|shadeSlider) shade_slider=$raw ;;
+      shade_round|shadeRound) shade_round=$raw ;;
+    esac
+  done <"$FILE"
+}
+
+write_file() {
+  mkdir -p "$(dirname "$FILE")"
+  {
+    cat <<'EOF'
+# Phone chrome. Independent of the colour theme.
+# Colours live in ~/.local/state/omarchy/current/theme/colors.toml
+# and change with omarchy-theme-set. This file reshapes the UI.
+#
+# corners: large | modest | square
+# shade:   roomy | compact
+#
+# Optional numbers (logical px) override the preset for that key:
+#   sheet, tile, card, shade_tile, shade_slider, shade_round
+
+EOF
+    printf 'corners = "%s"\n' "$corners"
+    printf 'shade = "%s"\n' "$shade"
+    if [[ -n $sheet ]]; then printf 'sheet = %s\n' "$sheet"; fi
+    if [[ -n $tile ]]; then printf 'tile = %s\n' "$tile"; fi
+    if [[ -n $card ]]; then printf 'card = %s\n' "$card"; fi
+    if [[ -n $shade_tile ]]; then printf 'shade_tile = %s\n' "$shade_tile"; fi
+    if [[ -n $shade_slider ]]; then printf 'shade_slider = %s\n' "$shade_slider"; fi
+    if [[ -n $shade_round ]]; then printf 'shade_round = %s\n' "$shade_round"; fi
+  } >"$FILE"
+}
+
+usage() {
+  echo "Usage: moarchy-ui [get KEY | corners VALUE | shade VALUE | set KEY NUMBER]" >&2
+  echo "  KEY: corners, corners-label, shade, shade-label" >&2
+  echo "  corners: large | modest | square" >&2
+  echo "  shade:   roomy | compact" >&2
+  exit 1
+}
+
+read_file
+
+if (($# == 0)); then
+  printf 'corners=%s\n' "$corners"
+  printf 'shade=%s\n' "$shade"
+  if [[ -n $sheet ]]; then printf 'sheet=%s\n' "$sheet"; fi
+  if [[ -n $tile ]]; then printf 'tile=%s\n' "$tile"; fi
+  if [[ -n $card ]]; then printf 'card=%s\n' "$card"; fi
+  if [[ -n $shade_tile ]]; then printf 'shade_tile=%s\n' "$shade_tile"; fi
+  if [[ -n $shade_slider ]]; then printf 'shade_slider=%s\n' "$shade_slider"; fi
+  if [[ -n $shade_round ]]; then printf 'shade_round=%s\n' "$shade_round"; fi
+  exit 0
+fi
+
+case "$1" in
+get)
+  [[ $# -eq 2 ]] || usage
+  case "$2" in
+    corners) echo "$corners" ;;
+    corners-label) label_corners "$corners" ;;
+    shade|density) echo "$shade" ;;
+    shade-label|density-label) label_shade "$shade" ;;
+    sheet|tile|card|shade_tile|shade_slider|shade_round)
+      eval "val=\${$2}"
+      echo "$val"
+      ;;
+    *) usage ;;
+  esac
+  ;;
+corners)
+  [[ $# -eq 2 ]] || usage
+  corners=$(norm_corners "$2")
+  # A preset retake drops numeric overrides for the radii it owns, otherwise
+  # "square" with sheet=28 still on disk would not look square.
+  sheet=""; tile=""; card=""
+  write_file
+  echo "$corners"
+  ;;
+shade)
+  [[ $# -eq 2 ]] || usage
+  shade=$(norm_shade "$2")
+  shade_tile=""; shade_slider=""; shade_round=""
+  write_file
+  echo "$shade"
+  ;;
+set)
+  [[ $# -eq 3 ]] || usage
+  case "$2" in
+    sheet|tile|card|shade_tile|shade_slider|shade_round)
+      [[ $3 =~ ^[0-9]+([.][0-9]+)?$ ]] || usage
+      eval "$2=\$3"
+      write_file
+      echo "$3"
+      ;;
+    *) usage ;;
+  esac
+  ;;
+-h|--help|help) usage ;;
+*) usage ;;
+esac

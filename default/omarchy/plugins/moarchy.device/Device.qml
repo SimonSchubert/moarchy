@@ -77,7 +77,9 @@ Item {
   // The card radius, from the four this shell has (docs/style.md D1). Was a
   // bare Style.space(14) -- a fifth radius nobody chose, which left this
   // screen's two panels 4px sharper than every card on the phone next to them.
-  readonly property int radiusCard: Style.space(18)
+  Shared.UiFile { id: ui }
+  readonly property int radiusTile: ui.radiusTile
+  readonly property int radiusCard: ui.radiusCard
 
   property var facts: ({})
 
@@ -258,7 +260,7 @@ Item {
             // and fading *from* "transparent" is the grey wash H3 rules out.
             PressVeil {
               anchors.fill: parent
-              radius: width / 2
+              radius: ui.radiusOn(width)
               on: backArea.pressed
             }
 

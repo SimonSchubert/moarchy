@@ -170,6 +170,23 @@ Item {
   readonly property bool fillStripBand:
     !!root.focusedToplevel() && !root.keyboardReserving
 
+  // I1b. The arranged area of moarchy-home, filled so a workspace switch does
+  // not flash wallpaper in the hole the window leaves. I1a is only the strip
+  // band, and it is off while the keyboard is up -- which is exactly when a
+  // swipe away from the terminal is ugliest, because the keyboard's exclusive
+  // zone has already cut this surface to the window area and that area is
+  // transparent. Representation is the same signal run("home") trusts: it
+  // stays true through a layer-surface Exclusive, which focus does not.
+  //
+  // coveringSwitch is the latch for the frames where both of those flicker
+  // false between workspaces. Set in run("next"/"prev"), cleared after the
+  // new workspace has had time to name a window.
+  property bool coveringSwitch: false
+  readonly property bool fillWorkspace:
+    root.coveringSwitch
+    || root.focusedRepresentation() !== ""
+    || !!root.focusedToplevel()
+
   // G6. Rightward travel that commits a back swipe -- three times the band, so
   // brushing the edge never closes an app.
   readonly property int backCommit: Style.space(48)
@@ -686,18 +703,24 @@ Item {
     var loader = root.shell.panelLoaders[id]
     if (!loader || !loader.item) return
     root.dragTarget = loader.item
-    // gestures.md N3. Ask the sheet to map now, while the finger is still
-    // crossing the slop. resolveTarget runs on the press, which is the only
-    // moment early enough to be worth anything -- by the first drawn frame the
-    // map, the configure and a full grid layout are all on the critical path.
-    if (typeof root.dragTarget.warming !== "undefined")
-      root.dragTarget.warming = true
+    // Do not map the sheet here. resolveTarget runs on every strip press, and
+    // most of those are a workspace swipe (B1: horizontal wins). Warming on
+    // press mapped the full grid, laid it out, and left it composited on Top
+    // for the duration of the switch -- the hitch that vanished when the
+    // drawer plugin failed to load. beginDrawer() maps once the tracker has
+    // latched upward, which is still inside the slop of a real open.
+    //
     // The drawer's progress *is* the pull, on both surfaces, now that both
     // measure against the same travel. An already-open drawer therefore starts
     // the next drag at 1.0, which is what lets a second swipe carry straight on
     // into the home band (A6) rather than starting over at the bottom of a
     // sheet that is already up.
     root.dragStartPull = Number(loader.item.progress) || 0
+  }
+
+  function beginDrawer(): void {
+    if (root.dragTarget && typeof root.dragTarget.warming !== "undefined")
+      root.dragTarget.warming = true
   }
 
   function setTargetProgress(pull: real): void {
@@ -776,6 +799,10 @@ Item {
       // back arrives on it (K2). Sweeping it here is what made a shell app
       // impossible to swipe back to.
       root.hideCoveringSurfaces()
+      // I1b. Paint before sway unmaps the window, so the first frame of the
+      // switch is the theme colour rather than the wallpaper.
+      root.coveringSwitch = true
+      coverSettle.restart()
       root.dispatch(action === "next" ? "workspace next_on_output"
                                       : "workspace prev_on_output")
     }
@@ -871,6 +898,16 @@ Item {
     onTriggered: root.performBack()
   }
 
+  // I1b. Long enough for the destination window to map on this hardware;
+  // short enough that a swipe onto an empty workspace does not keep the
+  // theme colour over the wallpaper. Harmless if fillWorkspace is still
+  // true for another reason -- the fill does not depend on this flag alone.
+  Timer {
+    id: coverSettle
+    interval: 280
+    onTriggered: root.coveringSwitch = false
+  }
+
   // Warmed once at startup, so the first back gesture is not the one that pays
   // for a cold DBus connection. The probe is fast once the path has been
   // exercised and slow the very first time, and performBack spends its whole
@@ -889,8 +926,9 @@ Item {
     keyboardProbe.running = true
   }
 
-  // G2. The one call this plugin makes; the incantation itself is
-  // moarchy.common/Osk.qml, which the drawer's search field also asks (G14a).
+  // G2. The one call this plugin makes, and the one way the keyboard goes
+  // down. The incantation itself is moarchy.common/Osk.qml, which a tap on a
+  // text field also asks (G14a).
   Shared.Osk { id: osk }
 
   function hideKeyboard(): void { osk.hide() }
@@ -1107,7 +1145,10 @@ Item {
                && root.pendingMode !== "none"
     startFrom: root.dragStartPull
 
-    onBegan: root.dragMode = root.pendingMode
+    onBegan: {
+      root.dragMode = root.pendingMode
+      if (root.dragMode === "drawer") root.beginDrawer()
+    }
     onMoved: p => root.setTargetProgress(stripDrag.travelled)
     onFinished: (p, v) => root.releaseStrip()
     onCanceled: from => root.dropDrag()
@@ -1125,7 +1166,10 @@ Item {
     latchable: root.dragTarget !== null && root.dragStartPull < 1
     startFrom: root.dragStartPull
 
-    onBegan: root.dragMode = "drawer"
+    onBegan: {
+      root.dragMode = "drawer"
+      root.beginDrawer()
+    }
     onMoved: p => root.setTargetProgress(homeDrag.travelled)
     onFinished: (p, v) => root.releaseTarget(
       root.openVelocity >= root.fling
@@ -1514,24 +1558,27 @@ Item {
     // the surface rather than shrinking it.
     margins.bottom: -root.stripHeight
 
-    // I1a. The band, filled from underneath.
+    // I1a / I1b. Theme background, filled from underneath.
     //
-    // Underneath is the whole trick, and it is why this costs nothing anywhere
-    // else. Bottom is below every window, so on an occupied workspace this is
-    // covered except in the band no window is drawn in; and it is below every
-    // sheet, so the drawer, the shade and the theme picker draw
-    // over it exactly as before. Painting the band from the *strip* instead
-    // would have put it over all four.
+    // Underneath is the whole trick. Bottom is below every window, so at rest
+    // this is covered except in the band no window is drawn in; and it is
+    // below every sheet, so the drawer, the shade and the theme picker draw
+    // over it exactly as before. Painting from the *strip* instead would have
+    // put it over all four.
     //
-    // Only the band, not the whole surface. A window with gaps on, or two
-    // tiled side by side, would otherwise get the theme colour in the gutters
-    // as well -- a change nobody asked for, in a place the wallpaper is meant
-    // to show.
+    // The whole arranged area, not only the strip band. A strip swipe unmaps
+    // the window for a frame, and an unfilled surface is the wallpaper
+    // flashing through -- ugliest from a terminal, where the keyboard is up
+    // and I1a has already turned the band fill off. The fill is already
+    // painted before that frame because an occupied workspace keeps it up.
+    // An empty workspace is the home screen and still shows the wallpaper.
+    //
+    // Gutters (gaps on, or two windows tiled) pick up the same colour. That
+    // is the cost of the fill being there before the window leaves.
     Rectangle {
-      anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
-      height: root.stripHeight
+      anchors.fill: parent
       color: Color.background
-      visible: root.fillStripBand
+      visible: root.fillWorkspace
     }
 
     MultiPointTouchArea {

@@ -50,6 +50,7 @@
 import QtQuick
 import qs.Commons
 import qs.Ui as Ui
+import "Ui.js" as UiSpec
 
 Item {
   id: header
@@ -63,6 +64,12 @@ Item {
   property color fill
 
   property int titleWeight: Font.DemiBold
+
+  // D1 tile radius from the surface. Passed in rather than watched here:
+  // this component's default property is the trailing slot, so a UiFile
+  // child would land in that slot and cover the back button.
+  // -1 means "fully round" (Large); 0 is Square.
+  property int radiusTile: -1
 
   // Controls this sheet puts at the right-hand end. They are children of an
   // item with the header's own geometry, so a child anchoring to `parent.right`
@@ -81,15 +88,17 @@ Item {
     anchors.verticalCenter: parent.verticalCenter
     width: Style.space(38)
     height: width
-    radius: width / 2
+    // D1: same tile radius as the shade's icon buttons, capped at a half-side
+    // so Large stays a circle and Square goes to 0.
+    radius: UiSpec.radiusOn(header.radiusTile < 0 ? width : header.radiusTile, width)
     color: header.fill
 
     PressVeil { anchors.fill: parent; radius: parent.radius; ink: header.ink; on: backArea.pressed }
 
-    // fa-angle-left.
+    // fa-angle-left. Pair of SettingsRow's fa-angle-right.
     Ui.OpticalGlyph {
       anchors.fill: parent
-      text: ""
+      text: ""
       fontFamily: Style.font.family
       fontSize: Style.font.icon
       color: header.ink

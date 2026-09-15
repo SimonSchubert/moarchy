@@ -41,6 +41,7 @@ Item {
 
   property string returnTo: ""
   readonly property var colours: themeFile.colours
+  readonly property int radiusCard: uiFile.radiusCard
   property int bodySize: Metrics.BODY
   Component.onCompleted: root.bodySize = Metrics.shellBody(root)
 
@@ -288,6 +289,7 @@ Item {
   }
 
   Chrome.ThemeFile { id: themeFile }
+  Chrome.UiFile { id: uiFile }
 
   IpcHandler {
     target: "reversi"
@@ -441,7 +443,7 @@ Item {
 
             Rectangle {
               anchors.fill: parent
-              radius: Metrics.CARD_RADIUS
+              radius: root.radiusCard
               color: root.feltColour
             }
 
@@ -554,7 +556,7 @@ Item {
 
                 Rectangle {
                   anchors.fill: parent
-                  radius: Metrics.CARD_RADIUS
+                  radius: root.radiusCard
                   color: modelData.key === root.level
                          ? Theme.mix(root.accent, root.colours.background, 0.25)
                          : "transparent"

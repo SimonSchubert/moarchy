@@ -37,6 +37,7 @@ Item {
 
   property string returnTo: ""
   readonly property var colours: themeFile.colours
+  readonly property int radiusCard: uiFile.radiusCard
   property int bodySize: Metrics.BODY
 
   Component.onCompleted: {
@@ -250,6 +251,7 @@ Item {
   }
 
   Chrome.ThemeFile { id: themeFile }
+  Chrome.UiFile { id: uiFile }
 
   IpcHandler {
     target: "contacts"
@@ -476,7 +478,7 @@ Item {
                           anchors.rightMargin: 12
                           anchors.verticalCenter: parent.verticalCenter
                           height: parent.height - 4
-                          radius: Metrics.CARD_RADIUS
+                          radius: root.radiusCard
                           color: root.surface(0.06)
 
                           Column {

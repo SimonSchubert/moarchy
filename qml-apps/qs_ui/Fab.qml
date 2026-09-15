@@ -9,14 +9,17 @@ Rectangle {
   property string tooltip: ""
 
   signal clicked
+  signal pressAndHold
 
   width: Metrics.FAB
   height: Metrics.FAB
-  radius: width / 2
+  radius: chrome.radiusOn(width)
   color: root.accent
   Accessible.role: Accessible.Button
   Accessible.name: root.tooltip
   Accessible.onPressAction: root.clicked()
+
+  UiFile { id: chrome }
 
   Icon {
     anchors.centerIn: parent
@@ -37,5 +40,6 @@ Rectangle {
     id: tap
     anchors.fill: parent
     onClicked: root.clicked()
+    onPressAndHold: root.pressAndHold()
   }
 }

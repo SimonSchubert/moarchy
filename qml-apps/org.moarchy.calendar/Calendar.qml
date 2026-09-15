@@ -52,6 +52,7 @@ Item {
   // `colours` and not `palette`: QQuickItem already has a `palette`, and
   // shadowing it makes a binding resolve to whichever the compiler picked.
   readonly property var colours: themeFile.colours
+  readonly property int radiusCard: uiFile.radiusCard
   property int bodySize: Metrics.BODY
 
   // Which day a week starts on is the phone's business, not this app's. Qt
@@ -446,6 +447,7 @@ Item {
   property bool harnessed: false
 
   Chrome.ThemeFile { id: themeFile }
+  Chrome.UiFile { id: uiFile }
 
   IpcHandler {
     target: "calendar"
@@ -851,6 +853,7 @@ Item {
                       entry: modelData
                       colours: root.colours
                       bodySize: root.bodySize
+                      radiusCard: root.radiusCard
                       onClicked: root.startEdit(modelData)
                     }
                   }
@@ -986,6 +989,7 @@ Item {
                         entry: modelData
                         colours: root.colours
                         bodySize: root.bodySize
+                        radiusCard: root.radiusCard
                         onClicked: {
                           root.selected = group.modelData.iso
                           root.startEdit(modelData)
@@ -1088,7 +1092,7 @@ Item {
                 id: dateRow
                 width: form.width - 32
                 height: Metrics.TARGET + 6
-                radius: Metrics.CARD_RADIUS
+                radius: root.radiusCard
                 color: root.pickingDate ? Theme.alpha(root.accent, 0.14) : root.surface(0.09)
                 Behavior on color { ColorAnimation { duration: Metrics.PRESS_MS } }
 
@@ -1139,7 +1143,7 @@ Item {
                 width: form.width - 32
                 height: root.pickingDate ? pickerCol.height + 12 : 0
                 clip: true
-                radius: Metrics.CARD_RADIUS
+                radius: root.radiusCard
                 color: root.surface(0.06)
                 visible: height > 0
                 Behavior on height { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }

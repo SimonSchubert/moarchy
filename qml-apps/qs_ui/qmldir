@@ -3,9 +3,12 @@ IconButton 1.0 IconButton.qml
 BackButton 1.0 BackButton.qml
 AppBar 1.0 AppBar.qml
 TextField 1.0 TextField.qml
+Osk 1.0 Osk.qml
 Check 1.0 Check.qml
 TypedText 1.0 TypedText.qml
 Fab 1.0 Fab.qml
+Pill 1.0 Pill.qml
+Switch 1.0 Switch.qml
 AppWindow 1.0 AppWindow.qml
 PressVeil 1.0 PressVeil.qml
 MenuItem 1.0 MenuItem.qml
@@ -14,4 +17,5 @@ BottomNav 1.0 BottomNav.qml
 BottomNavItem 1.0 BottomNavItem.qml
 JsonFile 1.0 JsonFile.qml
 ThemeFile 1.0 ThemeFile.qml
+UiFile 1.0 UiFile.qml
 Toast 1.0 Toast.qml

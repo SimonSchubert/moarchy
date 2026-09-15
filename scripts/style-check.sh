@@ -48,7 +48,7 @@ printf '\nB. type / C. colour / D. shape\n'
 report=$(python3 - "$PLUGINS" <<'PY'
 import pathlib, re, sys
 
-RADII = ("radiusSheet", "radiusTile", "radiusCard")
+RADII = ("radiusSheet", "radiusTile", "radiusCard", "radiusOn")
 HEX = re.compile(r'"#[0-9a-fA-F]{3,8}"')
 problems = []
 
@@ -188,7 +188,7 @@ PY
 if [[ -z $report ]]; then
   ok "every Text names its family and weight; glyphs in slots use OpticalGlyph (B1, B3, B5)"
   ok "hex only as a pre-theme fallback (C4)"
-  ok "every radius is sheet, tile, card, pill or circle (D1)"
+  ok "every radius is sheet, tile, card, pill or radiusOn (D1)"
   ok "every control that answers a tap shows a pressed state (H1, H6)"
 else
   no "style violations" "$report"
@@ -282,6 +282,35 @@ if command -v node >/dev/null 2>&1; then
   fi
 else
   skip "the Sheet.js cases need node, which is not installed here (I1a)"
+fi
+
+# Chrome file. Corners and shade sizes live in ~/.config/omarchy/ui.toml, and
+# moarchy-ui is the writer the theme switcher, Settings and an agent all use.
+# A parser that disagrees with the writer is a theme switcher that does not
+# stick, so both halves are checked here rather than only on the phone.
+printf '\nchrome (ui.toml)\n'
+if ui_out=$(bash scripts/test-ui.sh 2>&1); then
+  ok "moarchy-ui reads and writes the chrome file ($(grep -c PASS <<<"$ui_out") cases)"
+else
+  no "the chrome file writer is broken" "$ui_out"
+fi
+
+# The apps cannot import moarchy.common, so Ui.js exists twice. The tables have
+# to be the same tables or a corners pick in the shell would not match the apps.
+ui_a=$(grep -A3 'var CORNERS' "$PLUGINS/moarchy.common/Ui.js")
+ui_b=$(grep -A3 'var CORNERS' qml-apps/qs_ui/Ui.js)
+if [[ $ui_a == "$ui_b" ]]; then
+  ok "plugin and app Ui.js share the same corner table"
+else
+  no "plugin and app Ui.js corner tables have drifted" "$ui_a"$'\n'"$ui_b"
+fi
+
+rad_a=$(grep -A8 'function radiusOn' "$PLUGINS/moarchy.common/Ui.js")
+rad_b=$(grep -A8 'function radiusOn' qml-apps/qs_ui/Ui.js)
+if [[ $rad_a == "$rad_b" ]]; then
+  ok "plugin and app Ui.js share radiusOn"
+else
+  no "plugin and app Ui.js radiusOn have drifted" "$rad_a"$'\n'"$rad_b"
 fi
 
 # --- F1-F4, F6: one drag tracker, and it stays one -------------------------

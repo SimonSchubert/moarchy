@@ -48,6 +48,8 @@ Item {
   // `colours` and not `palette`: QQuickItem already has a `palette`, and
   // shadowing it makes a binding resolve to whichever the compiler picked.
   readonly property var colours: themeFile.colours
+  readonly property int radiusCard: uiFile.radiusCard
+  readonly property int radiusTile: uiFile.radiusTile
   property int bodySize: Metrics.BODY
   Component.onCompleted: {
     root.bodySize = Metrics.shellBody(root)
@@ -539,6 +541,7 @@ Item {
   }
 
   Chrome.ThemeFile { id: themeFile }
+  Chrome.UiFile { id: uiFile }
 
   onCurrentIdChanged: Qt.callLater(root.maybeFetch)
 
@@ -924,7 +927,7 @@ Item {
                   anchors.rightMargin: 12
                   anchors.topMargin: 2
                   anchors.bottomMargin: 12
-                  radius: Metrics.CARD_RADIUS
+                  radius: root.radiusCard
                   color: root.card
 
                   RowLayout {
@@ -1419,7 +1422,7 @@ Item {
                   Repeater {
                     model: [{ name: "metric", label: "°C" }, { name: "imperial", label: "°F" }]
 
-                    delegate: Rectangle {
+                    delegate: Chrome.Pill {
                       id: pill
                       required property var modelData
 
@@ -1428,35 +1431,16 @@ Item {
                       Layout.preferredWidth: 58
                       Layout.preferredHeight: Metrics.TARGET - 6
                       Layout.alignment: Qt.AlignVCenter
-                      radius: height / 2
+                      text: pill.modelData.label
                       color: pill.on ? Theme.mix(root.colours.accent, root.colours.background, 0.22)
                                      : root.card
-
-                      Chrome.TypedText {
-                        anchors.centerIn: parent
-                        role: "body"
-                        text: pill.modelData.label
-                        color: pill.on ? root.accent : root.dim
-                        bodySize: root.bodySize
-                      }
-
-                      Chrome.PressVeil {
-                        anchors.fill: parent
-                        radius: parent.radius
-                        ink: root.ink
-                        on: pillTap.pressed
-                      }
-
-                      MouseArea {
-                        id: pillTap
-                        anchors.fill: parent
-                        onClicked: root.setUnits(pill.modelData.name)
-                      }
+                      ink: pill.on ? root.accent : root.dim
+                      bodySize: root.bodySize
+                      onClicked: root.setUnits(pill.modelData.name)
 
                       Accessible.role: Accessible.RadioButton
                       Accessible.name: pill.modelData.name === "metric" ? "Celsius" : "Fahrenheit"
                       Accessible.checked: pill.on
-                      Accessible.onPressAction: root.setUnits(pill.modelData.name)
                     }
                   }
                 }

@@ -34,6 +34,7 @@ import Quickshell.Wayland
 import qs.Commons
 import qs.Ui as Ui
 import "../moarchy.common/Theme.js" as Theme
+import "../moarchy.common/Ui.js" as UiSpec
 import "../moarchy.common" as Shared
 import "../moarchy.common/Sheet.js" as Sheet
 
@@ -72,11 +73,12 @@ Item {
   // the theme's shell.toml, so this is nearer 23 at the default ~1.15 -- which
   // is why nothing here or in the selftest writes the number down.
   readonly property int gestureStrip: Style.space(20)
-  // 20 is the tile radius, and a cell in a grid you tap is a tile rather
-  // than a card (docs/style.md D1). The value never changed; the name was
-  // the odd one out, and a name is how the next screen picks the right
-  // number without measuring this one.
-  readonly property int radiusTile: Style.space(20)
+  Shared.UiFile { id: ui }
+
+  // A cell in a grid you tap is a tile rather than a card (docs/style.md D1).
+  // The number comes from ~/.config/omarchy/ui.toml, not a literal, so a
+  // corners pick on this screen restyles the cells it is sitting on.
+  readonly property int radiusTile: ui.radiusTile
 
   readonly property color surface: Color.menu.background
   // NOT `onSurface` / `onAccent`, however much the Material role names want to
@@ -87,6 +89,8 @@ Item {
   // on a dark tile while the properties either side of them are fine.
   readonly property color textOnSurface: Color.menu.text
   readonly property color container: Util.alpha(Color.menu.text, 0.08)
+  readonly property color containerHigh: Util.alpha(Color.menu.text, 0.14)
+  readonly property color accent: Color.accent
   // Computed per theme, not fixed. A flat 0.6 reaches 2.72:1 on rose-pine --
   // measured across all 22 colors.toml files -- and no single alpha clears AA
   // everywhere without being loud enough to stop reading as secondary. Walk
@@ -107,7 +111,51 @@ Item {
     ink: root.textOnSurface
     fill: root.container
     titleWeight: root.textWeight
+    radiusTile: root.radiusTile
     onBack: root.dismiss()
+  }
+
+  // A row of exclusive chips. Used twice: corners, then shade size. The chip
+  // radius follows the current corners pick, so tapping Square squares these
+  // too -- the control is the preview.
+  component ChoiceRow: Column {
+    id: choice
+    property string title: ""
+    property var options: []
+    property string current: ""
+    signal picked(string key)
+
+    width: parent.width
+    spacing: Style.space(6)
+
+    Text {
+      text: choice.title
+      font.family: Style.font.family
+      font.pixelSize: Style.font.caption
+      font.weight: root.textWeight
+      color: root.subdued
+    }
+
+    Row {
+      width: parent.width
+      spacing: Style.space(6)
+      Repeater {
+        model: choice.options
+        delegate: Shared.Pill {
+          required property var modelData
+          readonly property bool on: modelData.key === choice.current
+          width: Math.floor((parent.width - Style.space(6) * (choice.options.length - 1))
+                            / Math.max(1, choice.options.length))
+          height: Style.space(44)
+          text: modelData.label
+          color: on ? root.containerHigh : root.container
+          ink: root.textOnSurface
+          border.width: on ? Math.max(2, Style.space(2)) : 0
+          border.color: root.accent
+          onClicked: if (!on) choice.picked(modelData.key)
+        }
+      }
+    }
   }
 
   // Matches the bar and the Settings list. See moarchy.bar's textWeight
@@ -217,6 +265,26 @@ Item {
     }
   }
 
+  // Same shape as applyTheme: run, not execDetached, so a failed write is
+  // visible. The FileView in UiFile picks the new toml up; the optimistic
+  // chrome assignment is what makes the chips restyle on the tap, not on
+  // the inotify.
+  Process { id: applyUi }
+
+  function setCorners(name) {
+    var next = UiSpec.normCorners(name)
+    ui.chrome = UiSpec.merge(ui.chrome, { corners: next })
+    applyUi.command = ["moarchy-ui", "corners", next]
+    applyUi.running = true
+  }
+
+  function setShade(name) {
+    var next = UiSpec.normShade(name)
+    ui.chrome = UiSpec.merge(ui.chrome, { shade: next })
+    applyUi.command = ["moarchy-ui", "shade", next]
+    applyUi.running = true
+  }
+
   function apply(row) {
     if (!row || root.pendingSlug !== "" || row.slug === root.currentSlug) return
     root.pendingSlug = row.slug
@@ -291,6 +359,16 @@ Item {
       }
       return "unknown theme: " + slug
     }
+    function corners(): string { return ui.corners }
+    function setCorners(name: string): string {
+      root.setCorners(name)
+      return ui.corners
+    }
+    function shade(): string { return ui.shade }
+    function setShade(name: string): string {
+      root.setShade(name)
+      return ui.shade
+    }
   }
 
   PanelWindow {
@@ -356,6 +434,27 @@ Item {
             font.weight: root.textWeight
             color: root.subdued
           }
+        }
+
+        ChoiceRow {
+          title: "Corners"
+          current: ui.corners
+          options: [
+            { key: "large", label: "Large" },
+            { key: "modest", label: "Modest" },
+            { key: "square", label: "Square" }
+          ]
+          onPicked: name => root.setCorners(name)
+        }
+
+        ChoiceRow {
+          title: "Shade controls"
+          current: ui.shade
+          options: [
+            { key: "roomy", label: "Roomy" },
+            { key: "compact", label: "Compact" }
+          ]
+          onPicked: name => root.setShade(name)
         }
 
         // --------------------------------------------------------- grid

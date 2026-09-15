@@ -1,0 +1,30 @@
+# Phone chrome. Independent of the colour theme.
+#
+# Colours live in ~/.local/state/omarchy/current/theme/colors.toml and
+# change with omarchy-theme-set. This file reshapes the UI: how round
+# cards are, how tall the shade's sliders and tiles are.
+#
+# This packaged copy is the documented default. The file the shell and
+# the apps actually read is:
+#
+#   ~/.config/omarchy/ui.toml
+#
+# Missing, empty or malformed is the same as this file -- themed by
+# presence, never broken by absence. Edit that path, or run `moarchy-ui`,
+# or pick from the theme switcher; all three write the same keys.
+#
+# corners: large | modest | square
+#   large   sheet 28, tile 20, card 18   (the look this phone shipped with)
+#   modest  sheet 12, tile 8,  card 6
+#   square  all 0
+#
+# shade: roomy | compact
+#   roomy    tiles 62, sliders 48, header buttons 36
+#   compact  tiles 48, sliders 36, header buttons 32
+#
+# Optional numbers (logical px, then scaled like Style.space) override
+# the preset for that one key:
+#   sheet, tile, card, shade_tile, shade_slider, shade_round
+
+corners = "large"
+shade = "roomy"

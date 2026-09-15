@@ -33,6 +33,7 @@ Item {
 
   property string returnTo: ""
   readonly property var colours: themeFile.colours
+  readonly property int radiusCard: uiFile.radiusCard
   property int bodySize: Metrics.BODY
   Component.onCompleted: {
     root.bodySize = Metrics.shellBody(root)
@@ -219,6 +220,7 @@ Item {
   }
 
   Chrome.ThemeFile { id: themeFile }
+  Chrome.UiFile { id: uiFile }
 
   IpcHandler {
     target: "habits"
@@ -505,7 +507,7 @@ Item {
                     required property var modelData
                     width: (detailCol.width - 40) / 2
                     height: 56
-                    radius: Metrics.CARD_RADIUS
+                    radius: root.radiusCard
                     color: Theme.mix(root.colours.foreground, root.colours.background, 0.06)
 
                     Column {

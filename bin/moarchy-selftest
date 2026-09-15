@@ -1945,7 +1945,7 @@ print(found[0] if found else "")'; }
       okac G14 "focusing a text field raises nothing (6 samples)"
     else
       noac G14 "the keyboard came up in $g14_up of 6 samples on a focused terminal" \
-               "text focus must not raise it; only the handle and SetVisible do"
+               "focus must not raise it; a tap on a field, the handle, or SetVisible does"
     fi
 
     # And the other half: what is up stays up. Home used to put it away, and
@@ -4061,10 +4061,10 @@ print(r["x"], r["y"], r["width"], r["height"])'
       # An environment that will not raise the keyboard cannot answer I5, and
       # reporting that as an I5 failure teaches you to ignore I5.
       #
-      # Worth knowing before chasing it: the keyboard no longer rises on a tap
-      # at all (G14), so this branch is now reached whenever the environment
-      # does not force it up on the bus rather than only when something is
-      # broken.
+      # Worth knowing before chasing it: G14 means *focus* does not raise it,
+      # so this branch is reached when the tap did not land on the field or
+      # the injector has not been bound yet -- not because taps are forbidden.
+      # G14a is a TapHandler on this pill, and I5 is the check that it fires.
       printf '  \033[90m%-4s\033[0m   \033[90mI5 skipped: the keyboard would not come up\033[0m\n' ""
     elif [[ -n $h_up && -n $h_down ]] && (( h_up < h_down )) && [[ $gap_up == "$gap_down" ]]; then
       ok "I5 the drawer reflows above the keyboard ($h_down -> $h_up, gap $gap_up held)"
@@ -4142,7 +4142,7 @@ print(r["x"], r["y"], r["width"], r["height"])'
         ok "I5d closing the drawer, Settings and the theme picker leaves the keyboard down"
       else
         no "I5d the keyboard came up after closing:$i5d_bad" \
-           "an overlay hands the window underneath its text input back; it must put the keyboard away on the way out"
+           "an overlay handing the window underneath its text input back must not raise the keyboard"
       fi
     fi
 

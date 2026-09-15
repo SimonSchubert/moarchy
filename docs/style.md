@@ -156,18 +156,27 @@ is available. Anywhere else it is a colour that will not follow a theme change.
 
 ## D. Shape
 
-**D1** Four radii, by what the thing is:
+**D1** Four radii, by what the thing is. The three rectangle radii come from
+the `corners` preset in `~/.config/omarchy/ui.toml` (large / modest / square).
+Missing file is `large`, which is the look this phone shipped with:
 
-| Radius | Value | What it is |
-| --- | --- | --- |
-| sheet | `Style.space(28)` | A full-width surface that slides in: the shade sheet, the drawer sheet. |
-| tile | `Style.space(20)` | Something in a grid or a row that you tap as a unit: shade tiles, theme cells, the drawer's open-app tiles. |
-| card | `Style.space(18)` | A stacked panel or list row: Settings rows, Wi-Fi rows, notification cards, the confirm card, Device's panels. |
-| pill / circle | `height / 2`, `width / 2` | Anything fully rounded: search field, switches, action buttons, the back chevron. |
+| Radius | large | modest | square | What it is |
+| --- | --- | --- | --- | --- |
+| sheet | `Style.space(28)` | `Style.space(12)` | `0` | A full-width surface that slides in: the shade sheet, the drawer sheet. |
+| tile | `Style.space(20)` | `Style.space(8)` | `0` | Something in a grid or a row that you tap as a unit: shade tiles, theme cells, the drawer's open-app tiles. Kit `Pill` / `Fab` / `TextField` / `IconButton` / `Switch` / `Check` use this too, via `UiFile.radiusOn`, capped at half the short side so Large stays a pill/circle. |
+| card | `Style.space(18)` | `Style.space(6)` | `0` | A stacked panel or list row: Settings rows, Wi-Fi rows, notification cards, the confirm card, Device's panels. |
+| pill / circle | `height / 2`, `width / 2` | same | same | A true capsule that is always fully round: the drawer handle, the home pill. |
 
 Held as `readonly property int radiusSheet / radiusTile / radiusCard` on the
-surface, so the name says which of the four was meant. A bare `Style.space(14)`
-on a card is a fifth radius nobody chose.
+surface, bound to `Shared.UiFile` (or `Chrome.UiFile` in an app), so the name
+says which of the four was meant. A labeled button is `Pill`, a track-and-knob
+is `Switch`, a tick box is `Check` — not a `Rectangle` with a copied radius.
+`UiFile.radiusOn(size)` is the cap. Edit the toml, run `moarchy-ui corners
+modest`, or pick from the theme switcher; colours stay in `colors.toml` and are
+not this file.
+
+The shade's tile height, slider height and header-button size are the other
+half of that file (`shade = "roomy" | "compact"`), not a fifth radius.
 
 **D2** A rounded rectangle drawn over a rounded corner squares it back off with
 a second rectangle rather than being left with notches — the drawer sheet and
@@ -266,7 +275,8 @@ and unfocused
 takes a free-form query carries a **clear** control at its trailing end, drawn
 only while there is something to clear. On a phone the alternative is holding
 backspace down, or closing the surface and reopening it — which on the drawer
-throws away the scroll position and the keyboard along with the query.
+throws away the scroll position and the query. The keyboard stays where it was
+(G14): closing the drawer does not put it away.
 
 Four things follow from the controls this shell already has, and none of them
 are new rules:
@@ -539,8 +549,8 @@ numbers.
 | `moarchy.settings` | row, any type | 58 full-width | ok |
 | `moarchy.settings` | Cancel / Continue | 110 × 44 | ok |
 | `moarchy.settings` | header back | 38 drawn, 44 answering | ok, E2 |
-| `moarchy.shade` | tiles, sliders, notification cards | ≥ 48 | ok |
-| `moarchy.shade` | gear / power | 36 drawn, 44 answering | ok, E2 |
+| `moarchy.shade` | tiles, sliders, notification cards | roomy: tiles 62, sliders 48; compact: tiles 48, sliders 36 (target still 44, E2) | ok |
+| `moarchy.shade` | gear / power | `shadeRound` drawn (36 roomy / 32 compact), answering toward 44 (E2, E3) | ok |
 | `moarchy.shade` | media prev / play / next | `tapSlot` ≥ 44 | ok, E4 E5 |
 | `moarchy.shade` | Clear all | 44 tall | ok, E2 |
 | `moarchy.drawer` | app cell | 90 × 86 | ok |

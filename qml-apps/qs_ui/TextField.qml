@@ -11,9 +11,9 @@ import "Metrics.js" as Metrics
 //
 // The inner control was the shell's Ui.TextField. It is a plain TextInput now,
 // because the keyboard is not the shell's to give: moarchy-keyboard binds
-// zwp_input_method_v2 and Qt speaks text-input-v3 for whatever holds focus, so
-// a field raises the OSK through the compositor rather than through an API
-// that only exists on our image.
+// zwp_input_method_v2 and Qt speaks text-input-v3 for whatever holds focus.
+// Focus arriving on its own raises nothing (gestures.md G14); a tap on this
+// field asks sm.puri.OSK0, the same way the restore handle does.
 //
 // Icons sit outside the input: putting them in a suffix that can take focus
 // would drop the keyboard the way a Gtk.Button on an Entry does.
@@ -34,18 +34,23 @@ Rectangle {
   signal trailingClicked
   signal accepted
 
-  // The keyboard, on demand.
-  //
-  // `field` is private to this file, and forcing focus onto the pill itself
-  // does nothing -- the TextInput inside it is what the compositor gives a
-  // keyboard to. Without a way in, every form on the phone opens with its
-  // first field waiting to be tapped before it can be typed into, which is a
-  // tap spent reaching a keyboard that was always going to be needed.
+  // Place the caret. Does not raise the keyboard: a window that maps with a
+  // field already focused, or a form that focuses its first field for you,
+  // is not a person asking (G14). A press that starts on `field` is.
   function focusInput(): void { field.forceActiveFocus() }
+
+  Osk { id: osk }
+  property bool raiseArmed: false
+  Timer {
+    interval: 200
+    running: true
+    onTriggered: root.raiseArmed = true
+  }
+  UiFile { id: chrome }
 
   implicitHeight: Metrics.PILL
   implicitWidth: 240
-  radius: height / 2
+  radius: chrome.radiusOn(height)
   color: Qt.rgba(1, 1, 1, 0.06)
 
   RowLayout {
@@ -77,6 +82,17 @@ Rectangle {
       selectionColor: root.accent
       selectedTextColor: root.foreground
       onAccepted: root.accepted()
+      // Press that starts on this field. A TapHandler fires on release after
+      // the item has slid under a finger that began elsewhere (drawer open,
+      // app switch), which is how the keyboard came up by itself.
+      MouseArea {
+        anchors.fill: parent
+        propagateComposedEvents: true
+        onPressed: mouse => {
+          if (root.raiseArmed) osk.show()
+          mouse.accepted = false
+        }
+      }
 
       // TextInput draws the caret in `color`; a search field wants it in the
       // accent, the way every other field on the phone has it. Blinking and

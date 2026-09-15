@@ -13,6 +13,7 @@ Item {
   property color foreground: "#ffffff"
   property color danger: "#e01b24"
   property int bodySize: 16
+  property int radiusCard: Metrics.CARD_RADIUS
   property int menuWidth: Metrics.MENU_WIDTH
   // "topEnd" | "center"
   property string placement: "topEnd"
@@ -39,7 +40,7 @@ Item {
     id: panel
     width: root.menuWidth
     height: menuCol.height + 16
-    radius: Metrics.CARD_RADIUS
+    radius: root.radiusCard
     color: root.background
     border.color: root.line
     border.width: 1

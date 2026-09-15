@@ -418,48 +418,42 @@ and a column that answers a gesture look the same until you try to use it.
 `surfaceW` > `w`; `w` keeps meaning the input band, so G8's number is still
 what it was
 
-**G14** The keyboard comes up only when asked, and three things can ask: its own
-restore handle, `$mod+i`, and **a tap on the drawer's search field** (G14a). Text
-focus on its own raises nothing — not an app's field, not any other field in this
-shell — and nothing puts it down except the back swipe (G2) and the drawer that
-raised it (G14a).
+**G14** The keyboard comes up only when a person asks, and three things can ask: its own
+restore handle, `$mod+i`, and **a tap on a text field**. Nothing puts it down except the
+back swipe (G2). Opening the drawer, closing it, and switching apps leave it where it was.
 
-An app asking for text input is not an app asking for a keyboard. It used to be
-read as one, so the keyboard appeared over half the screen whenever anything took
-focus and left again just as often, which is the worse half: it moves the layout
-under a thumb already on its way to a key. `moarchy-keyboard`'s AC 49 is what
-makes a dismissal safe to let stick — the handle is on screen whenever the
-keyboard is not, and AC 52 keeps it above this shell's overlays.
+An app asking for text input is not an app asking for a keyboard. Focus arriving on its
+own — a window mapping, an overlay taking Exclusive, a field the host focused for you —
+raises nothing and lowers nothing. It used to be read as a request, so the keyboard
+appeared over half the screen whenever anything took focus and left again just as often,
+which is the worse half: it moves the layout under a thumb already on its way to a key.
+
+A tap on a field is a person asking, the same way the restore handle is. The tap is the
+signal, not the focus that follows it, so a field that is already focused from an earlier
+tap does not raise the keyboard again when its window is focused.
+`moarchy-keyboard`'s AC 49 is what makes a dismissal safe to let stick — the handle is on
+screen whenever the keyboard is not, and AC 52 keeps it above this shell's overlays.
 → with an app's text field focused and the keyboard down, `sm.puri.OSK0`
-`Visible` stays false across ~3s of sampling; going home and opening the drawer
-without touching its field leave it wherever it was
+`Visible` stays false across ~3s of sampling; going home, opening the drawer
+without touching its field, and switching apps leave it wherever it was
 
-**G14a** Tapping the drawer's search field raises the keyboard, and the drawer
-lowers it again when it goes down — but only if the tap is what raised it.
+**G14a** Tapping the drawer's search field raises the keyboard. Closing the drawer does
+not lower it.
 
-This is an exception to G14 and not a retreat from it. What G14 refused was
-*focus* as the signal, because an app takes focus on its own schedule and the
-keyboard then flaps. A tap on this field is not that: it is a person reaching for
-a search box, it is the one field in the shell whose surface exists to be typed
-into, and it cannot happen by accident — `open()` and `close()` both park active
-focus in `focusSink` (N4), so the field is focused if and only if a finger
-focused it.
+What G14 refused was *focus* as the signal, because Exclusive keyboard focus is granted
+as soon as the sheet starts moving and Qt hands it to the first StrongFocus control —
+this field — before `open()` can park it in `focusSink` (N4). Reading that as a request
+is what raised the keyboard on every drawer open, and hiding on close is what put it
+away again on every launch.
 
-The pair is the whole criterion. Raising without lowering leaves a keyboard over
-whatever the drawer was covering, which no phone does; lowering unconditionally
-would take down a keyboard the user raised by hand before ever opening the
-drawer, which is G14's complaint pointed the other way. So the drawer remembers
-whether it was the one that asked.
-
-The hide fires from the surface going down, not from `close()`: `close()` starts
-a 200ms animation and the drawer is still mapped throughout it, which is the
-ordering that made the first attempt at this class of fix pass for the theme
-picker and fail 6/6 for the drawer.
+The raise is a TapHandler on a ClickFocus field, so a finger on the pill is what asks
+and a drag that started there is not a tap. The keyboard that tap raised stays up when
+the drawer goes down: back (G2) is the one way down.
 → with the keyboard down, `omarchy-shell drawer open` then a tap at
 `drawer searchTarget`'s field centre leaves the focused workspace's `rect.height`
 lower by the keyboard's reservation, and `searchTarget` reports `focused=true`;
-closing the drawer restores the rect. Raise the keyboard by hand first and the
-same close leaves it up. **The rect, not `sm.puri.OSK0` `Visible`** — that
+closing the drawer leaves the rect lowered. Open and close without touching the
+field leaves the rect where it was. **The rect, not `sm.puri.OSK0` `Visible`** — that
 property reports the keyboard's own intent and has been observed true with
 nothing drawn
 
@@ -553,19 +547,18 @@ else. Bottom is below every window, so the fill can only be seen in the band no
 window is drawn in; and it is below every sheet, so the drawer, the shade and
 the theme picker draw over it exactly as they did. Filling the band from the
 *strip* instead — the obvious place, since the strip is what reserves it —
-would have painted over all three. Only the band, and not the whole surface
-underneath: a workspace with gaps on, or two windows tiled side by side, leaves
-gutters where the wallpaper is meant to show.
+would have painted over all three.
 
-Two states keep the wallpaper, and each is a case where the wallpaper is the
-answer:
+Two states keep the wallpaper **in the strip band**, and each is a case where
+the wallpaper is the answer for that band:
 
 - **an empty workspace**, which *is* the home screen (vocabulary, D). Asked as
   "is any window focused", which is the question `run("home")` already trusts
   for this and which K1 made honest: the shell's own screens are windows and
   answer it themselves.
 - **the keyboard up**, when the band sits under the keyboard rather than under
-  the app.
+  the app. `gestures geometry` still reports `band=0` then; I1b is what paints
+  the window area above it.
 
 Whether the keyboard is up is read off the `moarchy-home` surface's own height
 rather than from `sm.puri.OSK0`. Sway resolves exclusive zones from Overlay
@@ -577,6 +570,19 @@ true` with nothing drawn.
 → with an app focused and the keyboard down, the pixel in the last row left of
 the pill is the theme's `background`; on an empty workspace it is not, and
 `gestures geometry` reports `band=0`
+
+**I1b** An occupied workspace fills `moarchy-home` with the theme's background,
+not only the strip band. A strip swipe therefore does not flash wallpaper in
+the hole the window leaves — including the hole above a still-mapped keyboard,
+which I1a deliberately does not paint.
+
+The fill is already up before the switch: it follows whether the focused
+workspace has a window (`representation`, the same signal as home), not the
+press. A latch covers the frames where that signal flickers false between
+workspaces. An empty workspace is still the home screen and still shows the
+wallpaper.
+→ with a terminal on one workspace and another app on the next, a strip swipe
+from one to the other does not show the wallpaper between them
 
 **I2** Each sheet that extends is exactly one strip taller than a Top surface
 with the same zero exclusive zone and no margin. That is the negative margin
@@ -1120,19 +1126,22 @@ about; on the device, opening the drawer twice with nothing closed in between
 leaves `omarchy-shell drawer openApps` byte-identical and the tiles' icons
 already drawn on the first frame of the second open
 
-**N3** The drawer's surface is mapped before the drag latches, and takes no
-input until the sheet is being drawn. The gesture plugin asks for the map on
-the press — the only moment early enough to be worth anything — and the sheet
-goes back to unmapped if the touch turns out to have meant something else.
+**N3** The drawer's surface is mapped when an **upward** drag latches, not on
+press, and takes no input until the sheet is being drawn.
+
+A press on the strip is usually a workspace swipe (B1, horizontal wins). Mapping
+the full grid on that press laid it out and left it composited on Top for the
+duration of the switch — the hitch that vanished when this plugin failed to
+load. Latch is 8px up, still inside the slop of a real open, so the configure
+still lands before the sheet is on screen. A press that never latches never maps.
 
 Unmapped, a layer surface reports Qt's 100x100 default, so `grid.cellWidth` is
 computed against 100 and every delegate is rebuilt when the real size arrives.
-The map, the configure round trip and that layout all landed on the frames the
-sheet was arriving on; the shade pays none of it, because its surface is never
-unmapped.
-→ with a finger resting on the strip and `drawer state` == `closed`,
-`omarchy-shell drawer geometry` reports real dimensions rather than `w=100
-h=100`, and a tap anywhere but the strip still reaches the app underneath
+After the first successful open, `sheetHeight` is already known and that rebuild
+does not recur.
+→ a sideways swipe with `drawer state` == `closed` leaves `drawer geometry` at
+the unmapped default; an up-swipe past slop reports real dimensions; a tap
+anywhere but the strip still reaches the app underneath
 
 **N4** The drawer opens with its search field unfocused and its query empty,
 however it was closed. The field has to be made to let go *before* the surface

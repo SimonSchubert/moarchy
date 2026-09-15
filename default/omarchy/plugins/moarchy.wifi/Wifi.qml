@@ -87,7 +87,9 @@ Item {
   // Was a bare Style.space(14) -- a fifth radius nobody chose, which put
   // this screen's rows next to Settings' rows at 18 and made the two lists
   // read as different apps.
-  readonly property int radiusCard: Style.space(18)
+  Shared.UiFile { id: ui }
+  readonly property int radiusTile: ui.radiusTile
+  readonly property int radiusCard: ui.radiusCard
 
   readonly property int textWeight: Font.DemiBold
   readonly property color surface: Color.popups.background
@@ -108,6 +110,7 @@ Item {
     ink: root.textOnSurface
     fill: root.container
     titleWeight: root.textWeight
+    radiusTile: root.radiusTile
     onBack: root.dismiss()
   }
 
@@ -235,6 +238,11 @@ Item {
   //   ReferenceError: passField is not defined
   // at load, which cost the surface its bottom margin binding.
   property bool passphraseFocused: false
+
+  // G14. A tap on the passphrase asks for the keyboard; mapping this window
+  // does not. Hide is the back swipe's, not this screen's.
+  Shared.Osk { id: osk }
+  function raiseKeyboard(): void { osk.show() }
 
   // Whether the passphrase is shown in the clear. Off by default; the eye in
   // the field turns it on. A phone keyboard has no key feedback worth the name,
@@ -471,45 +479,20 @@ Item {
           // The radio switch. A pill rather than a checkbox: it is the one
           // control on this screen that is not a list row, and it has to read
           // as a switch at a glance.
-          Rectangle {
-            id: radioSwitch
+          Shared.Switch {
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
-            width: Style.space(52)
-            height: Style.space(30)
-            radius: height / 2
-            color: Networking.wifiEnabled ? root.accent : root.containerHigh
-            Behavior on color { ColorAnimation { duration: 120 } }
-
-            // Veiled toward whichever ink the track is carrying (docs/style.md
-            // H4): on a theme whose accent is close to its text, one fixed ink
-            // would show nothing in one of the two states.
-            PressVeil {
-              anchors.fill: parent
-              radius: parent.radius
-              ink: Networking.wifiEnabled ? root.textOnAccent : root.textOnSurface
-              on: radioArea.pressed
-            }
-
-            Rectangle {
-              width: parent.height - Style.space(6)
-              height: width
-              radius: width / 2
-              y: Style.space(3)
-              x: Networking.wifiEnabled ? parent.width - width - Style.space(3) : Style.space(3)
-              color: Networking.wifiEnabled ? root.textOnAccent : root.textOnSurface
-              Behavior on x { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
-            }
+            checked: Networking.wifiEnabled
+            trackOn: root.accent
+            trackOff: root.containerHigh
+            knobOn: root.textOnAccent
+            knobOff: root.textOnSurface
             // A switch is 30 tall because that is what a switch looks like,
             // and 30 is not a target (docs/style.md E1, E2). The 7px fills
             // the 44px header it sits in and reaches past both ends of the
             // track; the only thing to its left is the title, which is text.
-            MouseArea {
-              id: radioArea
-              anchors.fill: parent
-              anchors.margins: -Style.space(7)
-              onClicked: Networking.wifiEnabled = !Networking.wifiEnabled
-            }
+            hitMargin: Style.space(7)
+            onToggled: function (on) { Networking.wifiEnabled = on }
           }
         }
 
@@ -674,7 +657,7 @@ Item {
                 visible: root.offersPassphrase(rowItem.modelData)
                 width: parent.width
                 height: Style.space(44)
-                radius: height / 2
+                radius: ui.radiusOn(height)
                 color: root.surface
 
                 // Visible, not completed: every row builds one of these and
@@ -725,6 +708,14 @@ Item {
                   // A delegate destroyed while focused never reports losing it,
                   // which would strand the surface with no bottom inset.
                   Component.onDestruction: if (activeFocus) root.passphraseFocused = false
+                  MouseArea {
+                    anchors.fill: parent
+                    propagateComposedEvents: true
+                    onPressed: mouse => {
+                      root.raiseKeyboard()
+                      mouse.accepted = false
+                    }
+                  }
                 }
 
                 // Reveal. Square on the field's height so the tap target is the
@@ -738,7 +729,7 @@ Item {
 
                   // This drew nothing at all until now, so the veil is the
                   // chrome (docs/style.md H8) rather than a layer over it.
-                  PressVeil { anchors.fill: parent; radius: width / 2; on: eyeArea.pressed }
+                  PressVeil { anchors.fill: parent; radius: ui.radiusOn(width); on: eyeArea.pressed }
                   // A glyph centred in a slot goes through Ui.OpticalGlyph, which
                   // measures the painted bounds and shifts by the difference
                   // (docs/style.md B5). anchors.centerIn centres the box the font

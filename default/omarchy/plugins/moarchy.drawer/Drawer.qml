@@ -101,6 +101,17 @@ Item {
   // animation off (so writes track 1:1) and keeps `opened` honest mid-gesture.
   property bool dragging: false
 
+  // G14a. The search pill slides under the opening finger as the sheet comes
+  // up, and a TapHandler treats that as a tap on the field. Armed only once
+  // the drawer is sitting still, so the swipe that opened it cannot raise the
+  // keyboard.
+  property bool keyboardRaiseArmed: false
+  Timer {
+    id: keyboardRaiseArm
+    interval: 120
+    onTriggered: root.keyboardRaiseArmed = root.progress >= 1 && !root.dragging
+  }
+
   // shell.isPluginOpen() reads this by name to decide what toggle() means, so
   // it has to stay honest. Half-dragged is neither open nor shut, and calling
   // it open would let the next swipe try to close something still being
@@ -332,9 +343,22 @@ Item {
 
   onHomeHintChanged: root.noteRetire()
 
-  onDraggingChanged: if (root.dragging) { root.dragTrace = []; root.retireTrace = [] }
+  onDraggingChanged: {
+    if (root.dragging) {
+      root.dragTrace = []
+      root.retireTrace = []
+      root.keyboardRaiseArmed = false
+      keyboardRaiseArm.stop()
+    } else if (root.progress >= 1) {
+      keyboardRaiseArm.restart()
+    }
+  }
   onProgressChanged: {
     root.noteRetire()
+    if (root.progress < 1) {
+      root.keyboardRaiseArmed = false
+      keyboardRaiseArm.stop()
+    }
     if (!root.dragging) return
     var next = root.dragTrace.slice()
     if (next.length < 200) next.push(Math.round(root.progress * 100))
@@ -406,17 +430,18 @@ Item {
   // D1). Named rather than written twice: it is also the height of the
   // rectangle that squares the bottom corners back off, and those two
   // numbers are the same number rather than two that happen to match.
-  readonly property int radiusSheet: Style.space(28)
+  Shared.UiFile { id: ui }
+  readonly property int radiusSheet: ui.radiusSheet
 
   // An app cell is a grid thing you tap as a unit, which is D1's `tile`. Only
   // the press veil is drawn at it -- the cell itself has no chrome.
-  readonly property int radiusTile: Style.space(20)
+  readonly property int radiusTile: ui.radiusTile
 
   // A settings result is a full-width list row, which is D1's `card` -- the
-  // same 18 the rows in moarchy.settings are drawn at, because it is the same
+  // same card the rows in moarchy.settings are drawn at, because it is the same
   // kind of row read on a different screen. The glyph slot comes from the same
   // place for the same reason (E5): derived from the glyph, not fixed.
-  readonly property int radiusCard: Style.space(18)
+  readonly property int radiusCard: ui.radiusCard
   readonly property int glyphSlot: Math.round(Style.font.iconLarge * 1.35)
 
   // The search field's clear button. Derived, never a flat 44 (E5): on a theme
@@ -476,15 +501,10 @@ Item {
   // sheet once rather than forwarding four handlers apiece.
   component SheetArea: Shared.SheetDragArea { sheet: root }
 
-  // G14a. The keyboard, and whether this surface is the one that asked for it.
-  //
-  // The flag is the whole of the criterion's second half: a keyboard the user
-  // raised by hand before opening the drawer must survive the drawer closing,
-  // and one this field raised must not outlive it. Without it the choice is
-  // between a keyboard stranded over the home screen and taking down one that
-  // was never ours.
+  // G14a. The keyboard, asked to show when a finger taps the search field.
+  // Hide is not this surface's: G2 is the one way down, and a drawer that put
+  // the keyboard away on close is what made it flap when launching an app.
   Shared.Osk { id: osk }
-  property bool raisedKeyboard: false
 
 
   readonly property var appRows: {
@@ -499,10 +519,10 @@ Item {
   // Whether this shell has paid for one icon rescan yet -- see open().
   property bool iconsRefreshed: false
 
-  // N3. Written by moarchy.gestures when a finger lands on a surface that
-  // might drag this one, so the map happens during the slop rather than on the
-  // first drawn frame. Not a state this plugin can decide for itself: the
-  // press is on somebody else's surface.
+  // N3. Written by moarchy.gestures when an upward drag latches, so the map
+  // happens during the slop of a real open rather than on every strip press.
+  // A press is usually a workspace swipe, and mapping this grid for that is
+  // what made the switch hitch.
   property bool warming: false
 
   Connections {
@@ -1215,13 +1235,13 @@ Item {
     sheetDrag.cancel()
     handleDrag.cancel()
 
-    // Move focus off the search field BEFORE the surface goes away. The keyboard
-    // is driven by zwp_text_input_v3 and an unmap is not a deactivate: close the
-    // drawer straight from the search field and the keyboard is left standing
-    // over whatever is underneath, with nothing focused that could dismiss it.
-    // `focus = false` is not enough -- it releases the focus *scope*, not the
-    // active focus, so Qt has no reason to disable the text input. Handing
-    // active focus to a plain Item is what actually sends the disable.
+    // Move focus off the search field BEFORE the surface goes away. An unmap
+    // is not a text-input-v3 deactivate, so a field that still holds active
+    // focus keeps receiving commits after the drawer is gone. `focus = false`
+    // is not enough -- it releases the focus *scope*, not the active focus.
+    // Handing active focus to a plain Item is what actually sends the disable.
+    // The keyboard itself stays up (G14); this only stops typing into a field
+    // that is no longer on screen.
     focusSink.forceActiveFocus()
 
     root.query = ""
@@ -1648,37 +1668,22 @@ Item {
     // and no phone this runs on has a 200px-tall sheet.
     onHeightChanged: if (drawerWindow.height > 200) root.sheetHeight = drawerWindow.height
 
-    // gestures.md N3. Mapped while the finger is still crossing the slop, not
-    // on the first drawn frame.
+    // gestures.md N3. Mapped when an upward drag latches, not on press.
     //
     // The shade is the comparison: its surface is never unmapped -- shut, it is
     // a bar-height band across the top -- so a pull-down costs a resize and
     // this cost a map, a configure round trip, and a first layout of the whole
     // grid. While unmapped this window reports Qt's 100x100 default (see
     // `sheetHeight` above), so `grid.cellWidth` is computed against 100 and
-    // every delegate on screen is rebuilt when the real size arrives. All of
-    // that landed on the frames the sheet was arriving on.
+    // every delegate on screen is rebuilt when the real size arrives.
     //
-    // `warming` is set by moarchy.gestures on the press, before the gesture has
-    // latched, and cleared by its reset(). It pays the same debt sheetHeight's
-    // note describes: the first drag of a session was 3.6% off 1:1 because
-    // there was no real height to divide by until the surface had been up once.
+    // Warming used to start on the press, which paid all of that on a sideways
+    // workspace swipe as well -- the hitch that went away when this plugin
+    // failed to load. Latch is 8px up, still inside the slop of a real open,
+    // and a press that never latches never maps.
     visible: root.progress > 0 || root.warming
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
-
-    // G14a. The keyboard this surface raised goes down with it -- and the hide
-    // fires here, on the surface actually going down, not in `close()`.
-    // `close()` starts a 200ms animation on `progress` and this window stays
-    // mapped for every frame of it, so a hide from there lands while the drawer
-    // is still on screen. That ordering is what made an earlier fix of this
-    // shape pass for the theme picker, which does not animate, and fail 6/6 for
-    // this surface, which does.
-    onVisibleChanged: {
-      if (drawerWindow.visible || !root.raisedKeyboard) return
-      root.raisedKeyboard = false
-      osk.hide()
-    }
 
     // N3. Mapped is not live. While warming this surface is full-screen, on
     // Top, and over everything -- so its input region is cut to one pixel
@@ -1921,7 +1926,7 @@ Item {
           id: searchPill
           width: parent.width
           height: Style.space(46)
-          radius: height / 2
+          radius: ui.radiusOn(height)
           color: root.container
 
           Text {
@@ -1981,34 +1986,27 @@ Item {
             verticalPadding: 0
             onTextChanged: queryDebounce.restart()
 
-            // G14a. Focus, not a press handler, because `Ui.TextField` has no
-            // press signal to hook and its own handling is what places the
-            // caret -- an area over the top would take the tap and cost that.
-            //
-            // Focus *is* the tap on this one field: open() and close() both park
-            // active focus in `focusSink` (N4), so nothing in this plugin or the
-            // host ever focuses it programmatically. That is what keeps this an
-            // exception to G14 rather than a reversal of it -- G14 refused focus
-            // as a signal because an app takes focus on its own schedule, and
-            // this field cannot be focused except by a finger.
-            onActiveFocusChanged: {
-              if (!activeFocus) return
-              // Claim the raise only if the keyboard was actually down, and ask
-              // I5e rather than the keyboard: `keyboardUp` is derived from the
-              // compositor's own configure, where `sm.puri.OSK0`'s `Visible`
-              // reports intent and has been seen true with nothing drawn. So a
-              // keyboard the user raised by hand before opening the drawer is
-              // one this surface will not take away again.
-              if (!root.keyboardUp) root.raisedKeyboard = true
-              osk.show()
+            // G14a. A press that *starts* on this field, and only once the
+            // drawer is sitting still. ClickFocus keeps Exclusive from parking
+            // here on map. onPressed rather than a TapHandler: the pill slides
+            // under the opening finger, and onTapped fires on that release.
+            focusPolicy: Qt.ClickFocus
+            activeFocusOnTab: false
+            MouseArea {
+              anchors.fill: parent
+              enabled: root.keyboardRaiseArmed
+              propagateComposedEvents: true
+              onPressed: mouse => {
+                if (root.keyboardRaiseArmed) osk.show()
+                mouse.accepted = false
+              }
             }
           }
 
           // Clear (F6). A field a thumb can fill is a field a thumb has to be
           // able to empty: backspacing a wrong query out is 20 taps on a phone
           // keyboard, and the alternative people actually use -- close the
-          // drawer and swipe it up again -- throws away the scroll position and
-          // the keyboard with it.
+          // drawer and swipe it up again -- throws away the scroll position.
           //
           // Only when there is something to clear. Drawn unconditionally it is
           // a control that does nothing for as long as the field is empty,
@@ -2035,7 +2033,7 @@ Item {
             // that nobody has to answer per control.
             PressVeil {
               anchors.fill: parent
-              radius: width / 2
+              radius: ui.radiusOn(width)
               on: clearArea.pressed && !root.sheetDragging
             }
 
@@ -3034,7 +3032,7 @@ Item {
     // Zero-sized and declared last, which costs nothing: it takes no input and
     // draws nothing, and the sheet's own drag areas are unaffected by a sibling
     // with no area.
-    Item { id: focusSink }
+    Item { id: focusSink; focus: true }
   }
 
 

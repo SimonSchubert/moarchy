@@ -182,9 +182,10 @@ Item {
   readonly property int tapSlot: Math.max(Style.space(44), root.glyphSlot)
 
   // ------------------------------------------------------------- shape
-  readonly property int radiusSheet: Style.space(28)
-  readonly property int radiusTile: Style.space(20)
-  readonly property int radiusCard: Style.space(18)
+  Shared.UiFile { id: ui }
+  readonly property int radiusSheet: ui.radiusSheet
+  readonly property int radiusTile: ui.radiusTile
+  readonly property int radiusCard: ui.radiusCard
 
   // ------------------------------------------------------------ colours
   //
@@ -1102,7 +1103,7 @@ Item {
     // when the click lands and the tile fires both actions).
     property bool heldFired: false
 
-    height: Style.space(62)
+    height: ui.shadeTile
     radius: root.radiusTile
     color: tile.on ? root.accent : root.container
     Behavior on color { ColorAnimation { duration: 140 } }
@@ -1197,7 +1198,7 @@ Item {
     property bool on: false
     signal activated()
 
-    height: Style.space(62)
+    height: ui.shadeTile
     radius: root.radiusTile
     color: small.on ? root.accent : root.container
     Behavior on color { ColorAnimation { duration: 140 } }
@@ -1255,7 +1256,9 @@ Item {
     property bool live: false
     signal committed(real value)
 
-    height: Style.space(48)
+    height: ui.shadeSlider
+    readonly property int vGrow: Math.min(Style.space(4),
+      Math.max(0, Math.round((Style.space(44) - height) / 2)))
     readonly property real clamped: Math.max(0, Math.min(1, slider.value))
     property real dragValue: slider.clamped
     property bool dragging: false
@@ -1263,15 +1266,17 @@ Item {
 
     Rectangle {
       anchors.fill: parent
-      radius: height / 2
+      // D1: the same tile radius as the quick-settings tiles, capped at a
+      // half-side so Large stays a pill and Square goes to 0.
+      radius: ui.radiusOn(height)
       color: root.container
 
       Rectangle {
         height: parent.height
         // Never narrower than the corner diameter: below that a rounded fill
         // collapses into a lens and reads as a rendering fault rather than a
-        // low value.
-        width: Math.max(parent.height, parent.width * slider.shown)
+        // low value. Square (radius 0) may be a sliver.
+        width: Math.max(parent.radius * 2, parent.width * slider.shown)
         radius: parent.radius
         color: root.accent
         Behavior on width {
@@ -1318,6 +1323,10 @@ Item {
     MouseArea {
       id: sliderArea
       anchors.fill: parent
+      // Compact sliders draw under 44; grow the target into the Column gap,
+      // never more than 4, so two adjacent sliders cannot eat each other (E3).
+      anchors.topMargin: -slider.vGrow
+      anchors.bottomMargin: -slider.vGrow
       property real preValue: 0
       property real pressX: 0
       property bool handedOver: false
@@ -1373,18 +1382,26 @@ Item {
     }
   }
 
-  // A circular tonal button, for the two things in the header that are not
-  // settings: the Omarchy menu and the power routes.
+  // A tonal icon button, for the two things in the header that are not
+  // settings: the Omarchy menu and the power routes. Circle at Large, rounded
+  // square at Modest, square at Square -- the same D1 tile radius as the
+  // sliders, capped at a half-side.
   component RoundButton: Rectangle {
     id: rb
     property string glyph: ""
     signal activated()
-    width: Style.space(36)
+    width: ui.shadeRound
     height: width
-    radius: width / 2
+    radius: ui.radiusOn(width)
     color: root.container
 
-    // 36 drawn, 44 answering: the veil takes the 36 (docs/style.md H8, E2).
+    // Drawn at shadeRound, answering at 44 where the neighbours allow it
+    // (docs/style.md E1-E3). The pair sits 8px apart, so 4 each is the most
+    // either may take without the later one eating the earlier one's edge.
+    readonly property int grow:
+      Math.min(Style.space(4), Math.max(0, Math.round((root.tapSlot - width) / 2)))
+
+    // The veil takes the drawn circle, not the grown target (docs/style.md H8, E2).
     PressVeil {
       anchors.fill: parent
       radius: parent.radius
@@ -1413,14 +1430,14 @@ Item {
       color: root.textOnSurface
     }
 
-    // 36 drawn, 44 answering (docs/style.md E1-E3). The two buttons
-    // sit 8px apart, so 4 each is the most either may take without the later
-    // one eating the earlier one's edge (E3) -- and 4 is exactly what 36 needs.
-    // Vertically it fills the 44px header the pair is centred in.
+    // Drawn at shadeRound, answering toward 44 (docs/style.md E1-E3). The two
+    // buttons sit 8px apart, so 4 each is the most either may take without
+    // the later one eating the earlier one's edge (E3). Compact's 32 therefore
+    // answers over 40, not 44 -- the same E4 trade the transport buttons make.
     SheetArea {
       id: rbArea
       anchors.fill: parent
-      anchors.margins: -Style.space(4)
+      anchors.margins: -rb.grow
       onClicked: if (!root.sheetWasDrag) rb.activated()
     }
   }
@@ -1776,7 +1793,7 @@ Item {
                     anchors.centerIn: parent
                     width: root.tapSlot - Style.space(10)
                     height: width
-                    radius: width / 2
+                    radius: ui.radiusOn(width)
                     on: mediaArea.pressed && !root.sheetDragging
                   }
 

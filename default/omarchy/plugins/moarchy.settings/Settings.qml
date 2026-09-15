@@ -148,7 +148,9 @@ Item {
     root.inputMap = next
   }
 
-  readonly property int radiusCard: Style.space(18)
+  Shared.UiFile { id: ui }
+  readonly property int radiusTile: ui.radiusTile
+  readonly property int radiusCard: ui.radiusCard
 
   // NOT `onSurface` / `onAccent` -- see the header.
   readonly property color surface: Color.menu.background
@@ -204,6 +206,7 @@ Item {
     ink: root.textOnSurface
     fill: root.container
     titleWeight: root.textWeight
+    radiusTile: root.radiusTile
     onBack: { if (!root.goBack()) root.dismiss() }
   }
 
@@ -1177,6 +1180,7 @@ Item {
             textColor: root.textOnSurface
             subduedColor: root.subdued
             accentColor: root.accent
+            radiusCard: root.radiusCard
             onActivated: root.activate(modelData)
             onEdited: function (value) { root.setInput(modelData.id, value) }
             // The id, not a bool: two fields on this page, and clearing the
@@ -1229,51 +1233,32 @@ Item {
               anchors.horizontalCenter: parent.horizontalCenter
               spacing: Style.space(12)
 
-              Rectangle {
-                width: Style.space(110); height: Style.space(44)
-                radius: height / 2
+              Shared.Pill {
+                width: Style.space(110)
+                height: Style.space(44)
+                text: "Cancel"
                 color: Util.alpha(root.textOnSurface, 0.10)
-                PressVeil { anchors.fill: parent; radius: parent.radius; on: cancelArea.pressed }
-                Text {
-                  anchors.centerIn: parent; text: "Cancel"
-                  font.family: Style.font.family; font.pixelSize: Style.font.body
-                  font.weight: root.textWeight
-                  color: root.textOnSurface
-                }
-                MouseArea {
-                  id: cancelArea
-                  anchors.fill: parent
-                  onClicked: { root.confirmText = ""; root.confirmRow = null }
-                }
+                ink: root.textOnSurface
+                pixelSize: Style.font.body
+                textWeight: root.textWeight
+                onClicked: { root.confirmText = ""; root.confirmRow = null }
               }
 
-              Rectangle {
-                width: Style.space(110); height: Style.space(44)
-                radius: height / 2
+              Shared.Pill {
+                width: Style.space(110)
+                height: Style.space(44)
+                text: "Continue"
                 color: root.accent
                 // This surface has no `textOnAccent` role, and H4 wants the
                 // control's own ink: the label below is already root.surface.
-                PressVeil {
-                  anchors.fill: parent
-                  radius: parent.radius
-                  ink: root.surface
-                  on: continueArea.pressed
-                }
-                Text {
-                  anchors.centerIn: parent; text: "Continue"
-                  font.family: Style.font.family; font.pixelSize: Style.font.body
-                  font.weight: root.textWeight
-                  color: root.surface
-                }
-                MouseArea {
-                  id: continueArea
-                  anchors.fill: parent
-                  onClicked: {
-                    var row = root.confirmRow
-                    root.confirmText = ""
-                    root.confirmRow = null
-                    if (row) root.activate(row, true)
-                  }
+                ink: root.surface
+                pixelSize: Style.font.body
+                textWeight: root.textWeight
+                onClicked: {
+                  var row = root.confirmRow
+                  root.confirmText = ""
+                  root.confirmRow = null
+                  if (row) root.activate(row, true)
                 }
               }
             }

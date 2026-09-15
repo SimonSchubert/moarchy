@@ -17,6 +17,8 @@ Item {
 
   signal toggled(bool checked)
 
+  UiFile { id: chrome }
+
   implicitWidth: root.text.length
                  ? box.width + 12 + label.implicitWidth
                  : Metrics.TARGET
@@ -46,10 +48,11 @@ Item {
       height: Metrics.TARGET
 
       Rectangle {
+        id: boxFill
         width: Metrics.CHECK
         height: Metrics.CHECK
         anchors.centerIn: parent
-        radius: 4
+        radius: chrome.radiusOn(width)
         color: root.checked ? root.accent : "transparent"
         border.color: root.checked ? root.accent : root.dim
         border.width: 1.5
@@ -61,6 +64,13 @@ Item {
           size: 12
           color: root.tickColor
           names: ["object-select-symbolic"]
+        }
+
+        PressVeil {
+          anchors.fill: parent
+          radius: parent.radius
+          ink: root.foreground
+          on: tap.pressed
         }
       }
     }
@@ -77,6 +87,7 @@ Item {
   }
 
   MouseArea {
+    id: tap
     anchors.fill: parent
     enabled: root.interactive
     onClicked: root._flip()

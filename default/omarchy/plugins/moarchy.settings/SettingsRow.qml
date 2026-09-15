@@ -63,7 +63,7 @@ Rectangle {
   // edge. Equal slots make one left edge. 1.35x is the bar's ratio.
   readonly property int glyphSlot: Math.round(Style.font.iconLarge * 1.35)
 
-  readonly property int radiusCard: Style.space(18)
+  property int radiusCard: Style.space(18)
 
   signal activated()
   signal edited(string value)
@@ -185,6 +185,18 @@ Rectangle {
       // A delegate destroyed while focused never reports losing it, which would
       // strand the surface with no bottom inset and no keyboard.
       Component.onDestruction: if (activeFocus) card.focusTaken(false)
+      // G14. The tap is the request; focus arriving because Settings mapped
+      // is not. Shared.Osk lives here rather than on the card so a nav row
+      // does not carry a bus name it never asks.
+      Shared.Osk { id: osk }
+      MouseArea {
+        anchors.fill: parent
+        propagateComposedEvents: true
+        onPressed: mouse => {
+          osk.show()
+          mouse.accepted = false
+        }
+      }
 
       RegularExpressionValidator { id: digitsOnly; regularExpression: /[0-9]{0,5}/ }
     }
@@ -242,27 +254,20 @@ Rectangle {
     }
 
     // switch
-    Rectangle {
-      id: track
+    Shared.Switch {
       anchors.verticalCenter: parent.verticalCenter
       visible: card.rowType === "switch"
       width: Style.space(44)
       height: Style.space(26)
-      radius: height / 2
-      color: card.checked ? card.accentColor : Util.alpha(card.textColor, 0.22)
-      Behavior on color { ColorAnimation { duration: 120 } }
-
-      Rectangle {
-        width: Style.space(20)
-        height: width
-        radius: width / 2
-        anchors.verticalCenter: parent.verticalCenter
-        x: card.checked ? parent.width - width - Style.space(3) : Style.space(3)
-        // The knob is the card's own background, not white: on a light theme a
-        // white knob on a pale track is invisible.
-        color: card.color
-        Behavior on x { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
-      }
+      checked: card.checked
+      interactive: false
+      veil: false
+      trackOn: card.accentColor
+      trackOff: Util.alpha(card.textColor, 0.22)
+      // The knob is the card's own background, not white: on a light theme a
+      // white knob on a pale track is invisible.
+      knobOn: card.color
+      knobOff: card.color
     }
   }
 

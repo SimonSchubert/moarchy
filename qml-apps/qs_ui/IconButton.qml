@@ -48,9 +48,11 @@ Item {
   onSpinningChanged: if (root.spinning && !turn.running) turn.start()
   Component.onCompleted: if (root.spinning) turn.start()
 
+  UiFile { id: chrome }
+
   PressVeil {
     anchors.fill: parent
-    radius: width / 2
+    radius: chrome.radiusOn(width)
     ink: root.color
     on: tap.pressed
   }

@@ -13,7 +13,10 @@ var ICON = 22
 var ICON_INK = 18
 var PILL = 40
 var FAB = 56
-var CARD_RADIUS = 12
+// D1's card radius at the large corners preset. Surfaces that follow
+// ~/.config/omarchy/ui.toml read UiFile.radiusCard instead; this is the
+// fallback for kit chrome that has not been handed one.
+var CARD_RADIUS = 18
 var CHECK = 22
 var MENU_WIDTH = 220
 var MENU_ROW = 40

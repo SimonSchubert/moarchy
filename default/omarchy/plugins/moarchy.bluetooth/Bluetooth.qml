@@ -109,7 +109,9 @@ Item {
 
   // --------------------------------------------------------------- palette
   // The card radius, from the four this shell has (docs/style.md D1).
-  readonly property int radiusCard: Style.space(18)
+  Shared.UiFile { id: ui }
+  readonly property int radiusTile: ui.radiusTile
+  readonly property int radiusCard: ui.radiusCard
 
   readonly property int textWeight: Font.DemiBold
   readonly property color surface: Color.popups.background
@@ -137,6 +139,7 @@ Item {
     ink: root.textOnSurface
     fill: root.container
     titleWeight: root.textWeight
+    radiusTile: root.radiusTile
     onBack: root.dismiss()
   }
 
@@ -600,55 +603,27 @@ Item {
         SheetHeader {
           title: "Bluetooth"
 
-          // The radio switch, drawn exactly as Wi-Fi's is: it is the one
+          // The radio switch, the same Shared.Switch Wi-Fi uses: it is the one
           // control on this screen that is not a list row, and the two screens
           // have to read as the same app.
-          Rectangle {
-            id: radioSwitch
+          Shared.Switch {
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
-            width: Style.space(52)
-            height: Style.space(30)
-            radius: height / 2
             // No adapter is not "off" -- there is nothing to switch -- so the
             // track goes quiet and the tap below does nothing.
             opacity: root.adapter ? 1 : 0.4
-            color: root.adapter && root.adapter.enabled ? root.accent : root.containerHigh
-            Behavior on color { ColorAnimation { duration: 120 } }
-
-            // Veiled toward whichever ink the track is carrying (docs/style.md
-            // H4): on a theme whose accent is close to its text, one fixed ink
-            // would show nothing in one of the two states.
-            PressVeil {
-              anchors.fill: parent
-              radius: parent.radius
-              ink: root.adapter && root.adapter.enabled ? root.textOnAccent
-                                                        : root.textOnSurface
-              on: radioArea.pressed
-            }
-
-            Rectangle {
-              width: parent.height - Style.space(6)
-              height: width
-              radius: width / 2
-              y: Style.space(3)
-              x: root.adapter && root.adapter.enabled
-                 ? parent.width - width - Style.space(3) : Style.space(3)
-              color: root.adapter && root.adapter.enabled ? root.textOnAccent
-                                                          : root.textOnSurface
-              Behavior on x { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
-            }
+            enabled: root.adapter !== null
+            checked: root.adapter && root.adapter.enabled
+            trackOn: root.accent
+            trackOff: root.containerHigh
+            knobOn: root.textOnAccent
+            knobOff: root.textOnSurface
             // A switch is 30 tall because that is what a switch looks like,
             // and 30 is not a target (docs/style.md E1, E2). The 7px fills
             // the 44px header it sits in and reaches past both ends of the
             // track; the only thing to its left is the title, which is text.
-            MouseArea {
-              id: radioArea
-              anchors.fill: parent
-              anchors.margins: -Style.space(7)
-              enabled: root.adapter !== null
-              onClicked: root.setEnabled(!root.adapter.enabled)
-            }
+            hitMargin: Style.space(7)
+            onToggled: function (on) { root.setEnabled(on) }
           }
         }
 

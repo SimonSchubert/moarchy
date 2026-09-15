@@ -3,12 +3,17 @@
 // Usage:
 //     Shared.Osk { id: osk }
 //     ...
-//     osk.show()
+//     osk.show()   // a tap on a text field
+//     osk.hide()   // the back swipe, and nowhere else
 //
 // `moarchy-keyboard` owns `sm.puri.OSK0` and the only way in is DBus, so this is
 // the one place the incantation is written. It stood in `moarchy.gestures` and in
 // `bin/moarchy-toggle-keyboard`, and a third copy was about to be written for the
 // drawer's search field.
+//
+// Visibility is sticky. Show is a person tapping a field or the restore handle;
+// hide is the back swipe (G2). Overlay open/close and app switches write
+// nothing -- that is the flap G14 exists to stop.
 //
 // ---------------------------------------------------------------------------
 // It asks; it does not know

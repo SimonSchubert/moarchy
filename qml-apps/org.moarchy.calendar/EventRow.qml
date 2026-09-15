@@ -21,6 +21,7 @@ Rectangle {
   property var entry: null
   property var colours: null
   property int bodySize: Metrics.BODY
+  property int radiusCard: Metrics.CARD_RADIUS
 
   signal clicked
 
@@ -33,7 +34,7 @@ Rectangle {
 
   implicitHeight: Math.max(Metrics.TARGET + 8, text.height + 18)
   height: implicitHeight
-  radius: Metrics.CARD_RADIUS
+  radius: root.radiusCard
   color: root.colours
     // A darker theme needs more of the hue to show the same amount of colour,
     // which is Habits' ramp in one number rather than eight.
