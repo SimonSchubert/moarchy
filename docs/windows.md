@@ -174,12 +174,14 @@ is occupied, so `bin/moarchy-one-app-per-workspace` moves it to a free one and
 follows it. What that cannot do is act before the window exists, and on this
 hardware an app launch is seconds.
 
-Not for an entry that summons a plugin (L5): some of those draw a layer
-surface, which is visible from every workspace, so moving would strand you on
-an empty one when it was dismissed.
-→ within a second of `omarchy-shell drawer launch <id>` for a real app, the
-focused workspace's `representation` is empty and its number is not the one the
-launch started on; for `moarchy.device` the focused workspace has not changed
+Two exceptions, and both are "there will be no new window to arrive on". An
+entry that summons a plugin (L5) may draw a layer surface, which is visible
+from every workspace; and an app that is already running maps nothing at all,
+because `gtk-launch` asks the running instance to present itself.
+→ from a workspace holding an app, `omarchy-shell drawer launch <id>` for an
+app that is not running leaves the focused workspace, within two seconds,
+holding that app and nothing else; for `moarchy.device`, and for an app already
+on the shelf, the focused workspace has not changed
 
 ### What the splash does not cover
 

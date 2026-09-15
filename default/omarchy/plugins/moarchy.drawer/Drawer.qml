@@ -629,6 +629,19 @@ Item {
     root.appIdIndex = map
   }
 
+  // Whether a window of this entry's app is already open. Asked of the same
+  // appId index the shelf resolves its icons through, so an app is "running"
+  // here exactly when the shelf would draw a tile for it.
+  function entryIsRunning(entry): bool {
+    if (!entry) return false
+    var open = root.openApps || []
+    for (var i = 0; i < open.length; i++) {
+      var e = open[i] ? root.entryForAppId(open[i].appId) : null
+      if (e && String(e.id) === String(entry.id)) return true
+    }
+    return false
+  }
+
   // The plugin id an entry summons, as a one-element match, or null for an
   // entry that starts a process. Written once: buildIndex keys the shelf's
   // icons off it (K5) and launch() asks it whether a window is coming (L10).
@@ -1232,7 +1245,14 @@ Item {
     // a layer surface is visible from every workspace -- so moving would leave
     // you standing on an empty one when it was dismissed, having gone nowhere
     // and come back somewhere else.
-    if (!root.pluginSummonedBy(entry)) ShellApps.goToFreeWorkspace(root.shell)
+    //
+    // Nor for an app that is already running. `gtk-launch` on a single-instance
+    // app maps no new window -- it asks the running one to present itself -- so
+    // there would be nothing to arrive on, and the hop would strand you on an
+    // empty workspace. Measured: with Clocks already open on 6, a launch left
+    // the phone sitting on 4 with nothing there.
+    if (!root.pluginSummonedBy(entry) && !root.entryIsRunning(entry))
+      ShellApps.goToFreeWorkspace(root.shell)
 
     root.shell.appLibrary.launch(entry.id, root.shell.appLibrary.entryName(entry))
     root.dismiss()
