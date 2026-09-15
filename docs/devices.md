@@ -876,11 +876,24 @@ Restated as a checklist, in build order. Each carries its state.
    verify suite now asserts every link of the Wi-Fi chain, the audio chain,
    bootmac, and both halves of the camera fix.
 
-   **Still open:** the image has **not been flashed**. Every fix from D27
-   onward was proved by hand-installing onto a running phone, so this is the
-   first artifact that carries the packaged form of all of it, and nothing has
-   booted from it. That is the gap most likely to be mistaken for done. SMS is
-   also unsent and unreceived, and should work on this SIM (`CS: 'attached'`).
+   **Flashed and booted 2026-09-15.** `moarchy-sargo-0.2.2-20260915` went onto
+   the handset over fastboot (166 s, slot marked active), left the bootloader
+   and came up. This is the first artifact carrying the packaged form of
+   everything from D27 onward — until now every one of those fixes had only
+   ever been hand-installed onto a running phone — and it was reported working
+   on the device.
+
+   **What that last sentence is and is not.** The flash, the slot state and the
+   132-check verification are measured here. The per-feature confirmation on
+   the fresh image is the owner's report, not this file's measurement: a
+   published image has no sshd and no baked credentials, so there is no way in
+   without a person connecting Wi-Fi and re-authorising a key. Worth keeping
+   the distinction, because "it looks good" and "wlan0 associated at −55 dBm"
+   are different claims and this file has been careful about which it makes.
+
+   **Still open:** SMS, unsent and unreceived, which should work on this SIM
+   (`CS: 'attached'`); and re-measuring the radios on the fresh image if anyone
+   wants the stronger claim.
 
    The Bluetooth AC that the previous revision of this file declined to write
    is now written, because the measurement it was waiting for has been taken.
