@@ -409,20 +409,50 @@ and a column that answers a gesture look the same until you try to use it.
 `surfaceW` > `w`; `w` keeps meaning the input band, so G8's number is still
 what it was
 
-**G14** The keyboard comes up only when asked, and only two things can ask: its
-own restore handle, and `$mod+i`. Text focus raises nothing — not an app's
-field, not the drawer's search box — and nothing in this shell puts it down
-except the back swipe (G2), which is the same `SetVisible` call.
+**G14** The keyboard comes up only when asked, and three things can ask: its own
+restore handle, `$mod+i`, and **a tap on the drawer's search field** (G14a). Text
+focus on its own raises nothing — not an app's field, not any other field in this
+shell — and nothing puts it down except the back swipe (G2) and the drawer that
+raised it (G14a).
 
 An app asking for text input is not an app asking for a keyboard. It used to be
-read as one, so the keyboard appeared over half the screen whenever anything
-took focus and left again just as often, which is the worse half: it moves the
-layout under a thumb already on its way to a key. `moarchy-keyboard`'s AC 49 is
-what makes a dismissal safe to let stick — the handle is on screen whenever the
+read as one, so the keyboard appeared over half the screen whenever anything took
+focus and left again just as often, which is the worse half: it moves the layout
+under a thumb already on its way to a key. `moarchy-keyboard`'s AC 49 is what
+makes a dismissal safe to let stick — the handle is on screen whenever the
 keyboard is not, and AC 52 keeps it above this shell's overlays.
 → with an app's text field focused and the keyboard down, `sm.puri.OSK0`
-`Visible` stays false across ~3s of sampling; going home, opening the drawer
-and closing it again all leave it wherever it was
+`Visible` stays false across ~3s of sampling; going home and opening the drawer
+without touching its field leave it wherever it was
+
+**G14a** Tapping the drawer's search field raises the keyboard, and the drawer
+lowers it again when it goes down — but only if the tap is what raised it.
+
+This is an exception to G14 and not a retreat from it. What G14 refused was
+*focus* as the signal, because an app takes focus on its own schedule and the
+keyboard then flaps. A tap on this field is not that: it is a person reaching for
+a search box, it is the one field in the shell whose surface exists to be typed
+into, and it cannot happen by accident — `open()` and `close()` both park active
+focus in `focusSink` (N4), so the field is focused if and only if a finger
+focused it.
+
+The pair is the whole criterion. Raising without lowering leaves a keyboard over
+whatever the drawer was covering, which no phone does; lowering unconditionally
+would take down a keyboard the user raised by hand before ever opening the
+drawer, which is G14's complaint pointed the other way. So the drawer remembers
+whether it was the one that asked.
+
+The hide fires from the surface going down, not from `close()`: `close()` starts
+a 200ms animation and the drawer is still mapped throughout it, which is the
+ordering that made the first attempt at this class of fix pass for the theme
+picker and fail 6/6 for the drawer.
+→ with the keyboard down, `omarchy-shell drawer open` then a tap at
+`drawer searchTarget`'s field centre leaves the focused workspace's `rect.height`
+lower by the keyboard's reservation, and `searchTarget` reports `focused=true`;
+closing the drawer restores the rect. Raise the keyboard by hand first and the
+same close leaves it up. **The rect, not `sm.puri.OSK0` `Visible`** — that
+property reports the keyboard's own intent and has been observed true with
+nothing drawn
 
 ## H. Closing an overlay by dragging it
 

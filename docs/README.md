@@ -165,6 +165,8 @@ Eleven plugins and one directory that is not a plugin, all under
 | `SheetHeader.qml` | the back-and-title row at the top of a sheet |
 | `AppWindow.qml` | a screen that maps as an ordinary window rather than a layer surface |
 | `PressVeil.qml` | the pressed state |
+| `Probe.qml` | a `Process` that hands back what the command printed |
+| `Osk.qml` | the one place the on-screen keyboard is asked to show or hide |
 | `Sheet.js` | the one list of sheets, how they stack, and what every `open()` does identically |
 | `ShellApps.js` | which of our screens are windows, and the two compositor helpers |
 | `Theme.js` | the colour arithmetic: luminance, contrast, mix, readableOn |

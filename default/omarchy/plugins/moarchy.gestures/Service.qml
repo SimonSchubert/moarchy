@@ -879,11 +879,11 @@ Item {
     keyboardProbe.running = true
   }
 
-  function hideKeyboard(): void {
-    Quickshell.execDetached(["busctl", "--user", "call", "sm.puri.OSK0",
-                             "/sm/puri/OSK0", "sm.puri.OSK0", "SetVisible",
-                             "b", "false"])
-  }
+  // G2. The one call this plugin makes; the incantation itself is
+  // moarchy.common/Osk.qml, which the drawer's search field also asks (G14a).
+  Shared.Osk { id: osk }
+
+  function hideKeyboard(): void { osk.hide() }
 
   // ------------------------------------------------------- G12: the back cue
   //

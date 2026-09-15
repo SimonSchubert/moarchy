@@ -474,6 +474,16 @@ Item {
   // sheet once rather than forwarding four handlers apiece.
   component SheetArea: Shared.SheetDragArea { sheet: root }
 
+  // G14a. The keyboard, and whether this surface is the one that asked for it.
+  //
+  // The flag is the whole of the criterion's second half: a keyboard the user
+  // raised by hand before opening the drawer must survive the drawer closing,
+  // and one this field raised must not outlive it. Without it the choice is
+  // between a keyboard stranded over the home screen and taking down one that
+  // was never ours.
+  Shared.Osk { id: osk }
+  property bool raisedKeyboard: false
+
 
   readonly property var appRows: {
     // Re-read on every appsChanged() as well as on every keystroke: the bump
@@ -1655,6 +1665,19 @@ Item {
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
 
+    // G14a. The keyboard this surface raised goes down with it -- and the hide
+    // fires here, on the surface actually going down, not in `close()`.
+    // `close()` starts a 200ms animation on `progress` and this window stays
+    // mapped for every frame of it, so a hide from there lands while the drawer
+    // is still on screen. That ordering is what made an earlier fix of this
+    // shape pass for the theme picker, which does not animate, and fail 6/6 for
+    // this surface, which does.
+    onVisibleChanged: {
+      if (drawerWindow.visible || !root.raisedKeyboard) return
+      root.raisedKeyboard = false
+      osk.hide()
+    }
+
     // N3. Mapped is not live. While warming this surface is full-screen, on
     // Top, and over everything -- so its input region is cut to one pixel
     // until the sheet is actually being drawn.
@@ -1955,6 +1978,28 @@ Item {
             background: null
             verticalPadding: 0
             onTextChanged: queryDebounce.restart()
+
+            // G14a. Focus, not a press handler, because `Ui.TextField` has no
+            // press signal to hook and its own handling is what places the
+            // caret -- an area over the top would take the tap and cost that.
+            //
+            // Focus *is* the tap on this one field: open() and close() both park
+            // active focus in `focusSink` (N4), so nothing in this plugin or the
+            // host ever focuses it programmatically. That is what keeps this an
+            // exception to G14 rather than a reversal of it -- G14 refused focus
+            // as a signal because an app takes focus on its own schedule, and
+            // this field cannot be focused except by a finger.
+            onActiveFocusChanged: {
+              if (!activeFocus) return
+              // Claim the raise only if the keyboard was actually down, and ask
+              // I5e rather than the keyboard: `keyboardUp` is derived from the
+              // compositor's own configure, where `sm.puri.OSK0`'s `Visible`
+              // reports intent and has been seen true with nothing drawn. So a
+              // keyboard the user raised by hand before opening the drawer is
+              // one this surface will not take away again.
+              if (!root.keyboardUp) root.raisedKeyboard = true
+              osk.show()
+            }
           }
 
           // Clear (F6). A field a thumb can fill is a field a thumb has to be
