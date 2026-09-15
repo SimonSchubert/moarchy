@@ -40,6 +40,23 @@
 # and the modem images live in sargo's own `modem` partition. Same repo and
 # same commit postmarketOS's firmware-google-sargo uses.
 #
+# --- Global_cal.acdb is NOT optional, and nothing about it says so -----------
+#
+# 23 KB of audio calibration data, and the difference between a phone that
+# makes sound and one that does not. `qcom-q6core` loads it as firmware and
+# refuses to probe without it; q6afe sits on q6core; the codec asks q6afe for
+# its MCLK; the sound card's DAI link waits for the codec. So one missing file
+# ends as
+#
+#   /proc/asound/cards -> --- no soundcards ---
+#
+# four errors downstream, with only the first naming a file. Calls connected
+# and carried no audio for exactly this reason (devices.md D29).
+#
+# From LineageOS's device config rather than TheMuppets, because it is not in
+# /vendor/firmware: calibration lives in the Android device repo, in a
+# directory named for the card -- sdm670-intcodec-s4-snd-card.
+#
 # --- The .jsn files, and the honest status of them ---------------------------
 #
 # adspr, adspua, cdspr, modemr, modemuw: the vendor's protection-domain maps,
@@ -89,6 +106,9 @@ _commit=$(manifest_get device.sargo firmware-ref) || return 1
 _url=$(manifest_get device.sargo firmware-url) || return 1
 _modem_commit=$(manifest_get device.sargo modem-ref) || return 1
 _modem_url=$(manifest_get device.sargo modem-url) || return 1
+_acdb_url=$(manifest_get device.sargo acdb-url) || return 1
+_acdb_ref=$(manifest_get device.sargo acdb-ref) || return 1
+_acdb_path=$(manifest_get device.sargo acdb-path) || return 1
 
 pkgname=firmware-moarchy-sargo
 pkgver=$_ver
@@ -97,7 +117,8 @@ pkgver=$_ver
 # docker/build-packages.sh skips a package whose pkgver-pkgrel is already in
 # PKGDEST -- so without this bump the build keeps yesterday's file and the
 # whole change ships as nothing at all.
-pkgrel=2
+# 3: gained Global_cal.acdb, without which the phone has no sound at all.
+pkgrel=3
 pkgdesc="Proprietary firmware for the Google Pixel 3a (sargo)"
 arch=('any')
 url="$_url"
@@ -118,6 +139,7 @@ source=(
   "$_fw/adsp.mbn"      "$_fw/cdsp.mbn"      "$_fw/venus.mbn"     "$_fw/wlanmdsp.mbn"
   "$_modem/mba.mbn"    "$_modem/modem.mbn"  "$_modem/modemr.jsn"
   "$_fw/adspr.jsn"     "$_fw/adspua.jsn"    "$_fw/cdspr.jsn"     "$_fw/modemuw.jsn"
+  "$_acdb_url/$_acdb_ref/$_acdb_path"
   'pil-squash.py'
 )
 sha256sums=('25487bfa1522db87ab5abd8aed82d322f1eda06226c39ef6181af407166d743b'
@@ -141,6 +163,7 @@ sha256sums=('25487bfa1522db87ab5abd8aed82d322f1eda06226c39ef6181af407166d743b'
             'd6c6376f53e5449eb4f7b9e5a30679ebc2a9afaad28c13ff171f979e7b1af1f6'
             '15e148599165b38f68e62302d63c87caa5f0b164deb81aa419bbb4ecf920bc4b'
             'e75d94b61df3e86c5b3f7a976d93f726cb85f2b897a8ea80a0924b9bb9c1a3bf'
+            '5228a1ed491d3c7452d67c1cccdbdd95c08bc2982f500da15d54e7578108956a'
             'SKIP')
 
 build() {
@@ -161,7 +184,7 @@ package() {
   local d="$pkgdir/usr/lib/firmware/qcom/sdm670/sargo"
   install -d "$d"
   for f in a615_zap.mbn ipa_fws.mbn adsp.mbn cdsp.mbn venus.mbn wlanmdsp.mbn \
-           mba.mbn modem.mbn \
+           mba.mbn modem.mbn Global_cal.acdb \
            adspr.jsn adspua.jsn cdspr.jsn modemr.jsn modemuw.jsn; do
     install -Dm644 "$srcdir/$f" "$d/$f"
   done

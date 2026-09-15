@@ -553,33 +553,64 @@ udev rule sets `hci0`'s public address from the bootloader's
 > worth doing, because a phone that takes a new address every boot is a phone
 > you have to hunt for on the LAN. **?**
 
-**D29** *Added 2026-09-15.* **Sound does not work, and it is not a packaging
-problem.** `/proc/asound/cards` is empty; PipeWire has only a Dummy Output.
+**D29** *Added 2026-09-15, corrected the same day.* **Sound needed two files,
+not a kernel fix.** `firmware-moarchy-sargo` carries `Global_cal.acdb` and
+`alsa-ucm-conf-moarchy-sdm670` carries the use-case profile; with both, the card
+registers and PipeWire exposes an earpiece, a speaker and a microphone.
 
+> **This entry first said the opposite,** and the mistake is the useful part.
+> The symptom was four errors deep:
+>
 > ```
 > qcom-q6afe aprsvc:service:4:4: AFE set params failed -110
 > msm8916-wcd-digital-codec 62ec0000.audio-codec: failed to enable mclk -110
-> msm8916-wcd-digital-codec ... probe ... failed with error -110
-> platform sound: deferred probe pending: snd-sm8250: Internal MI2S Playback: codec dai not found
+> platform sound: deferred probe pending: snd-sm8250: ... codec dai not found
+> /proc/asound/cards -> --- no soundcards ---
 > ```
 >
-> The ADSP boots (`remoteproc2: remote processor adsp is now up`) and registers
-> its APR audio services. The digital codec then asks the AFE to enable its
-> MCLK — `&lpass_codec` takes `clocks = <&q6afecc LPASS_CLK_ID_INT_MCLK_0>` —
-> and the ADSP never answers. `-110` is ETIMEDOUT at APR's 3-second timeout.
-> Codec probe fails, so the card's DAI link has no codec, so the card is
-> deferred forever and never registers.
+> All three of those name a DSP that will not answer, so this file recorded a
+> bring-up bug, "above this project's line (§2)", and moved on. A rebind forced
+> 14 minutes after boot failed identically, which ruled out a boot race and
+> seemed to confirm it.
 >
-> Two things follow, and only the second is ours to fix cheaply:
+> The actual first line was further up the log and had been filtered out of
+> every search, because none of the greps included the word that mattered:
 >
-> 1. The AFE timeout is a bring-up bug, above this project's line (§2 — we do
->    not do bring-up). It belongs upstream at `sdm670-mainline`.
-> 2. **Even once a card exists there is no routing for it.** Arch's
->    `alsa-ucm-conf` carries `Qualcomm/sdm845` and `sc7180` and no sdm670;
->    postmarketOS packages `alsa-ucm-conf-qcom-sdm670` from
->    `gitlab.com/sdm670-mainline/alsa-ucm-conf` at a pinned commit. That one is
->    a package like any other here, and it is worth having ready so that when
->    the kernel side lands there is nothing else in the way. **?**
+> ```
+> qcom-q6core aprsvc:service:4:3: Direct firmware load for
+>     qcom/sdm670/sargo/Global_cal.acdb failed with error -2
+> qcom-q6core ...: probe with driver qcom-q6core failed with error -2
+> ```
+>
+> `q6afe` sits on `q6core`, the codec asks `q6afe` for its MCLK, and the card's
+> DAI link waits for the codec. One missing 23 KB file, four errors of distance,
+> and not one of the downstream three mentions a filename. **The lesson is to
+> read the first error rather than the loudest**, and to be slower to call
+> something upstream's problem: "the DSP is not answering" was a true
+> description and a false diagnosis.
+>
+> `Global_cal.acdb` is audio calibration and lives in LineageOS's device config
+> rather than TheMuppets' `/vendor/firmware` dump, under a directory named for
+> the card this phone has — `sdm670-intcodec-s4-snd-card`. A fourth upstream for
+> one file, pinned in `manifest.toml` as `acdb-url`/`acdb-ref`.
+>
+> The second file is the ALSA use-case profile, and without it the card exists
+> and the phone is still silent: `wpctl status` shows no sink and no source,
+> because WirePlumber does not expose a card it has no routing for. Arch's
+> `alsa-ucm-conf` has `Qualcomm/sdm845` and `sc7180` and no sdm670. Ours
+> installs only the three sargo files, where postmarketOS's replaces the whole
+> `ucm2` tree — on Arch that would be two packages owning several hundred
+> identical paths. ALSA finds it through `conf.d/sdm660/Google Pixel 3a.conf`,
+> whose name must be the card's name exactly.
+>
+> **Measured after both:** `0 [G3a]: sdm660 - Google Pixel 3a`, sink "Built-in
+> Audio Earpiece (L) and Speaker (R)", source "Built-in Audio Built-in
+> Microphone", a tone played through `pw-play` and a 3 s capture that came back
+> 48 kHz stereo at full scale rather than silence.
+>
+> **Still open:** call audio specifically. The profile carries a VoiceCall verb,
+> but routing a call through it also wants `q6voiced`, which is not packaged for
+> Arch. Calls connect and are what exposed all of this. **?**
 
 **D30** *Added 2026-09-15.* **The camera works; its colour does not.** Both
 sensors enumerate (`imx363` rear, `imx355` front, `lc898219xi` focus actuator,
@@ -785,9 +816,16 @@ Restated as a checklist, in build order. Each carries its state.
    (`nfc0`); battery and charger (`qcom-battery`, `pm660-charger`); the Venus
    decoder (visible to PipeWire); touch, display and GPU.
 
-   **Does not work:** sound and microphone — no card registers at all (D29).
+   **Also works, found after the first pass:** the modem registers and
+   **calls connect in both directions** (`o2 - de+`, LTE, `CS: 'attached'` as
+   well as `PS`, so this network still offers circuit-switched fallback and
+   needs no IMS); and audio, once D29's two missing files were added — card,
+   earpiece, speaker and microphone all measured.
 
-   **Works but wrong:** camera colour (D30).
+   **Still open:** call audio through the VoiceCall verb, which wants
+   `q6voiced` (D29); camera colour (D30); and sound on a *fresh image*, since
+   both audio fixes were proved by hand-installing onto a running phone and
+   the packaged form has been built but not yet flashed.
 
    The Bluetooth AC that the previous revision of this file declined to write
    is now written, because the measurement it was waiting for has been taken.
@@ -838,8 +876,8 @@ booting, and this file should not say otherwise until one has.
   1. **A SIM.** Everything below is untestable without one, and this project
      does not ship claims it has not measured.
   2. **`q6voiced`** — call audio, routing voice to the ADSP. Note it is blocked
-     behind D29 regardless: with no sound card there is no call audio either,
-     so the audio bring-up bug gates calls as well as media.
+     behind D29's remaining half: the card and the VoiceCall verb are there
+     now, but routing a call through them wants this daemon.
   3. **`81voltd`** (`gitlab.com/flamingradian/81voltd`, GPL-2.0, in pmaports as
      `temp/81voltd`) — a host-side implementation of the QMI IMS Data service.
      LTE carries no circuit-switched voice, so on a network with no 2G/3G

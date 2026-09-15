@@ -474,3 +474,34 @@ firmware-ref  = "c631f0f2aa24ea60cfb505d327cd4ae56ca27f16"
 # and telephony is the thing that comes later, not the other way round.
 modem-url     = "https://gitlab.com/flamingradian/firmware-google-sargo-modem"
 modem-ref     = "34bbe2c27f35537f13747c9eba67ece6ae141806"
+
+# A FOURTH upstream, for one 23 KB file, and it buys every sound this phone
+# makes. `qcom-q6core` loads Global_cal.acdb as firmware and REFUSES TO PROBE
+# without it:
+#
+#   qcom-q6core aprsvc:service:4:3: Direct firmware load for
+#       qcom/sdm670/sargo/Global_cal.acdb failed with error -2
+#   qcom-q6core ...: probe with driver qcom-q6core failed with error -2
+#
+# q6afe sits on top of q6core, so the next thing in the log is an AFE timeout
+# -- `AFE set params failed -110` -- then the codec failing to enable its MCLK,
+# then `deferred probe pending: codec dai not found`, and finally
+# /proc/asound/cards reading "--- no soundcards ---". Four errors deep, in a
+# cascade whose first line is the only one that names a missing file, and whose
+# last three all look like a DSP that is simply not answering.
+#
+# It is audio CALIBRATION data, which is why it is not in TheMuppets tree: that
+# is /vendor/firmware, and this lives in the device's Android config repo.
+# LineageOS's, at the commit postmarketOS pins, under a directory named for the
+# card this phone actually has -- sdm670-intcodec-s4-snd-card.
+acdb-url      = "https://raw.githubusercontent.com/LineageOS/android_device_google_bonito"
+acdb-ref      = "a1cd8bf2603569b8b3b450b9d7b5b595eb549df0"
+acdb-path     = "acdbdata/OEM/sdm670-intcodec-s4-snd-card/Global_cal.acdb"
+
+# The ALSA use-case profile for that card, from the same org as the kernel.
+# Arch's alsa-ucm-conf carries Qualcomm/sdm845 and sc7180 and no sdm670, so
+# without this the card exists and PipeWire still shows no sink and no source:
+# WirePlumber does not expose a card it has no routing for. It carries a
+# VoiceCall verb as well as HiFi, which is what call audio needs.
+ucm-url       = "https://gitlab.com/sdm670-mainline/alsa-ucm-conf"
+ucm-ref       = "1e39c9fce12cb521bb53a6422532822b2e4faa10"

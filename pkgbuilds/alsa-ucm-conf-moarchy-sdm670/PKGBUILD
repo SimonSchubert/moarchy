@@ -1,0 +1,76 @@
+# The ALSA use-case profile for the Pixel 3a's sound card.
+#
+# Without it the card exists and the phone is still silent, which is a
+# confusing place to stop. `/proc/asound/cards` reads
+#
+#   0 [G3a  ]: sdm660 - Google Pixel 3a
+#
+# and `wpctl status` shows no sink and no source at all, because WirePlumber
+# does not expose a card it has no routing for. Every PCM node is there under
+# /dev/snd; nothing knows which one is the earpiece.
+#
+# With it, the same phone reports "Built-in Audio Earpiece (L) and Speaker (R)"
+# and "Built-in Audio Built-in Microphone" -- and the profile carries a
+# VoiceCall verb beside HiFi, which is the half a phone call needs.
+#
+# --- Why this is a package and not a line in alsa-ucm-conf ------------------
+#
+# Arch's alsa-ucm-conf carries Qualcomm/sdm845 and Qualcomm/sc7180 and nothing
+# for sdm670. postmarketOS fills the same gap with its own
+# alsa-ucm-conf-qcom-sdm670, from this same upstream -- the sdm670-mainline org
+# that maintains the kernel this phone runs.
+#
+# ONLY the sargo files are installed, which is where this differs from
+# postmarketOS's version. Theirs replaces the whole ucm2 tree and `provides`
+# alsa-ucm-conf; on Arch that would mean two packages owning several hundred
+# identical paths, and pacman refusing the transaction. Three files, none of
+# which Arch's package ships, is a strictly additive change.
+#
+# The conf.d entry is the discovery half and is not decoration: ALSA finds a
+# profile by looking up conf.d/<driver>/<card name>.conf, so the symlink's
+# name has to be the card's name exactly -- "Google Pixel 3a", spaces and all,
+# under sdm660. Get it wrong and everything above still happens.
+
+. "$startdir/../../scripts/manifest.sh"
+_ver=$(manifest_get moarchy version) || return 1
+_url=$(manifest_get device.sargo ucm-url) || return 1
+_ref=$(manifest_get device.sargo ucm-ref) || return 1
+
+pkgname=alsa-ucm-conf-moarchy-sdm670
+pkgver=$_ver
+pkgrel=1
+pkgdesc="ALSA use-case configuration for SDM670 (Google Pixel 3a)"
+arch=('any')
+url="$_url"
+license=('BSD-3-Clause')
+
+# alsa-ucm-conf itself is NOT a dependency and must not be: this package adds
+# files beside it rather than replacing it, and the two never touch the same
+# path. alsa-lib is what reads them.
+depends=('alsa-lib')
+
+source=("alsa-ucm-conf-sdm670-$_ref.tar.gz::$_url/-/archive/$_ref/alsa-ucm-conf-$_ref.tar.gz")
+sha256sums=('606ecece34efa340f1c7e0ab3660b507207b59200618bd4f3855172ac4642a20')
+
+package() {
+  local src="$srcdir/alsa-ucm-conf-$_ref/ucm2"
+  local dst="$pkgdir/usr/share/alsa/ucm2"
+
+  install -Dm644 "$src/Google/sargo/sargo.conf"     "$dst/Google/sargo/sargo.conf"
+  install -Dm644 "$src/Google/sargo/VoiceCall.conf" "$dst/Google/sargo/VoiceCall.conf"
+
+  # The lookup entry, by the card's own name. Shipped as the symlink upstream
+  # ships rather than as a copy, so there is one file to correct if the profile
+  # is ever renamed.
+  install -d "$dst/conf.d/sdm660"
+  ln -s "../../Google/sargo/sargo.conf" "$dst/conf.d/sdm660/Google Pixel 3a.conf"
+
+  # A profile that does not mention the verb call audio needs is a profile that
+  # will play music and carry a silent call, which is the exact failure this
+  # package was written for. Cheap to rule out at build time.
+  grep -q 'VoiceCall' "$dst/Google/sargo/sargo.conf" ||
+    { echo "!! sargo.conf names no VoiceCall verb -- call audio would stay silent"; return 1; }
+
+  install -Dm644 "$srcdir/alsa-ucm-conf-$_ref/LICENSE" \
+    "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

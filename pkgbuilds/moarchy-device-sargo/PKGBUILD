@@ -31,7 +31,9 @@ pkgver=$_ver
 # the field sees no upgrade to take.
 # 3: gained moarchy-qcom-modem, which is what gives this phone Wi-Fi (D27).
 # 4: gained bootmac, which is what gives this phone Bluetooth (D28).
-pkgrel=4
+# 5: gained the ALSA use-case profile, which is what gives this phone audio
+#    once Global_cal.acdb gives it a sound card at all (D29).
+pkgrel=5
 pkgdesc="Google Pixel 3a (sargo) hardware support for moarchy"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
@@ -84,6 +86,12 @@ conflicts=('moarchy-device')
 # daemon runs, and `bluetoothctl` says "No default controller available".
 # Measured on the handset, and measured fixed (D28).
 #
+# alsa-ucm-conf-moarchy-sdm670 is the second half of audio. The first half is
+# Global_cal.acdb in firmware-moarchy-sargo, without which qcom-q6core will not
+# probe and there is no sound card at all; this is what makes the card, once it
+# exists, appear to PipeWire as an earpiece, a speaker and a microphone rather
+# than as nothing. Arch's alsa-ucm-conf has sdm845 and sc7180 and no sdm670.
+#
 # qbootctl is what stops this phone bricking itself. An A/B bootloader counts
 # down a retry counter on every handoff and marks the slot unbootable at zero
 # unless the OS calls back; measured here as slot-retry-count:a:0 and
@@ -97,6 +105,7 @@ depends=(
   'firmware-moarchy-sargo'
   'moarchy-qcom-modem'
   'bootmac'
+  'alsa-ucm-conf-moarchy-sdm670'
   'qbootctl'
 )
 
