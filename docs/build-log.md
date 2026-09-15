@@ -361,7 +361,8 @@ panels — stop being instantiated.
 
 **Two things needed outside the shell:** `usermod -aG feedbackd` for the torch
 (`/sys/class/leds/white:flash/brightness` is `root:feedbackd 0664` and the group
-is empty on a bare install), and a real log destination —
+is empty on a bare install — true on the PinePhone that day, and *not* true on
+sargo, which is §6v), and a real log destination —
 `moarchy-restart-shell` used to send the shell's stdout to `/dev/null`,
 which threw away the only diagnosis a failed bar plugin ever produces.
 
@@ -1909,6 +1910,59 @@ produces no output is not evidence about the thing you changed. Establish a
 channel first — and check `fastboot getvar slot-unbootable:a` before believing
 any A/B result at all, because that one silently invalidates every measurement
 taken after it flips.
+
+## 6v. A tile that was never drawn, and a GPS that never speaks (2026-09-15)
+
+Two questions asked of the Pixel 3a — *does the torch work, does GPS work* —
+and both answers turned out to be about something reporting success.
+
+**The torch.** The tile was not off, it was **absent**: three small tiles
+instead of four. The shade probes with `[ -w …/brightness ]` and hides a
+control it cannot operate, which is the right behaviour and is
+indistinguishable on screen from a phone with no flash LED. The LED is real
+and lights on a root write.
+
+What was wrong is a path. `feedbackd` ships `72-feedbackd.rules`, which matches
+`*/*:flash` and delegates the permission to `/usr/libexec/fbd-ledctrl`; Arch
+installs that helper at `/usr/lib/fbd-ledctrl`. udev logs `Failed to find and
+pin callout binary … ignoring` and moves on, so the attribute keeps
+`root:root 0644` on every boot. `moarchy-firstboot`'s `usermod -aG feedbackd`
+was doing its job the whole time against a group that had been granted nothing.
+
+`moarchy-led-perms.service` re-triggers LED rules at boot and was running — it
+simply re-ran the same rule and got the same failure two seconds later, which
+is why the journal carries the message twice. A service that works, re-running
+a rule that does not.
+
+The fix is `73-moarchy-torch.rules` in the `moarchy` package (docs/shade.md
+S10a): ours, device-independent, doing the chgrp and chmod itself. Not a
+symlink into feedbackd's layout — that had to be typed on a phone somebody
+would eventually reflash, and it would break again the next time feedbackd
+moved the file. `GROUP=`/`MODE=` cannot express it: udev applies those to the
+node in `/dev`, and an LED has none.
+
+S10 was amended in the same change, because it had said the tile is absent
+"when the device has no flash LED" and the code has always tested writability.
+The spec described one of the two causes and the missing one was the bug.
+
+**GPS is a longer story and is not fixed.** Every layer reports success: the
+QMI Location service is registered on qrtr, `rmtfs` and `tqftpserv` run,
+ModemManager advertises `gps-raw, gps-nmea, agps-msa, agps-msb`, and enabling
+location gathering answers "successfully setup location gathering". Two things
+are nonetheless true. The GNSS engine ships **locked** — `qmicli
+--loc-get-engine-lock` returns `all`, both MI and MT blocked — and once
+unlocked, only Qualcomm's proprietary `$PQW*` sentences ever arrive. MM logs
+`couldn't setup required NMEA traces: Operation timed out`, `--location-get`
+holds not one `GGA`/`RMC`/`GSV` line, and `--loc-get-position-report` from a
+fresh client times out.
+
+The engine is *solving*: `$PQWP1`/`$PQWP2` carry latitude and longitude in
+**radians**, and over a few minutes indoors their uncertainty field fell from
+~256 km to ~11 m at a plausible position. So "no fix" was the wrong summary.
+The right one is that the fix never leaves the modem in a form anything can
+read, which means geoclue has nothing and no app can have a position. Left
+open; the engine lock is the half worth remembering, because it makes every
+measurement taken before it is checked meaningless.
 
 ## 7. Hardware status
 

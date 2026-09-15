@@ -1,0 +1,33 @@
+# Make the flash LED's brightness writable by the session's group, which is
+# what the shade's Torch tile needs to exist at all (docs/shade.md S10, S10a).
+#
+# feedbackd ships a rule for exactly this attribute -- 72-feedbackd.rules,
+# matching */*:flash -- and it does not work on Arch: the rule runs
+# /usr/libexec/fbd-ledctrl while the package installs the helper at
+# /usr/lib/fbd-ledctrl. udev says so and carries on:
+#
+#   white:flash: Failed to find and pin callout binary "/usr/libexec/fbd-ledctrl"
+#   white:flash: Failed to execute '/usr/libexec/fbd-ledctrl ...', ignoring
+#
+# so the attribute keeps root:root 0644 on every boot. Nothing else notices:
+# the shade probes with `[ -w ... ]` and correctly hides a control it cannot
+# operate, which draws three tiles instead of four and reads exactly like a
+# phone with no flash LED. Found on sargo, where the LED is real.
+#
+# Ours rather than a symlink into feedbackd's layout: a feedbackd upgrade that
+# moves the helper again, or drops it, then changes nothing here.
+#
+# GROUP= and MODE= would be the obvious way to write this and do not work --
+# udev applies those to the device node in /dev, and an LED has no node. The
+# attribute is a sysfs file and has to be chgrp'd and chmod'd as one, which is
+# what fbd-ledctrl itself does.
+#
+# The group is feedbackd rather than video because moarchy-firstboot already
+# puts the user in it and feedbackd's own LED feedback wants the same access;
+# the package depends on feedbackd so the group is there when this runs.
+#
+# *:torch is matched for the same reason feedbackd matches it: some devices
+# name the same LED that way. The shade only ever probes *:flash.
+ACTION=="add|change", SUBSYSTEM=="leds", KERNEL=="*:flash|*:torch", \
+  RUN+="/usr/bin/chgrp feedbackd %S%p/brightness", \
+  RUN+="/usr/bin/chmod g+w %S%p/brightness"

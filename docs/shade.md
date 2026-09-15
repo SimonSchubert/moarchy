@@ -218,9 +218,31 @@ tapping Wi-Fi does not quietly switch Bluetooth back on. The radio is enabled
 ~700ms later, once the unblock has landed, because NetworkManager refuses to
 enable an interface rfkill still has blocked.
 
-**S10** Torch is **absent, not disabled**, when the device has no flash LED:
-the row divides its width by what is actually shown, three tiles or four. When
-present it writes the LED directly.
+**S10** Torch is **absent, not disabled**, when the session user cannot write
+`/sys/class/leds/white:flash/brightness` — which is *usually* no flash LED, and
+is a permissions failure the rest of the time. The row divides its width by
+what is actually shown, three tiles or four. When present it writes the LED
+directly.
+
+Check: `omarchy-shell shade open`, then `grim /tmp/shade.png` — four tiles on a
+device whose LED exists, three where it does not.
+
+**S10a** On a device that has the LED, the session user **can** write it on a
+fresh install, with nothing run by hand. The `moarchy` package ships
+`/usr/lib/udev/rules.d/73-moarchy-torch.rules`, which gives
+`leds/*:flash/brightness` group `feedbackd` and group write; `usermod -aG
+feedbackd` in `moarchy-firstboot` is the other half and is not sufficient
+alone.
+
+Check, as the session user: `[ -w /sys/class/leds/white:flash/brightness ]`,
+and `pacman -Qo /usr/lib/udev/rules.d/73-moarchy-torch.rules` naming `moarchy`.
+Made to fail once by removing the rule and re-triggering, so the check is known
+to be able to go red.
+
+S10a exists because S10's two causes are indistinguishable on screen: on sargo
+the LED was real, the tile was missing, and every layer reported success — udev
+ignored the rule that failed, and the probe correctly hid a control it could
+not operate. The archaeology is in `docs/build-log.md`.
 
 **S11** Rotate toggles `normal ↔ 90` — portrait and one landscape. Not a cycle
 through all four transforms: this is a portrait phone, so 180 is upside-down

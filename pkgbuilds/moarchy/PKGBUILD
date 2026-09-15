@@ -90,7 +90,11 @@ pkgver=$_ver
 # 4: bin/moarchy-sim and the moarchy.sim plugin. Both are shipped by this
 # package, and pkgver comes from manifest.toml -- without the bump the builder
 # keeps the existing artifact and the new screen reaches no phone.
-pkgrel=4
+# 5: 73-moarchy-torch.rules, which is the whole reason the Torch tile appears
+#    on a device that has a flash LED (docs/shade.md S10a). A phone holding
+#    0.2.2-4 shows three tiles and nothing anywhere says why, so this is a
+#    bump a field upgrade has to carry.
+pkgrel=5
 pkgdesc="Omarchy's look, keybindings and theming on a phone, under Sway"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
@@ -129,7 +133,13 @@ license=('MIT')
 # ships no .desktop file and cannot be reached from the drawer; it is worth
 # declaring on its own merits. A browser is deliberately NOT in this list:
 # bin/moarchy-launch-browser is a fallback chain over four of them and says so.
-depends=('bash' 'sway' 'omarchy-config' 'foot' 'polkit-gnome' 'upower')
+# feedbackd is here for its GROUP, not for its daemon: 73-moarchy-torch.rules
+# chgrps the flash LED to `feedbackd`, and that group is created by feedbackd's
+# sysusers file. Without the package the chgrp fails, udev shrugs, and the
+# Torch tile is missing with nothing saying why -- exactly the failure the rule
+# exists to end. It arrives anyway through megapixels and gnome-calls; naming
+# it here is what makes that a fact rather than a coincidence.
+depends=('bash' 'sway' 'omarchy-config' 'foot' 'polkit-gnome' 'upower' 'feedbackd')
 source=()
 
 package() {
@@ -158,6 +168,7 @@ package() {
          "$pkgdir/usr/share/moarchy/default/themed" \
          "$pkgdir/usr/share/moarchy/default/pacman-hooks" \
          "$pkgdir/usr/share/moarchy/default/polkit" \
+         "$pkgdir/usr/share/moarchy/default/udev" \
          "$pkgdir/usr/share/moarchy/default/applications" \
          "$pkgdir/usr/share/moarchy/default/glib-schemas" \
          "$pkgdir/usr/share/moarchy/default/agents"
@@ -262,6 +273,14 @@ package() {
   # matches on the action id, which then simply never appears.
   install -Dm644 "$_repo/default/polkit/49-moarchy-store.rules" \
     "$pkgdir/usr/share/polkit-1/rules.d/49-moarchy-store.rules"
+
+  # The torch tile's permission. 73 so it runs after feedbackd's 72, which
+  # tries to do this and cannot on Arch -- the rule's own header has the whole
+  # story, and docs/shade.md S10a is the criterion. /usr/lib, not /etc, for the
+  # same reason as the polkit rule above: this is the package's, and the
+  # override path stays free.
+  install -Dm644 "$_repo/default/udev/73-moarchy-torch.rules" \
+    "$pkgdir/usr/lib/udev/rules.d/73-moarchy-torch.rules"
 
   # --- systemd -------------------------------------------------------------
   install -Dm644 "$_repo/default/systemd/system/moarchy-firstboot.service" \

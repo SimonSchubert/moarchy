@@ -274,6 +274,42 @@ Bluetooth|S6c|openBluetooth|Bluetooth devices|moarchy.bluetooth
 ROWS
 fi
 
+# shade S10/S10a. The Torch tile is drawn only where this user can write the
+# LED, so a permissions failure and a phone with no flash LED are the same
+# picture -- three tiles, and nothing anywhere saying why. That is how sargo
+# shipped with a working LED and no tile.
+#
+# Two questions, because writability alone is not the criterion: it also has to
+# arrive from the package, on a phone nobody has typed anything into. The second
+# check is the one a hand-made symlink in /usr/libexec does not satisfy.
+torch_led=""
+for _l in /sys/class/leds/*:flash/brightness /sys/class/leds/*:torch/brightness; do
+  [[ -e $_l ]] && { torch_led=$_l; break; }
+done
+torch_rule=/usr/lib/udev/rules.d/73-moarchy-torch.rules
+
+if [[ -z $torch_led ]]; then
+  skip_ "no flash LED on this device, so S10 hides the tile and S10a asks nothing"
+else
+  if [[ -w $torch_led ]]; then
+    ok "the torch LED is writable by $(id -un), so the tile is drawn (S10, $torch_led)"
+  else
+    no "$torch_led is not writable by $(id -un)" \
+       "S10: the Torch tile disappears, and looks exactly like a phone with no LED"
+  fi
+
+  torch_owner=$(pacman -Qoq "$torch_rule" 2>/dev/null)
+  if [[ $torch_owner == moarchy ]]; then
+    ok "the permission comes from a packaged rule (S10a, $torch_rule)"
+  elif [[ -e $torch_rule ]]; then
+    no "$torch_rule is owned by ${torch_owner:-nothing}, not the moarchy package" \
+       "S10a: it is a hand-made file and the next reflash loses it"
+  else
+    no "$torch_rule is missing" \
+       "S10a: any writability above was arranged by hand and will not survive a reflash"
+  fi
+fi
+
 # --- the coding agent tile (docs/settings.md P) ------------------------------
 head_ "coding agent"
 
