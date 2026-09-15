@@ -959,7 +959,11 @@ an accent dot under the label. Everything else about it is a grid cell — same
 icon size, same column pitch, same label — because it is the same app, and a
 shelf drawn in a second visual language reads as a second kind of thing.
 A shell app (K) has no desktop entry to take an icon from, so its tile wears
-its own glyph, the way its card does (K5).
+its own glyph, the way its card does (K5). That glyph is declared, not derived:
+an empty one falls through to an `Image` with an empty source and the tile is a
+blank box under a correct label, which no check that counted tiles would see.
+→ `scripts/style-check.sh` reports every `AppWindow` declaring a non-empty
+`glyph`, counted, and names the file and line of one that does not
 
 **M5** Tapping a tile switches to that window and closes the drawer. It does
 not launch a second copy. The same `swaymsg` dispatch a card's tap takes, for
@@ -1108,11 +1112,16 @@ is not deliberate — I6 is covered in substance by A7 (`bin/moarchy-selftest`
 notes this at the `--surfaces` end), but I5a, I5b, I7 and I1's companions are
 simply unrun.
 
-**Stated, with no check** (23). Behavioural claims with nothing to settle them
+**Stated, with no check** (22). Behavioural claims with nothing to settle them
 from a terminal; several are hand checks on glass by nature:
 
 > B2 · D2 · D3 · D4 · F1 · G1 · G5 · G7 · G8 · G9 · G10a · H3 · H5 · H6 · H7a ·
-> H7b · H8 · K10 · L4 · M4 · M10 · M11 · M12
+> H7b · H8 · K10 · L4 · M10 · M11 · M12
+
+M4 left this list by being split: the accent dot is still a hand check on glass,
+and the glyph beside it is a declaration `scripts/style-check.sh` can read. The
+command above regenerates the three lists from `bin/moarchy-selftest` alone, so
+a criterion checked anywhere else has to be moved by hand.
 
 **Run, with no `→` line here** (6). The suites check these; the doc understates
 itself, and each should gain the check it is already being held to:

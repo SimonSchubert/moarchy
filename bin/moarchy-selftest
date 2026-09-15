@@ -2291,7 +2291,10 @@ walk(tree)' 2>/dev/null
   #   M2/M3   the shelf hidden with nothing open, and hidden by a query. The
   #           first needs every window on the device closed, including the
   #           user's, so it is not run here.
-  #   M4      the running dot -- visual
+  #   M4      the running dot -- visual. The glyph a shell app's tile wears
+  #           is the half a terminal can see, and scripts/style-check.sh
+  #           reads it: an empty one drew a blank box for as long as M4
+  #           was on this list whole
   #   M9/M10  closing the last tile, and a window that refuses to close
   #   M11/M12 absences: the grid unchanged, and no bulk clear-all
   #   G5      a close-request that only a prompting app shows

@@ -224,6 +224,66 @@ else
   no "shared code written out again (E7)" "$e7"
 fi
 
+# --- gestures.md M4: a shell app's tile wears its own glyph -------------------
+# Not a style.md section. A shell app's window carries the shell process's own
+# app id, so the drawer's shelf has no desktop entry to take an icon from and
+# asks the plugin for a glyph instead -- and an empty one falls through to an
+# Image with an empty source, which draws nothing at all. Settings shipped that
+# way from a116d9a: the tile carried the right name, the running dot and a
+# blank square, and every automated check passed, because M4 is about a
+# character and nothing was reading it.
+#
+# The declaration and not the rendering, which is the half a terminal can see.
+printf '\nshell apps (gestures.md M4, not a style.md section)\n'
+m4=$(python3 - "$PLUGINS" <<'M4PY'
+import pathlib, re, sys
+
+problems, seen = [], 0
+for path in sorted(pathlib.Path(sys.argv[1]).glob("*/*.qml")):
+    if path.parent.name == "moarchy.common":
+        continue
+    lines = path.read_text().splitlines()
+    for i, line in enumerate(lines):
+        if not re.match(r"^\s*(?:\w+\.)?AppWindow\s*{", line):
+            continue
+        seen += 1
+        # Everything indented past the opening line, which is enough here:
+        # these are hand-written declarations, and a brace counter would trip
+        # over a brace inside a string.
+        indent = len(line) - len(line.lstrip())
+        body = []
+        for rest in lines[i + 1:]:
+            if rest.strip() and (len(rest) - len(rest.lstrip())) <= indent:
+                break
+            body.append(rest)
+        # The window's own properties, at one level in -- not any `glyph:`
+        # anywhere inside it. Settings has a second one on a row delegate
+        # eleven levels down (`glyph: modelData.glyph || ""`), and a search
+        # over the whole block found that instead and passed while the
+        # window's own was missing. A check that reads the wrong line is worse
+        # than no check: it reports the thing it is not looking at.
+        own = [b for b in body
+               if len(b) - len(b.lstrip()) == indent + 2]
+        glyph = re.search(r"^\s*glyph\s*:\s*(.+?)\s*$", "\n".join(own), re.M)
+        rel = f"{path.parent.name}/{path.name}"
+        if not glyph:
+            problems.append(f"{rel}:{i + 1}  AppWindow declares no glyph")
+        elif glyph.group(1) in ('""', "''"):
+            problems.append(f"{rel}:{i + 1}  AppWindow declares an empty glyph; "
+                            "its tile on the drawer's shelf draws nothing")
+if not seen:
+    problems.append("!! no AppWindow found -- this check is reading nothing")
+print("%d|%s" % (seen, "; ".join(problems)))
+M4PY
+)
+m4_n=${m4%%|*}
+m4_bad=${m4#*|}
+if [[ -z ${m4_bad// /} ]]; then
+  ok "every shell app declares a glyph for its shelf tile ($m4_n windows, M4)"
+else
+  no "a shell app has no glyph (M4)" "$m4_bad"
+fi
+
 # --- the artwork parses ------------------------------------------------------
 # Every icon this project ships is a file rather than a theme name, argued at
 # length in moarchy.device/icon.svg, and each carries a paragraph of prose

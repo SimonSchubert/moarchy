@@ -1215,9 +1215,16 @@ Item {
     appName: "Settings"
     pageTitle: root.pageTitle === "Settings" ? "" : root.pageTitle
     pluginId: root.pluginId
-    // K5. One character of a Nerd Font, invisible in an editor that has no such
-    // font: U+E615, nf-seti-config -- the gear the shade opens this by.
-    glyph: ""
+    // K5. The gear the shade opens this by: U+E615, nf-seti-config.
+    //
+    // Spelled as an escape where its siblings carry the rune itself
+    // (moarchy.wifi, moarchy.bluetooth, moarchy.sim), because this one did not
+    // survive being typed: it was committed empty in a116d9a under a comment
+    // naming the character, and an empty glyph falls through to an Image whose
+    // source is "" -- so the shelf drew Settings as a blank box while the name
+    // beside it was right. A character no editor can render is a character an
+    // editor can eat, and this is the spelling that cannot be.
+    glyph: "\ue615"
     color: root.surface
 
     // I5d. The unmap is the event that raises the keyboard, so it is also the
