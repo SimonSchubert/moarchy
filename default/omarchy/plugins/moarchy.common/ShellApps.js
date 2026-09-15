@@ -76,3 +76,22 @@ function focusToplevel(shell, tl) {
   tl.activate()
   return false
 }
+
+// Stand on the workspace the next window will land on -- windows.md L10.
+//
+// Here for focusToplevel()'s reason rather than a new one: it is a compositor
+// call, the drawer is what needs it and the drawer has no connection of its
+// own, and moarchy.gestures is where every compositor call in this shell
+// already lives. It owns the rule as well as the socket (gestures.md F1), so
+// asking it also means not writing "the lowest free workspace" a third time.
+//
+// No fallback. focusToplevel() has one only because there is a worse-but-real
+// answer available; there is no equivalent here, and dispatching a workspace
+// switch from a shell whose gestures plugin failed to load would need a
+// second swaymsg path for a case in which the strip is already gone.
+function goToFreeWorkspace(shell) {
+  var gestures = item(shell, "moarchy.gestures")
+  if (!gestures || typeof gestures.goToFreeWorkspace !== "function") return false
+  gestures.goToFreeWorkspace()
+  return true
+}

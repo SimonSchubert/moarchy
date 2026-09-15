@@ -638,13 +638,21 @@ Item {
       //
       // Kept under a prefix so a plugin id can never be returned for an app_id
       // that happens to spell the same thing.
-      var toggled = /(?:^|\s)shell\s+toggle\s+(\S+)/.exec(String(entry.execString || ""))
+      var toggled = root.pluginSummonedBy(entry)
       if (toggled) {
         var key = "plugin:" + toggled[1].toLowerCase()
         if (map[key] === undefined) map[key] = entry
       }
     }
     root.appIdIndex = map
+  }
+
+  // The plugin id an entry summons, as a one-element match, or null for an
+  // entry that starts a process. Written once: buildIndex keys the shelf's
+  // icons off it (K5) and launch() asks it whether a window is coming (L10).
+  function pluginSummonedBy(entry) {
+    if (!entry) return null
+    return /(?:^|\s)shell\s+toggle\s+(\S+)/.exec(String(entry.execString || ""))
   }
 
   function entryForAppId(appId) {
@@ -1233,6 +1241,29 @@ Item {
 
   function launch(entry) {
     if (!entry || !root.shell || !root.shell.appLibrary) return
+
+    // windows.md L10. Stand on the workspace the window will land on, before
+    // starting it rather than after it maps.
+    //
+    // Focus already followed a new window: it lands on the focused workspace,
+    // which has the app you launched from on it, so bin/moarchy-one-app-per-
+    // workspace moves it to a free one and follows it there. What it cannot do
+    // is act before the window exists, and on this hardware that is seconds of
+    // gtk-launch spent looking at the app you were leaving with the splash
+    // drawn over it.
+    //
+    // Before appLibrary.launch(), so the splash it starts is drawn over the
+    // wallpaper of the workspace being arrived at. No race with the daemon
+    // either: the window then maps alone on that workspace and on_new_window()
+    // returns at its `if not others` guard without moving anything.
+    //
+    // Not for an entry that summons a plugin. Some of those draw a window and
+    // some draw a layer surface (windows.md L5, and moarchy.device is one), and
+    // a layer surface is visible from every workspace -- so moving would leave
+    // you standing on an empty one when it was dismissed, having gone nowhere
+    // and come back somewhere else.
+    if (!root.pluginSummonedBy(entry)) ShellApps.goToFreeWorkspace(root.shell)
+
     root.shell.appLibrary.launch(entry.id, root.shell.appLibrary.entryName(entry))
     // A hand-off too (I5d): the app being launched is the one that gets to say
     // whether it wants a keyboard, and a terminal asks for one the moment it

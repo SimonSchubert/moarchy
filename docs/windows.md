@@ -164,6 +164,23 @@ deliberate. L7 cannot catch it: `fallback` is a pass there, by design.
   <img src="screenshots/splash.png" width="40%" alt="the Calculator icon on the wallpaper while it launches">
 </p>
 
+**L10** Tapping an app in the drawer leaves the workspace you tapped from
+immediately, before the window exists. The splash (L1) is drawn over the
+wallpaper of the workspace the window is about to land on, not over the app you
+were in.
+
+Focus already followed a new window — it maps on the focused workspace, which
+is occupied, so `bin/moarchy-one-app-per-workspace` moves it to a free one and
+follows it. What that cannot do is act before the window exists, and on this
+hardware an app launch is seconds.
+
+Not for an entry that summons a plugin (L5): some of those draw a layer
+surface, which is visible from every workspace, so moving would strand you on
+an empty one when it was dismissed.
+→ within a second of `omarchy-shell drawer launch <id>` for a real app, the
+focused workspace's `representation` is empty and its number is not the one the
+launch started on; for `moarchy.device` the focused workspace has not changed
+
 ### What the splash does not cover
 
 Apps started from a terminal, from a keybinding, or by

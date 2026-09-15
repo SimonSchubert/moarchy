@@ -594,6 +594,25 @@ Item {
     return free
   }
 
+  // windows.md L10. Go and stand on the workspace the next window will land on.
+  //
+  // The same two lines run("home") uses, under the same guard, and for the
+  // same reason in both places: already on an empty workspace there is nowhere
+  // to go, and going anyway hops to a *different* empty one and churns the
+  // numbering for nothing. `representation` is read alongside the focused
+  // toplevel because an exclusive-focus layer surface -- the drawer, which is
+  // what calls this -- deactivates the window underneath, so focus alone
+  // answers "nothing is open" over an app that is plainly there (F5).
+  //
+  // Called before the launch rather than after the window maps. What follows
+  // is seconds of gtk-launch on this hardware, and bin/moarchy-one-app-per-
+  // workspace only moves the new window once it exists -- so until then you
+  // are looking at the app you launched *from*, with the splash over it.
+  function goToFreeWorkspace(): void {
+    if (root.focusedToplevel() || root.focusedRepresentation() !== "")
+      root.dispatch("workspace number " + root.firstFreeWorkspace())
+  }
+
   // ------------------------------------------------------ driving an overlay
   function resolveTarget(id: string): void {
     root.dragTarget = null
