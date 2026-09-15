@@ -300,9 +300,18 @@ phone that shows two penguins and stops.
 
 **D12** `image/verify.sh` splits the same way. Its partition-table and
 `eGON.BT0` assertions are `sunxi-gpt` facts; the Android backend asserts its
-own (boot.img magic, the DTB appended, vbmeta flags = 2), and the behavioural
-section — the first-boot scripts run in a chroot — stays shared because it is
-about the rootfs.
+own (boot.img magic, the DTB appended, vbmeta flags = 2, no ramdisk, and the
+cmdline read back out of the header), and the behavioural section — the
+first-boot scripts run in a chroot — stays shared because it is about the
+rootfs.
+
+*Amended 2026-09-15.* `verify_artifact` and `verify_grow` are required;
+`verify_rootfs` is a third and **optional** hook, run against the mounted
+rootfs, for facts true of one device's rootfs and meaningless for another's.
+sargo uses it for D26, which is invisible in every shared check because an
+image missing it is otherwise perfect. Optional rather than required because a
+backend with no such facts should not have to define an empty function to say
+so.
 
 ---
 

@@ -49,6 +49,9 @@ _repos=$(manifest_repos) || _repos=""
 for _hook in verify_artifact verify_grow; do
   declare -F "$_hook" >/dev/null || { printf "  \033[31mFAIL\033[0m verify/%s.sh defines no %s\n" "$BACKEND" "$_hook"; exit 1; }
 done
+# verify_rootfs is OPTIONAL, unlike the two above: it is for facts that are
+# true of one device's rootfs and meaningless for another's, and a backend with
+# none of those should not have to define an empty function to say so.
 printf "\n  device %s, backend %s\n" "$DEVICE" "$BACKEND"
 
 rm -rf "$WORK"; mkdir -p "$WORK"
@@ -482,6 +485,12 @@ else
       && ok "$v=$val in the session" || no "$v is unset in the session"
   done
 fi
+
+# Anything else this device needs to be true of its rootfs, if it has any.
+# sargo does: without qbootctl marking the boot slot, the bootloader stops
+# booting the phone after a few reboots (D26), and that is invisible in every
+# other check here because the image is otherwise perfect.
+declare -F verify_rootfs >/dev/null && verify_rootfs
 
 # How this device grows into the storage it was flashed onto. A card that may
 # be bigger than the image, or a fixed vendor partition -- different enough

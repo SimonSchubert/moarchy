@@ -142,6 +142,38 @@ printf '  rootfs %s sparse -> %s raw\n' \
   "$(du -h "$IMG_XZ/rootfs.simg" | cut -f1)" "$(du -h "$WORK/root.img" | cut -f1)"
 }
 
+# What has to be true of THIS device's rootfs (the optional hook in verify.sh).
+verify_rootfs() {
+sec "the boot slot is marked successful (D26)"
+# The check that is invisible in every other section, because an image missing
+# this is otherwise perfect. An A/B bootloader counts a slot down on every
+# handoff and marks it unbootable at zero unless the OS calls back; a phone
+# without qbootctl gets about three reboots and then needs a host with fastboot.
+[ -x "$R/usr/bin/qbootctl" ] \
+  && ok "qbootctl is installed" \
+  || no "no /usr/bin/qbootctl -- nothing will mark the boot slot, and the phone stops booting after a few reboots (D26)"
+
+# Enabled by the PACKAGE's own symlink, not by moarchy-firstboot: a first-boot
+# script can fail, and this has to be true from the moment the image exists.
+# Same two-tree rule as verify.sh's unit(): /usr/lib is how a package enables
+# a unit, /etc is what `systemctl enable` writes.
+_u=qbootctl-mark-successful.service
+if [ -L "$R/usr/lib/systemd/system/multi-user.target.wants/$_u" ] ||
+   [ -L "$R/etc/systemd/system/multi-user.target.wants/$_u" ]; then
+  ok "$_u is enabled"
+else
+  no "$_u is not enabled in either tree -- qbootctl is installed but nothing runs it"
+fi
+
+# And that it actually runs qbootctl, rather than being a unit that was renamed
+# out from under its ExecStart.
+if grep -q '^ExecStart=/usr/bin/qbootctl -m' "$R/usr/lib/systemd/system/$_u" 2>/dev/null; then
+  ok "the unit execs qbootctl -m"
+else
+  no "the unit's ExecStart is not /usr/bin/qbootctl -m"
+fi
+}
+
 # The rootfs growing to fill its partition.
 verify_grow() {
 sec "behaviour: the rootfs grows to fill userdata"
