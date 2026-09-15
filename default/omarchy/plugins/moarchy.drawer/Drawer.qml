@@ -625,6 +625,21 @@ Item {
       // never displaced by a suffix collision.
       var tail = id.split(".").pop()
       if (tail && map[tail] === undefined) map[tail] = entry
+
+      // A shell app's window carries the shell process's own app id (K9), so
+      // nothing above can ever find its entry. The entry names the plugin in
+      // its Exec line -- `omarchy-shell shell toggle <id>` -- and that is the
+      // only place the two are joined: Quickshell's DesktopEntry exposes name,
+      // icon, categories and exec, and no way to read an X- key, so the
+      // X-Moarchy-Plugin these entries also carry is unreachable from here.
+      //
+      // Kept under a prefix so a plugin id can never be returned for an app_id
+      // that happens to spell the same thing.
+      var toggled = /(?:^|\s)shell\s+toggle\s+(\S+)/.exec(String(entry.execString || ""))
+      if (toggled) {
+        var key = "plugin:" + toggled[1].toLowerCase()
+        if (map[key] === undefined) map[key] = entry
+      }
     }
     root.appIdIndex = map
   }
@@ -632,6 +647,12 @@ Item {
   function entryForAppId(appId) {
     if (!appId) return null
     var e = root.appIdIndex[String(appId).toLowerCase()]
+    return e === undefined ? null : e
+  }
+
+  function entryForPluginId(pluginId) {
+    if (!pluginId) return null
+    var e = root.appIdIndex["plugin:" + String(pluginId).toLowerCase()]
     return e === undefined ? null : e
   }
 
@@ -644,9 +665,16 @@ Item {
     return ShellApps.forToplevel(root.shell, app)
   }
 
+  // K5, M4 again, for the icon. openNameFor has asked the plugin since K5 and
+  // this did not, so a shell app resolved a name and never an artwork -- and
+  // the app id it falls back on is `org.quickshell` for every one of them. It
+  // went unseen while the only shell apps were Settings, Wi-Fi and Bluetooth,
+  // which open from the shade and never take a tile on the shelf.
   function openIconFor(app) {
-    var entry = app ? root.entryForAppId(app.appId) : null
-    if (!entry || !root.shell || !root.shell.appLibrary) return ""
+    if (!app || !root.shell || !root.shell.appLibrary) return ""
+    var own = root.shellAppFor(app)
+    var entry = own ? root.entryForPluginId(own.pluginId) : root.entryForAppId(app.appId)
+    if (!entry) return ""
     return root.shell.appLibrary.iconSource(entry.icon)
   }
 

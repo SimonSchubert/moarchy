@@ -32,9 +32,24 @@ function item(shell, id) {
 // finds its own handle once (moarchy.common/AppWindow.qml), and doing it again
 // here would be a second matcher with its own way of being subtly wrong.
 function forToplevel(shell, tl) {
-  if (!tl) return null
-  for (var i = 0; i < IDS.length; i++) {
-    var plugin = item(shell, IDS[i])
+  if (!tl || !shell || !shell.panelLoaders) return null
+  // Every loaded plugin, not IDS. The list above is the *settings family* --
+  // the screens a back swipe and the carousel have to treat alike -- and it was
+  // never the set of plugins that draw a window. Reusing it here made it a
+  // second list by accident, with the same failure mode the header describes:
+  // moarchy-apps ships Keep, Launches and Chrome as plugins, none of them are
+  // in IDS, and every one of them showed on the shelf as `org.quickshell` with
+  // no icon.
+  //
+  // Asking the loaders instead means a plugin that draws a window is found
+  // because it draws a window. shell.qml registers a panel loader for every
+  // plugin with a panel entry point (registerPanelLoader, called from the
+  // panel Loader's onLoaded), third-party ones included, so there is nothing
+  // for an app to sign up to.
+  var loaders = shell.panelLoaders
+  for (var id in loaders) {
+    var loader = loaders[id]
+    var plugin = loader && loader.item ? loader.item : null
     if (plugin && plugin.appWindow && plugin.appWindow.toplevel === tl)
       return plugin
   }
