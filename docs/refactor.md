@@ -658,18 +658,32 @@ moarchy.settings".
 → `grep -c 'component WideTile\|component SmallTile' moarchy.shade/Shade.qml`
 is 1
 
-**J6** `E7_EXEMPT` is empty. `Settings.qml` and `SettingsRow.qml` are the two
-files §E2 and §E3 could not take, and the check in `scripts/style-check.sh` was
-written so that removing the last exemption tightens it.
-→ `grep -n 'E7_EXEMPT=' scripts/style-check.sh` shows an empty string, and the
-check passes
+**J6** `E7_EXEMPT` is empty. *Done.* Both files take `Shared.PressVeil` through
+the one-line inline component now, and Settings' own `luminance`,
+`contrastRatio`, `mix` and `readableOn` are gone in favour of `Theme.js`, which
+had the identical four. They were exempt because they were another session's
+files, and they are not any more.
 
-**J7** The drawer imports nothing out of another plugin. `Search.js` and
-`Guards.js` are pure libraries living in `moarchy.settings`, so the drawer today
-will not load unless a sibling plugin's internals are beside it — the header
-already warns that a user-directory copy of one and not the other breaks the
-path.
-→ `grep -n 'moarchy.settings' moarchy.drawer/Drawer.qml` matches only comments
+`SettingsRow`'s veil keeps `card.textColor` as its default rather than a
+surface's role, which is the per-file fact §E2's shape exists to carry: that
+component *is* the row and does not know which screen drew it.
+→ `grep -n 'E7_EXEMPT=' scripts/style-check.sh` shows an empty string, and the
+check passes without printing a `still to migrate` line
+
+**J7** *Withdrawn.* The coupling is real and moving the files makes it worse.
+`Search.js` opens with `.import "Pages.js" as Pages` and walks `Pages.PAGES`: it
+is a search over the Settings tree, so in the common dir it would be shared code
+that depends on a plugin — the same edge pointing the wrong way. Moving only
+`Guards.js` splits a pair the selftest checks as a pair.
+
+> What the drawer depends on is the Settings *tree*, and there is deliberately
+> one of those: `Drawer.qml`'s header argues that the alternative is a second copy
+> of the tree in the launcher. The dependency is on the right thing; the
+> *directory* is what makes it look like a layering fault.
+> `bin/moarchy-selftest` already checks first, and separately, that both files are
+> beside the drawer, because a missing import makes the whole plugin fail to load.
+→ `grep -n '^\.import' moarchy.settings/Search.js` shows why the file cannot
+move, and the selftest reports `O the drawer's imports` before any other §O check
 
 **J8** A host-contract property a plugin never reads is not declared. Four
 plugins declare five of them apiece and read one; the host assigns by name into
