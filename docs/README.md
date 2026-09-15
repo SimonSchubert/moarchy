@@ -21,6 +21,13 @@ citations go first.
 `build-log.md` is neither — it is the chronological account, and it is where the
 archaeology belongs.
 
+**Orientation** is the third genre and there is one of it: [the code](#the-code)
+at the bottom of this file. No criteria, no rationale — just where things are, so
+that a stranger, or this project six months from now, can find the file that owns
+a thing without reading 9,000 lines of contract first. It is a map and not a
+second copy of the territory: every row points at the document that governs it,
+because a map that restates a rule is a map that will contradict it.
+
 ## A criterion is three things
 
 ```
@@ -103,3 +110,160 @@ alongside the change that made them untrue.
 | [`upstream.md`](upstream.md) | Decisions — the boundary with Omarchy, and what a version bump may break |
 | [`refactor.md`](refactor.md) | Contract — what has to be true when the duplication is gone. Cited by ~29 comments |
 | [`build-log.md`](build-log.md) | How this went, including the dead ends. The archaeology lives here |
+
+---
+
+# The code
+
+Orientation, in the sense above: where things are. Nothing here is a criterion.
+Where a rule is mentioned, the file that owns it is named and that file wins.
+
+## What the phone is running
+
+Omarchy on Arch ARM, with sway in place of Hyprland, and **one overlay package**
+on top rather than a fork ([`upstream.md`](upstream.md) has the boundary). Three
+kinds of thing make up the phone UI:
+
+| | What it is | Where |
+| --- | --- | --- |
+| **The compositor layer** | sway config, split by lifetime: device-independent here, per-device in the device package, theme-generated at runtime | `default/sway/*.conf`, entered through `config/sway/config` |
+| **The shell** | Omarchy 4.x's quickshell/QML shell, unmodified except for a patch, hosting our screens as plugins | `pkgbuilds/omarchy-config/port-4x.patch`, `default/omarchy/plugins/` |
+| **The commands** | everything a tap ends up running, plus the shims that answer upstream's names | `bin/` |
+
+Nothing in this repo is the shell itself. The shell is upstream's, fetched at a
+pinned ref, ported to sway at build time by a patch that must apply with no fuzz.
+
+## The shell plugins
+
+Eleven plugins and one directory that is not a plugin, all under
+`default/omarchy/plugins/`, installed to `/usr/share/moarchy/plugins`.
+
+| Plugin | Kind | What it owns | Contract |
+| --- | --- | --- | --- |
+| `moarchy.gestures` | panel | the bottom strip, the home pill, the back edge — every touch gesture, and the shell's only compositor-dispatch seam | [`gestures.md`](gestures.md) |
+| `moarchy.drawer` | overlay | the app grid, its search field, the open-apps shelf, the uninstall card | [`gestures.md`](gestures.md) §N, [`apps.md`](apps.md) |
+| `moarchy.shade` | overlay | the pull-down: quick tiles, brightness and volume, media, notification history | [`shade.md`](shade.md) |
+| `moarchy.settings` | overlay | the settings screen tree and the IPC it answers on | [`settings.md`](settings.md) |
+| `moarchy.themes` | overlay | the theme picker, as a grid of live swatches | [`settings.md`](settings.md) §theme |
+| `moarchy.wifi` | overlay | pick a network, type a passphrase | [`settings.md`](settings.md) |
+| `moarchy.bluetooth` | overlay | pair and connect a device | [`settings.md`](settings.md) |
+| `moarchy.sim` | overlay | unlock the SIM, and how many tries are left | [`settings.md`](settings.md) |
+| `moarchy.device` | overlay | live hardware: battery, thermals, CPU, memory, storage | [`devices.md`](devices.md) |
+| `moarchy.bar` | bar | the status bar, display-only | [`style.md`](style.md) |
+| `moarchy.splash` | panel | the launching app's icon, from the tap until its window appears | [`windows.md`](windows.md) §L |
+| `moarchy.common` | **not a plugin** | the shared code below. No `manifest.json`, so the registry skips it | [`refactor.md`](refactor.md) §E8 |
+
+### What is shared, and the rule about it
+
+`moarchy.common/` is reached as a plain directory import — `import
+"../moarchy.common" as Shared` — which needs no `qmldir`.
+
+| File | What it is |
+| --- | --- |
+| `DragTracker.qml` | one touch sequence → progress, velocity, a latch, and a watchdog. Every gesture on the phone is an instance of it |
+| `SheetDragArea.qml` | a control that also drags the sheet it sits on |
+| `SheetHeader.qml` | the back-and-title row at the top of a sheet |
+| `AppWindow.qml` | a screen that maps as an ordinary window rather than a layer surface |
+| `PressVeil.qml` | the pressed state |
+| `Sheet.js` | the one list of sheets, how they stack, and what every `open()` does identically |
+| `ShellApps.js` | which of our screens are windows, and the two compositor helpers |
+| `Theme.js` | the colour arithmetic: luminance, contrast, mix, readableOn |
+
+**A second copy of any of these fails `scripts/style-check.sh`.** That is the
+point of the directory: the rule is checked, not written down. The checker's own
+header comment is the authoritative list of what it enforces.
+
+## How the screens stack
+
+The thing to know before touching any of them, and the reason a sheet that opens
+puts some of its neighbours away and not others:
+
+```
+ Overlay   the shade · the gesture strip · the back edge · the launch splash
+ Top       the drawer · the theme picker · the status bar · moarchy.device
+           the on-screen keyboard (moarchy-keyboard, its own package)
+ windows   Settings · Wi-Fi · Bluetooth · SIM — and every app
+ Bottom    the home catcher, under everything
+```
+
+Two consequences that are easy to get wrong, and have been:
+
+- **A sheet opening puts away every sheet on its own layer or above it, and none
+  below.** So the shade covers nothing (nothing is above it), the drawer and the
+  picker cover each other and the shade, and a *window* is under all three and
+  clears all three. One implementation, `Sheet.js`; the rule is
+  [`refactor.md`](refactor.md) §B6 and `node scripts/sheet-test.js` runs it.
+- **Our four screens that are windows are windows.** The compositor puts them
+  away and brings them back, they live on workspaces, and the back gesture asks
+  which window is focused rather than walking a list ([`gestures.md`](gestures.md)
+  K1, K7).
+
+## Words used precisely
+
+| Term | Meaning |
+| --- | --- |
+| **strip** | the 20px band along the bottom edge that `moarchy.gestures` reserves off every window, permanently |
+| **sheet** | a full-screen surface that is dismissed rather than left running: the shade, the drawer, the theme picker |
+| **shell app** | a screen this shell draws and maps as an ordinary window: Settings, Wi-Fi, Bluetooth, SIM |
+| **overlay / panel / bar** | the three plugin *kinds* the host knows. A "sheet" is our word; `kind` is the host's |
+| **travel** | the distance in scene pixels that carries a drag's progress from 0 to 1 |
+| **the common dir** | `default/omarchy/plugins/moarchy.common/` — shared code, and not a plugin |
+
+## Where a change goes
+
+| If you are changing… | …the file is |
+| --- | --- |
+| what a swipe does | `moarchy.gestures/Service.qml`, and `gestures.md` first |
+| how a drag feels — thresholds, flings, slop | the *surface's* own properties. `DragTracker` deliberately owns no threshold |
+| what a sheet covers when it opens | `moarchy.common/Sheet.js`, nowhere else |
+| a settings row | `moarchy.settings/Pages.js` — the tree is data |
+| what ships on the phone | `pkgbuilds/moarchy-meta/PKGBUILD`'s `depends`, with `apps.md` as its readable half |
+| the version of anything | `manifest.toml`, and nowhere else |
+| what a tap runs | `bin/` — and `bin/omarchy-*` only to answer a name upstream calls |
+| a per-device fact | the device package. Nothing else in the tree may name hardware ([`devices.md`](devices.md) D2) |
+
+## The rest of the tree
+
+| Path | What it is |
+| --- | --- |
+| `bin/` | everything installed to `/usr/lib/moarchy/bin`, which precedes `/usr/bin` on PATH. `moarchy-*` are ours; `omarchy-*` shadow upstream commands we have ported or redirected |
+| `default/` | files installed under `/usr/share/moarchy` and `/etc`: sway config, plugins, systemd units, udev rules, theme templates, fontconfig |
+| `config/sway/config` | the entry point sway is started with; it includes everything else |
+| `pkgbuilds/` | one directory per package we build. `moarchy` is the overlay, `moarchy-meta` is what the image installs, `moarchy-device-*` is where hardware is named |
+| `manifest.toml` | every version pin in the project. Read by `scripts/manifest.sh`, which 14 PKGBUILDs source |
+| `image/` | the flashable image: a Dockerfile, a build, and per-device boot backends |
+| `scripts/` | the host side — build, flash, provision, verify, style-check |
+| `docker/`, `repo/` | the aarch64 package builder, and publishing the pacman repository |
+| `docs/` | this directory. Contracts, decisions, the log |
+
+## Three copies of everything, which is the usual way to lose an afternoon
+
+The worktree is not what the phone is running. There are three trees, and a
+stale one fails exactly like the bug you were chasing:
+
+1. this repo,
+2. `/usr/share/moarchy/plugins/` on the phone — what the shell loads,
+3. `/usr/lib/moarchy/bin/` on the phone — what a tap runs.
+
+and a fourth that outranks the second: `~/.config/omarchy/plugins/`, where a
+user copy of a plugin *wins over the packaged one*, for the whole directory.
+
+The shell does not watch its files: quickshell reads its QML once, at startup, so
+a plugin edit does nothing until it restarts — and it has to restart in a way
+that keeps its seat, or polkit starts asking for a password this image has not
+got. `default/pacman-hooks/50-moarchy-shell-reload.hook` says so after an
+upgrade rather than doing it, for exactly that reason.
+
+## What to run
+
+| | |
+| --- | --- |
+| `scripts/style-check.sh` | the whole static half: tokens, type, colour, shape, press states, the shared-code rules, the sheet rule, and that every shipped SVG parses. Runs anywhere |
+| `node scripts/sheet-test.js` | the stacking rule, against the shipped `Sheet.js` |
+| `bin/moarchy-selftest` | on the phone. `--gestures`, `--settings`, `--surfaces`, `--windows` are opt-in suites, and they cite the criterion ids in these documents |
+| `scripts/provision.sh` | the dev loop, one step per verb: `steps` lists them, no argument runs prereqs → image → build → flash, then `deploy`, `install`, `watch`, `verify` once the phone is up |
+| `scripts/build-image.sh`, `scripts/verify-image.sh` | the flashable image, and the checks against it |
+
+A criterion with no runnable check is visible on purpose:
+[`gestures.md`](gestures.md)'s `## Coverage` lists which ones a suite actually
+executes, and `style-check.sh` prints what it is not able to check.

@@ -193,8 +193,13 @@ moarchy-selftest --gestures   # drives real synthetic touch via /dev/uinput
 
 ## Layout
 
+Ten files worth knowing about. For the whole map — the eleven shell plugins and
+what each owns, how the screens stack, where a given change goes, and what to run
+— see **[docs/README.md § The code](docs/README.md#the-code)**.
+
 | Path | What it is |
 | --- | --- |
+| `default/omarchy/plugins/` | The phone UI: eleven quickshell plugins and the shared code under `moarchy.common/` |
 | `manifest.toml` | The version pins. The only file that says what version of anything is built |
 | `pkgbuilds/` | `moarchy`, `omarchy-config` (upstream + the Sway port as a patch), `moarchy-meta`, `moarchy-keyring` |
 | `pkgbuilds/moarchy-meta/PKGBUILD` | The aarch64 package set, as `depends`, with every omission explained |
