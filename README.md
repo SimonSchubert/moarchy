@@ -9,8 +9,8 @@
   <img src="docs/screenshots/app-lcl.png" width="16%" alt="Linux Command Library, an ordinary GTK app under the gesture strip">
 </p>
 
-Omarchy's look, keybindings and theming on an original **PinePhone**, running on
-Arch Linux ARM (DanctNIX) with **Sway** in Hyprland's place.
+Omarchy's look, keybindings and theming on a phone — an original **PinePhone**
+or a **Pixel 3a** — running on Arch Linux ARM with **Sway** in Hyprland's place.
 
 This is not a fork of Omarchy's installer. It is a thin overlay that vendors
 Omarchy's *configuration and theme layer* — which is architecture-neutral — onto
@@ -18,9 +18,15 @@ an aarch64 base, and replaces the one part that cannot work on this hardware.
 
 ## Install
 
-Download the latest `.img.xz` from
-**[Releases](https://github.com/SimonSchubert/moarchy/releases)**, write it to an
-SD card (8 GB or larger), put the card in the phone and power it on.
+Download the image for your phone from
+**[Releases](https://github.com/SimonSchubert/moarchy/releases)**. There is no
+installer to run on the device and no default password to change: the account's
+password is locked and tty1 autologin brings the session up without one.
+
+### PinePhone
+
+Write the `.img.xz` to an SD card (8 GB or larger) and power on. The rootfs
+grows to fill the card on first boot.
 
 ```bash
 # macOS -- find the card with: diskutil list external physical
@@ -31,15 +37,22 @@ xz -dc moarchy-pinephone-*.img.xz | sudo dd of=/dev/rdiskN bs=4m
 xz -dc moarchy-pinephone-*.img.xz | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync
 ```
 
-That is the whole procedure. There is no installer to run on the device and no
-default password to change: the account's password is locked and tty1 autologin
-brings the session up without one. The rootfs grows to fill the card on first
-boot.
-
 <sub>A Mac's built-in card reader reports as `internal`, so `diskutil list
 external` shows nothing — use `system_profiler SPCardReaderDataType | grep 'BSD
 Name'`. If you have this repo checked out, `./scripts/flash-sd.sh /dev/diskN`
 does the same with guards.</sub>
+
+### Pixel 3a
+
+The bootloader must be unlocked. Unpack the sargo archive, put the phone in
+fastboot (power off, hold Volume Down, tap Power), and run `flash.sh`. That
+overwrites `boot` and `userdata`; the Android install does not survive it.
+
+```bash
+tar -xJf moarchy-sargo-*.tar.xz
+cd moarchy-sargo-*
+./flash.sh
+```
 
 ## Why not just run Omarchy?
 
