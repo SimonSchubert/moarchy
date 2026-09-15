@@ -129,7 +129,7 @@ EOF
 # ---------------------------------------------------------------------------
 # After the rootfs is trimmed: the three images and a script to flash them.
 backend_image() {
-_set_dtb_name
+_set_device_facts
 local OUTDIR="$OUT/$NAME"
 rm -rf "$OUTDIR"; mkdir -p "$OUTDIR"
 
