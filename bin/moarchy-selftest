@@ -1309,6 +1309,29 @@ print(found[0] if found else "")'; }
     fi
     timeout 8 omarchy-shell drawer close >/dev/null 2>&1; sleep 2
 
+    # --- A3b. the same flick, eight times -----------------------------------
+    # A3 fires each speed once, and once cannot see the defect this is about:
+    # the speed reading was not wrong, it was unrepeatable. Measured from the
+    # strip with a probe in DragTracker, one flick reached the tracker as two
+    # position events 353ms apart and the next as two events 1ms apart, so the
+    # same gesture read 0.59 px/ms and then 3.51, and opened the drawer or did
+    # not at random. Reported by hand as "I have to swipe two or three times",
+    # and invisible to every single-shot check in this file.
+    a3b_open=0
+    for _ in $(seq 8); do
+      timeout 8 omarchy-shell drawer close >/dev/null 2>&1; sleep 2
+      sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 $(( STRIP_Y - 500 )) 250 >/dev/null 2>&1
+      sleep 2
+      [[ $(shell_state drawer) == "open" ]] && a3b_open=$(( a3b_open + 1 ))
+    done
+    if (( a3b_open == 8 )); then
+      okac A3b "the same flick opens the drawer 8 times out of 8"
+    else
+      noac A3b "the same flick opened the drawer $a3b_open times out of 8" \
+               "a flick that commits sometimes is a speed read between two events"
+    fi
+    timeout 8 omarchy-shell drawer close >/dev/null 2>&1; sleep 2
+
     sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 600 2000 >/dev/null 2>&1
     sleep 3
     samples=$(timeout 8 omarchy-shell drawer dragTrace 2>/dev/null | wc -w)

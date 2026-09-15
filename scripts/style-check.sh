@@ -298,9 +298,12 @@ TRACKER="$PLUGINS/moarchy.common/DragTracker.qml"
 f=""
 [[ -f $TRACKER ]] || f+="  $TRACKER is missing; every surface below has nothing to call"$'\n'
 
-# F1. The smoothing is the fingerprint: one copy, in the tracker.
-smoothing=$(grep -rln 'velocity \* 0\.6' "$PLUGINS" | grep -v 'moarchy.common/DragTracker.qml' || true)
-[[ -n $smoothing ]] && f+="  the velocity smoothing is written out again in:"$'\n'"$smoothing"$'\n'
+# F1. The speed reading is the fingerprint: one copy, in the tracker. Keyed to
+# `speedFloorMs` since the frame-to-frame smoothing it used to name went away --
+# a grep for a string that exists nowhere passes whatever the tree looks like.
+smoothing=$(grep -rln 'speedFloorMs\|speedAt(' "$PLUGINS" | grep -v 'moarchy.common/DragTracker.qml' || true)
+[[ -n $smoothing ]] && f+="  the velocity measurement is written out again in:"$'\n'"$smoothing"$'\n'
+grep -q 'speedFloorMs' "$TRACKER" || f+="  the tracker has no speed measurement left to share (F1)"$'\n'
 
 # F3. Thresholds belong to the surface that decided them.
 thresholds=$(grep -nE 'Commit|Fraction|fling|homeExtra' "$TRACKER" | grep -v '^\s*[0-9]*:\s*//' | grep -vE ':\s*//' || true)

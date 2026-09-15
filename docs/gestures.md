@@ -6,9 +6,10 @@ What the phone's touch gestures must do. Written to the rule in
 `bin/moarchy-selftest --gestures` and `--surfaces` cite these ids. A criterion
 is in one of three states, and the difference matters: **run** — it has a `→`
 check and a suite executes it; **written** — it has a `→` check that nothing
-runs; **stated** — it has no check at all. 62 of the 101 below are run. The
-other 39, and the six the suites run without a `→` line here, are listed under
-[Coverage](#coverage) at the foot.
+runs; **stated** — it has no check at all. 50 of the 110 below are run. The
+other 60, and the six the suites run without a `→` line here, are listed under
+[Coverage](#coverage) at the foot — where the two lists currently name 50 of
+those 60 and are due a regeneration by the command they carry.
 
 ## Vocabulary
 
@@ -57,6 +58,14 @@ The only thing the strip adds is the second stop.
 → a drag of *n* logical px from the strip leaves `drawer dragTrace` ending
 within a few percent of *n* / 694, the same figure D2a asserts for the
 wallpaper drag
+
+**A3b** The same swipe commits the same way every time. Speed is read across an
+interval long enough to be one, and from the press when the gesture has not
+produced one — never between two consecutive position events, because the shell
+delivers a fast flick as two of those and a slow drag as twenty-four, so a
+frame-to-frame reading is a reading of the load rather than of the finger.
+→ the same 35% flick, eight times over, leaves `omarchy-shell drawer state` ==
+`open` eight times out of eight
 
 **A4** Home is **past a full sheet**, never inside the travel that opens one.
 From an app that means a sweep to the very top of the screen; from an
@@ -1206,10 +1215,10 @@ went stale the first time a check was added above them and then silently
 reported a different document's ids. Ids are not unique across files, so the
 list it prints is a superset: take from it only what this file defines.
 
-**Written, but nothing runs it** (29). Each has a `→` check that no suite
+**Written, but nothing runs it** (28). Each has a `→` check that no suite
 executes, so it is as unverified as one with no check at all:
 
-> A3 · A3a · A8 · A10 · C1 · C3 · C4 · C5 · G10b · G11 · G12 · G13 · H1 · H4 ·
+> A3a · A8 · A10 · C1 · C3 · C4 · C5 · G10b · G11 · G12 · G13 · H1 · H4 ·
 > I5a · I5b · I6 · I7 · K8 · L8 · M2 · M3 · M7 · M7a · M8 · M9 · N1 · N2 · N3
 
 All of §C is here: the hold cannot be fired by a suite without installing an

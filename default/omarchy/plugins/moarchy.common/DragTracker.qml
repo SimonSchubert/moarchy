@@ -17,8 +17,8 @@
 //
 // Four surfaces each wrote this out: the gesture strip, the wallpaper, the
 // drawer's sheet and handle, and the shade's sheet and band. Each had its own
-// copy of the start coordinates, `lastY`/`lastT`, the identical smoothing
-// `v * 0.6 + (dy / dt) * 0.4`, a slop latch, a 0..1 clamp, and the
+// copy of the start coordinates, `lastY`/`lastT`, an identical frame-to-frame
+// speed reading, a slop latch, a 0..1 clamp, and the
 // cleared-on-press flag that stops a drag ending as a tap. Two of the four had
 // a watchdog and two did not, so a stranded touch left the drawer parked where
 // it left the shade recovered (F2).
@@ -166,7 +166,8 @@ Item {
 
   // Scene-signed along the axis: positive is downward on Y and rightward on X,
   // because that is what the coordinates do. Almost nothing wants it in these
-  // terms -- read `openVelocity`.
+  // terms -- read `openVelocity`. How it is measured is under "measuring
+  // speed" below, and the answer is not "since the last event".
   property real velocity: 0
 
   // The same speed signed **toward open**, which is what a fling test means on
@@ -208,6 +209,61 @@ Item {
   // moves: the shade's band owns the status bar from the touch, and a 2px
   // wobble on it must not start opening the shade.
   property bool travelling: false
+
+  // ------------------------------------------------------ measuring speed
+  //
+  // A pair of consecutive events is not a speed on this phone. Measured from
+  // the strip with a probe in this file: one flick arrives here as **two**
+  // position events 353ms apart, the next as two events 1ms apart, and an
+  // 800ms drag as twenty-four. The shell draws a full-screen sheet at 5-15fps
+  // while it is being dragged and Qt compresses touch motion to what it draws,
+  // so the sample rate is a reading of the load and not of the finger.
+  //
+  // Read frame-to-frame, that made the fling term noise. Three drags whose
+  // real speed was 0.70, 0.66 and 0.58 px/ms were read as 0.59, 0.87 and 2.79
+  // -- so two gestures a user cannot tell apart landed on opposite sides of
+  // one threshold, which is the whole of "sometimes it opens and sometimes I
+  // have to swipe again". The same measurement is why the floor that used to
+  // sit here is gone rather than raised: no clamp on `dt` fixes a reading
+  // taken over 1ms, because the interval carries no information to clamp.
+  //
+  // So: look back to the newest sample that is at least `speedFloorMs` old,
+  // and measure across that. Long enough to be a speed, short enough to still
+  // be *this* part of the gesture. A drag that has not produced such a sample
+  // falls back to the whole touch, press to now, which needs no samples at all
+  // -- it was the one estimator that tracked reality across every trial.
+  //
+  // It is not a threshold (F3). Nothing here decides whether a gesture
+  // commits; this is the instrument the surfaces read, and how long an
+  // interval has to be before it is a measurement is the instrument's own
+  // business.
+  property int speedFloorMs: 80
+
+  // The samples the reading looks back through. Capped because a slow drag can
+  // run for seconds and only the recent end is ever read.
+  property var sampleT: []
+  property var samplePos: []
+  property real startT: 0
+  property real startPos: 0
+
+  function remember(t: real, pos: real): void {
+    drag.sampleT.push(t)
+    drag.samplePos.push(pos)
+    if (drag.sampleT.length > 32) { drag.sampleT.shift(); drag.samplePos.shift() }
+  }
+
+  // Scene-signed, like `velocity`: positive is downward on Y, rightward on X.
+  function speedAt(t: real, pos: real): real {
+    for (var i = drag.sampleT.length - 1; i >= 0; i--) {
+      var span = t - drag.sampleT[i]
+      if (span >= drag.speedFloorMs) return (pos - drag.samplePos[i]) / span
+    }
+    // Wall-clock since the press, which no amount of coalescing can shorten.
+    // The 16ms guard is against a divide by zero on a touch that arrives and
+    // leaves inside one millisecond, not against a burst -- press-to-now is
+    // never briefly wrong the way an inter-event gap is.
+    return (pos - drag.startPos) / Math.max(16, t - drag.startT)
+  }
 
   // ----------------------------------------------------------- signals
 
@@ -251,6 +307,10 @@ Item {
     drag.startY = sceneY
     drag.lastPos = drag.axis === "x" ? sceneX : sceneY
     drag.lastT = Date.now()
+    drag.startT = drag.lastT
+    drag.startPos = drag.lastPos
+    drag.sampleT = []
+    drag.samplePos = []
     drag.dx = 0
     drag.dy = 0
     drag.velocity = 0
@@ -294,21 +354,12 @@ Item {
       drag.travelling = true
     }
 
-    // Smoothed, so one jittery frame at the end of a slow drag cannot read as
-    // a fling. Signed in scene coordinates -- positive is downward -- and the
-    // surface reads it against its own fling limit in the same frame.
-    //
-    // The floor is one frame, not one millisecond. Two move events delivered
-    // closer together than the compositor can draw say nothing about how fast
-    // the finger is going, and dividing by the gap between them multiplies the
-    // answer by up to 16: measured, a deliberately slow 8% drag came through
-    // as two samples and opened the drawer as though it had been flung. A real
-    // 60Hz gesture sits at ~16ms and never meets this floor; what does meet it
-    // is a burst after a stalled frame, and a burst is exactly the thing that
-    // should not be read as speed.
+    // Measured over an interval long enough to be one, then the sample is
+    // kept. Order matters: the reading looks *back* from this frame, so the
+    // current position must not already be in the ring when it does.
     var pos = drag.axis === "x" ? sceneX : sceneY
-    var dt = Math.max(16, now - drag.lastT)
-    drag.velocity = drag.velocity * 0.6 + ((pos - drag.lastPos) / dt) * 0.4
+    drag.velocity = drag.speedAt(now, pos)
+    drag.remember(now, pos)
     drag.lastPos = pos
     drag.lastT = now
 
@@ -326,6 +377,15 @@ Item {
     if (!drag.latched) return
     drag.latched = false
     drag.wasDrag = true
+    // Re-read at the lift, from the position the finger last reported. A
+    // finger that has stopped moving sends the same coordinates until it goes,
+    // and identical coordinates are coalesced away below the client -- so a
+    // gesture that flicked and then rested delivers no events for the resting
+    // part and would otherwise be released on the speed it had before the
+    // pause. Measuring again here stretches the interval across the rest and
+    // the reading falls to what it should be: a drag that stopped, not a
+    // fling. Nothing moved, so this cannot invent travel.
+    drag.velocity = drag.speedAt(Date.now(), drag.lastPos)
     drag.finished(drag.progress, drag.openVelocity)
   }
 

@@ -168,7 +168,9 @@ Item {
   // dragging the sheet shut.
   readonly property int dragSlop: Style.space(10)
 
-  readonly property real sheetFling: 0.6
+  // The strip's `fling`, and for the reason given there: 0.6 was a number
+  // matched to a speed reading that swung by 5x between identical gestures.
+  readonly property real sheetFling: 0.3
 
   // H1, on the shared tracker (docs/refactor.md F1). Downward closes, so
   // `openDirection` is -1: travelling up is what would raise progress, and

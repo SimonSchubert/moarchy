@@ -256,7 +256,17 @@ Item {
   // It was 0.35, inherited from the shade, whose sheet is a different shape and
   // whose drag has no second stop past it.
   readonly property real drawerCommit: 0.5
-  readonly property real fling: 0.6
+
+  // A3. Speed past which a release commits whatever the travel, in logical px
+  // per ms. It was 0.6 against a reading that could not be trusted: measured
+  // from the strip, ordinary swipes whose real speed was 0.70, 0.66 and 0.58
+  // came through as 0.59, 0.87 and 2.79, so the same gesture opened the drawer
+  // or did not, at random. With the reading fixed (DragTracker, "measuring
+  // speed") the number can mean something, and 0.3 is what it should mean: a
+  // deliberate swipe on this phone lands at 0.35-0.7 and a slow positioning
+  // drag under 0.33, so the band sits in the gap between the two intents
+  // rather than inside the first one.
+  readonly property real fling: 0.3
 
   // D2a. What one pixel of finger is worth to the sheet being dragged: one
   // pixel, on every surface that drags it.

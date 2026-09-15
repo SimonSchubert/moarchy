@@ -234,8 +234,12 @@ Item {
   // the way.
   readonly property real openFraction: 0.35
   readonly property real closeFraction: 0.75
-  // Speed that commits regardless of travel, logical px per ms.
-  readonly property real flingVelocity: 0.6
+  // Speed that commits regardless of travel, logical px per ms. The strip's
+  // `fling` and the drawer's `sheetFling` are the same number for the same
+  // reason: it is matched to what DragTracker's "measuring speed" now reads,
+  // and 0.6 was matched to a reading that swung by 5x between identical
+  // gestures.
+  readonly property real flingVelocity: 0.3
   readonly property int slop: Style.space(6)
 
   // ------------------------------------------------- H2: dragging the body
