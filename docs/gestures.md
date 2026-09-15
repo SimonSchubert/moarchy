@@ -1047,12 +1047,13 @@ like the hold-to-close C4 refuses, it has no undo.
 
 ---
 
-## N. What opening the drawer costs
+## N. Opening the drawer
 
 The sheet is dragged open by a finger at 60Hz on a Mali-400, and everything the
 open path does lands on the frames the sheet is arriving on. The shade is the
 comparison that makes this measurable rather than a feeling: it does none of
-it, and it is the surface people say comes up instantly.
+it, and it is the surface people say comes up instantly. N4 is not about cost
+but about what state it opens in, which is the other half of the same path.
 
 **N1** Opening the drawer starts no filesystem scan. The icon index refreshes
 itself — `AppLibrary` watches `DesktopEntries` and restarts a 750ms
@@ -1089,6 +1090,16 @@ unmapped.
 → with a finger resting on the strip and `drawer state` == `closed`,
 `omarchy-shell drawer geometry` reports real dimensions rather than `w=100
 h=100`, and a tap anywhere but the strip still reaches the app underneath
+
+**N4** The drawer opens with its search field unfocused and its query empty,
+however it was closed. The field has to be made to let go *before* the surface
+unmaps: `focus = false` releases the focus scope and not the active focus, so
+the field keeps its `focus` flag across the unmap and takes activeFocus back on
+the next map — and an item outside the window cannot be given active focus at
+all, which is how a `forceActiveFocus()` on an orphan silently took nothing
+away for a release.
+→ tap the search field, close the drawer, open it again:
+`omarchy-shell drawer searchTarget` reports `focused=false`
 
 ---
 
@@ -1161,11 +1172,11 @@ went stale the first time a check was added above them and then silently
 reported a different document's ids. Ids are not unique across files, so the
 list it prints is a superset: take from it only what this file defines.
 
-**Written, but nothing runs it** (28). Each has a `→` check that no suite
+**Written, but nothing runs it** (29). Each has a `→` check that no suite
 executes, so it is as unverified as one with no check at all:
 
 > A3 · A3a · A8 · A10 · C1 · C3 · C4 · C5 · G10b · G11 · G12 · G13 · H1 · H4 ·
-> I5a · I5b · I6 · I7 · K8 · L8 · M2 · M3 · M7 · M7a · M8 · M9 · N1 · N2
+> I5a · I5b · I6 · I7 · K8 · L8 · M2 · M3 · M7 · M7a · M8 · M9 · N1 · N2 · N3
 
 All of §C is here: the hold cannot be fired by a suite without installing an
 agent, which is C's own note. All of §I's assertable half is here too, and that

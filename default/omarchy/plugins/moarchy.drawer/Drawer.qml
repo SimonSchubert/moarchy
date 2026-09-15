@@ -378,8 +378,7 @@ Item {
   // False while the surface is down, and that default is the safe one: `height`
   // is whatever the last configure left behind (100 on a surface that has never
   // mapped), so an ungated read would map the first frame with the inset off
-  // and flash a band of wallpaper under the pill -- I5c's symptom, from the
-  // other end.
+  // and flash a band of wallpaper under the pill (I1).
   readonly property bool keyboardUp:
     drawerWindow.visible && drawerWindow.screen
     && drawerWindow.height < drawerWindow.screen.height - root.keyboardPanelHeight / 2
@@ -2974,7 +2973,7 @@ Item {
       }
     }
 
-    // Somewhere for active focus to go when the drawer closes (I5c). It has to
+    // Somewhere for active focus to go when the drawer closes (N4). It has to
     // be a real item *inside this window*, and for a long time it was not: it
     // sat out at plugin root, a child of an Item that belongs to no window at
     // all. An item with no window cannot be given active focus, so
@@ -2983,13 +2982,9 @@ Item {
     // the unmap and had it handed straight back the moment sway re-activated
     // the surface on the next open.
     //
-    // Two symptoms, one fault. The one that was noticed first is that the
-    // keyboard stops rising: a tap on a field Qt already considers focused
-    // changes no focus and so re-enables no text input. The one that is worse
-    // is the margin above -- gated on `searchField.activeFocus`, it dropped the
-    // bottom inset on every open, so the drawer drew its first frame under the
-    // strip and then shrank off it, leaving wallpaper in the band under the
-    // pill for as long as it was up.
+    // The symptom was the drawer re-opening with its query and its focus from
+    // last time: the field kept its `focus` across the unmap and took
+    // activeFocus straight back on the next map (N4).
     //
     // Zero-sized and declared last, which costs nothing: it takes no input and
     // draws nothing, and the sheet's own drag areas are unaffected by a sibling
