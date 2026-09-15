@@ -85,6 +85,31 @@ Item {
     return "Unlocked"
   }
 
+  // An ABSOLUTE path, and this is the first plugin that needed one.
+  //
+  // Quickshell's Process execs directly with the shell process's own PATH, and
+  // that PATH is not always the session's: a shell restarted from anywhere but
+  // a login session can come up with /usr/local/sbin:/usr/local/bin:/usr/bin
+  // and nothing else. Measured on the device -- /proc/<quickshell>/environ had
+  // exactly that while sway's own children had the full list.
+  //
+  // What that costs is the reason it is worth hardcoding. A Process that
+  // cannot find its binary does not throw: it writes one line into
+  // ~/.local/state/moarchy/shell.log --
+  //
+  //   WARN: Process failed to start, likely because the binary could not be
+  //         found. Command: QList("moarchy-sim", "status")
+  //
+  // -- and the StdioCollector still fires with empty text. So this screen
+  // silently reported "No modem" on a phone whose modem was present, locked
+  // and answering mmcli perfectly from a terminal two seconds earlier.
+  //
+  // Every other plugin gets away with a bare name because it calls
+  // `omarchy-shell` or `mmcli`, which live in /usr/bin. This one calls a
+  // moarchy script, and /usr/lib/moarchy/bin is exactly the directory a
+  // stripped PATH loses.
+  readonly property string simTool: "/usr/lib/moarchy/bin/moarchy-sim"
+
   function refresh() { statusProbe.running = true }
 
   // The two the host calls, and the reason `summon` answered "ok" while
@@ -129,13 +154,13 @@ Item {
     if (root.busy || !root.locked) return
     if (root.pin.length < 4) { root.errorText = "A PIN is at least 4 digits"; return }
     root.busy = true
-    unlockProc.command = ["moarchy-sim", "unlock", root.pin]
+    unlockProc.command = [root.simTool, "unlock", root.pin]
     unlockProc.running = true
   }
 
   Process {
     id: statusProbe
-    command: ["moarchy-sim", "status"]
+    command: [root.simTool, "status"]
     stdout: StdioCollector {
       onStreamFinished: {
         var present = false, st = "", lk = "none", rt = -1, op = ""
