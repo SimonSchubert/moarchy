@@ -35,6 +35,7 @@ import Quickshell.Io
 import qs.Commons
 import qs.Ui as Ui
 import "../moarchy.common" as Shared
+import "../moarchy.common/Theme.js" as Theme
 import "../moarchy.common/Sheet.js" as Sheet
 import "Pages.js" as Pages
 import "Guards.js" as Guards
@@ -42,17 +43,9 @@ import "Guards.js" as Guards
 Item {
   id: root
 
-  // Injected by the host in onLoaded, by name, after construction. NOT
-  // `readonly` and NOT `required`: readonly makes the assignment throw,
-  // required makes the component fail to instantiate, and either way the
-  // plugin silently does not load.
-  property string omarchyPath: Quickshell.env("OMARCHY_PATH")
-                               || (Quickshell.env("HOME") + "/.local/share/omarchy")
+  // Injected by the host after construction, and not `readonly` or `required` --
+  // see the drawer, which also says why this is the only one declared (J8).
   property var shell: null
-  property var manifest: null
-  property var barWidgetRegistry: null
-  property var pluginRegistry: null
-  property var service: null
 
   readonly property string pluginId: "moarchy.settings"
 
@@ -178,8 +171,8 @@ Item {
   // on rose-pine, and sixteen of the twenty-two below 0.70.
   //
   // Evaluated once per theme change, not per row.
-  readonly property color cardOpaque: root.mix(root.surface, Color.menu.text, 0.08)
-  readonly property color subdued: root.readableOn(root.cardOpaque, Color.menu.text,
+  readonly property color cardOpaque: Theme.mix(root.surface, Color.menu.text, 0.08)
+  readonly property color subdued: Theme.readableOn(root.cardOpaque, Color.menu.text,
                                                    0.55, 4.5)
   readonly property color accent: Color.accent
 
@@ -199,17 +192,7 @@ Item {
   //
   // Culled at rest rather than drawn transparent: nothing in the scene graph
   // culls an alpha-0 rectangle, and this is a Mali-400.
-  component PressVeil: Rectangle {
-    id: pv
-    property color ink: root.textOnSurface
-    property bool on: false
-    visible: pv.color.a > 0
-    color: Util.alpha(pv.ink, pv.on ? 0.12 : 0)
-    Behavior on color {
-      enabled: pv.color.a > 0
-      ColorAnimation { duration: 120 }
-    }
-  }
+  component PressVeil: Shared.PressVeil { ink: root.textOnSurface }
 
   // The same weight the bar runs at. Light text on a dark surface reads thinner
   // than it measures; moarchy.bar's textWeight carries the ink
@@ -238,34 +221,6 @@ Item {
     // is the whole of showing them (docs/settings.md J1).
     if (p.provider && p.provider.before) return root.dynamicRows.concat(p.rows)
     return root.dynamicRows
-  }
-
-  // WCAG 2.1 relative luminance and contrast, and a linear composite. `container`
-  // is painted with alpha over `surface`, so the background the text actually
-  // lands on is the blend of the two -- measuring against `surface` alone
-  // overstates the contrast by the width of that lift.
-  function luminance(c) {
-    function chan(v) { return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4) }
-    return 0.2126 * chan(c.r) + 0.7152 * chan(c.g) + 0.0722 * chan(c.b)
-  }
-
-  function contrastRatio(a, b) {
-    var la = root.luminance(a), lb = root.luminance(b)
-    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
-  }
-
-  function mix(bg, fg, a) {
-    return Qt.rgba(bg.r + a * (fg.r - bg.r),
-                   bg.g + a * (fg.g - bg.g),
-                   bg.b + a * (fg.b - bg.b), 1)
-  }
-
-  function readableOn(bg, fg, from, minRatio) {
-    for (var a = from; a < 1.0; a += 0.01) {
-      var c = root.mix(bg, fg, a)
-      if (root.contrastRatio(c, bg) >= minRatio) return c
-    }
-    return fg
   }
 
   function rowsTsv(pageId) {

@@ -40,12 +40,9 @@ import "../moarchy.common/Sheet.js" as Sheet
 Item {
   id: root
 
-  // Injected by the host. Not readonly, not required -- see the drawer.
+  // Injected by the host after construction, and not `readonly` or `required` --
+  // see the drawer, which also says why this is the only one declared (J8).
   property var shell: null
-  property var manifest: null
-  property var barWidgetRegistry: null
-  property var pluginRegistry: null
-  property var service: null
 
   readonly property string pluginId: "moarchy.themes"
 

@@ -76,17 +76,19 @@ import "../moarchy.common" as Shared
 Item {
   id: root
 
-  // Injected by the host in the panel Loader's onLoaded. None of these may be
-  // `readonly` or `required`: readonly makes the assignment throw, and required
-  // makes the component fail to instantiate at all, because a plugin is created
-  // first and configured afterwards. Either way the failure is silent.
-  property string omarchyPath: Quickshell.env("OMARCHY_PATH")
-                               || (Quickshell.env("HOME") + "/.local/share/omarchy")
+  // Injected by the host in the panel Loader's onLoaded, by name and after
+  // construction. It may not be `readonly` or `required`: readonly makes the
+  // assignment throw, and required makes the component fail to instantiate at
+  // all, because a plugin is created first and configured afterwards. Either way
+  // the failure is silent.
+  //
+  // One, where every plugin here declared six (refactor.md J8). The host also
+  // offers `omarchyPath`, `manifest`, `barWidgetRegistry`, `pluginRegistry` and
+  // `service`, each behind an `if ("x" in target)` -- so a plugin that does not
+  // declare one is simply skipped, and not one of the eleven read any of them.
+  // A service is reached through `shell.serviceFor()`, which is the supported
+  // way in and the way the bar and the shade have always done it.
   property var shell: null
-  property var manifest: null
-  property var barWidgetRegistry: null
-  property var pluginRegistry: null
-  property var service: null
 
   // 0 shut .. 1 open, and the drag writes it directly. The gestures plugin owns
   // the bottom edge -- it cannot be shared, so this surface never sees the

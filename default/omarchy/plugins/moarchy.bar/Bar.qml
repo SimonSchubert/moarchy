@@ -49,12 +49,7 @@ Item {
   // any of them: the assignment throws against a read-only declaration and the
   // whole plugin fails to load, silently, with the host falling back to
   // omarchy.bar. Same trap the gestures plugin documents.
-  property string omarchyPath: Quickshell.env("OMARCHY_PATH")
-                               || (Quickshell.env("HOME") + "/.local/share/omarchy")
   property var shell: null
-  property var manifest: null
-  property var barWidgetRegistry: null
-  property var pluginRegistry: null
   // Declared but read by nothing, on purpose: `configureBar` assigns it under an
   // `in` test, so dropping it would be silently accepted -- and the property is
   // the record that this bar is handed the same config upstream's is, and reads

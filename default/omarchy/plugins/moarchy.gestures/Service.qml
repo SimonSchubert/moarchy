@@ -355,8 +355,6 @@ Item {
   // assignment throw, required makes the component fail to instantiate at all,
   // because a plugin is created first and configured afterwards. Either way the
   // failure is silent.
-  property string omarchyPath: Quickshell.env("OMARCHY_PATH")
-                               || (Quickshell.env("HOME") + "/.local/share/omarchy")
   property var shell: null
 
   // -------------------------------------------------------- compositor state

@@ -193,12 +193,13 @@ fi
 # It can (E1), so the copies are gone -- and this is what stops them coming
 # back one screen at a time, which is exactly how they arrived.
 #
-# Named exceptions rather than a silent pass. moarchy.settings is another
-# session's file (docs/refactor.md Open questions) and is migrated in a second
-# pass; listing it here means the day it is migrated this check tightens by
-# deleting a line, and until then the debt is counted rather than invisible.
+# Named exceptions rather than a silent pass, and the list is empty now: the two
+# moarchy.settings files were migrated 2026-09-15 and the check tightened by
+# deleting their names, which is what it was built to do. The mechanism stays --
+# the next un-migrated file is counted here rather than being invisible, and an
+# entry that stops describing anything fails below.
 printf '\nE. shared code\n'
-E7_EXEMPT="moarchy.settings/Settings.qml moarchy.settings/SettingsRow.qml"
+E7_EXEMPT=""
 e7=$(python3 - "$PLUGINS" "$E7_EXEMPT" <<'PY'
 import pathlib, re, sys
 
