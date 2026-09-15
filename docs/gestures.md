@@ -394,6 +394,30 @@ reordering it changes which sheet a back swipe reaches first.
 `shade state` == `closed` and `drawer state` == `open`; a second leaves both
 `closed` with the open-window count unchanged
 
+**G12** The back swipe shows where it has got to. A circle carrying the same
+chevron Settings' own back button wears comes in from the edge under the thumb,
+following the finger rather than appearing at the threshold, and takes the
+accent at the point where letting go would commit — the strip's own vocabulary
+for "this is about to do something" (A4, C2).
+
+It is the one gesture on this phone with nothing to look at: the edge surface
+is transparent and reserves nothing, so where it stops is invisible from
+outside and unmeasurable with a finger.
+→ `omarchy-shell gestures backTrace` leaves ≥ 8 samples across a slow drag in
+from the edge, rising monotonically; a drag that never commits leaves samples
+and closes nothing
+
+**G13** The surface is wider than the band it takes touches in, and the extra
+width is masked out of its input region. Everything right of the 16px falls
+through to the app, exactly as it did when the surface was 16px wide.
+
+This is on `Overlay` and sits over every window, so an unmasked widening takes
+the leftmost strip of every app on the phone — silently, because a dead column
+and a column that answers a gesture look the same until you try to use it.
+→ `omarchy-shell gestures geometry` reports `w` == `backEdgeWidth` and
+`surfaceW` > `w`; `w` keeps meaning the input band, so G8's number is still
+what it was
+
 ## H. Closing an overlay by dragging it
 
 **H1** Dragging **down** anywhere on the drawer closes it, following the finger.

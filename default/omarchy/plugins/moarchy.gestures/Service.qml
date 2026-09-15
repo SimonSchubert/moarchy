@@ -65,6 +65,7 @@ import Quickshell.I3
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
+import qs.Ui as Ui
 import "../moarchy.common/ShellApps.js" as ShellApps
 import "../moarchy.common" as Shared
 
@@ -171,6 +172,22 @@ Item {
   // G6. Rightward travel that commits a back swipe -- three times the band, so
   // brushing the edge never closes an app.
   readonly property int backCommit: Style.space(48)
+
+  // G12. How big the cue is, and therefore how far past the band this surface
+  // reaches. Style.space because it is ours and it is chrome, unlike G10's 200
+  // -- that number belongs to another client's panel and does not know this
+  // theme exists.
+  readonly property int backCueSize: Style.space(44)
+
+  // Where down the edge the finger is, in this surface's own coordinates, so
+  // the cue rides under the thumb rather than sitting at a fixed height.
+  property real backCueY: 0
+
+  // G12's instrument. One integer per frame of the gesture, the same shape
+  // `drawer dragTrace` is and for the same reason: "does it follow the finger"
+  // is a question about the number of samples, and an arc that appeared at the
+  // threshold would look identical in a screenshot.
+  property var backTrace: []
 
   // Travel that commits a sideways swipe. Below this the pill springs back and
   // nothing happens, so resting a thumb on the edge is not a workspace switch.
@@ -860,6 +877,18 @@ Item {
                              "b", "false"])
   }
 
+  // ------------------------------------------------------- G12: the back cue
+  //
+  // How far the back gesture has come, 0 at the edge and 1 at the commit. The
+  // edge is the one gesture on this phone with nothing to look at: the surface
+  // is transparent and reserves nothing, so where it stops is invisible from
+  // the outside -- which is the same argument C2's shake makes for the hold.
+  property real backPull: 0
+
+  // True from the moment the gesture commits until the cue has finished, so
+  // the arc does not snap away under the finger that earned it.
+  property real backFlash: 0
+
   function performBack(): void {
     if (!root.keyboardKnown && root.backRetries < root.backRetryLimit) {
       root.backRetries++
@@ -1132,8 +1161,19 @@ Item {
     // is invisible from the outside and unmeasurable with a finger: a tap below
     // the cut and a tap on a dead edge look identical, which is the confusion
     // that let the keyboard's left column stay swallowed. Ask instead.
+    // G12. One integer per frame of a back gesture, cleared on the next press.
+    // The same instrument `drawer dragTrace` is, for the same reason: a cue
+    // that appeared at the threshold and one that followed the finger look
+    // identical in a screenshot and identical to `state`, and only the sample
+    // count tells them apart.
+    function backTrace(): string { return root.backTrace.join(" ") }
+
     function geometry(): string {
-      return "backEdge w=" + Math.round(backEdge.width)
+      // G13. `w` is the *input* band and stays that, with the drawn width
+      // published beside it. Repurposing `w` would change what every existing
+      // reader is asserting without the reader noticing.
+      return "backEdge w=" + root.backEdgeWidth
+             + " surfaceW=" + Math.round(backEdge.width)
              + " h=" + Math.round(backEdge.height)
              + " inset=" + root.backEdgeBottomInset
              // G10b. Published beside the bottom one, because `h` alone cannot
@@ -1475,7 +1515,19 @@ Item {
     id: backEdge
 
     anchors { top: true; bottom: true; left: true }
-    implicitWidth: root.backEdgeWidth
+
+    // G13. Wider than the band it takes touches in, so the cue has somewhere
+    // to be drawn, and masked back down to the band so nothing else changes.
+    // A masked-out region falls through to the next surface in the layer,
+    // which is what the shade already relies on to keep this very edge working
+    // underneath it.
+    //
+    // The mask is unconditional and that is the whole risk here: this surface
+    // is on Overlay and sits over every app, so an unmasked widening would
+    // quietly take the leftmost `backCueSize` of every window on the phone.
+    // `geometry` publishes both widths for exactly that reason.
+    implicitWidth: root.backEdgeWidth + root.backCueSize
+    mask: Region { x: 0; y: 0; width: root.backEdgeWidth; height: backEdge.height }
     color: "transparent"
 
     // G10. Anchored top and bottom, then pulled up off the bottom edge. A
@@ -1491,6 +1543,59 @@ Item {
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
     exclusionMode: ExclusionMode.Ignore
 
+    // G12. The cue, in the band the surface gained for it. Drawn and not
+    // tappable: the input region above is still `backEdgeWidth` wide, and
+    // everything to the right of it falls through to the app.
+    //
+    // One rounded quad and one glyph, moved by `x` rather than grown by
+    // `scale` (style.md G4): a translation is free and a scale re-rasters the
+    // chevron every frame, on a Mali-400, while a finger is already driving
+    // the compositor.
+    Item {
+      id: backCue
+      anchors.verticalCenter: parent.verticalCenter
+      // Follows the finger down the edge as well as in, so the cue is under
+      // the thumb rather than halfway up the screen from it. Clamped inside
+      // the surface, which is already inset from both ends (G10, G10b).
+      y: Math.max(0, Math.min(parent.height - height, root.backCueY - height / 2))
+      x: -width * (1 - root.backPull)
+      width: root.backCueSize
+      height: root.backCueSize
+      visible: root.backPull > 0 || root.backFlash > 0
+
+      Rectangle {
+        anchors.fill: parent
+        radius: width / 2
+        // Armed at the commit it goes accent, which is the strip's own
+        // vocabulary for "letting go now does something" (C2, A4) rather than
+        // a third colour invented for one gesture.
+        color: root.backPull >= 1 || root.backFlash > 0
+               ? Util.alpha(Color.accent, 0.55 + 0.45 * Math.max(root.backFlash, 0))
+               : Util.alpha(Color.background, 0.82)
+        border.width: 1
+        border.color: Util.alpha(Color.foreground, 0.18)
+      }
+
+      // The same chevron Settings' own back button wears, through the same
+      // component: a Nerd Font glyph is rarely centred inside the box the font
+      // reserves for it, and `anchors.centerIn` centres the box.
+      Ui.OpticalGlyph {
+        anchors.fill: parent
+        text: ""
+        fontFamily: Style.font.family
+        fontSize: Style.font.icon
+        color: root.backPull >= 1 || root.backFlash > 0
+               ? Color.background : Color.foreground
+      }
+
+      Behavior on x {
+        // style.md G5. Off while the finger is driving it, on for the spring
+        // back and for the retreat after a commit.
+        enabled: root.backPull <= 0
+        NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+      }
+    }
+
     MultiPointTouchArea {
       anchors.fill: parent
       maximumTouchPoints: 1
@@ -1502,19 +1607,54 @@ Item {
         if (pts.length === 0) return
         edgeStartX = pts[0].sceneX
         edgeStartY = pts[0].sceneY
+        root.backCueY = pts[0].y
+        root.backPull = 0
+        root.backTrace = []
         // Started now so it has answered by the time the swipe has travelled
         // far enough to commit.
         root.startKeyboardProbe()
       }
 
-      onReleased: pts => {
+      onUpdated: pts => {
         if (pts.length === 0) return
+        var edx = pts[0].sceneX - edgeStartX
+        var edy = pts[0].sceneY - edgeStartY
+        root.backCueY = pts[0].y
+        // The same test the release commits on, as a ramp: a gesture the
+        // release would refuse never shows a cue, so the arc cannot promise
+        // something that then does not happen.
+        root.backPull = (Math.abs(edx) > Math.abs(edy))
+          ? Math.max(0, Math.min(1, edx / root.backCommit)) : 0
+        if (root.backTrace.length < 200) {
+          var next = root.backTrace.slice()
+          next.push(Math.round(root.backPull * 100))
+          root.backTrace = next
+        }
+      }
+
+      onReleased: pts => {
+        if (pts.length === 0) { root.backPull = 0; return }
         var edx = pts[0].sceneX - edgeStartX
         var edy = pts[0].sceneY - edgeStartY
         // G6. Inward, far enough, and more sideways than not -- so a vertical
         // scroll that begins at the edge is never a back.
-        if (edx >= root.backCommit && Math.abs(edx) > Math.abs(edy)) root.performBack()
+        var commits = edx >= root.backCommit && Math.abs(edx) > Math.abs(edy)
+        root.backPull = 0
+        if (commits) { backFlashAnim.restart(); root.performBack() }
       }
+
+      onCanceled: pts => root.backPull = 0
+    }
+
+    // The cue's own moment, borrowed from the hold's flash (C2) rather than
+    // timed separately: in 90ms, out over 320, so the arc acknowledges the
+    // commit and leaves instead of vanishing on the frame the app closes.
+    SequentialAnimation {
+      id: backFlashAnim
+      NumberAnimation { target: root; property: "backFlash"; to: 1
+                        duration: 90; easing.type: Easing.OutCubic }
+      NumberAnimation { target: root; property: "backFlash"; to: 0
+                        duration: 320; easing.type: Easing.OutCubic }
     }
   }
 }

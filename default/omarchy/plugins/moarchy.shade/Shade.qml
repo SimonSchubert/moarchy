@@ -380,6 +380,16 @@ Item {
   }
 
   function close() {
+    // F8. A touch can outlive this surface: a long press on a tile opens the
+    // Wi-Fi or Bluetooth picker, which hides the shade from under the finger
+    // that is still down, and the unmap means the MouseArea never reports a
+    // release. The tracker would then sit active until its watchdog fired and
+    // put `progress` back -- reopening a shade the picker had just replaced.
+    // Measured as S6c: "the picker opened but the shade is open".
+    //
+    // No-ops on every ordinary path, where release() has already ended it.
+    sheetDrag.cancel()
+    bandDrag.cancel()
     root.dragging = false
     root.progress = 0
   }

@@ -1190,6 +1190,15 @@ Item {
   }
 
   function close() {
+    // F8, and the shade's reason applies here too: a tile tap that launches,
+    // or a hold that opens a card, can take this surface away under a finger
+    // that is still down, and an unmapped MouseArea reports no release. A
+    // tracker left active is a watchdog that puts `progress` back four seconds
+    // later, over whatever is on screen by then. No-ops on every ordinary
+    // path, where release() has already ended it.
+    sheetDrag.cancel()
+    handleDrag.cancel()
+
     // Move focus off the search field BEFORE the surface goes away. The keyboard
     // is driven by zwp_text_input_v3 and an unmap is not a deactivate: close the
     // drawer straight from the search field and the keyboard is left standing
