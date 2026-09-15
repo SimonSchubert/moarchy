@@ -167,7 +167,7 @@ ref     = "0.2.2"
 version = "0.2.2"
 
 # ---------------------------------------------------------------------------
-# The Qualcomm modem-side userspace, four upstreams built as one package
+# The Qualcomm modem-side userspace, three upstreams built as one package
 # (pkgbuilds/moarchy-qcom-modem). On SDM670 this is what Wi-Fi runs on, which
 # is not obvious and is the whole reason these are here -- devices.md D27.
 #
@@ -178,12 +178,18 @@ version = "0.2.2"
 # `-mss-pil` modalias), so the daemon named after remote *filesystem* service
 # is also the ignition. No rmtfs, no modem; no modem, no Wi-Fi.
 #
-# qrtr is the shared library the other three link, not a daemon we run:
+# qrtr is the shared library the other two link, not a daemon we run:
 # `net/qrtr/Makefile` is `qrtr-y := af_qrtr.o ns.o`, so the name service is in
 # the kernel and `qrtr-ns` must NOT be started beside it. The package builds
 # with `-Dqrtr-ns=disabled` for that reason.
 #
-# Tags, not commits: all four are tagged and the tarball sha256s live in the
+# linux-msm/pd-mapper is deliberately NOT pinned here. The same argument
+# applies to it one step further: CONFIG_QCOM_PD_MAPPER puts the protection
+# domain mapper in the kernel, with an `sdm670_domains[]` table that already
+# names the WLAN domain. Alpine dropped the userspace daemon for this reason
+# and so do we -- the PKGBUILD's header has the detail.
+#
+# Tags, not commits: all three are tagged and the tarball sha256s live in the
 # PKGBUILD, so a moved tag stops the build rather than changing what a phone
 # runs. Not device-scoped -- nothing in any of them is sargo-specific.
 # ---------------------------------------------------------------------------
@@ -196,11 +202,6 @@ version = "1.2"
 url     = "https://github.com/linux-msm/rmtfs"
 ref     = "v1.3"
 version = "1.3"
-
-[pd-mapper]
-url     = "https://github.com/linux-msm/pd-mapper"
-ref     = "v1.1"
-version = "1.1"
 
 [tqftpserv]
 url     = "https://github.com/linux-msm/tqftpserv"

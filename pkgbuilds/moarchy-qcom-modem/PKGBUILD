@@ -16,37 +16,52 @@
 # `-mss-pil` modalias). The daemon named for the remote *filesystem* service is
 # also the ignition, which is not something the name tells you.
 #
-# The four, and what each is actually for:
+# The three, and what each is actually for:
 #
-#   qrtr       libqrtr.so, the QMI/QRTR client library the other three link.
+#   qrtr       libqrtr.so, the QMI/QRTR client library the other two link.
 #              We ship the LIBRARY and not the qrtr-ns daemon -- net/qrtr's
 #              Makefile is `qrtr-y := af_qrtr.o ns.o`, so the name service is
 #              in the kernel and a second one in userspace would fight it.
 #              Built -Dqrtr-ns=disabled so it cannot be started by accident.
 #   rmtfs      Serves the modem its EFS partitions, and starts the DSP (-s).
-#   pd-mapper  Answers "where does service X live" from the .jsn protection
-#              domain maps beside the firmware. It finds them by walking
-#              /sys/class/remoteproc/*/firmware and listing dirname() of each
-#              value under /lib/firmware, which is why firmware-moarchy-sargo
-#              puts adspr/adspua/cdspr/modemr/modemuw.jsn in that exact
-#              directory rather than merely somewhere sensible.
 #   tqftpserv  TFTP over QRTR; the modem reads files from the host through it.
 #
-# --- Why one package for four upstreams -------------------------------------
+# --- pd-mapper is NOT here, and that is the interesting one -----------------
+#
+# The protection-domain mapper answers "where does service X live", and
+# ath10k's WLAN domain (msm/modem/wlan_pd) is one of the answers -- so it looks
+# exactly like a thing this package must carry. It is not, because this kernel
+# already is one: `drivers/soc/qcom/qcom_pd_mapper.c`, CONFIG_QCOM_PD_MAPPER=m
+# in our config, with a compiled-in `sdm670_domains[]` table that includes
+# `mpss_wlan_pd` and matches on `qcom,sdm670` -- which is sargo's second
+# compatible. It is an auxiliary driver bound to `qcom_common.pd-mapper`, an
+# aux device that `pdm_notify_prepare()` creates every time a remoteproc is
+# started, so it loads itself as part of bringing the DSP up.
+#
+# Running linux-msm/pd-mapper beside it would put a SECOND server for
+# `tms/servreg` on QRTR -- the same mistake as running qrtr-ns next to the
+# kernel's name service, on the exact lookup that decides whether Wi-Fi comes
+# up. Alpine does not package pd-mapper at all any more, for this reason.
+#
+# The kernel says so itself when it cannot help: "PDM: no support for the
+# platform, userspace daemon might be required." A device whose SoC is not in
+# that table is the case for adding this back, and nothing else is.
+#
+# --- Why one package for three upstreams ------------------------------------
 #
 # This is the one place this repo bends its own "an upstream gets a package
 # under its own name" rule (qbootctl is the model), and the reason is the build
-# system rather than taste. The three daemons link libqrtr, and
-# docker/build-packages.sh builds every in-repo package with --nodeps, in the
-# glob order of pkgbuilds/*/ -- which is alphabetical, so `pd-mapper` would
-# build before `qrtr` even if --nodeps were not in the way. There is no point
-# at which a built `qrtr` package could be installed for a `rmtfs` package to
-# find. One recipe that stages qrtr and builds the rest against it needs no new
-# concept in the build system at all.
+# system rather than taste. rmtfs and tqftpserv link libqrtr, and
+# docker/build-packages.sh builds every in-repo package with --nodeps: the
+# packages it produces are never installed into the builder, so there is no
+# point at which a built `qrtr` package could be there for a `rmtfs` package to
+# link against. One recipe that stages qrtr and builds the rest against it
+# needs no new concept in the build system at all.
 #
-# The four upstream versions are NOT hidden by this: they are pinned separately
-# in manifest.toml and restated in provides(), so `pacman -Si` names each one.
-# The package's own pkgver is moarchy's, like every other in-repo package.
+# The three upstream versions are NOT hidden by this: they are pinned
+# separately in manifest.toml and restated in provides(), so `pacman -Si` names
+# each one. The package's own pkgver is moarchy's, like every other in-repo
+# package.
 #
 # Not device-scoped, though only sargo pulls it in today: nothing here is
 # sargo-specific, and any other Qualcomm handset is the same shape
@@ -63,10 +78,6 @@ _rmtfs_url=$(manifest_get rmtfs url) || return 1
 _rmtfs_ref=$(manifest_get rmtfs ref) || return 1
 _rmtfs_ver=$(manifest_get rmtfs version) || return 1
 
-_pdm_url=$(manifest_get pd-mapper url) || return 1
-_pdm_ref=$(manifest_get pd-mapper ref) || return 1
-_pdm_ver=$(manifest_get pd-mapper version) || return 1
-
 _tqf_url=$(manifest_get tqftpserv url) || return 1
 _tqf_ref=$(manifest_get tqftpserv ref) || return 1
 _tqf_ver=$(manifest_get tqftpserv version) || return 1
@@ -74,37 +85,34 @@ _tqf_ver=$(manifest_get tqftpserv version) || return 1
 pkgname=moarchy-qcom-modem
 pkgver=$_ver
 pkgrel=1
-pkgdesc="Qualcomm modem-side userspace: qrtr, rmtfs, pd-mapper, tqftpserv"
+pkgdesc="Qualcomm modem-side userspace: qrtr, rmtfs, tqftpserv"
 arch=('aarch64')
 url='https://github.com/linux-msm'
 license=('BSD-3-Clause')
 
-# glibc for pthreads, systemd-libs for libudev (rmtfs), xz for liblzma
-# (pd-mapper reads .jsn.xz), zstd for tqftpserv's decompressor.
-depends=('glibc' 'systemd-libs' 'xz' 'zstd')
+# glibc for pthreads, systemd-libs for libudev (rmtfs), zstd for tqftpserv's
+# decompressor. No liblzma: that was pd-mapper's, and pd-mapper is not here.
+depends=('glibc' 'systemd-libs' 'zstd')
 makedepends=('meson' 'ninja' 'pkgconf' 'gcc' 'make')
 
 # The upstream versions, said out loud. This package installs the files those
 # names would, so a future Arch or AUR package of any of them is a clean swap
 # rather than a file conflict discovered at install time.
-provides=("qrtr=$_qrtr_ver" "rmtfs=$_rmtfs_ver"
-          "pd-mapper=$_pdm_ver" "tqftpserv=$_tqf_ver")
-conflicts=('qrtr' 'rmtfs' 'pd-mapper' 'tqftpserv')
+provides=("qrtr=$_qrtr_ver" "rmtfs=$_rmtfs_ver" "tqftpserv=$_tqf_ver")
+conflicts=('qrtr' 'rmtfs' 'tqftpserv')
 
 # Tags, verified by checksum rather than trusted (structure.md P10). A tag can
 # be moved by whoever owns the repo; the checksum is the only thing that
 # notices when it is.
 source=("qrtr-$_qrtr_ver.tar.gz::$_qrtr_url/archive/refs/tags/$_qrtr_ref.tar.gz"
         "rmtfs-$_rmtfs_ver.tar.gz::$_rmtfs_url/archive/refs/tags/$_rmtfs_ref.tar.gz"
-        "pd-mapper-$_pdm_ver.tar.gz::$_pdm_url/archive/refs/tags/$_pdm_ref.tar.gz"
         "tqftpserv-$_tqf_ver.tar.gz::$_tqf_url/archive/refs/tags/$_tqf_ref.tar.gz")
 sha256sums=('7a82bf80246fe71287b13c66c0466208822e8337fcd4aaf302eee6c5fcb48a52'
             '4b6c398806a1046e2256a685d592833de0f37b7245b8adc4797e1791f0e117ee'
-            '7654a7fb8b70b0c7670f98ad9313649abc48eabcef84dad086ed01408fd538a2'
             'a3850c34e48f23b7bc360d70f1e91700de2f8c60af003eda93e14182f8cf6af1')
 
 build() {
-  # --- qrtr first, into a staging tree the other three build against --------
+  # --- qrtr first, into a staging tree the other two build against ----------
   #
   # -Dsystemd-service=disabled keeps qrtr-ns.service out of the package. The
   # binary is already excluded by -Dqrtr-ns=disabled; this stops a unit for a
@@ -125,16 +133,15 @@ build() {
     "$srcdir/stage/usr/lib/pkgconfig/qrtr.pc" > "$srcdir/pc/qrtr.pc"
   export PKG_CONFIG_PATH="$srcdir/pc"
 
-  # Both Makefile builds get these through the ENVIRONMENT, never as
-  # `make CFLAGS=...`. Both makefiles say `LDFLAGS += -lqrtr ...`, and a
-  # variable set on make's command line overrides the makefile's `+=` outright
+  # rmtfs's Makefile build gets these through the ENVIRONMENT, never as
+  # `make CFLAGS=...`. Its makefile says `LDFLAGS += -lqrtr -ludev -lpthread`,
+  # and a variable set on make's command line overrides a makefile's `+=` outright
   # -- which drops -lqrtr and fails the link with an undefined-reference wall
   # that says nothing about the flag that caused it.
   export CFLAGS="$CFLAGS -I$srcdir/stage/usr/include"
   export LDFLAGS="$LDFLAGS -L$srcdir/stage/usr/lib"
 
   make -C "rmtfs-$_rmtfs_ver"
-  make -C "pd-mapper-$_pdm_ver"
 
   # -Dsystemd-unit-prefix explicitly, rather than letting meson ask systemd.pc
   # where units go. The builder has systemd-libs and need not have systemd, and
@@ -145,8 +152,8 @@ build() {
     -Dsystemd-unit-prefix=/usr/lib/systemd/system
   meson compile -C build-tqftpserv
 
-  # What is provable without a phone, and worth proving: that four binaries
-  # exist, are for the phone rather than the builder, and that the three
+  # What is provable without a phone, and worth proving: that the binaries
+  # exist, are for the phone rather than the builder, and that the two
   # daemons are linked against libqrtr rather than having quietly built without
   # it. Asserted here and NOT in check(), because docker/build-packages.sh
   # builds with --nocheck: a check() in this repo never runs, and a test that
@@ -154,14 +161,12 @@ build() {
   local b
   for b in "$srcdir/stage/usr/bin/qrtr-cfg" \
            "$srcdir/rmtfs-$_rmtfs_ver/rmtfs" \
-           "$srcdir/pd-mapper-$_pdm_ver/pd-mapper" \
            "$srcdir/build-tqftpserv/tqftpserv"; do
     [ -f "$b" ] || { echo "!! $b was not built"; return 1; }
     readelf -h "$b" | grep -q 'AArch64' ||
       { echo "!! $b is not an AArch64 binary"; return 1; }
   done
   for b in "$srcdir/rmtfs-$_rmtfs_ver/rmtfs" \
-           "$srcdir/pd-mapper-$_pdm_ver/pd-mapper" \
            "$srcdir/build-tqftpserv/tqftpserv"; do
     readelf -d "$b" | grep -q 'libqrtr\.so' ||
       { echo "!! $(basename "$b") is not linked against libqrtr"; return 1; }
@@ -177,8 +182,7 @@ package() {
   # *.service.in into *.service, so the unit that ships names /usr/bin/rmtfs
   # rather than /usr/local/bin/rmtfs -- a unit that installs cleanly and fails
   # at every boot with status=203/EXEC.
-  make -C "rmtfs-$_rmtfs_ver"   DESTDIR="$pkgdir" prefix=/usr install
-  make -C "pd-mapper-$_pdm_ver" DESTDIR="$pkgdir" prefix=/usr install
+  make -C "rmtfs-$_rmtfs_ver" DESTDIR="$pkgdir" prefix=/usr install
 
   # Shipped ENABLED, by the symlink `systemctl enable` would write, for the
   # same reason moarchy-device-sargo ships qbootctl's unit enabled: installing
@@ -201,7 +205,7 @@ package() {
   # one of them is wanted by anything.
   install -d "$pkgdir/usr/lib/systemd/system/multi-user.target.wants"
   local u
-  for u in rmtfs.service pd-mapper.service tqftpserv.service; do
+  for u in rmtfs.service tqftpserv.service; do
     [ -f "$pkgdir/usr/lib/systemd/system/$u" ] ||
       { echo "!! $u was not installed -- nothing would start"; return 1; }
     ln -s "../$u" "$pkgdir/usr/lib/systemd/system/multi-user.target.wants/$u"
@@ -211,8 +215,6 @@ package() {
     "$pkgdir/usr/share/licenses/$pkgname/LICENSE.qrtr"
   install -Dm644 "$srcdir/rmtfs-$_rmtfs_ver/LICENSE" \
     "$pkgdir/usr/share/licenses/$pkgname/LICENSE.rmtfs"
-  install -Dm644 "$srcdir/pd-mapper-$_pdm_ver/LICENSE" \
-    "$pkgdir/usr/share/licenses/$pkgname/LICENSE.pd-mapper"
   install -Dm644 "$srcdir/tqftpserv-$_tqf_ver/LICENSE" \
     "$pkgdir/usr/share/licenses/$pkgname/LICENSE.tqftpserv"
 }

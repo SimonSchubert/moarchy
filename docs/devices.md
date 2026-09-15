@@ -457,12 +457,11 @@ installed rather than from the moment a first-boot script succeeds.
 
 **D27** *Added 2026-09-15.* **Wi-Fi on this SoC is a modem feature.** The chain
 is `rmtfs -s` → modem DSP → `wlanmdsp.mbn` → QMI → `ath10k_snoc` → `wlan0`, and
-every link of it is shipped: `firmware-moarchy-sargo` carries `mba.mbn`,
-`modem.mbn` and the five `.jsn` protection-domain maps, and
-`moarchy-device-sargo` depends on `moarchy-qcom-modem` (qrtr, rmtfs, pd-mapper,
-tqftpserv), whose three units ship **enabled** by their own symlinks.
+every link of it is shipped: `firmware-moarchy-sargo` carries `mba.mbn` and
+`modem.mbn`, and `moarchy-device-sargo` depends on `moarchy-qcom-modem` (qrtr,
+rmtfs, tqftpserv), whose two units ship **enabled** by their own symlinks.
 
-> The four facts that make this non-obvious, each read out of a source rather
+> The five facts that make this non-obvious, each read out of a source rather
 > than a wiki:
 >
 > 1. **The Wi-Fi firmware does not run on the Wi-Fi chip.** WCN3990's
@@ -480,6 +479,15 @@ tqftpserv), whose three units ship **enabled** by their own symlinks.
 >    `/vendor/firmware`; the modem images live in sargo's own `modem` partition.
 >    They come from a third upstream, the one postmarketOS uses, pinned in
 >    `manifest.toml` as `modem-url`/`modem-ref`.
+> 5. **The protection-domain mapper is the kernel's, and userspace must not run
+>    one.** `CONFIG_QCOM_PD_MAPPER` compiles an `sdm670_domains[]` table into
+>    `drivers/soc/qcom/qcom_pd_mapper.c` — including `mpss_wlan_pd`, the exact
+>    domain `ath10k` looks up — and binds as an auxiliary driver to a device
+>    `pdm_notify_prepare()` creates whenever a DSP starts. Shipping
+>    `linux-msm/pd-mapper` beside it would put a second `tms/servreg` server on
+>    QRTR. Alpine stopped packaging it; so did we, after packaging it first.
+>    The kernel announces the case for the daemon when it applies: *"PDM: no
+>    support for the platform, userspace daemon might be required."*
 >
 > The decision this reverses is `firmware-moarchy-sargo`'s own: "the modem pair
 > is NOT shipped … it goes in when the daemons that drive it do." The
@@ -627,10 +635,10 @@ Restated as a checklist, in build order. Each carries its state.
    found", about a header, four directories from the missing tool.
 
 8. **D27 — BUILT, NOT MEASURED.** The radios. What is true off the device:
-   `moarchy-qcom-modem` builds and installs `qrtr`, `rmtfs`, `pd-mapper` and
-   `tqftpserv`; all three daemons link `libqrtr.so.1` (`readelf -d`, asserted
-   in `build()` so a silent unlinked build fails rather than ships); their
-   units name `/usr/bin/…` rather than `/usr/local/bin/…` and land in
+   `moarchy-qcom-modem` builds and installs `qrtr`, `rmtfs` and `tqftpserv`;
+   both daemons link `libqrtr.so.1` (`readelf -d`, asserted in `build()` so a
+   silent unlinked build fails rather than ships); their units name
+   `/usr/bin/…` rather than `/usr/local/bin/…` and land in
    `multi-user.target.wants`; `firmware-moarchy-sargo` 0.2.2-2 carries thirteen
    files including `mba.mbn`, `modem.mbn` and five `.jsn` maps, with the two
    modem blobs checked for `\x7fELF` + `EM_QDSP6` so a truncated download fails
@@ -675,9 +683,12 @@ booting, and this file should not say otherwise until one has.
 - **Calls, Wi-Fi and Bluetooth — one decision, not three.** *Wi-Fi answered
   2026-09-15; see D27.* The modem stack is built and shipped: `mba.mbn` and
   `modem.mbn` from a third upstream, and `moarchy-qcom-modem` carrying qrtr,
-  rmtfs, pd-mapper and tqftpserv at four pins. `qbootctl` was the precedent and
-  it held — four upstream C projects, pinned and packaged, at the price of
-  being the ones who notice when they move.
+  rmtfs and tqftpserv at three pins. `qbootctl` was the precedent and it held —
+  upstream C projects, pinned and packaged, at the price of being the ones who
+  notice when they move. It was four until reading the kernel showed the fourth,
+  `pd-mapper`, had been replaced by `CONFIG_QCOM_PD_MAPPER` — which is the
+  cheapest kind of scope cut and the reason D27 quotes sources rather than
+  wikis.
 
   **Still open:** whether any of it works. Nothing has run on the handset, and
   D27 is "built, not measured" until it has.

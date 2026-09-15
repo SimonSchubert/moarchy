@@ -186,12 +186,17 @@ for _f in mba.mbn modem.mbn wlanmdsp.mbn; do
   else no "no $_fwd/$_f -- the modem DSP never boots, so the WLAN firmware never runs"; fi
 done
 
-# 2. The protection-domain maps, which have to be in THIS directory: pd-mapper
-# finds them by dirname()-ing /sys/class/remoteproc/*/firmware, not by search.
-_jsn=$(ls "$_fwd"/*.jsn 2>/dev/null | wc -l)
-[ "$_jsn" -ge 5 ] \
-  && ok "$_jsn protection-domain maps beside the firmware" \
-  || no "only $_jsn .jsn files in $_fwd -- pd-mapper has nothing to serve"
+# 2. The protection-domain mapper, which is the KERNEL's on this SoC: the
+# sdm670 table in qcom_pd_mapper.c names the WLAN domain ath10k looks up, and
+# an auxiliary device created when a DSP starts autoloads it. A missing module
+# here is silent -- the lookup simply never finds mpss_wlan_pd.
+_kver=$(ls "$R/usr/lib/modules" 2>/dev/null | head -1)
+if [ -n "$_kver" ] && \
+   find "$R/usr/lib/modules/$_kver" -name 'qcom_pd_mapper.ko*' | grep -q .; then
+  ok "the in-kernel protection-domain mapper is present ($_kver)"
+else
+  no "no qcom_pd_mapper module in the image -- nothing answers the WLAN domain lookup"
+fi
 
 # 3. The board file, from linux-firmware-atheros. Named here because it comes
 # from a package nothing names explicitly (`linux-firmware` pulls it in), which
@@ -203,13 +208,14 @@ _jsn=$(ls "$_fwd"/*.jsn 2>/dev/null | wc -l)
 # 4. The daemons. rmtfs is the one that is not optional and does not look
 # load-bearing: its -s flag is what writes "start" to the modem remoteproc,
 # because the kernel sets rproc->auto_boot = false and starts nothing itself.
-for _b in rmtfs pd-mapper tqftpserv; do
+# pd-mapper is NOT in this list on purpose -- check 2 is what replaced it.
+for _b in rmtfs tqftpserv; do
   [ -x "$R/usr/bin/$_b" ] && ok "$_b is installed" \
     || no "no /usr/bin/$_b -- moarchy-qcom-modem is missing from the image"
 done
 
 # 5. And that something runs them. Same two-tree rule as qbootctl above.
-for _u in rmtfs.service pd-mapper.service tqftpserv.service; do
+for _u in rmtfs.service tqftpserv.service; do
   if [ -L "$R/usr/lib/systemd/system/multi-user.target.wants/$_u" ] ||
      [ -L "$R/etc/systemd/system/multi-user.target.wants/$_u" ]; then
     ok "$_u is enabled"

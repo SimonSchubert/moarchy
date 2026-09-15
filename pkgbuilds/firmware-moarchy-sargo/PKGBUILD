@@ -40,14 +40,30 @@
 # and the modem images live in sargo's own `modem` partition. Same repo and
 # same commit postmarketOS's firmware-google-sargo uses.
 #
-# --- The .jsn files are not documentation -----------------------------------
+# --- The .jsn files, and the honest status of them ---------------------------
 #
-# adspr, adspua, cdspr, modemr, modemuw: protection-domain maps, read by
-# pd-mapper, which serves them over QMI so that a client can ask where a
-# service lives. pd-mapper finds them by walking /sys/class/remoteproc/*/firmware,
-# taking dirname() of each value and listing that directory under /lib/firmware
-# -- so they are not merely *somewhere*, they have to be in this exact
-# directory, beside the .mbn files that named it.
+# adspr, adspua, cdspr, modemr, modemuw: the vendor's protection-domain maps,
+# the data a mapper serves over QMI so a client can ask where a service lives.
+#
+# NOTHING IN THIS IMAGE READS THEM TODAY, and that is worth saying rather than
+# implying otherwise. The mapper on this device is the kernel's --
+# CONFIG_QCOM_PD_MAPPER, whose sdm670 domain table is compiled into
+# drivers/soc/qcom/qcom_pd_mapper.c and includes the WLAN domain ath10k needs.
+# The userspace daemon that would parse these is deliberately not packaged
+# (see pkgbuilds/moarchy-qcom-modem's header).
+#
+# They are shipped anyway, on 2.5 KB of evidence rather than none:
+# postmarketOS's firmware-google-sargo installs the same five for the same
+# device, and what reads them beyond a userspace mapper -- hexagonrpcd and the
+# sensor stack are the candidates -- has not been established here. Dropping
+# files because *one* consumer turned out not to need them is how a later
+# feature acquires a mystery. They cost 2.5 KB; the claim above costs nothing
+# to re-check.
+#
+# If a userspace mapper ever is needed, they have to be in THIS directory: it
+# finds them by walking /sys/class/remoteproc/*/firmware, taking dirname() of
+# each value and listing that path under /lib/firmware. Not merely somewhere
+# sensible -- beside the .mbn files that named it.
 #
 # --- On the free half -------------------------------------------------------
 #
