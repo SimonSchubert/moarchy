@@ -689,12 +689,25 @@ framed and focused. It is heavily green.
 > symptom is megapixels printing `Found calibration file at .config`.
 >
 > The profiles are shipped at the correct path anyway: that is where they
-> belong, and where a fixed megapixels will look. **Open:** whether to carry a
-> patched megapixels, or route around it — giving the app a working directory
-> of `/usr/share/megapixels` makes upstream's own first path,
-> `config/%s,%s.dcp`, resolve to our files before the broken loop runs, which
-> is the least invasive workaround and needs no patch. Reporting it upstream
-> costs nothing and should happen either way. **?**
+> belong, and where a fixed megapixels will look.
+>
+> **Do not "fix" it by putting the profile where bug 1 looks.** That path,
+> `$XDG_CONFIG_HOME/megapixels/config/<model>.conf`, is not spare: it is where
+> **libmegapixels** looks for the DEVICE config — the file that defines the
+> sensors and the media-controller pipeline. Dropping a `.dcp` there under a
+> `.conf` name shadows the real one, and the camera then does not start at all.
+> Tried on the handset, and it cost the camera until the file was deleted. The
+> two lookups collide in one namespace, which is arguably the deeper bug.
+>
+> **Open, with one option fewer than it looked:**
+> - Give megapixels a working directory of `/usr/share/megapixels`, so
+>   upstream's own first path, `config/%s,%s.dcp`, resolves to our correctly
+>   named files before the broken loop runs. Needs no patch and no file in
+>   `$HOME`; costs a wrapper or a desktop entry this project would then own.
+> - Or carry a patched megapixels — two lines, and a fork of an Arch package to
+>   maintain.
+>
+> Reporting it upstream costs nothing and should happen either way. **?**
 
 **D23** **There is no console on this device, and there cannot be one.** ABL
 strips any `console=` from the boot image and appends its own `console=null`.
