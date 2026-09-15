@@ -907,10 +907,23 @@ Restated as a checklist, in build order. Each carries its state.
    the *packaging* rather than the fix, because both appear with nothing run by
    hand at all.
 
-   **Still open:** SMS, unsent and unreceived in either direction, which should
-   work on this SIM (`CS: 'attached'`). The SIM re-locks on every boot, so the
-   modem reads `locked` until someone enters the PIN — which is what
-   `moarchy.sim` is for (D28).
+   **SMS works, both directions, on the flashed image.** Measured rather than
+   assumed: `chatty-history.db` holds three rows within three seconds of each
+   other, two `direction -1` and one `direction 1`, and ModemManager's journal
+   shows `/SMS/1` consumed and deleted — the app took the message off the modem.
+   So the whole receive path ran: modem → ModemManager → chatty → store. No
+   `81voltd` and no IMS, because this operator still offers circuit-switched
+   fallback (`CS: 'attached'`); a VoLTE-only SIM would need §10's items 3 and 4.
+   Message bodies were not read; lengths were enough.
+
+   **Nothing on the sargo feature list is untested any more.** The remaining
+   open items are quality rather than absence: camera colour beyond a
+   matrix-only profile (no HueSatMap, no look table), and telephony on a
+   VoLTE-only operator.
+
+   One expected behaviour worth not mistaking for a fault: the SIM re-locks on
+   every boot, so the modem reads `locked` until someone enters the PIN. That
+   is what `moarchy.sim` is for (D28).
 
    The Bluetooth AC that the previous revision of this file declined to write
    is now written, because the measurement it was waiting for has been taken.
