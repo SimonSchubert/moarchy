@@ -20,6 +20,23 @@ FROM --platform=linux/arm64 menci/archlinuxarm@sha256:f7c6f64c0f246f41775e017933
 #   "restricting filesystem access failed because Landlock is not supported"
 RUN sed -i '/^\[options\]/a DisableSandbox' /etc/pacman.conf
 
+# [danctnix], for the same reason image/Dockerfile carries it and no further:
+# it is where libdng and libmegapixels live, and pkgbuilds/megapixels links
+# against both. Arch Linux ARM has neither, so without this the megapixels
+# build stops at `Dependency "gtk4" not found` -- the first missing one, which
+# is not even one of the two that are actually absent.
+#
+# The image's OWN /etc/pacman.conf still does not get this (structure.md R8a):
+# a flashed phone syncs [moarchy], [moarchy-apps] and the Arch repos, and
+# nothing else. This is the builder, where a foreign repo is an input to a
+# build rather than a thing a phone updates itself from.
+#
+# SigLevel = Never matches image/Dockerfile's stanza. It is the weaker half of
+# this trade and worth naming: these packages are verified by nothing but the
+# transport.
+RUN printf '\n[danctnix]\nSigLevel = Never\nServer = https://archmobile.mirror.danctnix.org/$repo/$arch/\n' \
+      >> /etc/pacman.conf
+
 # bc and libelf are the KERNEL's build tools, and they are here rather than in
 # linux-moarchy-sdm670's makedepends because build-packages.sh builds every
 # in-repo package with --nodeps (see its pkgbuilds loop) -- makedepends are

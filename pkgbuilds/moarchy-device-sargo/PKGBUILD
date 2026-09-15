@@ -35,7 +35,7 @@ pkgver=$_ver
 #    once Global_cal.acdb gives it a sound card at all (D29).
 # 6: gained q6voiced and the PCM numbers it needs, without which a call
 #    terminates the moment it is dialled (D32).
-# 7: gained the camera colour profiles (D30).
+# 7: gained the camera colour profiles (D30), named as megapixels asks.
 pkgrel=7
 pkgdesc="Google Pixel 3a (sargo) hardware support for moarchy"
 arch=('any')
@@ -151,21 +151,24 @@ package() {
   # -- this must be true from the moment the package is installed, including in
   # an image that never completes a first boot.
   # Camera colour, by the names megapixels looks up: <compatible>,<camera>.dcp,
-  # where <compatible> is the device tree's first compatible string and <camera>
-  # is the libmegapixels section name lowercased. Both read off the device --
-  # /proc/device-tree/compatible gives google,b4s4-sdm670, and the PinePhone's
-  # own profiles prove the lowercasing (its config says Rear:, its file says
-  # rear).
+  # where <compatible> is the device tree's first compatible string and
+  # <camera> is the libmegapixels section name VERBATIM.
   #
-  # NOTE megapixels 2.1.0 cannot currently find these. See devices.md D30: its
-  # lookup checks for a *.conf under XDG_CONFIG_HOME and then walks the bytes of
-  # a format string rather than the array of paths, so it matches the ~/.config
-  # DIRECTORY and stops. Shipped at the correct path anyway, because that is
-  # where they belong and where a fixed megapixels will look.
+  # Both read off the device: /proc/device-tree/compatible gives
+  # google,b4s4-sdm670, and a fixed megapixels says
+  #
+  #   No calibration found Front
+  #
+  # naming the capital-F section name it actually looks for. The PinePhone's
+  # own profiles are lowercase and had suggested otherwise -- they are
+  # evidently misnamed too, and inferring from them cost a round trip.
+  #
+  # Needs pkgbuilds/megapixels: Arch's 2.1.0 cannot find these wherever they
+  # are put (devices.md D30).
   install -Dm644 "$srcdir/rear.dcp" \
-    "$pkgdir/usr/share/megapixels/config/google,b4s4-sdm670,rear.dcp"
+    "$pkgdir/usr/share/megapixels/config/google,b4s4-sdm670,Rear.dcp"
   install -Dm644 "$srcdir/front.dcp" \
-    "$pkgdir/usr/share/megapixels/config/google,b4s4-sdm670,front.dcp"
+    "$pkgdir/usr/share/megapixels/config/google,b4s4-sdm670,Front.dcp"
 
   # The voice PCM, read by q6voiced's unit as an EnvironmentFile. Device 4 is
   # VoiceMMode1 on this card -- confirmed against /proc/asound/pcm on the

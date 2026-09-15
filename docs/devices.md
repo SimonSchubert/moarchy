@@ -649,65 +649,57 @@ ships the PCM numbers it needs.
 > not install `depends` either, so a library a package links against has to be
 > in the container too.
 
-**D30** *Added 2026-09-15, revised the same day.* **The camera works; its
-colour does not, and megapixels 2.1.0 cannot currently be told otherwise.**
-Both sensors enumerate (`imx363` rear, `imx355` front, `lc898219xi` focus
-actuator, `qcom-camss` bound, `/dev/video0-13`), `libmegapixels` ships a real
-device config with the full media-controller pipeline, and the preview is live,
-framed and focused. It is heavily green.
+**D30** *Added 2026-09-15, fixed the same day.* **The camera's colour needed a
+profile and a patched megapixels.** `moarchy-device-sargo` generates
+`google,b4s4-sdm670,{Rear,Front}.dcp`; `pkgbuilds/megapixels` carries a
+three-line patch without which megapixels cannot load a profile at all.
 
-> **Why green.** `src/process_pipeline.c` falls back to IDENTITY colour
-> matrices and an sRGB forward matrix when it finds no profile. A Bayer mosaic
-> has twice as many green photosites as red or blue, so an uncorrected debayer
-> is green. It is a calibration file, not a driver.
+> **Why green.** `process_pipeline.c` falls back to IDENTITY colour matrices
+> when it finds no profile, and a Bayer mosaic has twice as many green
+> photosites as red or blue, so an uncorrected debayer is green.
 >
-> **The profile is solved.** `pkgbuilds/moarchy-device-sargo/make-dcp.py`
-> generates `google,b4s4-sdm670,{rear,front}.dcp` from Google's own matrices —
-> read out of a Pixel 3a DNG published on raw.pixls.us under CC0, because every
-> DNG the stock camera wrote carries `ColorMatrix1/2` in its tags. That DNG has
-> no `ForwardMatrix`, so the script derives both per the DNG 1.4 spec
-> (`FM = CA(W→D50) · CM⁻¹ · diag(CM·W)`, Bradford adaptation) and asserts the
-> spec's own property — that `FM · [1,1,1]` is the XYZ of D50 — before writing.
-> Generated rather than committed: a `.dcp` is a small TIFF whose payload is
-> nine numbers twice over, and as a binary the only reviewable part would be
-> unreadable in a diff.
+> **The profile.** `make-dcp.py` builds both from Google's own `ColorMatrix1/2`,
+> read out of a Pixel 3a DNG published on raw.pixls.us under CC0 — every DNG
+> the stock camera wrote carries those tags, so this is the vendor's
+> measurement rather than ours. That DNG has no `ForwardMatrix` and megapixels
+> reads them, so both are derived per DNG 1.4
+> (`FM = CA(W→D50) · CM⁻¹ · diag(CM·W)`, Bradford) and the script asserts the
+> spec's own property — `FM · [1,1,1]` must be the XYZ of D50 — before writing.
+> Generated, not committed: a `.dcp` is a TIFF whose payload is nine numbers
+> twice over, and as a binary the only reviewable part would be unreadable.
 >
-> **What blocks it is two bugs in megapixels' own lookup,** in 2.1.0 and still
-> on upstream `master`:
+> **Three bugs in one upstream function,** `find_calibration_by_model` in
+> `src/dcp.c`, in 2.1.0 and on master:
 >
-> ```c
-> // 1. hunts for a .conf while looking for a calibration profile,
-> //    and omits the sensor from the name
-> snprintf(conffile, maxlen, "%s/megapixels/config/%s.conf", config_home, model);
+> 1. It looks for `<model>.conf` under `XDG_CONFIG_HOME` while hunting for a
+>    profile — wrong extension, and it drops the sensor from the name.
+> 2. That name **is libmegapixels' device config**. Putting a profile there,
+>    the obvious workaround for (1), shadows the file defining the sensors and
+>    the media pipeline, and the camera stops starting. Tried here; it cost the
+>    camera until the file was deleted.
+> 3. `for (const char *fmt = paths[0]; fmt; fmt++)` walks the *bytes* of the
+>    first format string instead of the array, matches `.config` — a directory
+>    in `$HOME` — and returns it as a calibration file. The tell is
+>    `Found calibration file at .config`.
 >
-> // 2. walks the BYTES of the first format string, not the array of paths
-> for (const char *fmt = paths[0]; fmt; fmt++) {
-> ```
+> **The names came from the fixed binary, not from inference.** The PinePhone's
+> shipped profiles are lowercase and had suggested the camera name was
+> lowercased; a patched megapixels says `No calibration found Front`, naming
+> the libmegapixels section verbatim. Upstream's own PinePhone profiles are
+> evidently misnamed too. Measuring beat inferring, and inferring cost a round
+> trip.
 >
-> The second one matches `~/.config` — a directory — and stops, so
-> `/usr/share/megapixels/config/*.dcp` is never reached. The observable
-> symptom is megapixels printing `Found calibration file at .config`.
+> **Measured:** `Found calibration file at
+> /usr/share/megapixels/config/google,b4s4-sdm670,Front.dcp`.
 >
-> The profiles are shipped at the correct path anyway: that is where they
-> belong, and where a fixed megapixels will look.
->
-> **Do not "fix" it by putting the profile where bug 1 looks.** That path,
-> `$XDG_CONFIG_HOME/megapixels/config/<model>.conf`, is not spare: it is where
-> **libmegapixels** looks for the DEVICE config — the file that defines the
-> sensors and the media-controller pipeline. Dropping a `.dcp` there under a
-> `.conf` name shadows the real one, and the camera then does not start at all.
-> Tried on the handset, and it cost the camera until the file was deleted. The
-> two lookups collide in one namespace, which is arguably the deeper bug.
->
-> **Open, with one option fewer than it looked:**
-> - Give megapixels a working directory of `/usr/share/megapixels`, so
->   upstream's own first path, `config/%s,%s.dcp`, resolves to our correctly
->   named files before the broken loop runs. Needs no patch and no file in
->   `$HOME`; costs a wrapper or a desktop entry this project would then own.
-> - Or carry a patched megapixels — two lines, and a fork of an Arch package to
->   maintain.
->
-> Reporting it upstream costs nothing and should happen either way. **?**
+> **The cost, stated plainly.** `pkgbuilds/megapixels` is a fork of an Arch
+> package, which §2's amendment says we do not do. It is meant to be temporary:
+> the patch goes upstream, and when it lands this package is deleted. It also
+> obliged `docker/Dockerfile.builder` to gain `[danctnix]`, because `libdng` and
+> `libmegapixels` live there and Arch Linux ARM has neither — the *builder*
+> only; a flashed phone's own `pacman.conf` still carries no such stanza (R8a).
+> The image's `[moarchy]` is first in its `pacman.conf`, so our megapixels wins
+> over danctnix's deterministically rather than by luck.
 
 **D23** **There is no console on this device, and there cannot be one.** ABL
 strips any `console=` from the boot image and appends its own `console=null`.

@@ -1,0 +1,42 @@
+--- a/src/dcp.c
++++ b/src/dcp.c
+@@ -73,15 +73,23 @@
+                 fch = 1;
+         }
+         // Check in XDG_CONFIG_HOME/megapixels/config
++        //
++        // ",%s.dcp" and not ".conf": this function looks for a DNG camera
++        // profile, and "<model>.conf" is libmegapixels' DEVICE config -- the
++        // file describing the sensors and the media pipeline. Sharing that
++        // name made a user-supplied profile shadow the device config, after
++        // which no camera starts at all.
+         snprintf(conffile,
+                  maxlen,
+-                 "%s/megapixels/config/%s.conf",
++                 "%s/megapixels/config/%s,%s.dcp",
+                  config_home,
+-                 model);
++                 model,
++                 sensor);
++        if (fch) {
++                free(config_home);
++        }
+         if (access(conffile, F_OK) != -1) {
+-                if (fch) {
+-                        free(config_home);
+-                }
++                printf("Found calibration file at %s\n", conffile);
+                 return true;
+         }
+ 
+@@ -89,8 +97,8 @@
+                                        SYSCONFDIR "/megapixels/config/%s,%s.dcp",
+                                        DATADIR "/megapixels/config/%s,%s.dcp",
+                                        NULL };
+-        for (const char *fmt = paths[0]; fmt; fmt++) {
+-                snprintf(conffile, maxlen, fmt, model, sensor);
++        for (const char **fmt = paths; *fmt; fmt++) {
++                snprintf(conffile, maxlen, *fmt, model, sensor);
+                 if (access(conffile, F_OK) != -1) {
+                         printf("Found calibration file at %s\n", conffile);
+                         return true;

@@ -1,0 +1,104 @@
+# Megapixels, with its camera-profile lookup fixed.
+#
+# WHY THIS PACKAGE EXISTS, because a fork of an Arch package is not free:
+#
+# megapixels 2.1.0 cannot load a DNG camera profile at all. Three bugs in one
+# function, `find_calibration_by_model` in src/dcp.c, present in 2.1.0 and in
+# upstream master as of 2026-09-15:
+#
+#   1. It looks for "<model>.conf" under XDG_CONFIG_HOME while hunting for a
+#      calibration profile -- the wrong extension, and it drops the sensor from
+#      the name so both cameras would share one file.
+#
+#   2. That name collides with libmegapixels' DEVICE config, which is exactly
+#      "<model>.conf". Putting a profile there -- the obvious workaround for
+#      bug 1 -- shadows the file that defines the sensors and the media
+#      pipeline, and the camera then does not start at all. Measured on this
+#      handset; it cost the camera until the file was removed.
+#
+#   3. The fallback loop is
+#
+#          for (const char *fmt = paths[0]; fmt; fmt++)
+#
+#      which increments a char* through the BYTES of the first format string
+#      instead of walking the array of paths. It ends up matching `.config` --
+#      a directory in $HOME -- and returning it as a calibration file, so
+#      /usr/share/megapixels/config is never reached and the profile is parsed
+#      from a directory.
+#
+# The visible result is a green preview on every device without a profile in
+# the app's own package, because process_pipeline.c falls back to IDENTITY
+# colour matrices, and a Bayer mosaic has twice as many green photosites as red
+# or blue. docs/devices.md D30.
+#
+# --- On carrying this at all ------------------------------------------------
+#
+# devices.md §2's amendment is narrow -- we package what upstream has brought
+# up, we do not carry patches. This is the exception and it is meant to be
+# temporary: the patch is three small changes against a function nobody could
+# call correct, and it goes upstream. When it lands, this package is deleted
+# and Arch's is used again. Until then a phone with a camera that renders green
+# is the alternative.
+#
+# Built from the same 2.1.0 tag Arch ships, so the only difference between this
+# package and theirs is the patch below.
+
+. "$startdir/../../scripts/manifest.sh"
+_url=$(manifest_get megapixels url) || return 1
+_ref=$(manifest_get megapixels ref) || return 1
+_ver=$(manifest_get megapixels version) || return 1
+
+pkgname=megapixels
+pkgver=$_ver
+pkgrel=1
+pkgdesc="The Linux-phone camera application, with the DNG profile lookup fixed"
+arch=('aarch64')
+url="$_url"
+license=('GPL-3.0-or-later')
+
+# Arch's own runtime list, read off the installed package rather than guessed.
+depends=('feedbackd' 'glib2' 'gtk4' 'imagemagick' 'libdng' 'libepoxy'
+         'libjpeg-turbo' 'libmegapixels' 'libraw' 'zbar')
+makedepends=('meson' 'ninja' 'pkgconf' 'gtk4' 'libdng' 'libmegapixels'
+             'libepoxy' 'zbar' 'feedbackd' 'libjpeg-turbo')
+
+# Replaces Arch's package rather than sitting beside it: two packages cannot
+# own /usr/bin/megapixels, and pacman should say so plainly if both are ever
+# pulled in.
+provides=("megapixels=$_ver")
+conflicts=('megapixels')
+
+source=("$pkgname-$_ver.tar.gz::$_url/-/archive/$_ref/Megapixels-$_ref.tar.gz"
+        'dcp-lookup.patch')
+sha256sums=('SKIP'
+            'SKIP')
+
+prepare() {
+  cd "Megapixels-$_ref"
+  patch -p1 < "$srcdir/dcp-lookup.patch"
+}
+
+build() {
+  arch-meson "Megapixels-$_ref" build
+  meson compile -C build
+}
+
+package() {
+  DESTDIR="$pkgdir" meson install -C build --no-rebuild
+
+  # The three fixes, asserted against the built binary rather than against the
+  # patch having applied -- `patch` exiting 0 says the hunks matched, not that
+  # the result behaves. Each of these strings only exists in a fixed build.
+  local bin="$pkgdir/usr/bin/megapixels"
+  [ -x "$bin" ] || { echo "!! megapixels was not built"; return 1; }
+  if strings "$bin" | grep -q '/megapixels/config/%s,%s\.dcp'; then
+    echo "==> the XDG lookup asks for a .dcp"
+  else
+    echo "!! the XDG lookup still asks for a .conf -- the patch did not take"
+    return 1
+  fi
+  if strings "$bin" | grep -q '/megapixels/config/%s\.conf'; then
+    echo "!! the old .conf lookup is still in the binary"
+    return 1
+  fi
+}

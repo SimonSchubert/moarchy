@@ -209,6 +209,24 @@ ref     = "v1.2"
 version = "1.2"
 
 # ---------------------------------------------------------------------------
+# Megapixels, carried ONLY for a three-line fix to its camera-profile lookup.
+#
+# The same 2.1.0 tag Arch ships. pkgbuilds/megapixels has the detail; the short
+# version is that `find_calibration_by_model` cannot find a profile at all, and
+# one of the ways it fails -- colliding with libmegapixels' device config --
+# stops the camera starting if you try the obvious workaround.
+#
+# This pin is meant to be deleted. The patch goes upstream; when it lands, the
+# package goes and Arch's is used again. Recorded here rather than in the
+# PKGBUILD alone so that "why do we fork this" is answerable from the file that
+# lists every version this project chooses.
+# ---------------------------------------------------------------------------
+[megapixels]
+url     = "https://gitlab.com/megapixels-org/Megapixels"
+ref     = "2.1.0"
+version = "2.1.0"
+
+# ---------------------------------------------------------------------------
 # The userspace half of a phone call's audio.
 #
 # On this SoC a voice call is not carried by the modem alone: the ADSP exposes
