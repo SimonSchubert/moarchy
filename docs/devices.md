@@ -612,6 +612,43 @@ registers and PipeWire exposes an earpiece, a speaker and a microphone.
 > but routing a call through it also wants `q6voiced`, which is not packaged for
 > Arch. Calls connect and are what exposed all of this. **?**
 
+**D32** *Added 2026-09-15.* **Fixing sound broke calling, and that is the
+correct order of events.** `moarchy-device-sargo` depends on `q6voiced` and
+ships the PCM numbers it needs.
+
+> Calls connected before D29 and carried no audio. After D29 they went
+>
+> ```
+> [modem0/call0] call state changed: unknown -> terminated (unknown)
+> ```
+>
+> immediately, on a modem that was `registered` on `o2 - de+` at signal 92 with
+> `CS: 'attached'`. Nothing about the network had changed.
+>
+> The reason is that a voice call on this SoC is not carried by the modem
+> alone. The ADSP exposes a voice PCM — `VoiceMMode1`, card 0 device 4 here,
+> visible in `/proc/asound/pcm` — and something has to hold it open for the
+> duration of a call. While `qcom-q6core` was failing to probe, the whole q6
+> stack was dead and the modem did the call by itself: it connected, and there
+> was nowhere for the audio to go. With q6core probing, `q6voice`, `q6mvm`,
+> `q6cvs` and `q6cvp` are live, the voice path expects a driver, and a dial
+> with nothing on the PCM is torn down at once.
+>
+> So the sequence reads as "the audio change broke calls", and the truth is
+> that it revealed the missing half. `q6voiced` is postmarketOS's daemon; it
+> watches ModemManager over D-Bus and drives the PCM.
+>
+> The card and device numbers live in the **device** package, not in
+> `q6voiced`: they are a hardware value (§4). q6voiced's own unit is written
+> for that — it `ConditionPathExists` on the config file, so a device that
+> ships none skips the unit rather than failing it.
+>
+> **Also fixed here:** `docker/Dockerfile.builder` gained `alsa-lib`. D20 says
+> the builder carries build *tools* because `--nodeps` never installs
+> makedepends; this is the same rule one step further, because `--nodeps` does
+> not install `depends` either, so a library a package links against has to be
+> in the container too.
+
 **D30** *Added 2026-09-15.* **The camera works; its colour does not.** Both
 sensors enumerate (`imx363` rear, `imx355` front, `lc898219xi` focus actuator,
 `qcom-camss` bound, `/dev/video0-13`), `megapixels` ships a real device config

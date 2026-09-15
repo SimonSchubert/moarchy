@@ -209,6 +209,27 @@ ref     = "v1.2"
 version = "1.2"
 
 # ---------------------------------------------------------------------------
+# The userspace half of a phone call's audio.
+#
+# On this SoC a voice call is not carried by the modem alone: the ADSP exposes
+# a PCM (VoiceMMode1, card 0 device 4 here) and something has to open it when a
+# call starts and close it when the call ends. q6voiced is that something --
+# it listens to ModemManager over D-Bus and drives the PCM.
+#
+# It became REQUIRED the moment audio started working, which is not obvious
+# and cost a working feature for an hour. Before Global_cal.acdb the whole q6
+# stack was dead, so the modem carried calls entirely on its own: they
+# connected and were silent. With q6core probing, q6voice/q6mvm/q6cvs/q6cvp are
+# live and the voice path expects a driver -- and with nothing opening
+# VoiceMMode1 a dial goes `unknown -> terminated` immediately. Calls got worse
+# before they got better, from a change that fixed sound.
+# ---------------------------------------------------------------------------
+[q6voiced]
+url     = "https://gitlab.postmarketos.org/postmarketOS/q6voiced"
+ref     = "0.3.1"
+version = "0.3.1"
+
+# ---------------------------------------------------------------------------
 # Stable MAC addresses for both radios, which on this SoC is not cosmetic for
 # Bluetooth -- it is the difference between having Bluetooth and not.
 #

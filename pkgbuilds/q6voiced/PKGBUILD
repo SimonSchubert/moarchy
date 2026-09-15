@@ -1,0 +1,77 @@
+# The userspace QDSP6 voice driver: what makes a phone call carry audio.
+#
+# On SDM670 a call is not carried by the modem alone. The ADSP exposes a voice
+# PCM -- `VoiceMMode1`, which is card 0 device 4 on this phone -- and something
+# has to open it when ModemManager reports a call and close it when the call
+# ends. q6voiced is that something; it watches ModemManager over D-Bus.
+#
+# WHY THIS IS NOT OPTIONAL, and why that is easy to get backwards:
+#
+# Before firmware-moarchy-sargo shipped Global_cal.acdb, `qcom-q6core` would
+# not probe, so the entire q6 stack was dead and the modem carried calls by
+# itself. They connected and were silent -- which reads as "calls work, audio
+# is the missing piece", and that is the wrong way round. With q6core probing,
+# q6voice/q6mvm/q6cvs/q6cvp are live, the voice path expects a driver, and a
+# dial with nothing holding VoiceMMode1 goes
+#
+#   [modem0/call0] call state changed: unknown -> terminated (unknown)
+#
+# immediately. So fixing sound BROKE calling until this landed. Worth stating
+# plainly, because the obvious reading of that sequence is that the audio
+# change was a mistake (docs/devices.md D29, D32).
+#
+# The device supplies the PCM numbers, not this package: the unit reads
+# /usr/share/q6voiced/q6voiced.conf as an EnvironmentFile and
+# `ConditionPathExists` on the same file, so on a device that ships no config
+# the unit is skipped rather than failing. moarchy-device-sargo ships sargo's
+# -- docs/devices.md §4, a hardware value belongs in the device package.
+#
+# postmarketOS's own daemon, MIT, pinned at a tag with its tarball checksummed.
+
+. "$startdir/../../scripts/manifest.sh"
+_url=$(manifest_get q6voiced url) || return 1
+_ref=$(manifest_get q6voiced ref) || return 1
+_ver=$(manifest_get q6voiced version) || return 1
+
+pkgname=q6voiced
+pkgver=$_ver
+pkgrel=1
+pkgdesc="QDSP6 voice driver daemon, driven by ModemManager over D-Bus"
+arch=('aarch64')
+url="$_url"
+license=('MIT')
+depends=('alsa-lib' 'dbus')
+makedepends=('meson' 'ninja' 'pkgconf')
+
+source=("$pkgname-$_ver.tar.gz::$_url/-/archive/$_ref/$pkgname-$_ref.tar.gz")
+sha256sums=('b9728837c137113737f1492ab08fcdcea58de157cc5ec204452587c7a9b111ba')
+
+build() {
+  # -Dsystemd=enabled explicitly: the option is a feature and defaults to auto,
+  # so the unit would ship or not depending on what the BUILDER happens to have
+  # installed. A phone whose call audio depends on a package in a container is
+  # not a phone anyone can reason about.
+  arch-meson "$pkgname-$_ref" build -Dsystemd=enabled -Dopenrc=disabled
+  meson compile -C build
+}
+
+package() {
+  DESTDIR="$pkgdir" meson install -C build --no-rebuild
+
+  # Both halves asserted, because this package is a binary and a unit and
+  # nothing else -- there is no compile step that would fail if either moved.
+  [ -x "$pkgdir/usr/bin/q6voiced" ] ||
+    { echo "!! q6voiced was not installed"; return 1; }
+  [ -s "$pkgdir/usr/lib/systemd/system/q6voiced.service" ] ||
+    { echo "!! q6voiced.service was not installed -- nothing would drive the PCM"; return 1; }
+
+  # And that the unit still reads its config from where the device package
+  # writes it. If upstream moves that path, the unit's ConditionPathExists
+  # silently stops matching and calls go quiet again with no error anywhere.
+  grep -q '/usr/share/q6voiced/q6voiced.conf' \
+    "$pkgdir/usr/lib/systemd/system/q6voiced.service" ||
+    { echo "!! the unit no longer reads /usr/share/q6voiced/q6voiced.conf"; return 1; }
+
+  install -Dm644 "$srcdir/$pkgname-$_ref/LICENSE" \
+    "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

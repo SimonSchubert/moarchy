@@ -41,8 +41,18 @@ RUN sed -i '/^\[options\]/a DisableSandbox' /etc/pacman.conf
 # DECLARED and never installed. Omitting a build tool is not a missing
 # dependency error, it is whatever confusing thing the build system says when
 # its own driver is absent.
+#
+# alsa-lib is q6voiced's, and it is a LIBRARY rather than a tool -- which is
+# the same rule one step further. --nodeps does not install `depends` either,
+# so anything a package links against has to be here too. Its absence reads as
+#
+#   Run-time dependency alsa found: NO (tried pkg-config)
+#   meson.build:12:7: ERROR: Dependency "alsa" not found
+#
+# which names the dependency honestly and still points at the wrong place: the
+# package declares it correctly, and the container is what has not got it.
 RUN pacman-key --init && pacman-key --populate archlinuxarm && \
-    pacman -Syu --noconfirm git go base-devel sudo bc libelf meson ninja
+    pacman -Syu --noconfirm git go base-devel sudo bc libelf meson ninja alsa-lib
 
 # makepkg refuses to run as root.
 RUN useradd -m builder && \

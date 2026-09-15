@@ -33,7 +33,9 @@ pkgver=$_ver
 # 4: gained bootmac, which is what gives this phone Bluetooth (D28).
 # 5: gained the ALSA use-case profile, which is what gives this phone audio
 #    once Global_cal.acdb gives it a sound card at all (D29).
-pkgrel=5
+# 6: gained q6voiced and the PCM numbers it needs, without which a call
+#    terminates the moment it is dialled (D32).
+pkgrel=6
 pkgdesc="Google Pixel 3a (sargo) hardware support for moarchy"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
@@ -92,6 +94,15 @@ conflicts=('moarchy-device')
 # exists, appear to PipeWire as an earpiece, a speaker and a microphone rather
 # than as nothing. Arch's alsa-ucm-conf has sdm845 and sc7180 and no sdm670.
 #
+# q6voiced is the third audio piece and the one that is a phone CALL rather
+# than sound in general. The ADSP exposes VoiceMMode1 -- card 0, device 4 here
+# -- and something must hold it open for the duration of a call. Nothing did,
+# and a dial went `unknown -> terminated` at once.
+#
+# q6voiced.conf below is why those numbers live in this package: they are a
+# hardware value (§4), and q6voiced's own unit is written to be skipped on a
+# device that ships no config rather than to fail.
+#
 # qbootctl is what stops this phone bricking itself. An A/B bootloader counts
 # down a retry counter on every handoff and marks the slot unbootable at zero
 # unless the OS calls back; measured here as slot-retry-count:a:0 and
@@ -106,11 +117,12 @@ depends=(
   'moarchy-qcom-modem'
   'bootmac'
   'alsa-ucm-conf-moarchy-sdm670'
+  'q6voiced'
   'qbootctl'
 )
 
-source=('sway.conf' 'device.conf' 'qbootctl-mark-successful.service')
-sha256sums=('SKIP' 'SKIP' 'SKIP')
+source=('sway.conf' 'device.conf' 'qbootctl-mark-successful.service' 'q6voiced.conf')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm644 "$srcdir/sway.conf"   "$pkgdir/usr/share/moarchy/device/sway.conf"
@@ -128,6 +140,19 @@ package() {
   # DEVICE_SERVICES runs once, on the first boot, from a script that can fail
   # -- this must be true from the moment the package is installed, including in
   # an image that never completes a first boot.
+  # The voice PCM, read by q6voiced's unit as an EnvironmentFile. Device 4 is
+  # VoiceMMode1 on this card -- confirmed against /proc/asound/pcm on the
+  # handset rather than copied on faith.
+  install -Dm644 "$srcdir/q6voiced.conf" "$pkgdir/usr/share/q6voiced/q6voiced.conf"
+
+  # Enabled here rather than in q6voiced, for the same reason the config is
+  # here: that package has no idea whether this device has a voice PCM, and a
+  # unit enabled on a device with no config would sit there condition-skipped
+  # on every boot of every other phone.
+  install -d "$pkgdir/usr/lib/systemd/system/multi-user.target.wants"
+  ln -s ../q6voiced.service \
+    "$pkgdir/usr/lib/systemd/system/multi-user.target.wants/q6voiced.service"
+
   install -Dm644 "$srcdir/qbootctl-mark-successful.service" \
     "$pkgdir/usr/lib/systemd/system/qbootctl-mark-successful.service"
   install -d "$pkgdir/usr/lib/systemd/system/multi-user.target.wants"
