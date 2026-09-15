@@ -738,23 +738,6 @@ Item {
                                       : "workspace prev_on_output")
     }
     else if (action === "home") {
-      // F3. The keyboard goes with the app. It does not pop *up* on the way
-      // home -- it fails to go *down*, and lands on the wallpaper with nothing
-      // behind it, which is why it reads as having appeared. Sway sends the
-      // text-input leave when focus moves off the app, but a home screen is an
-      // empty workspace and there is no window there to take the input state
-      // over, so nothing lowers it. Measured: up after 3 of 5 homes, down in
-      // exactly the two that happened to land on a workspace that still had a
-      // window; with the keyboard already down, 6 of 6 homes left it down, so
-      // nothing here raises it.
-      //
-      // Unconditional. SetVisible false on a keyboard already down is a no-op,
-      // and hideKeyboard is execDetached -- reading `keyboardUp` first would
-      // mean waiting on the probe's round trip on the one gesture that has to
-      // feel instant, and acting on a stale answer is what G2's comment above
-      // already warns about.
-      root.hideKeyboard()
-
       // K4. A shell app goes where an app goes: nowhere. It stays mapped on its
       // own workspace, it keeps its tile on the drawer's shelf, and this
       // gesture leaves it the way it leaves `foot` -- by going somewhere else.
@@ -797,11 +780,6 @@ Item {
       // one: the agent arrives on a workspace of its own, and a sheet left
       // standing over it is a hold that appears to have done nothing at all.
       root.hideCoveringSurfaces()
-
-      // The keyboard is deliberately left where it is, unlike going home (F3).
-      // What opens is a terminal, which is entitled to the input an empty
-      // workspace was not, and lowering it here would make the agent's first
-      // act be taking it back.
 
       // One answer to "the default agent", and it is moarchy-agent's:
       // with one picked this opens it, with none it opens the picker, and the

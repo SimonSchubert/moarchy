@@ -186,7 +186,7 @@ window for anyone with a keyboard, and the shelf closes one you can see (M6).
 **C5** The hold reaches the agent from wherever the strip does. The shell's own
 sheets are put away on the way, the way a sideways swipe puts them away (B3): a
 window that opens underneath the drawer is a gesture that appears to have done
-nothing. The keyboard is left up, unlike going home (F3) — what opens is a
+nothing. The keyboard is left up, like everything else now (G14) — what opens is a
 terminal, and it is entitled to the input an empty workspace was not.
 → with the drawer open, `omarchy-shell gestures hold` leaves `drawer state` ==
 `closed` and the agent focused
@@ -251,19 +251,6 @@ must not drift from — never had one.
 **F2** Going home never closes anything. Every app still has its tile on the
 drawer's shelf afterwards.
 → `drawer openApps` count unchanged across a home gesture
-
-**F3** Going home puts the on-screen keyboard away. A home screen has nothing
-to type into, so the keyboard leaves with the app it belonged to.
-
-It has to be put away explicitly. Sway sends the text-input leave when focus
-moves off the app, but home is an *empty* workspace with no window there to
-take the input state over, so nothing lowers it on its own. `SetVisible false`
-sticks even with the text field still focused, so the call needs no ordering
-against the workspace switch.
-→ with the keyboard up, `omarchy-shell gestures swipe home`, then
-`sm.puri.OSK0` `Visible` is false and *stays* false across ~3s of sampling. One
-late reading cannot tell "never went down" from "went down and something raised
-it again", which on a shared phone is a real second case
 
 **F4** The sheet does not snap back on its way out. What signals the home band
 -- the sheet travelling on past the first stop -- is at its *furthest* there,
@@ -417,6 +404,21 @@ and a column that answers a gesture look the same until you try to use it.
 → `omarchy-shell gestures geometry` reports `w` == `backEdgeWidth` and
 `surfaceW` > `w`; `w` keeps meaning the input band, so G8's number is still
 what it was
+
+**G14** The keyboard comes up only when asked, and only two things can ask: its
+own restore handle, and `$mod+i`. Text focus raises nothing — not an app's
+field, not the drawer's search box — and nothing in this shell puts it down
+except the back swipe (G2), which is the same `SetVisible` call.
+
+An app asking for text input is not an app asking for a keyboard. It used to be
+read as one, so the keyboard appeared over half the screen whenever anything
+took focus and left again just as often, which is the worse half: it moves the
+layout under a thumb already on its way to a key. `moarchy-keyboard`'s AC 49 is
+what makes a dismissal safe to let stick — the handle is on screen whenever the
+keyboard is not, and AC 52 keeps it above this shell's overlays.
+→ with an app's text field focused and the keyboard down, `sm.puri.OSK0`
+`Visible` stays false across ~3s of sampling; going home, opening the drawer
+and closing it again all leave it wherever it was
 
 ## H. Closing an overlay by dragging it
 
@@ -575,9 +577,14 @@ is on Overlay and draws over us. With the keyboard up it is the keyboard, which
 is on Top like the drawer and mapped earlier, so the drawer wins the overlap and
 paints over it — the whole `qwertyuiop` row reduced to a sliver under the
 drawer's app labels.
-→ `drawer geometry` reports `margin=0` while the search field has focus.
-`margin=-<strip>` holds only when neither this nor I5e's condition is true —
-the gate is the union of the two, not this one alone
+
+The signal is the compositor's own configure, read off the surface's height
+(I5e), and it is the only one. `searchField.activeFocus` used to lead it as a
+stand-in for "the keyboard is up"; with G14 a focused field raises nothing, so
+the stand-in stands for nothing and would drop the inset on every tap in the
+search box with no keyboard under it.
+→ `drawer geometry` reports `margin=0` with the keyboard up and
+`margin=-<strip>` with it down, whatever has focus
 
 **I5b** The keyboard reserves the same space whether or not it draws under the
 strip. sway reduces the usable area by `exclusive_zone + margin.bottom`, so a
@@ -586,78 +593,34 @@ quietly under-reserves by exactly that much.
 → with the keyboard up, `drawer geometry` `h` is `screen - bar - panelHeight`;
 at 176 rather than 200 the drawer settles over the top key row
 
-**I5c** The gate cannot get stuck. `activeFocus` only stands in for "the
-keyboard is up" (I5a) while the two actually move together, so anything that
-leaves the search field focused with the keyboard down drops the inset for the
-rest of the session.
-
-Closing the drawer therefore has to *release* the field's focus rather than
-merely deactivate the window, which means handing active focus to an item
-inside the same surface -- an item that belongs to no window holds nothing, so
-the field keeps its `focus` flag across the unmap and takes activeFocus back on
-the next map. The second symptom is the tell: a tap on a field that is already
-focused changes no focus and re-enables no text input, so a session that has
-had the drawer open for a while stops raising the keyboard at all.
-→ tap the search field, close the drawer, open it again: `drawer searchTarget`
-reports `focused=false` and `drawer geometry` reports `margin` equal to
-`-<strip>`
-
 **I5d** Closing an overlay never *raises* the on-screen keyboard. It may leave
-it down and it may put it down; it may not put it up.
+it down; it may not put it up.
 
-This is F3 one rung down — the keyboard does not pop up, it fails to go down.
-An overlay that declares `WlrKeyboardFocus.Exclusive` takes the seat's keyboard
-while it is up, which deactivates the window underneath and lowers the keyboard
-with it; on unmap sway re-activates that window, its `zwp_text_input_v3`
-re-enters, and the keyboard rises. The cause is the exclusive grab and not the
-drawer, and the four sheets separate on exactly that line — three closes each,
-with a focused `foot` underneath:
+True by construction since G14, and it was not before. An overlay declaring
+`WlrKeyboardFocus.Exclusive` takes the seat's keyboard while it is up, which
+deactivates the window underneath and lowers the keyboard with it; on unmap
+sway re-activates that window and its `zwp_text_input_v3` re-enters. Nothing
+listens to that any more, so the re-entry raises nothing and the shell needs no
+hide on any dismissal path.
+→ with an app focused and the keyboard up, open and close each of the drawer,
+Settings and the theme picker: `sm.puri.OSK0` `Visible` is still true
+afterwards, and the focused workspace's `rect.height` is unchanged across the
+close at 6 samples over 3s
 
-| | `keyboardFocus` | raised |
-| --- | --- | --- |
-| drawer | `Exclusive` while up | 3/3 |
-| Settings | `Exclusive` while up | 3/3 |
-| theme picker | `Exclusive` while up | 3/3 |
-| shade | `None` | 0/3 |
-
-With nothing focused underneath it never fires -- 0 of 4 on a bare home screen,
-4 of 4 with an app -- which is why a home-screen test reads as "not
-reproducible".
-
-The fix is F3's: an unconditional `SetVisible false` on the dismissal path. It
-is deliberately *not* conditional on the keyboard having been down beforehand —
-that question needs the DBus probe's round trip, and G2 already records what
-acting on a stale answer costs. The cost is that dismissing an overlay over an
-app you were typing in puts the keyboard away, and you tap the field again.
-
-Hand-offs are the exception, and they are why the call cannot simply live in
-every `close()`. `activateSetting` and `launch` on the drawer, and `dismiss` on
-Settings and the theme picker, close one surface in order to open another;
-firing the hide there robs the successor of a keyboard it may be about to want.
-→ with an app focused, open and close each of the drawer, Settings and the theme
-picker: the focused workspace's `rect.height` is unchanged across the close, at
-6 samples over 3s. One late reading cannot tell "never went up" from "went up
-and something put it down"
-
-**I5e** The bottom inset follows the keyboard rather than the field. I5a gates
-it on `activeFocus` as a stand-in for "the keyboard is up", and I5d is the proof
-that the stand-in can be wrong in the direction I5a cannot see: keyboard up,
-field not focused. The inset then stays at `-<strip>` with the keyboard under
-it, and the sheet's last row paints over the top key row.
-
-The signal is the compositor's own configure, which is already what `geometry`
-reports. On this panel the granted height is 694 or 674 with the keyboard down
-and 494 or 474 with it up -- the two clusters are 180px apart, so no threshold
+**I5e** The bottom inset follows the keyboard and not the field, and that is
+now the only signal there is (I5a). The compositor's own configure is what
+answers: on this panel the granted height is 694 or 674 with the keyboard down
+and 494 or 474 with it up, so the two clusters are 180px apart and no threshold
 between them can be walked into by the 20px the inset itself moves.
-`activeFocus` is not merely a worse signal here, it is a *lagging* one: it
-answers about the field, and the field is only one of the things that raises a
-keyboard. It matters even with I5d fixed — the hide is `execDetached` and the
-keyboard takes time to retract, so every close with the keyboard up spends the
-slide animation in exactly this state.
-→ with the drawer open and the keyboard forced up on `sm.puri.OSK0` rather than
-by a tap, `drawer geometry` reports `margin=0` while `searchTarget` reports
-`focused=false`. Forced, because a tap would focus the field and hand the answer
-to the term this AC exists to check the *other* one against
+
+`searchField.activeFocus` was the leading term, as a stand-in for "the keyboard
+is up" on the reasoning that focusing the field is what raised it. It is not a
+worse signal now, it is a wrong one: a focused field raises nothing (G14), so a
+gate that read it would drop the inset with no keyboard underneath and show a
+band of the app through the sheet with the home pill on it.
+→ with the drawer open, the keyboard forced up on `sm.puri.OSK0` and the search
+field never tapped, `drawer geometry` reports `margin=0` while `searchTarget`
+reports `focused=false`; tapping the field leaves `margin=0` unchanged
 
 **I6** The pill still works over all three, and none of them needs a mask to
 manage it. All three are on Top -- the keyboard included, deliberately, because
@@ -1175,15 +1138,20 @@ Not criteria — the record of which criteria are actually verified, so that
 "written down" is never mistaken for "checked". Regenerate with:
 
 ```sh
-sed -n '942,2316p;3674,4001p' bin/moarchy-selftest > /tmp/g.sh
-grep -ohE '\b(okac|noac|skipac) +([A-Z][0-9]+[a-z]?)\b' /tmp/g.sh | awk '{print $2}' | sort -u
+grep -ohE '\b(okac|noac|skipac) +([A-Z][0-9]+[a-z]?)\b' bin/moarchy-selftest |
+  awk '{print $2}' | sort -u
 ```
 
-**Written, but nothing runs it** (22). Each has a `→` check that no suite
+That over the whole file rather than over two hand-copied line ranges, which
+went stale the first time a check was added above them and then silently
+reported a different document's ids. Ids are not unique across files, so the
+list it prints is a superset: take from it only what this file defines.
+
+**Written, but nothing runs it** (28). Each has a `→` check that no suite
 executes, so it is as unverified as one with no check at all:
 
-> A3 · A3a · A8 · C1 · C3 · C4 · C5 · G10b · H1 · H4 · I5a · I5b · I6 · I7 ·
-> K8 · L8 · M2 · M3 · M7 · M7a · M8 · M9
+> A3 · A3a · A8 · A10 · C1 · C3 · C4 · C5 · G10b · G11 · G12 · G13 · H1 · H4 ·
+> I5a · I5b · I6 · I7 · K8 · L8 · M2 · M3 · M7 · M7a · M8 · M9 · N1 · N2
 
 All of §C is here: the hold cannot be fired by a suite without installing an
 agent, which is C's own note. All of §I's assertable half is here too, and that

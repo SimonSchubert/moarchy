@@ -1787,42 +1787,59 @@ print(found[0] if found else "")'; }
       noac G6 "a 13-logical-px drag from the edge closed an app"
     fi
 
-    # --- F3. going home puts the keyboard away -----------------------------
+    # --- G14. nothing in this shell moves the keyboard but back ------------
+    # Replaces F3's block, which asserted the opposite: that going home put the
+    # keyboard away. It does not any more, and nothing else does either.
+    #
     # Its own window, not whatever happens to be on the phone. Taking
     # `[app_id=".*"] focus` meant this ran against other sessions' windows when
     # there were any and skipped entirely when G4 had closed the last one: two
-    # runs, one FAIL and one SKIP, and neither was a verdict on the fix.
-    #
-    # Driven through the IPC rather than a real swipe. The bug is in what
-    # `run("home")` does once it is reached, not in reaching it, and a strip
-    # swipe with the keyboard up is its own open question -- measured at 1 home
-    # in 5 attempts, at 86% travel against a 75% commit. Routing this through
-    # that would make an unrelated flake read as the keyboard fix regressing.
+    # runs, one FAIL and one SKIP, and neither was a verdict on anything.
     setsid foot --app-id=moa-selftest -e sh -c 'while :; do sleep 300; done' >/dev/null 2>&1 </dev/null &
     sleep 4
     swaymsg '[app_id=moa-selftest] focus' >/dev/null 2>&1
     sleep 1
+
+    # The falsifier first, and it is the one that matters: foot activates the
+    # input method the moment it is focused and holds it for as long as it is
+    # focused, so under the old rule this raised the keyboard every time.
+    osk false; sleep 2
+    swaymsg '[app_id=moa-selftest] focus' >/dev/null 2>&1
+    g14_up=0
+    for _ in 1 2 3 4 5 6; do
+      sleep 0.5
+      [[ $(osk_visible) == *true* ]] && g14_up=$((g14_up + 1))
+    done
+    if (( g14_up == 0 )); then
+      okac G14 "focusing a text field raises nothing (6 samples)"
+    else
+      noac G14 "the keyboard came up in $g14_up of 6 samples on a focused terminal" \
+               "text focus must not raise it; only the handle and SetVisible do"
+    fi
+
+    # And the other half: what is up stays up. Home used to put it away, and
+    # every sheet's close used to as well.
     osk true; sleep 2
     if [[ $(osk_visible) == *true* ]]; then
       timeout 8 omarchy-shell gestures swipe home >/dev/null 2>&1
+      timeout 8 omarchy-shell drawer open >/dev/null 2>&1; sleep 1
+      timeout 8 omarchy-shell drawer close >/dev/null 2>&1
       # Sampled over 3s, not read once. A single late reading cannot tell
       # "never went down" from "went down and something raised it again", and
-      # on a shared phone another session mapping a window with a text input
-      # does exactly that. Verified by hand at the mechanism: forced up, then
-      # home, then b false at 8 of 8 samples over 4s.
-      f3_up=0
+      # on a shared phone another session mapping a window does exactly that.
+      g14_down=0
       for _ in 1 2 3 4 5 6; do
         sleep 0.5
-        [[ $(osk_visible) == *true* ]] && f3_up=$((f3_up + 1))
+        [[ $(osk_visible) != *true* ]] && g14_down=$((g14_down + 1))
       done
-      if (( f3_up == 0 )); then
-        okac F3 "going home puts the keyboard away and it stays away (6 samples)"
+      if (( g14_down == 0 )); then
+        okac G14 "going home and opening a sheet leave the keyboard where it was"
       else
-        noac F3 "the keyboard was up in $f3_up of 6 samples after going home" \
-                "a home screen has nothing to type into; the keyboard leaves with the app"
+        noac G14 "the keyboard went down in $g14_down of 6 samples" \
+                 "only the back swipe and \$mod+i may lower it"
       fi
     else
-      no "the on-screen keyboard would not come up" "cannot test F3 without it"
+      no "the on-screen keyboard would not come up" "cannot test G14's second half without it"
     fi
     osk false
 
@@ -3980,7 +3997,7 @@ print(r["x"], r["y"], r["width"], r["height"])'
         i5d_before=$(ws_h)
         open_ "$sheet"
         close_ "$sheet"
-        # Sampled over 3s rather than read once, for F3's reason: a single late
+        # Sampled over 3s rather than read once, for G14's reason: a single late
         # reading cannot tell "never went up" from "went up and something put it
         # back down", and on a shared phone that second case is real.
         i5d_up=0

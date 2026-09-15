@@ -384,23 +384,6 @@ Item {
     drawerWindow.visible && drawerWindow.screen
     && drawerWindow.height < drawerWindow.screen.height - root.keyboardPanelHeight / 2
 
-  // I5d. Put the keyboard away on the way out.
-  //
-  // Fire-and-forget over the same bus name moarchy-toggle-keyboard drives, and
-  // execDetached rather than a Process for the reason F3 gives: the answer is
-  // not needed and the round trip is on the one path that has to feel instant.
-  function hideKeyboard(): void {
-    Quickshell.execDetached(["busctl", "--user", "call", "sm.puri.OSK0",
-                             "/sm/puri/OSK0", "sm.puri.OSK0", "SetVisible",
-                             "b", "false"])
-  }
-
-  // Set for the length of a dismissal that exists to open something else, and
-  // cleared by the close() it guards. Without it the hide above fires on the
-  // hand-off paths too and robs the successor of a keyboard it is about to
-  // want: tapping a Wi-Fi row in the drawer's own results would open the
-  // passphrase screen with the keyboard forced down under it.
-  property bool handingOff: false
 
   // The weight the bar and every other surface runs at (docs/style.md B3).
   // Light text on a dark ground reads thinner than it measures, and one
@@ -891,10 +874,6 @@ Item {
     // Settings' own open() hides this surface, the same as the shade's gear
     // does. Dismissing first anyway is the belt to those braces: a quiet open
     // never reaches the branch that hides anything.
-    //
-    // A hand-off, so the keyboard stays where it is (I5d). Settings is about to
-    // stand up a page that may be a passphrase field.
-    root.handingOff = true
     root.dismiss()
     root.shell.summon("moarchy.settings", JSON.stringify(payload))
   }
@@ -1148,9 +1127,6 @@ Item {
 
     // L5. The drawer opens on the grid, never on somebody's half-read card.
     root.closeDetail()
-    // A hand-off that never reached an unmap must not silence the next real
-    // close (I5d).
-    root.handingOff = false
     // A4. A drag that armed home and was then abandoned must not leave the
     // next opening sitting 80px high.
     root.homeHint = 0
@@ -1208,20 +1184,6 @@ Item {
     // active focus to a plain Item is what actually sends the disable.
     focusSink.forceActiveFocus()
 
-    // I5d. Releasing the field is not enough, and this is the half that was
-    // missing. The field is only one of the things that can have the keyboard
-    // up: this surface holds the seat's keyboard while it is open, so the
-    // window underneath is deactivated for that whole time and sway re-activates
-    // it on the unmap. Its text input re-enters and the keyboard rises -- a
-    // keyboard nobody asked for, standing on whatever is now on screen.
-    //
-    // Unconditional, for F3's reasons. Asking whether it was up first needs the
-    // DBus probe's round trip on a dismissal, and G2 already records what
-    // acting on a stale answer costs. The price is that leaving an overlay over
-    // an app you were typing in puts the keyboard away; that is the trade F3
-    // and G1 both already make.
-    if (!root.handingOff) root.hideKeyboard()
-
     root.query = ""
     // The card goes with the surface. Left standing it would be the first thing
     // on screen the next time the drawer came up, about an app that may not be
@@ -1267,10 +1229,6 @@ Item {
     if (!root.pluginSummonedBy(entry)) ShellApps.goToFreeWorkspace(root.shell)
 
     root.shell.appLibrary.launch(entry.id, root.shell.appLibrary.entryName(entry))
-    // A hand-off too (I5d): the app being launched is the one that gets to say
-    // whether it wants a keyboard, and a terminal asks for one the moment it
-    // maps. Forcing it down here would fight that on a race.
-    root.handingOff = true
     root.dismiss()
   }
 
@@ -1647,17 +1605,6 @@ Item {
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
 
-    // I5d. The unmap is the event that raises the keyboard, so it is also the
-    // event that has to put it away. `handingOff` is consumed here rather than
-    // in close(): for the drawer close() runs a whole animation before the
-    // surface goes, and a flag cleared at the top of it would be gone by the
-    // time this ran.
-    onVisibleChanged: {
-      if (visible) return
-      if (!root.handingOff) keyboardRetreat.restart()
-      root.handingOff = false
-    }
-
 
     WlrLayershell.namespace: "moarchy-drawer"
     WlrLayershell.layer: WlrLayer.Top
@@ -1683,9 +1630,9 @@ Item {
     // margin.bottom)` with no clamping, and sway delegates to it and adds no
     // validation of its own.
     //
-    // Gated on the search field, and this is the whole subtlety. A margin does
-    // not extend the surface "under the strip" -- it extends it past the bottom
-    // of the *usable area*, and what sits there depends on what else is
+    // Gated on the keyboard, and this is the whole subtlety. A margin does not
+    // extend the surface "under the strip" -- it extends it past the bottom of
+    // the *usable area*, and what sits there depends on what else is
     // reserving. With the keyboard down that is the strip, which is on Overlay
     // and draws over us: exactly what is wanted. With the keyboard up it is the
     // keyboard, which is on Top like this surface and mapped earlier, so the
@@ -1696,29 +1643,17 @@ Item {
     // to a sliver under the app labels. Content compensation does not help,
     // because the grid's bottomMargin moves the last *row* and not the surface.
     //
-    // Two signals, and the field is the *second* of them now (I5e).
+    // One signal, and it is the compositor's own configure (I5a, I5e). It lags
+    // the raise by a frame and cannot be wrong about it.
     //
-    // activeFocus leads: the field holding focus is what causes the keyboard to
-    // come up, so it flips before the keyboard has finished rising and the
-    // inset is already off when it arrives. What it cannot do is answer for a
-    // keyboard this surface did not raise, and I5d is the proof that happens --
-    // so on its own it left the inset on with the keyboard under it, and the
-    // sheet's last row painted over the top key row.
-    //
-    // `keyboardUp` covers exactly that gap. It reads the compositor's own
-    // configure, which lags the raise by a frame but cannot be wrong about it.
-    //
-    // OR rather than a replacement, deliberately. Either term alone drops the
-    // inset, so this can only turn it off in more cases than before and never
-    // in fewer -- which is what keeps I5a and I5c saying what they said.
-    //
-    // Safe against the drag, which was the reason to want it constant. Focus
-    // does not change mid-drag: a close moves it to focusSink only once the
-    // sheet is already on its way out, and while typing the height is constant
-    // for the whole gesture. closeTravel and the sheet's `y` both read
-    // drawerWindow.height and neither sees it move.
-    margins.bottom: (searchField.activeFocus || root.keyboardUp)
-                    ? 0 : -root.gestureStrip
+    // `searchField.activeFocus` used to lead it, as a stand-in for "the
+    // keyboard is up" on the reasoning that focusing the field is what raised
+    // it. Focusing a field raises nothing now (gestures.md G14), so the
+    // stand-in stopped standing for anything: left in, it dropped the inset on
+    // every tap in the search box with no keyboard underneath, and a band of
+    // the app showed through with the home pill drawn on it -- which is I1's
+    // failure, arriving from the fix for a different one.
+    margins.bottom: root.keyboardUp ? 0 : -root.gestureStrip
 
     // Plain Exclusive rather than the prime-then-OnDemand dance in
     // Ui/KeyboardPanel.qml: that exists so clicks can still reach the bar
@@ -3010,27 +2945,6 @@ Item {
     Item { id: focusSink }
   }
 
-
-  // I5d, second half. The keyboard is raised *by* the unmap -- sway re-activates
-  // the window this surface was covering and its text input re-enters -- so a
-  // SetVisible sent from close() is answering a question that has not been
-  // asked yet, and the handback undoes it.
-  //
-  // Measured with the close()-time call alone: the theme picker passed 0 of 6
-  // and the drawer and Settings failed 6 of 6, on identical code. The variable
-  // is how much runs between the call and the surface actually going away --
-  // the drawer animates its progress to 0 over 200ms and the busctl lands well
-  // inside that window.
-  //
-  // So it is repeated once the surface is down. Both are kept and they do
-  // different jobs: the early one takes the keyboard away as the sheet leaves,
-  // which is what stops it flashing, and this one is the only one guaranteed to
-  // be after the handback.
-  Timer {
-    id: keyboardRetreat
-    interval: 250
-    onTriggered: root.hideKeyboard()
-  }
 
   // Typing on a phone keyboard is slow enough that per-keystroke re-sorting of
   // every desktop entry is affordable, but the icon churn behind it is not.

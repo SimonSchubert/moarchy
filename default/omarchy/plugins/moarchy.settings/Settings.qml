@@ -141,37 +141,6 @@ Item {
   property var inputMap: ({})
   property string focusedInput: ""
 
-  // I5, and all that is left of it here. The keyboard's own inset is the
-  // compositor's business now: squeekboard is a layer surface with an exclusive
-  // zone, so sway resizes this *window* around it and the page reflows with no
-  // arithmetic of its own. The layer surface had to compute that itself,
-  // because a zero-exclusive-zone surface is arranged over the whole output
-  // whatever else is on it -- hence the negative bottom margin, the duplicated
-  // keyboard panel height and the height-versus-screen probe that stood in for
-  // asking whether the keyboard was up. All three are gone.
-  //
-  // I5d. Put the keyboard away on the way out. Kept, because the failure it
-  // names is not about layers: closing a screen hands the text input back to
-  // whatever sway focuses next, and that client can raise the keyboard with
-  // nothing focused here at all. Fire-and-forget for F3's reason: the answer is
-  // not needed and a dismissal must not wait on a round trip.
-  function hideKeyboard(): void {
-    Quickshell.execDetached(["busctl", "--user", "call", "sm.puri.OSK0",
-                             "/sm/puri/OSK0", "sm.puri.OSK0", "SetVisible",
-                             "b", "false"])
-  }
-
-  // Set for the length of a dismissal that exists to open something else, and
-  // cleared by the unmap it guards. Two callers left, and both really do unmap:
-  // dismiss() when it has somewhere to go back to, and dropQuiet(), which is
-  // putting away a surface that never mapped in the first place.
-  //
-  // It used to be set by every bridged launch as well, because a launch used to
-  // hide this screen. Nothing here hides any more (K8), so setting it on a
-  // launch would leave it standing until the next real close -- which would
-  // then skip the keyboard hide that close exists to do (I5d). A flag consumed
-  // by an event has to be set only by the paths that cause the event.
-  property bool handingOff: false
 
   function inputValue(id) {
     var v = root.inputMap[id]
@@ -408,7 +377,6 @@ Item {
     root.returnTo = ""
     // A hand-off that never reached an unmap must not silence the next real
     // close (I5d).
-    root.handingOff = false
     var start = "root"
     var resume = false
     var named = false
@@ -494,7 +462,6 @@ Item {
     // A quiet open never mapped and so never took the keyboard: there is no
     // handback to undo, and firing the hide here would put away a keyboard this
     // screen was never over (I5d).
-    root.handingOff = true
     root.hideOnly()
   }
 
@@ -597,7 +564,6 @@ Item {
     root.returnTo = ""
     // Going back to whoever opened us is a hand-off and the keyboard is theirs
     // to decide about; closing to nothing is not (I5d).
-    root.handingOff = back !== ""
     root.quit()
     if (back && root.shell && typeof root.shell.summon === "function")
       root.shell.summon(back, "{}")
@@ -867,13 +833,6 @@ Item {
       // (K1, K10) and go to their own workspace; the theme picker is still a
       // sheet and draws over this window the way it draws over any app. What
       // used to happen here -- hide Settings, then summon -- would close it.
-      //
-      // And `handingOff` is not set either, which it was. That flag exists to
-      // silence the keyboard hide on an unmap this screen is about to be
-      // replaced through, and it is consumed by the unmap. With nothing here
-      // unmapping, setting it would leave it standing until the *next* close --
-      // which would then skip the hide it is there to do, and leave a keyboard
-      // up over whatever came after (I5d).
       if (root.shell && typeof root.shell.summon === "function")
         root.shell.summon(target, JSON.stringify({ returnTo: root.pluginId,
                                                    page: here }))
@@ -922,9 +881,6 @@ Item {
     // on screen, and what is on screen is this. That is the honest outcome of a
     // window taking a picture of its own output, and the alternative -- hiding
     // first -- photographed the empty workspace Settings had been given.
-    //
-    // No `handingOff` here either, for the reason the plugin branch above
-    // gives: it guards an unmap, and there is no longer one to guard.
     root.runCommand(cmd)
   }
 
@@ -1180,27 +1136,6 @@ Item {
   }
 
 
-  // I5d, second half. The keyboard is raised *by* the unmap -- sway re-activates
-  // the window this surface was covering and its text input re-enters -- so a
-  // SetVisible sent from close() is answering a question that has not been
-  // asked yet, and the handback undoes it.
-  //
-  // Measured with the close()-time call alone: the theme picker passed 0 of 6
-  // and the drawer and Settings failed 6 of 6, on identical code. The variable
-  // is how much runs between the call and the surface actually going away --
-  // the drawer animates its progress to 0 over 200ms and the busctl lands well
-  // inside that window.
-  //
-  // So it is repeated once the surface is down. Both are kept and they do
-  // different jobs: the early one takes the keyboard away as the sheet leaves,
-  // which is what stops it flashing, and this one is the only one guaranteed to
-  // be after the handback.
-  Timer {
-    id: keyboardRetreat
-    interval: 250
-    onTriggered: root.hideKeyboard()
-  }
-
   // ---------------------------------------------------------------- window
   //
   // docs/gestures.md K. An ordinary toplevel: sway tiles it, gives it a
@@ -1227,17 +1162,10 @@ Item {
     glyph: "\ue615"
     color: root.surface
 
-    // I5d. The unmap is the event that raises the keyboard, so it is also the
-    // event that has to put it away. `handingOff` is consumed here rather than
-    // in close(): a hand-off may run a whole animation before the window goes,
-    // and a flag cleared at the top of it would be gone by the time this ran.
-    //
-    // A6, K6. The page stack resets here too, and here is the only place it can:
+    // A6, K6. The page stack resets here, and here is the only place it can:
     // the card flick closes this window through xdg_toplevel.close, which Qt
     // answers by hiding it without calling anything in this file.
     onUnmapped: {
-      if (!root.handingOff) keyboardRetreat.restart()
-      root.handingOff = false
       root.stack = ["root"]
       root.confirmText = ""
       root.confirmRow = null
