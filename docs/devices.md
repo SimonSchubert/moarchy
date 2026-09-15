@@ -870,11 +870,17 @@ Restated as a checklist, in build order. Each carries its state.
    landed. So on this handset the phone is a phone: Wi-Fi, Bluetooth, camera,
    vibration, sound, and calls in both directions with voice on them.
 
-   **Still open:** camera colour (D30); SMS, which should work on this SIM
-   (`CS: 'attached'`) and has not been sent or received; and **all of it on a
-   fresh image** — every fix from D27 onward was proved by hand-installing onto
-   a running phone, and the packaged form has been built but not yet flashed.
-   That last one is the gap most likely to be mistaken for done.
+   **Built and verified as an image, 2026-09-15:**
+   `moarchy-sargo-0.2.2-20260915`, 132 checks passing and one failing — the
+   dirty-tree provenance flag, from another session's uncommitted docs. The
+   verify suite now asserts every link of the Wi-Fi chain, the audio chain,
+   bootmac, and both halves of the camera fix.
+
+   **Still open:** the image has **not been flashed**. Every fix from D27
+   onward was proved by hand-installing onto a running phone, so this is the
+   first artifact that carries the packaged form of all of it, and nothing has
+   booted from it. That is the gap most likely to be mistaken for done. SMS is
+   also unsent and unreceived, and should work on this SIM (`CS: 'attached'`).
 
    The Bluetooth AC that the previous revision of this file declined to write
    is now written, because the measurement it was waiting for has been taken.

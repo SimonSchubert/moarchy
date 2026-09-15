@@ -288,6 +288,41 @@ fi
 
 # 4. And the numbers it needs. Its unit ConditionPathExists on this file, so a
 # missing one is not an error anywhere: the unit is simply skipped, for ever.
+sec "the camera's colour (D30)"
+# Two halves, each useless alone. The profile without a patched megapixels is
+# never read; the patched megapixels without a profile falls back to identity
+# colour matrices, which is the green preview this pair exists to fix.
+for _c in Rear Front; do
+  if [ -s "$R/usr/share/megapixels/config/google,b4s4-sdm670,$_c.dcp" ]; then
+    ok "camera profile for $_c present"
+  else
+    no "no google,b4s4-sdm670,$_c.dcp -- that camera renders green"
+  fi
+done
+
+# The patched lookup, asserted against the shipped binary rather than against
+# the package version: Arch's 2.1.0 and ours are both "2.1.0", and the only
+# difference that matters is this string.
+#
+# `grep -a` on the binary, NOT `strings`: binutils is not in this container,
+# and a missing `strings` makes every pattern fail -- which reads as "the bad
+# string is absent" and passes the second check. That false pass was caught by
+# the first check failing beside it, which is luck rather than design.
+if [ -x "$R/usr/bin/megapixels" ]; then
+  if grep -aq '/megapixels/config/%s,%s\.dcp' "$R/usr/bin/megapixels"; then
+    ok "megapixels looks up profiles by <model>,<camera>.dcp"
+  else
+    no "megapixels is the unpatched build -- it cannot find a profile at all (D30)"
+  fi
+  if grep -aq '/megapixels/config/%s\.conf' "$R/usr/bin/megapixels"; then
+    no "megapixels still has the .conf lookup that shadows libmegapixels' device config"
+  else
+    ok "the .conf lookup that breaks the camera is gone"
+  fi
+else
+  no "no /usr/bin/megapixels in the image"
+fi
+
 if [ -s "$R/usr/share/q6voiced/q6voiced.conf" ]; then
   if grep -q '^q6voice_device=' "$R/usr/share/q6voiced/q6voiced.conf"; then
     ok "q6voiced.conf names a voice PCM ($(sed -n 's/^q6voice_device=/device /p' "$R/usr/share/q6voiced/q6voiced.conf"))"
