@@ -481,15 +481,25 @@ Item {
     // start with "omarchy.". Since the rename those two differ by a single
     // transposition (m-o-a versus o-m-a), so this is worth stating rather
     // than leaving to the eye: it reads like a prefix and is not one.
+    //
+    // A set, not a list (refactor.md N1). The host declares `openPanelIds: ({})` and keys
+    // it by plugin id, so `.length` is undefined -- which is how this branch
+    // came to never run once, with nothing to say so: a back swipe over a
+    // vendored popup fell straight past it to the focused window and closed
+    // the app underneath the popup instead. It is B4's failure on the one path
+    // B4 did not cover, and Splash.qml has been reading the same property
+    // correctly, as a map, the whole time.
+    //
+    // The last match rather than the first. The host rebuilds the object by
+    // copying what was in it and adding the new id, so key order is open
+    // order and the popup summoned most recently is the one on top.
     var open = root.shell ? root.shell.openPanelIds : null
-    if (open && open.length) {
-      for (var j = open.length - 1; j >= 0; j--) {
-        var candidate = String(open[j] || "")
-        if (candidate.indexOf("omarchy.") === 0 && candidate !== "omarchy.bar")
-          return candidate
-      }
+    var top = ""
+    for (var id in open) {
+      if (open[id] !== true) continue
+      if (id.indexOf("omarchy.") === 0 && id !== "omarchy.bar") top = id
     }
-    return ""
+    return top
   }
 
   // B3. Everything this shell had drawn over the workspace, put away before it
@@ -525,9 +535,11 @@ Item {
   // goBack() answers true when it consumed the gesture; false means "nothing
   // left, close me".
   //
-  // No sheet in overlayIds owns one today -- the three screens that do are
-  // windows and reach performBack()'s own K7 branch instead. Kept because the
-  // next sheet with a stack must not have to rediscover the ordering.
+  // The drawer owns one: goBack() retires its app-detail card, so this branch
+  // fires on every back swipe over an open card. It said the opposite until
+  // refactor.md N4 -- that no sheet in overlayIds owned a stack and this was kept for a
+  // future one -- which had been untrue since the card landed, and a comment
+  // calling a live branch dormant is an invitation to delete it.
   function backTopmostOverlay(): bool {
     var id = root.topmostOverlay()
     if (!id || !root.shell) return false
