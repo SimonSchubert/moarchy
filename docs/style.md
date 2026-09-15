@@ -115,8 +115,15 @@ edge rather than centred may stay a plain `Text`.
 | Layer | Source | Surfaces |
 | --- | --- | --- |
 | bar | `Color.bar.*` | `moarchy.bar` |
-| full-screen | `Color.menu.*` | drawer, Settings, Themes |
-| popup / pull-down | `Color.popups.*` | shade, Wi-Fi, Bluetooth |
+| full-screen | `Color.menu.*` | drawer, Settings, Themes, Device |
+| popup / pull-down | `Color.popups.*` | shade, Wi-Fi, Bluetooth, SIM |
+
+Every token named here is one upstream's `Color` singleton actually has:
+`foreground`, `background`, `accent`, `urgent`, `muted`, and a nested object per
+layer. It has no Material role names — no `surface`, `onSurface`, `primary` — and
+`moarchy.device` read five of those for as long as it existed, behind C4 guards
+that were therefore always false. It drew the hex beside each one and never once
+followed the theme (`refactor.md` J1a).
 
 **C2** Each surface declares the same six roles at the top of the file, and the
 body refers only to those — never to `Color.*` inline. The recipe:

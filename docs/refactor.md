@@ -634,6 +634,27 @@ serves both palettes, which is the thing a singleton could not do — **E6** and
 → `grep -rlc 'property color containerHigh' default/omarchy/plugins/` matches
 only the common dir
 
+**J1a — a defect, found by asking what J1 was actually deduplicating.** Every
+colour token a plugin reads exists in upstream's `Color` singleton.
+`moarchy.device` read `Color.surface`, `Color.surfaceContainer`,
+`Color.onSurface`, `Color.onSurfaceVariant` and `Color.primary` — Material role
+names that singleton has never carried, at the pinned ref or before it. Each sat
+behind the `typeof Color` guard C4 permits, so all five were false and the screen
+drew the hex written beside each one: it has never followed the theme, while its
+own comment said it recoloured with everything else.
+
+> It is the third time this one file has claimed in a comment to match the others
+> while matching none of them — raw pixels, then no font family, now the palette —
+> and each time the claim was in the comment rather than in a check.
+> `scripts/style-check.sh` cannot check this one from the worktree: upstream's
+> `Color.qml` is fetched at build time and is not here. What it *can* do is what
+> it already does — refuse a hex outside a guard — and the guard is the part that
+> was wrong. So this is recorded rather than automated, and `style.md` C1 now
+> lists the tokens that exist.
+→ `grep -rn 'Color\.\(surface\|onSurface\|primary\)' default/omarchy/plugins/`
+matches only comments, and on the device the Device screen changes colour with
+the theme
+
 **J2** A shell probe is one component. The `Process` + `StdioCollector` +
 `bash -c` idiom stands about fifteen times, and the generation guard that keeps
 a stale answer from landing on a new question is copied five more.

@@ -41,13 +41,29 @@ Item {
   property bool opened: false
   property string returnTo: ""
 
-  // Palette, from the shell's theme singleton where it exists so this screen
-  // recolours with everything else, with literals only as a fallback.
-  readonly property color surface: (typeof Color !== "undefined" && Color.surface) ? Color.surface : "#1a1b26"
-  readonly property color container: (typeof Color !== "undefined" && Color.surfaceContainer) ? Color.surfaceContainer : "#24283b"
-  readonly property color textOnSurface: (typeof Color !== "undefined" && Color.onSurface) ? Color.onSurface : "#c0caf5"
-  readonly property color subdued: (typeof Color !== "undefined" && Color.onSurfaceVariant) ? Color.onSurfaceVariant : "#787c99"
-  readonly property color accent: (typeof Color !== "undefined" && Color.primary) ? Color.primary : "#7aa2f7"
+  // Palette, C1's full-screen block: this is a Top layer surface like the drawer
+  // and the theme picker, so it reads `Color.menu.*`.
+  //
+  // It read `Color.surface`, `Color.surfaceContainer`, `Color.onSurface`,
+  // `Color.onSurfaceVariant` and `Color.primary` until 2026-09-15. Those are
+  // Material role names and upstream's `Color` singleton has never had any of
+  // them -- it carries `foreground`, `background`, `accent`, `urgent`, `muted`
+  // and a nested object per layer. So all five guards were false, every colour
+  // on this screen was the hex written beside it, and the comment here said the
+  // screen recoloured with everything else while it had never recoloured once.
+  //
+  // C4 permits a hex behind a `typeof Color` guard, which is exactly why no
+  // check caught this: the guard was the thing that was wrong. It is the third
+  // time this one file has claimed in a comment to match the others while
+  // matching none of them -- raw pixels, then no font family, now the palette.
+  readonly property color surface: Color.menu.background
+  readonly property color textOnSurface: Color.menu.text
+  readonly property color container: Util.alpha(Color.menu.text, 0.08)
+  readonly property color accent: Color.accent
+
+  // C3: computed against the surface it is read on, never fixed at an alpha.
+  readonly property color subdued: Theme.readableOn(root.surface, Color.menu.text,
+                                                   0.55, 4.5)
 
   // The veil is shared (docs/refactor.md E2); the default ink is this
   // surface's own, which is the half a shared type cannot know (style.md H2).
