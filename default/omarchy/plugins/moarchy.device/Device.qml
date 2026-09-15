@@ -163,8 +163,15 @@ Item {
       printf 'cores=%s\\n' "$(grep -c ^processor /proc/cpuinfo)"
       f=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq 2>/dev/null)
       [ -n "$f" ] && printf 'mhz=%s\\n' "$((f/1000))"
-      printf 'batt=%s\\n' "$(cat /sys/class/power_supply/axp20x-battery/capacity 2>/dev/null)"
-      printf 'battstatus=%s\\n' "$(cat /sys/class/power_supply/axp20x-battery/status 2>/dev/null)"
+      # The first supply that says it is a battery, not a named one
+      # (refactor.md N3, devices.md D3). This read axp20x-battery -- the PinePhone's PMIC --
+      # behind the same 2>/dev/null the other reads use, so on any other phone
+      # the screen reported no battery rather than reporting an error.
+      for d in /sys/class/power_supply/*/; do
+        [ "$(cat "$d/type" 2>/dev/null)" = Battery ] && { b=$d; break; }
+      done
+      printf 'batt=%s\\n' "$(cat "$b/capacity" 2>/dev/null)"
+      printf 'battstatus=%s\\n' "$(cat "$b/status" 2>/dev/null)"
       hot=0
       for z in /sys/class/thermal/thermal_zone*/temp; do
         t=$(cat "$z" 2>/dev/null); t=$((t/1000))

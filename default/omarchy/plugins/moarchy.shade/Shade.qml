@@ -872,10 +872,16 @@ Item {
     // Sway has no "rotate by 90" verb, so read the current transform and pick
     // the other one. Detached and fire-and-forget: the output reconfigure is
     // what tells us it worked, and there is nothing useful to do if it did not.
+    //
+    // The output is asked for by the same call that reads its transform, not
+    // named (refactor.md N2, devices.md D3). This said `DSI-1` until then -- the panel this
+    // was written on -- which made it the one hardcoded output name in the tree
+    // and a silent no-op on any phone whose panel is called something else.
     Quickshell.execDetached(["bash", "-c",
-      "t=$(swaymsg -t get_outputs | python3 -c 'import json,sys;print(json.load(sys.stdin)[0].get(\"transform\",\"normal\"))'); " +
-      "case $t in normal) n=90;; *) n=normal;; esac; " +
-      "swaymsg output DSI-1 transform $n"])
+      "s=$(swaymsg -t get_outputs | python3 -c 'import json,sys;d=json.load(sys.stdin)[0];print(d[\"name\"], d.get(\"transform\",\"normal\"))'); " +
+      "set -- $s; " +
+      "case $2 in normal) n=90;; *) n=normal;; esac; " +
+      "swaymsg output \"$1\" transform $n"])
   }
 
   // ---------------------------------------------------- notification history
