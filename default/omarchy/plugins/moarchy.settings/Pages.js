@@ -156,6 +156,15 @@ var PAGES = {
     keywords: "bt pair pairing headset headphones speaker",
     run: "omarchy-shell shell summon moarchy.bluetooth '{\"returnTo\":\"moarchy.settings\",\"page\":\"net\"}'",
     launch: "none" },
+  // Shown only while the SIM is actually asking for something, because a row
+  // that says "SIM PIN" on a phone with no SIM, or one already unlocked, is a
+  // row you learn to scroll past. `when` is the same mechanism the QR row
+  // below uses.
+  { id: "sim", type: "action", glyph: "󰯙", label: "Unlock SIM",
+    when: "[[ $(moarchy-sim status) == *lock=sim-p* ]]",
+    keywords: "sim pin puk unlock modem cellular mobile carrier",
+    run: "omarchy-shell shell summon moarchy.sim '{\"returnTo\":\"moarchy.settings\",\"page\":\"net\"}'",
+    launch: "none" },
   { id: "qr", type: "action", glyph: "󰐲", label: "Wi-Fi QR code",
     when: "[[ $(omarchy-network-status) == wifi* ]]",
     run: "omarchy-shell shell summon omarchy.wifiqr", launch: "none",

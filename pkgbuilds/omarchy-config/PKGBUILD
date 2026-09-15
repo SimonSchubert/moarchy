@@ -46,7 +46,13 @@ pkgver=${_ver#v}
 # and the web app artwork installed into an icon theme (docs/apps.md B3) -- so
 # without this line every phone in the field would keep the package it has and
 # neither would ever arrive.
-pkgrel=2
+# 3: the shell.json patch gained moarchy.sim, and a phone only sees a new
+# plugin when this package is rebuilt. pkgver comes from the upstream pin and
+# does not move for our patch, so docker/build-packages.sh would keep the
+# existing artifact -- which is exactly what happened to moarchy.recents: it was
+# deleted from the patch in d258680 and the packaged shell.json on a phone
+# flashed 2026-09-15 still listed it, naming a plugin that is not there.
+pkgrel=3
 pkgdesc="Omarchy's configuration and theme layer, ported to Sway"
 arch=('any')
 url="$_url"

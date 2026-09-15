@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "moarchy.sim",
+  "name": "SIM",
+  "version": "1.0.0",
+  "author": "moarchy",
+  "description": "Unlock the SIM with a keypad, and see how many attempts are left.",
+  "kinds": [
+    "overlay"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "Sim.qml"
+  }
+}

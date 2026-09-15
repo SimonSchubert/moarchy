@@ -14,7 +14,7 @@
 // ---------------------------------------------------------------------------
 // Why a window and not a layer surface
 // ---------------------------------------------------------------------------
-// docs/gestures.md K. Settings, Wi-Fi and Bluetooth are screens you sit in, and
+// docs/gestures.md K. Settings, Wi-Fi, Bluetooth and SIM are screens you sit in, and
 // for two releases the shell emulated an app around each of them: a switcher
 // card built by hand, a workspace claimed on their behalf, a hide fired from a
 // focus watcher. Every one of those re-implemented something sway already does

@@ -1,0 +1,156 @@
+#!/bin/bash
+# The SIM lock, for a screen rather than a shell.
+#
+# A PIN is four to eight digits typed under pressure, with a counter that ends
+# in a PUK you probably do not have. `mmcli -m any --pin=1234` is the wrong
+# interface for that on a phone: it is an ssh session away, it says nothing
+# about how many tries are left until you have spent one, and every wrong
+# answer looks the same as a modem that was not listening.
+#
+# So the shell gets a keypad (plugins/moarchy.sim) and this is the half that
+# talks to ModemManager. Splitting it this way is not ceremony: QML cannot be
+# tested without a running shell, and this can be run against a locked SIM from
+# anywhere, which is how the retry counting below was checked without spending
+# a retry.
+#
+# `-m any` everywhere, never an index. ModemManager renumbers the modem when it
+# re-enumerates -- inserting a SIM took this phone from Modem/0 to Modem/1 --
+# so an index captured a moment ago names nothing.
+set -uo pipefail
+
+MMCLI=/usr/bin/mmcli
+
+# sudo, and passwordless by design on this phone (docs/structure.md; the
+# drop-in is deliberate). ModemManager's Device.Control action is what
+# --pin goes through, and from the shell's session a polkit prompt would land
+# on top of the very keypad that asked for it -- a dialog about the dialog.
+# Reads need no privilege and do not get sudo.
+_mm_root() { sudo -n "$MMCLI" "$@" 2>&1; }
+
+usage() {
+  cat <<'EOF'
+moarchy-sim status         what the SIM is doing, as key=value lines
+moarchy-sim unlock <pin>   try a PIN; exit 0 unlocked, 1 wrong, 2 PUK, 3 no modem
+EOF
+}
+
+# The fields the keypad needs, flattened. mmcli's own --output-keyvalue is
+# close, but it answers "--" for absent values and spells the lock state across
+# three keys; a UI wants one line per question it actually asks.
+#
+#   present   is there a modem at all
+#   state     mmcli's modem.generic.state, verbatim
+#   lock      sim-pin | sim-puk | none   -- what is being asked for
+#   retries   attempts left for whatever `lock` names, or -1 if unknown
+#   operator  once registered
+status() {
+  local kv
+  kv=$("$MMCLI" -m any --output-keyvalue 2>/dev/null)
+  if [ -z "$kv" ]; then
+    echo "present=no"
+    echo "state="
+    echo "lock=none"
+    echo "retries=-1"
+    echo "operator="
+    return 0
+  fi
+
+  local state lock operator retries
+  state=$(printf '%s\n' "$kv" | sed -n 's/^modem\.generic\.state *: *//p' | head -1)
+  lock=$(printf '%s\n' "$kv" | sed -n 's/^modem\.generic\.unlock-required *: *//p' | head -1)
+  operator=$(printf '%s\n' "$kv" | sed -n 's/^modem\.3gpp\.operator-name *: *//p' | head -1)
+
+  # unlock-retries is a LIST, and the entry that matters is the one naming the
+  # lock currently being asked for -- "sim-pin (3)". Reading value[1] blindly
+  # gets you sim-pin's count while the modem is asking for the PUK, which is
+  # the number that would be wrong at exactly the moment it matters most.
+  retries=-1
+  if [ -n "$lock" ] && [ "$lock" != "--" ]; then
+    retries=$(printf '%s\n' "$kv" |
+      sed -n "s/^modem\.generic\.unlock-retries\.value\[[0-9]*\] *: *$lock (\([0-9]*\))$/\1/p" |
+      head -1)
+    [ -n "$retries" ] || retries=-1
+  fi
+
+  [ "$lock" = "--" ] && lock=none
+  [ "$operator" = "--" ] && operator=
+  echo "present=yes"
+  echo "state=${state:-}"
+  echo "lock=${lock:-none}"
+  echo "retries=$retries"
+  echo "operator=$operator"
+}
+
+unlock() {
+  local pin="$1" out
+
+  # Refuse before spending anything. The modem is the only counter that
+  # matters, so this checks what it is actually asking for rather than assuming
+  # a PIN: sending a PIN to a modem waiting for a PUK is a wasted attempt
+  # against a counter that does not forgive.
+  local lock retries
+  lock=$(status | sed -n 's/^lock=//p')
+  retries=$(status | sed -n 's/^retries=//p')
+
+  case "$lock" in
+    none)
+      echo "The SIM is not locked." >&2
+      return 0 ;;
+    sim-puk)
+      echo "This SIM wants its PUK, not a PIN. A PIN here is a wasted attempt." >&2
+      return 2 ;;
+    sim-pin) ;;
+    *)
+      echo "No modem is asking for a PIN (lock=$lock)." >&2
+      return 3 ;;
+  esac
+
+  case "$pin" in
+    ''|*[!0-9]*)
+      echo "A PIN is digits only." >&2
+      return 1 ;;
+  esac
+  if [ ${#pin} -lt 4 ] || [ ${#pin} -gt 8 ]; then
+    # Checked here rather than left to the modem, because the modem counts a
+    # malformed PIN as an attempt just like a wrong one.
+    echo "A PIN is 4 to 8 digits; that one is ${#pin}." >&2
+    return 1
+  fi
+
+  out=$(_mm_root -m any --pin="$pin")
+  if [ $? -eq 0 ] && ! printf '%s' "$out" | grep -qi error; then
+    echo "unlocked"
+    return 0
+  fi
+
+  # One human sentence on stderr, and the raw mmcli text only to the journal.
+  #
+  # The keypad shows stderr verbatim, and mmcli's own failure is
+  # "error: couldn't send PIN: 'GDBus.Error:org.freedesktop.ModemManager1.Error.MobileEquipment.IncorrectPassword: ...'"
+  # -- which on a 360px screen is a wall that hides the only number that
+  # matters. Say what it cost instead; "wrong PIN" with no count is how
+  # somebody tries twice more and lands on the PUK.
+  printf 'mmcli: %s\n' "$out" | systemd-cat -t moarchy-sim -p warning 2>/dev/null || true
+
+  local now_lock now_left
+  now_lock=$(status | sed -n 's/^lock=//p')
+  now_left=$(status | sed -n 's/^retries=//p')
+
+  if [ "$now_lock" = "sim-puk" ]; then
+    echo "Wrong PIN — the SIM is now locked and needs its PUK." >&2
+    return 2
+  fi
+  case "$now_left" in
+    1) echo "Wrong PIN — 1 attempt left, then the SIM needs its PUK." >&2 ;;
+    ''|-1) echo "That PIN was not accepted." >&2 ;;
+    *) echo "Wrong PIN — $now_left attempts left." >&2 ;;
+  esac
+  return 1
+}
+
+case "${1:-}" in
+  status) status ;;
+  unlock) [ $# -ge 2 ] || { usage >&2; exit 64; }; unlock "$2" ;;
+  -h|--help|help) usage ;;
+  *) usage >&2; exit 64 ;;
+esac

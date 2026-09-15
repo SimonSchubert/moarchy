@@ -13,7 +13,7 @@ index e6202da..b16db36 100644
            "verticalFormat": "HH\n\u2014\nmm"
          },
          {
-@@ -60,7 +60,36 @@
+@@ -60,7 +60,39 @@
            "id": "omarchy.power"
          }
        ]
@@ -37,6 +37,9 @@ index e6202da..b16db36 100644
 +    },
 +    {
 +      "id": "moarchy.bluetooth"
++    },
++    {
++      "id": "moarchy.sim"
 +    },
 +    {
 +      "id": "moarchy.themes"
@@ -514,7 +517,7 @@ index 0cc0575..235daf6 100644
      var key = String(manifest.id || "")
      if (!key) return null
      if (_pluginRegistryApis[key]) return _pluginRegistryApis[key]
-@@ -768,7 +799,7 @@ ShellRoot {
+@@ -768,8 +799,8 @@ ShellRoot {
    }
  
    function pluginBarWidgetRegistryFor(manifest) {

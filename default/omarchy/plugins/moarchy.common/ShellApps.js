@@ -11,7 +11,7 @@
 // how that happens; this is the file that stops there being one.
 .pragma library
 
-var IDS = ["moarchy.settings", "moarchy.wifi", "moarchy.bluetooth"]
+var IDS = ["moarchy.settings", "moarchy.wifi", "moarchy.bluetooth", "moarchy.sim"]
 
 function ids() {
   return IDS.slice()

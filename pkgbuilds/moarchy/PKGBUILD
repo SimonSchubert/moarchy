@@ -87,7 +87,10 @@ pkgver=$_ver
 # gnome-text-editor default, and both upstream scripts falling back to a binary
 # that its next upgrade removes -- so this is precisely the case the rule is
 # for.
-pkgrel=3
+# 4: bin/moarchy-sim and the moarchy.sim plugin. Both are shipped by this
+# package, and pkgver comes from manifest.toml -- without the bump the builder
+# keeps the existing artifact and the new screen reaches no phone.
+pkgrel=4
 pkgdesc="Omarchy's look, keybindings and theming on a phone, under Sway"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'

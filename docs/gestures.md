@@ -17,7 +17,7 @@ other 39, and the six the suites run without a `→` line here, are listed under
 | **strip** | The reserved 20px band at the very bottom holding the home pill. Owned by `moarchy.gestures`. |
 | **home screen** | A sway workspace with no windows on it: wallpaper, bar, pill. One app per workspace, so an empty workspace *is* the home screen. |
 | **app** | A workspace with a window on it, or Settings, which is treated as one (K). |
-| **shell app** | A screen this shell draws itself and maps as an ordinary window, so every criterion about apps applies to it. Three of them: Settings, Wi-Fi and Bluetooth (K). |
+| **shell app** | A screen this shell draws itself and maps as an ordinary window, so every criterion about apps applies to it. Four of them: Settings, Wi-Fi, Bluetooth and SIM (K). |
 | **drawer** | The searchable app grid, with a shelf of open apps along its top (`moarchy.drawer`). Every up-swipe raises this. |
 | **shade** | The pull-down from the top edge (`moarchy.shade`). |
 | **travel** | Drag distance as a fraction of the sheet being dragged — the drawer's own height, ~694 logical px. One pixel of finger is one pixel of sheet, on every surface that drags it (D2a). |
@@ -652,7 +652,7 @@ you navigate — so it behaves like the apps beside it. A layer surface has no
 workspace, and every attempt to give it one is a re-implementation of window
 management inside a shell plugin.
 
-So **Settings, Wi-Fi and Bluetooth are ordinary Wayland toplevels**, drawn by
+So **Settings, Wi-Fi, Bluetooth and SIM are ordinary Wayland toplevels**, drawn by
 the shell process and mapped as windows. This section is short because that is
 the whole of it: A, B, F, G and M apply to them unchanged, with no clause of
 their own.
