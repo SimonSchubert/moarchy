@@ -938,6 +938,22 @@ Ordered by value over risk, not by section number.
     Before this file can be deleted, not after: `refactor.md` is the only record
     of the layer rule, and this file has an end. *Done 2026-09-15.*
 
+**None of the second pass has been on hardware.** Every criterion above was
+settled statically -- `scripts/style-check.sh` (11 checks, 0 failures),
+`node scripts/sheet-test.js`, and the pinned upstream source for the four
+questions about the host contract. The phone was held by another session for a
+gesture measurement the whole time, and §G1 and §G3 are therefore **open**.
+
+`scripts/verify-refactor.sh` is what remains to run, on the phone, after
+deploying `default/omarchy/plugins` to `/usr/share/moarchy/plugins`: nine
+targeted checks, each an A/B or a reading that can only be right if the change
+works. Three of the changes fail *silently* if any of this is wrong, which is why
+it is a script and not a paragraph -- 16 rewired probes (a dead `answered()`
+signal takes brightness, airplane, torch and the notification count with it), 10
+rewired controls (a sheet that cannot be dragged from a tile), and the palette on
+a whole screen. Then `bin/moarchy-selftest` and `--gestures` for §G1, and the
+coverage count for §G3.
+
 **What the second pass actually did, 2026-09-15.** §N, §H1–H3 and H5, §I3, §B1,
 §B2, §I1–I2, §J1a, §J2, §J6 and §J8 landed; §H4, §I4, §E5, §J1 and §J7 are
 withdrawn with the measurement that withdrew each; §J3–J5, §K, §L and §M are not
