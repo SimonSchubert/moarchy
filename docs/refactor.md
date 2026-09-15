@@ -19,7 +19,7 @@ Two of the duplicates have already drifted, and one of those is a defect
 | --- | --- |
 | **copy** | The same code written out in two files. Not a call to shared code — a second text of it. |
 | **canonical list** | A list of surface ids written once and read everywhere. `gestures.md` A8 already says why: "Three hand-kept lists of overlay ids is how Settings and Themes came to be missing from the back gesture." |
-| **shell app** | `gestures.md` K10: a screen this shell draws and maps as an ordinary window. Three of them — Settings, Wi-Fi, Bluetooth. |
+| **shell app** | `gestures.md` K10: a screen this shell draws and maps as an ordinary window. Four of them — Settings, Wi-Fi, Bluetooth and SIM. |
 | **sheet** | A full-screen surface that is dismissed rather than left running: shade, drawer, themes. |
 | **the common dir** | `default/omarchy/plugins/moarchy.common/`, proposed in §E. It has no `manifest.json` and is not a plugin. |
 
@@ -276,11 +276,18 @@ than failing loudly.
 
 **E4** *Not done, and not by omission.* The strip height is one number. Seven
 declarations of `Style.space(20)`
-today — `Service.qml:68` as `stripHeight`, and `gestureStrip` in `Shade.qml:89`,
-`Themes.qml:76`, `Wifi.qml:88`, `Bluetooth.qml:108`, `Drawer.qml:223`,
-`Settings.qml:158` — each carrying a comment saying it must match the others.
-The comments are right, which is the problem: a constraint stated six times is
+— `stripHeight` in `moarchy.gestures`, `gestureStrip` in the shade, the drawer
+and the theme picker — each carrying a comment saying it must match the others.
+The comments are right, which is the problem: a constraint stated four times is
 not enforced once.
+
+> **Amended 2026-09-15: four, not seven.** This AC named seven and listed
+> Wi-Fi, Bluetooth and Settings among them. Those three became windows (§B3) and
+> dropped their declarations with the layer surface that needed them, so three
+> of the seven went away without anyone closing anything. The count is the
+> claim, so the claim is corrected here rather than restated in §M — and the
+> line numbers are gone, because all seven of them had moved by the time this
+> was read back.
 
 > **Blocked on a mechanism E1 did not test.** This number is
 > `Style.space(20)`, and `Style` is a QML singleton from `qs.Commons` — which a
@@ -290,10 +297,13 @@ not enforced once.
 > no qmldir*; adding one changes the shape and has to be proved on the device
 > before six files depend on it. Deliberately left rather than guessed.
 
-**E5** *Not done.* The extended-sheet margin (`gestures.md` I5a) is written
-once. Five
-copies, three spellings of the focus condition: `Wifi.qml:479`,
-`Bluetooth.qml:631`, `Themes.qml:358`, `Drawer.qml:756`, `Settings.qml:1130`.
+**E5** The extended-sheet margin (`gestures.md` I5a) is written once. **Closed
+by §I4**, which is the same block of the same files: the margin belongs to the
+sheet header, and a second component for it would be a second place to forget.
+
+> **Amended 2026-09-15: two, not five.** As with E4, three of the five named
+> here are shell apps now and have no margin to write. What is left is the theme
+> picker and the drawer.
 
 **E6** `style.md` C2 is amended to match. It currently justifies per-surface
 palette blocks with "a shared singleton can only serve one of them" — true of a
@@ -418,7 +428,11 @@ silently cannot be dragged, which is a live failure mode and not a tidiness
 question. A sheet-wide handler cannot replace it: `Drawer.qml` and `Shade.qml`
 both record, from measurement, that a `DragHandler` over the content gets one
 translation event per gesture because every content `MouseArea` holds the
-exclusive grab.
+exclusive grab. **Taken up as §H3**, which keeps the twelve areas and shares
+what each of them forwards.
+
+Three more copies of the tracker's own arithmetic were found outside the six
+areas §F converted, one of them a whole gesture with no watchdog. **§H.**
 
 ---
 
@@ -443,6 +457,294 @@ specification, not changing it.
 are three trees (`three-trees-stale-copy`), and §E adds a directory that must
 arrive in all of them — a stale common dir fails exactly like the missing import
 E1 tests for.
+
+---
+
+## H. One drag tracker, for every gesture
+
+§F unified six input areas on four surfaces and stopped. Four copies of the same
+arithmetic stand outside them, one of them a whole gesture. This is the rest of
+§F rather than a new idea, and the citations below are greppable rather than
+line-numbered, because every line number §E4 and §B2 carry went stale inside a
+week.
+
+**H1** The back edge is a `DragTracker` instance. It keeps its own start
+coordinates, its own 0..1 clamp, its own axis-dominance test, its own trace ring
+— and alone among the five gestures **no watchdog**, which is the one thing §F2
+exists to guarantee. A back swipe interrupted by a lost seat leaves the drawn
+cue on screen with nothing to retire it.
+→ `grep -n edgeStart moarchy.gestures/Service.qml` matches nothing, and a touch
+held on the back edge past the watchdog leaves `omarchy-shell gestures
+backTrace` ending `-2`
+
+**H2** The tracker measures one axis, named by the surface. `openDirection`
+already reduced four surfaces to one signed factor; the back edge travels on X
+and takes the same reduction rather than a second implementation.
+→ `grep -nE 'sceneX|\.x\b' moarchy.common/DragTracker.qml` matches the axis
+input and its comments, and nothing that assumes Y
+
+**H3** A control that presses a tracker declares it, rather than writing out the
+four handlers. The quartet stands twelve times — eight in `Shade.qml`, four in
+`Drawer.qml` — and a control that omits one of the four silently cannot be
+dragged, or strands the watchdog §F2 added (§F8).
+→ `scripts/style-check.sh` asserts that every drag-forwarding area in a sheet is
+the shared component and that it names a tracker
+
+**H4** The drawer's shelf-tile flick and the shade's brightness slider read
+their own tracker, not another one's origin. Both reach through the sheet
+tracker's sampled press coordinates and both carry their own copy of the
+slop-and-axis test that `DragTracker` already applies.
+→ `grep -n 'sheetPressX\|sheetPressY' moarchy.drawer/Drawer.qml
+moarchy.shade/Shade.qml` matches nothing
+
+**H5** A cancel marks the trace on every surface that has one. §F2's evidence
+sentence — "a real cancel ends `-1`" — is true of the drawer's handle and of
+nothing else: the drawer's sheet and both of the shade's trackers leave the
+trace unmarked, so that check passes today for three surfaces that cannot fail
+it (`green-is-not-verified`).
+→ after a cancel on either surface, `omarchy-shell drawer dragTrace` and
+`omarchy-shell shade sheet` both end `-1`
+
+---
+
+## I. One sheet
+
+Seven plugins write out the same lifecycle, and five of them write out the same
+guard inside it. §B2 tabulated the guard and §B6 found its rule — the layer a
+sheet sits on, not a list of ids — and both were held for §E1 to answer. It is
+answered.
+
+**I1** The sheet lifecycle is one component. `open`, `close`, `dismiss` and
+`returnTo` live in the common dir, and a sheet declares which layer it is on
+rather than naming the sheets it displaces.
+→ `grep -rn 'hide("moarchy' default/omarchy/plugins/` matches only the common
+dir
+
+**I2** No plugin spells another sheet's id inside its own `open()`. §B2's table
+is four spellings of one rule; this closes it by deriving the answer rather than
+by correcting the four.
+→ the same grep as I1, and `omarchy-shell themes open` with the drawer up leaves
+`drawer state` == `closed` while `shade open` over the drawer leaves it `open`
+(§B6, both directions)
+
+**I3** The sheet header is one component — the title, the circular back button,
+its veil and its glyph. Four copies at about thirty-five lines each.
+→ `grep -rn 'id: backButton' default/omarchy/plugins/` matches only the common
+dir
+
+**I4** The extended-sheet margin arrives with the header. This is **E5**, which
+is the same block of the same four files; it is closed here rather than beside
+here.
+→ `grep -rn 'extendedMargin\|Style.space(20) +' default/omarchy/plugins/`
+matches only the common dir
+
+---
+
+## J. One set of shared parts
+
+Not one abstraction — a list of them, each small, each removing a class rather
+than an instance. They are one section because they are one pass over the same
+nine files.
+
+**J1** The colour roles are declared once. Eight plugins write out six to eight
+role bindings over the two palettes `style.md` C1 records, and the arithmetic
+under them is `Theme.js` already. A component taking the layer as a property
+serves both palettes, which is the thing a singleton could not do — **E6** and
+`style.md` C2 are amended to say so.
+→ `grep -rlc 'property color containerHigh' default/omarchy/plugins/` matches
+only the common dir
+
+**J2** A shell probe is one component. The `Process` + `StdioCollector` +
+`bash -c` idiom stands about fifteen times, and the generation guard that keeps
+a stale answer from landing on a new question is copied five more.
+→ `grep -rn 'StdioCollector' default/omarchy/plugins/` matches only the common
+dir
+
+**J3** Long-press is one component. Three implementations today, each carrying
+the same "cleared on press, never on release, because `released` precedes
+`clicked`" rule in its own words.
+→ `grep -rn 'holdFired\|heldFired' default/omarchy/plugins/` matches only the
+common dir
+
+**J4** One resolver answers "which app is this". Three implementations today,
+and the shade's walks every app entry per notification card where the drawer
+built an index precisely so it would not have to.
+→ `grep -n 'function entryFor' moarchy.shade/Shade.qml` matches nothing
+
+**J5** A tile is one component and a row is one component. The shade's two tiles
+differ in layout and two flags; the drawer draws an icon-and-label cell twice
+and a settings row its own comment calls "the same row drawn in
+moarchy.settings".
+→ `grep -c 'component WideTile\|component SmallTile' moarchy.shade/Shade.qml`
+is 1
+
+**J6** `E7_EXEMPT` is empty. `Settings.qml` and `SettingsRow.qml` are the two
+files §E2 and §E3 could not take, and the check in `scripts/style-check.sh` was
+written so that removing the last exemption tightens it.
+→ `grep -n 'E7_EXEMPT=' scripts/style-check.sh` shows an empty string, and the
+check passes
+
+**J7** The drawer imports nothing out of another plugin. `Search.js` and
+`Guards.js` are pure libraries living in `moarchy.settings`, so the drawer today
+will not load unless a sibling plugin's internals are beside it — the header
+already warns that a user-directory copy of one and not the other breaks the
+path.
+→ `grep -n 'moarchy.settings' moarchy.drawer/Drawer.qml` matches only comments
+
+**J8** A host-contract property a plugin never reads is not declared. Four
+plugins declare five of them apiece and read one; the host assigns by name into
+the plugin root, so an unread declaration buys nothing. The one that is
+deliberately unread keeps its comment saying so.
+→ each `property var manifest`, `pluginRegistry` and `barWidgetRegistry` left in
+the tree has a second reference in its own file, or a comment saying why it has
+none
+
+---
+
+## K. One connect-list
+
+**K1** Wi-Fi and Bluetooth share their skeleton. 273 of about 600 normalised
+code lines are identical and in the same order: a list of things to connect to,
+a row that expands, an error line under it, a field for a secret. Two screens,
+one shape, and the second was written by copying the first.
+→ `grep -c 'Shared.ConnectList' moarchy.wifi/Wifi.qml
+moarchy.bluetooth/Bluetooth.qml` is 1 apiece
+
+**K2** What differs stays with the plugin: NetworkManager against BlueZ, the
+scan lifecycle, the glyphs, and the wait BlueZ needs before it will power an
+adapter up under a soft block (`shade.md` S6d-8, whose 700ms is an AC and is not
+a candidate for anything).
+→ `grep -n '700' moarchy.bluetooth/Bluetooth.qml` still matches, and
+`bin/moarchy-selftest --settings` still passes its Wi-Fi and Bluetooth blocks
+
+---
+
+## L. One script layer
+
+`bin/` has no sourced library. `scripts/manifest.sh` proved the pattern at build
+time and nothing carried it to runtime, so the session environment, the paths
+and the notification tool are each re-derived by hand — and one of the
+re-derivations names a binary this image does not carry.
+
+**L1** There is one sourced helper under `bin/`, and the things every device
+script re-derives come from it: the session environment, the moarchy and omarchy
+path roots, the state directory, `osk get`/`set`, a shell refresh, a
+first-present resolver and the usage dispatch.
+→ `grep -rln 'XDG_RUNTIME_DIR' bin/` matches the helper and
+`bin/moarchy-selftest`
+
+**L2** One notification tool, and it is one that is installed. `notify-send` is
+absent from this image (`phone-has-no-notify-send`), so the call in
+`bin/moarchy-launch-browser` has been a swallowed no-op for as long as it has
+existed — the selftest already wraps both tools and records why.
+→ `grep -rn 'notify-send' bin/` matches only comments and the selftest's wrapper
+
+**L3** `MOARCHY_PATH` has one spelling. Three today, and one of them defaults to
+the installer path that was deleted — the exact failure the selftest's own PATH
+check was written about.
+→ `grep -rn 'MOARCHY_PATH' bin/ | grep -v '/usr/share/moarchy'` matches nothing
+
+**L4** The twelve shims that only forward to a `moarchy-` twin are one
+dispatcher on `${0##*/}`. None of the shims is dead: every one of the
+twenty-four names is still called by upstream at the pinned ref, which is why
+they are collapsed rather than deleted — and why `docs/upstream.md`'s "shadows
+16" is a stale count and not a shorter list.
+→ `wc -l bin/omarchy-*` shows no forwarder over three lines, and
+`docs/upstream.md` names the measured count
+
+**L5** Our own configuration never calls through a shadow. `bindings.conf`
+reaches for both namespaces for the same capability today, which makes the shim
+load-bearing for us as well as for upstream.
+→ `grep -n 'omarchy-' default/sway/bindings.conf` matches only the commands we
+have no twin for
+
+**L6** The recorded editor has one owner. The state path, the fallback and the
+ten-entry MIME list are written out across three files, two of them carrying a
+comment asking the reader to keep them in step.
+→ `grep -rln 'gnome-text-editor' bin/` matches one file
+
+---
+
+## M. The numbers that are still written twice
+
+**M1** The strip height is one number. **This amends E4**, whose list is stale:
+Wi-Fi, Bluetooth and Settings became windows and dropped theirs, so there are
+four declarations rather than seven. The blocked mechanism is still the blocker
+— `Style.space()` is a `qs.Commons` singleton a `.pragma library` cannot reach —
+so this lands as a component the plugins instantiate, or it does not land and
+says why.
+→ `grep -rn 'Style.space(20)' default/omarchy/plugins/` matches the one
+declaration, the three `radiusTile` uses that are a different constant with the
+same value, and nothing else
+
+**M2** "Is the keyboard up" is answered in one place per question. There are
+three answers today: a busctl probe the back gesture waits on, and two copies of
+a surface-height threshold with two copies of the `200` it compares against.
+The probe and the threshold answer different questions and both stay; the two
+copies of the threshold do not.
+→ `grep -rn 'keyboardPanelHeight' default/omarchy/plugins/` matches one
+declaration
+
+**M3** The fling limit, the hold delay and the slop are held against each other
+rather than retyped. Thresholds belong to the surface that decided them (**F3**,
+and that does not change) — but three surfaces independently typing `0.6` and
+`500` is not three decisions, and the four slop declarations carry three values
+with no record of which difference is meant.
+→ `bin/moarchy-selftest --gestures` reports the three values it read and fails
+when a surface's differs without a comment saying why
+
+---
+
+## N. Defects this survey found
+
+Four, all silent, all found by reading rather than by use. §G4 permits no
+behaviour change except the ones named — these are named, and each is a fix
+against the existing specification rather than a change to it.
+
+**N1** `openPanelIds` is a set and is read as one. The gestures plugin tests
+`open.length` and then indexes it; the host declares `property var
+openPanelIds: ({})` and its own comment says "a plain object treated as a set",
+so `.length` is `undefined` and **the branch has never run**. A back swipe over
+a vendored popup — the menu, the emoji picker, the speed tests, the image
+selector — therefore falls past it to the focused window and closes the app
+behind the popup. It is §B4's failure on the one path §B4 did not cover, and
+`Splash.qml` reads the same property correctly, as a map.
+→ with `omarchy.menu` up, `omarchy-shell gestures back` leaves the menu closed
+and the window count unchanged; pre-fix it leaves the menu up and the count one
+lower
+
+**N2** `rotate()` names no output. It reads the current transform from the first
+output and writes the new one to `DSI-1` by name, so it is the only hardcoded
+output name in the tree and it silently does nothing on any device whose panel
+is called something else. This is `devices.md` §4 row 6, ruled **probe, no key**
+by D3.
+→ `grep -rn 'DSI-1' default/ bin/` matches nothing, and the shade's rotate tile
+turns the screen on the attached device
+
+**N3** The battery path is probed. `Device.qml` reads
+`/sys/class/power_supply/axp20x-battery` — the PinePhone's PMIC — behind a
+`2>/dev/null` that turns a wrong path into an empty reading rather than an
+error, so the Device screen reports no battery at all on sargo. `devices.md` §4
+row 5, same rule, same verdict.
+→ `grep -rn 'axp20x' default/` matches nothing, and `omarchy-shell device
+battery` answers a number on the attached device
+
+**N4** The comment above the back-overlay ladder is true. It states that no
+sheet in `overlayIds` owns a page stack and that the `goBack()` branch below it
+is therefore kept for a future surface — and the drawer has owned one since its
+detail card landed, so that branch fires on every back swipe over an open card.
+A comment claiming a live branch is dormant is worse than no comment: it invites
+the next reader to delete it.
+
+> **Amended before implementing: the `quit()` guard stays.** This AC first said
+> the dead branch was to go, and reading it settled that there are two things
+> here, not one. `quit()` is genuinely unreachable — the three surfaces defining
+> it are windows and none is in `overlayIds` — but the line above it says so, and
+> says it is kept as the same escape hatch `goBack()` is. That is a stated
+> decision about an escape hatch, not an oversight, and G4 is not a licence to
+> overturn one. What was wrong is the *other* half of the same comment.
+→ `grep -n 'No sheet in overlayIds' moarchy.gestures/Service.qml` matches
+nothing, and the sentence that replaces it names the drawer
 
 ---
 
@@ -471,6 +773,21 @@ Ordered by value over risk, not by section number.
    start, a freeze-on-begin and a hand-over, so it proves the component before
    anything irreversible; the gestures plugin last because every `gestures.md`
    criterion runs through it.
+8. **§N** — the four defects. First of the second pass, for the same reason §B4
+   and §C1 came first in the first one: they are small, they are independently
+   checkable, and they are the argument for the rest.
+9. **§H** — the three tracker copies and the twelve quartets, on top of a green
+   §G1. The back edge first: it is the copy with no watchdog, so it is the one
+   where the shared component is worth something the day it lands.
+10. **§I**, then **§J** — the sheet, then the parts. This order because §I moves
+    the block §J's header and colour work would otherwise have to move twice.
+11. **§K** — Wi-Fi and Bluetooth. Last of the QML, because it is the largest
+    single diff over two screens that are verified today and cheap to break.
+12. **§L**, **§M** — the script layer and the numbers. Independent of all of the
+    above; they go whenever the phone is not needed for something else.
+13. The code map in `docs/README.md`, and the durable content §B6 is holding.
+    Before this file can be deleted, not after: `refactor.md` is the only record
+    of the layer rule, and this file has an end.
 
 **Verified on the device, 2026-09-07** (192.168.0.18, plugin and bins deployed
 into `/usr/share/moarchy` and `/usr/lib/moarchy/bin`, shell restarted through
@@ -510,6 +827,12 @@ Not acceptance criteria — the boundaries any implementation works inside.
 - **`Style.space()` is theme-scaled** (`style-space-is-scaled`). Every number in
   this file is the source value, not the drawn one, and no AC here may be
   checked by measuring pixels on the panel.
+- **`Style` itself does not move or get renamed.** §M1 puts the strip height
+  somewhere; it does not touch the singleton the number comes from. The plugin
+  kit in the apps repo reaches `Style.font.body` and
+  `Style.effectiveSpacingScale` by compiling `import qs.Commons` as a string, and
+  a rename there falls back to a default silently rather than failing — so plugin
+  text would quietly stop following Settings with nothing on stderr.
 
 ## Open questions
 

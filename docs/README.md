@@ -68,6 +68,14 @@ alongside the change that made them untrue.
 - **Ids are never renumbered and never reused.** They are transcribed by hand
   into ~300 code comments and 220 assertion strings in `bin/moarchy-selftest`,
   and no tool notices when one moves.
+- **A check cites a pattern, not a line number.** The `→` line names a grep,
+  a symbol or an IPC verb. `refactor.md` was written with `file:line` citations
+  and they did not survive a week: of the ten it carried, one still landed on its
+  target, one named a file that had been deleted, and two counted copies that had
+  gone away on their own — so the section read as remaining debt while the work
+  was done, and as done where it was not. A grep that matches nothing is a
+  criterion that has been met or a criterion that has moved, and either way it
+  says so out loud.
 - **Ids are not unique across files.** `L1`–`L13` is long-press in
   `gestures.md` and the launch splash in `windows.md`; `I*`, `D*` and `B*`
   collide across four files each. A new citation names the file —
