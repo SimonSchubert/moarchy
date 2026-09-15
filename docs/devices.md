@@ -883,17 +883,34 @@ Restated as a checklist, in build order. Each carries its state.
    ever been hand-installed onto a running phone — and it was reported working
    on the device.
 
-   **What that last sentence is and is not.** The flash, the slot state and the
-   132-check verification are measured here. The per-feature confirmation on
-   the fresh image is the owner's report, not this file's measurement: a
-   published image has no sshd and no baked credentials, so there is no way in
-   without a person connecting Wi-Fi and re-authorising a key. Worth keeping
-   the distinction, because "it looks good" and "wlan0 associated at −55 dBm"
-   are different claims and this file has been careful about which it makes.
+   **Measured on that fresh rootfs**, after re-authorising a key by hand —
+   a published image has no sshd and no credentials, so getting back in costs
+   a person at the screen:
 
-   **Still open:** SMS, unsent and unreceived, which should work on this SIM
-   (`CS: 'attached'`); and re-measuring the radios on the fresh image if anyone
-   wants the stronger claim.
+   ```
+   kernel      7.1.3-sdm670, LSMs lockdown,capability,landlock,yama,bpf
+   pacman      `pacman -S tree` installs over the network, sandbox on,
+               no DisableSandbox in pacman.conf
+   Wi-Fi       associated, -48 dBm
+   modem       rmtfs / tqftpserv / q6voiced all active; cdsp, adsp and
+               4080000.remoteproc all running
+   Bluetooth   Controller 02:00:FF:14:0F:1B — the same serial-derived
+               address as before, unattended, with nobody running btmgmt
+   sound       0 [G3a]: sdm660 — Google Pixel 3a, sink "Earpiece (L) and
+               Speaker (R)"
+   camera      Found calibration file at
+               /usr/share/megapixels/config/google,b4s4-sdm670,Front.dcp
+   ```
+
+   Every one of those was a hand-installed file this morning. The Bluetooth
+   address and the camera profile are the two worth singling out: both prove
+   the *packaging* rather than the fix, because both appear with nothing run by
+   hand at all.
+
+   **Still open:** SMS, unsent and unreceived in either direction, which should
+   work on this SIM (`CS: 'attached'`). The SIM re-locks on every boot, so the
+   modem reads `locked` until someone enters the PIN — which is what
+   `moarchy.sim` is for (D28).
 
    The Bluetooth AC that the previous revision of this file declined to write
    is now written, because the measurement it was waiting for has been taken.
