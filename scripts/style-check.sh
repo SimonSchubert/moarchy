@@ -123,6 +123,14 @@ for path in sorted(pathlib.Path(sys.argv[1]).glob("*/*.qml")):
     # moment they were declared by their new name. The failing branch was run --
     # one `.pressed` read taken away from a converted tile, which this passed --
     # so the type list is part of the check and not a detail of it.
+    # J2. Declaring `stdout` on a Shared.Probe replaces the collector that
+    # raises `answered`, so the probe runs and tells nobody. Same trap as
+    # SheetArea's four handlers, one component along.
+    for start, _kind, block in blocks(lines, r"Shared\.Probe"):
+        if re.search(r"^\s*stdout\s*:", block, re.M):
+            problems.append(f"{path}:{start}  Shared.Probe declares stdout, which "
+                            "replaces the collector that raises answered (J2)")
+
     whole = "\n".join(lines)
     for start, _kind, block in blocks(lines, r"MouseArea|SheetArea"):
         # H3. Declaring one of the four on an instance replaces the shared

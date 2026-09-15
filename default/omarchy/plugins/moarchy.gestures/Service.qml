@@ -844,16 +844,14 @@ Item {
   property int backRetries: 0
   readonly property int backRetryLimit: 6
 
-  Process {
+  Shared.Probe {
     id: keyboardProbe
     command: ["busctl", "--user", "get-property", "sm.puri.OSK0",
               "/sm/puri/OSK0", "sm.puri.OSK0", "Visible"]
-    stdout: StdioCollector {
-      // `busctl get-property` prints the variant as e.g. `b true`.
-      onStreamFinished: {
-        root.keyboardUp = String(text).indexOf("true") >= 0
-        root.keyboardKnown = true
-      }
+    // `busctl get-property` prints the variant as e.g. `b true`.
+    onAnswered: {
+      root.keyboardUp = String(text).indexOf("true") >= 0
+      root.keyboardKnown = true
     }
   }
 

@@ -622,91 +622,87 @@ Item {
     guardProc.running = true
   }
 
-  Process {
+  Shared.Probe {
     id: dynamicProc
     property int wanted: 0
-    stdout: StdioCollector {
-      onStreamFinished: {
-        if (dynamicProc.wanted !== root.generation) return
-        var p = root.pageDef
-        if (!p) return
-        // A `provider.json` answers with the rows themselves -- id, type,
-        // label, and the command each one runs -- because a reminder's row
-        // carries its own `cancel <unit>`, which one-value-per-line cannot
-        // express. JSON and not TSV: the label is a message somebody typed,
-        // and a tab in it would silently become a column.
-        if (p.provider && p.provider.json) {
-          var rows = []
-          try {
-            var parsed = JSON.parse(String(text || "[]"))
-            if (parsed && parsed.length !== undefined) rows = parsed
-          } catch (e) {
-            // Half a page is worse than an empty one: a provider that answers
-            // nothing usable says so with its own info row, and a provider
-            // that is not there at all leaves the declared rows alone.
-            rows = []
-          }
-          root.dynamicRows = rows
-          root.dynamicLoaded = true
-          Qt.callLater(root.refresh)
-          return
+    onAnswered: {
+      if (dynamicProc.wanted !== root.generation) return
+      var p = root.pageDef
+      if (!p) return
+      // A `provider.json` answers with the rows themselves -- id, type,
+      // label, and the command each one runs -- because a reminder's row
+      // carries its own `cancel <unit>`, which one-value-per-line cannot
+      // express. JSON and not TSV: the label is a message somebody typed,
+      // and a tab in it would silently become a column.
+      if (p.provider && p.provider.json) {
+        var rows = []
+        try {
+          var parsed = JSON.parse(String(text || "[]"))
+          if (parsed && parsed.length !== undefined) rows = parsed
+        } catch (e) {
+          // Half a page is worse than an empty one: a provider that answers
+          // nothing usable says so with its own info row, and a provider
+          // that is not there at all leaves the declared rows alone.
+          rows = []
         }
-
-        var lines = String(text || "").split("\n")
-        var built = []
-        for (var i = 0; i < lines.length; i++) {
-          var line = lines[i]
-          if (!line || !line.trim()) continue
-          if (p.text) {
-            // Columnar output from omarchy-menu-keybindings --print: keys,
-            // action, section, padded apart. Two or more spaces is the split.
-            var parts = line.split(/\s{2,}/)
-            built.push({ id: "k" + i, type: "info",
-                         label: (parts[0] || "").trim(),
-                         detail: (parts[1] || "").trim() })
-          } else {
-            var value = line.trim()
-            var label = value
-            if (p.provider.label === "basename")
-              label = value.replace(/^.*\//, "")
-            // The same transform omarchy-theme-bg-current applies, so the row
-            // that ticks reads the way the Appearance detail line above it does:
-            // "Quattro", not "1-quattro.jpg".
-            // "Europe/Berlin" -> "Berlin", "America/New_York" -> "New York".
-            // The value stays the whole zone, because that is what timedatectl
-            // takes and what the reader answers.
-            else if (p.provider.label === "city")
-              label = value.replace(/^.*\//, "").replace(/_/g, " ")
-            else if (p.provider.label === "background")
-              label = value.replace(/^.*\//, "").replace(/\.[^.]+$/, "")
-                           .replace(/^\d+-/, "").replace(/-/g, " ")
-                           .replace(/\b\w/g, function (c) { return c.toUpperCase() })
-            built.push({ id: "p" + i, type: "choice", label: label, value: value,
-                         write: p.write + " " + root.shellQuote(value) })
-          }
-        }
-        root.dynamicRows = built
+        root.dynamicRows = rows
         root.dynamicLoaded = true
         Qt.callLater(root.refresh)
+        return
       }
+
+      var lines = text.split("\n")
+      var built = []
+      for (var i = 0; i < lines.length; i++) {
+        var line = lines[i]
+        if (!line || !line.trim()) continue
+        if (p.text) {
+          // Columnar output from omarchy-menu-keybindings --print: keys,
+          // action, section, padded apart. Two or more spaces is the split.
+          var parts = line.split(/\s{2,}/)
+          built.push({ id: "k" + i, type: "info",
+                       label: (parts[0] || "").trim(),
+                       detail: (parts[1] || "").trim() })
+        } else {
+          var value = line.trim()
+          var label = value
+          if (p.provider.label === "basename")
+            label = value.replace(/^.*\//, "")
+          // The same transform omarchy-theme-bg-current applies, so the row
+          // that ticks reads the way the Appearance detail line above it does:
+          // "Quattro", not "1-quattro.jpg".
+          // "Europe/Berlin" -> "Berlin", "America/New_York" -> "New York".
+          // The value stays the whole zone, because that is what timedatectl
+          // takes and what the reader answers.
+          else if (p.provider.label === "city")
+            label = value.replace(/^.*\//, "").replace(/_/g, " ")
+          else if (p.provider.label === "background")
+            label = value.replace(/^.*\//, "").replace(/\.[^.]+$/, "")
+                         .replace(/^\d+-/, "").replace(/-/g, " ")
+                         .replace(/\b\w/g, function (c) { return c.toUpperCase() })
+          built.push({ id: "p" + i, type: "choice", label: label, value: value,
+                       write: p.write + " " + root.shellQuote(value) })
+        }
+      }
+      root.dynamicRows = built
+      root.dynamicLoaded = true
+      Qt.callLater(root.refresh)
     }
   }
 
-  Process {
+  Shared.Probe {
     id: guardProc
     property int wanted: 0
-    stdout: StdioCollector {
-      onStreamFinished: {
-        if (guardProc.wanted !== root.generation) return
-        var parsed = Guards.parse(String(text || ""))
-        root.whenMap = parsed.when
-        root.valueMap = parsed.value
-        root.pageValue = parsed.value["__page"] !== undefined
-                         ? String(parsed.value["__page"]) : ""
-        // The page is now standing with its guards answered, which is the
-        // moment a quiet open has been waiting for (O4, O7).
-        root.settlePending()
-      }
+    onAnswered: {
+      if (guardProc.wanted !== root.generation) return
+      var parsed = Guards.parse(text)
+      root.whenMap = parsed.when
+      root.valueMap = parsed.value
+      root.pageValue = parsed.value["__page"] !== undefined
+                       ? String(parsed.value["__page"]) : ""
+      // The page is now standing with its guards answered, which is the
+      // moment a quiet open has been waiting for (O4, O7).
+      root.settlePending()
     }
   }
 

@@ -159,37 +159,35 @@ Item {
     unlockProc.running = true
   }
 
-  Process {
+  Shared.Probe {
     id: statusProbe
     command: [root.simTool, "status"]
-    stdout: StdioCollector {
-      onStreamFinished: {
-        var present = false, st = "", lk = "none", rt = -1, op = ""
-        var lines = String(text || "").split("\n")
-        for (var i = 0; i < lines.length; i++) {
-          var eq = lines[i].indexOf("=")
-          if (eq < 0) continue
-          var k = lines[i].slice(0, eq)
-          var v = lines[i].slice(eq + 1)
-          if (k === "present") present = (v === "yes")
-          else if (k === "state") st = v
-          else if (k === "lock") lk = v
-          else if (k === "retries") rt = parseInt(v, 10)
-          else if (k === "operator") op = v
-        }
-        root.present = present
-        root.modemState = st
-        root.lock = lk
-        root.retries = isFinite(rt) ? rt : -1
-        root.operator = op
-
-        // Close on success rather than sitting there congratulating itself. The
-        // screen exists to answer one question; once answered there is nothing
-        // on it worth a tap.
-        if (root.opened && present && lk === "none" && st !== "" && st !== "locked")
-          simWindow.hide()
-
+    onAnswered: {
+      var present = false, st = "", lk = "none", rt = -1, op = ""
+      var lines = text.split("\n")
+      for (var i = 0; i < lines.length; i++) {
+        var eq = lines[i].indexOf("=")
+        if (eq < 0) continue
+        var k = lines[i].slice(0, eq)
+        var v = lines[i].slice(eq + 1)
+        if (k === "present") present = (v === "yes")
+        else if (k === "state") st = v
+        else if (k === "lock") lk = v
+        else if (k === "retries") rt = parseInt(v, 10)
+        else if (k === "operator") op = v
       }
+      root.present = present
+      root.modemState = st
+      root.lock = lk
+      root.retries = isFinite(rt) ? rt : -1
+      root.operator = op
+
+      // Close on success rather than sitting there congratulating itself. The
+      // screen exists to answer one question; once answered there is nothing
+      // on it worth a tap.
+      if (root.opened && present && lk === "none" && st !== "" && st !== "locked")
+        simWindow.hide()
+
     }
   }
 
@@ -197,7 +195,7 @@ Item {
     id: unlockProc
     stdout: StdioCollector {}
     stderr: StdioCollector {
-      onStreamFinished: root.errorText = String(text || "").trim()
+      onStreamFinished: root.errorText = text.trim()
     }
     // No exit code is read, and that is deliberate. The modem owns both the
     // lock and the counter, so "did that work" is a question for

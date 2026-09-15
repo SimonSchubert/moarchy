@@ -39,6 +39,7 @@ import Quickshell.Networking
 import Quickshell.Services.UPower
 import qs.Commons
 import qs.Ui as Ui
+import "../moarchy.common" as Shared
 
 Item {
   id: root
@@ -140,15 +141,13 @@ Item {
     (Quickshell.env("XDG_STATE_HOME") || (Quickshell.env("HOME") + "/.local/state"))
     + "/omarchy/toggles"
 
-  Process {
+  Shared.Probe {
     id: flagProbe
     running: true
     command: ["bash", "-c",
       "[[ -f \"${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/toggles/battery-percentage-off\" ]] " +
       "&& echo pct=off || echo pct=on"]
-    stdout: StdioCollector {
-      onStreamFinished: root.batteryPercentShown = String(text || "").indexOf("pct=on") >= 0
-    }
+    onAnswered: root.batteryPercentShown = text.indexOf("pct=on") >= 0
   }
 
   // printErrors off because the directory is absent on a phone that has never
@@ -327,7 +326,7 @@ Item {
         var reason = ""
         var lock = ""
         var signal = -1
-        var lines = String(text || "").split("\n")
+        var lines = text.split("\n")
         for (var i = 0; i < lines.length; i++) {
           var parts = lines[i].split(":")
           if (parts.length < 2) continue
@@ -388,20 +387,18 @@ Item {
   // made it. So the watch is armed by the first count, not before.
   property bool historyWatched: false
 
-  Process {
+  Shared.Probe {
     id: historyProbe
     running: true
     command: ["bash", "-c", "mkdir -p \"$1\" && ls -1 \"$1\" | grep -c '\\.json$'", "--", root.historyDir]
-    stdout: StdioCollector {
-      onStreamFinished: {
-        // grep -c with no match exits 1 and prints 0, which is the count we
-        // want -- but `set -e` semantics elsewhere have made that exit code
-        // look like a failure before now, so the number is read and nothing
-        // reads the status.
-        var n = parseInt(String(text || "").trim(), 10)
-        root.historyCount = isFinite(n) ? n : 0
-        root.historyWatched = true
-      }
+    onAnswered: {
+      // grep -c with no match exits 1 and prints 0, which is the count we
+      // want -- but `set -e` semantics elsewhere have made that exit code
+      // look like a failure before now, so the number is read and nothing
+      // reads the status.
+      var n = parseInt(text.trim(), 10)
+      root.historyCount = isFinite(n) ? n : 0
+      root.historyWatched = true
     }
   }
 

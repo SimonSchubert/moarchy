@@ -865,16 +865,14 @@ Item {
 
   onSettingsHitsChanged: root.readSettingsGuards()
 
-  Process {
+  Shared.Probe {
     id: guardProc
     property int wanted: 0
-    stdout: StdioCollector {
-      onStreamFinished: {
-        // A batch for a query that has already been retyped is not a late
-        // answer, it is the wrong answer.
-        if (guardProc.wanted !== root.guardGeneration) return
-        root.settingsGuards = Guards.parse(String(text || "")).when
-      }
+    onAnswered: {
+      // A batch for a query that has already been retyped is not a late
+      // answer, it is the wrong answer.
+      if (guardProc.wanted !== root.guardGeneration) return
+      root.settingsGuards = Guards.parse(text).when
     }
   }
 
@@ -950,7 +948,7 @@ Item {
 
   function parseKv(text) {
     var out = ({})
-    var lines = String(text || "").split("\n")
+    var lines = text.split("\n")
     for (var i = 0; i < lines.length; i++) {
       var t = lines[i].indexOf("\t")
       if (t <= 0) continue
@@ -1084,27 +1082,23 @@ Item {
     return true
   }
 
-  Process {
+  Shared.Probe {
     id: infoProc
     property int wanted: 0
-    stdout: StdioCollector {
-      onStreamFinished: {
-        if (infoProc.wanted !== root.detailGeneration) return
-        root.detailInfo = root.parseKv(String(text || ""))
-        root.detailBusy = false
-      }
+    onAnswered: {
+      if (infoProc.wanted !== root.detailGeneration) return
+      root.detailInfo = root.parseKv(text)
+      root.detailBusy = false
     }
   }
 
-  Process {
+  Shared.Probe {
     id: planProc
     property int wanted: 0
-    stdout: StdioCollector {
-      onStreamFinished: {
-        if (planProc.wanted !== root.detailGeneration) return
-        root.detailPlan = root.parseKv(String(text || ""))
-        root.detailBusy = false
-      }
+    onAnswered: {
+      if (planProc.wanted !== root.detailGeneration) return
+      root.detailPlan = root.parseKv(text)
+      root.detailBusy = false
     }
   }
 
@@ -1579,7 +1573,7 @@ Item {
     // including the debounce, which is flushed here rather than waited out: a
     // check that slept 120ms would be asserting the timer, not the results.
     function type(text: string): string {
-      searchField.text = String(text || "")
+      searchField.text = text
       queryDebounce.stop()
       root.query = searchField.text
       return "ok"

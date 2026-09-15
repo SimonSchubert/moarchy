@@ -156,7 +156,7 @@ Item {
     onTriggered: probe.running = true
   }
 
-  Process {
+  Shared.Probe {
     id: probe
     running: false
     command: ["sh", "-c", `
@@ -184,15 +184,13 @@ Item {
       printf 'uptime=%s\\n' "$(cut -d. -f1 /proc/uptime)"
       printf 'kernel=%s\\n' "$(uname -r)"
     `]
-    stdout: StdioCollector {
-      onStreamFinished: {
-        const next = {}
-        for (const line of text.split("\n")) {
-          const i = line.indexOf("=")
-          if (i > 0) next[line.slice(0, i)] = line.slice(i + 1).trim()
-        }
-        root.facts = next
+    onAnswered: {
+      const next = {}
+      for (const line of text.split("\n")) {
+        const i = line.indexOf("=")
+        if (i > 0) next[line.slice(0, i)] = line.slice(i + 1).trim()
       }
+      root.facts = next
     }
   }
 

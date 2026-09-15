@@ -626,13 +626,21 @@ Not one abstraction — a list of them, each small, each removing a class rather
 than an instance. They are one section because they are one pass over the same
 nine files.
 
-**J1** The colour roles are declared once. Eight plugins write out six to eight
-role bindings over the two palettes `style.md` C1 records, and the arithmetic
-under them is `Theme.js` already. A component taking the layer as a property
-serves both palettes, which is the thing a singleton could not do — **E6** and
-`style.md` C2 are amended to say so.
-→ `grep -rlc 'property color containerHigh' default/omarchy/plugins/` matches
-only the common dir
+**J1** *Withdrawn.* The eight colour blocks are not copies of each other, which
+only became clear from reading all eight: three compute `subdued` three different
+ways — a flat alpha in the three popup surfaces, `readableOn` against the surface
+in the theme picker, `mix` then `readableOn` in the shade — and a fourth was not
+reading the theme at all (J1a). What is left shared between them is four lines of
+`Color.<layer>.*`, and a component to carry those saves about four lines net while
+adding the indirection `style.md` C2 argues against by name.
+
+> C2's reasoning survives this: two palettes are real, the roles are per-surface,
+> and the *arithmetic* under them was the duplication — which is E3, and E3
+> landed. E6 is amended to say that rather than to promise a component: what it
+> objected to was a singleton, and the answer turned out to be that there was
+> nothing left to share once `Theme.js` existed.
+→ `grep -rn 'readonly property color subdued' default/omarchy/plugins/` shows
+three different formulas, each with the surface it is computed against
 
 **J1a — a defect, found by asking what J1 was actually deduplicating.** Every
 colour token a plugin reads exists in upstream's `Color` singleton.
@@ -655,11 +663,25 @@ own comment said it recoloured with everything else.
 matches only comments, and on the device the Device screen changes colour with
 the theme
 
-**J2** A shell probe is one component. The `Process` + `StdioCollector` +
-`bash -c` idiom stands about fifteen times, and the generation guard that keeps
-a stale answer from landing on a new question is copied five more.
-→ `grep -rn 'StdioCollector' default/omarchy/plugins/` matches only the common
-dir
+**J2** A shell probe is one component. *Done for sixteen of the twenty-one.*
+`Shared.Probe` is a `Process` that raises `answered(text)`, so a probe declares
+its command and what to do with the answer and nothing else — the three lines of
+`stdout: StdioCollector { onStreamFinished: … }` around every one of them are
+gone.
+
+Five `Process` blocks are left as they are and each has a reason: three collect
+nothing (they are run for their effect), one handles `stderr` as well, and one is
+a generation-guarded pair whose collector body reads its own `wanted`. The
+generation guard is **not** folded in: it is five lines in four places and it
+belongs to the question being asked, not to the asking.
+
+`String(text || "")` went with it, in sixteen places. `StdioCollector.text` is a
+QString and the signal declares `string text`, so that guard never had anything
+to catch.
+→ `grep -rn 'StdioCollector' default/omarchy/plugins/` matches the common dir and
+the five that keep their own, and `scripts/style-check.sh` fails when a
+`Shared.Probe` declares `stdout` — which would replace the collector that raises
+`answered`, so the probe would run and tell nobody
 
 **J3** Long-press is one component. Three implementations today, each carrying
 the same "cleared on press, never on release, because `released` precedes

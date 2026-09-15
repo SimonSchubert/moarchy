@@ -156,7 +156,7 @@ Item {
   // spaces -- because omarchy-theme-set is given that name and looks the
   // directory back up from it. "rose-pine" must come back as "Rose Pine" and
   // nothing else.
-  Process {
+  Shared.Probe {
     id: themeScan
     command: ["python3", "-c",
       "import glob, json, os, re\n" +
@@ -194,15 +194,13 @@ Item {
       "except OSError:\n" +
       "    pass\n" +
       "print(json.dumps({'current': cur, 'themes': rows}))\n"]
-    stdout: StdioCollector {
-      onStreamFinished: {
-        try {
-          var parsed = JSON.parse(String(text || "{}"))
-          root.themes = parsed.themes || []
-          root.currentSlug = String(parsed.current || "")
-        } catch (e) {
-          console.warn("theme scan failed to parse:", e)
-        }
+    onAnswered: {
+      try {
+        var parsed = JSON.parse(String(text || "{}"))
+        root.themes = parsed.themes || []
+        root.currentSlug = String(parsed.current || "")
+      } catch (e) {
+        console.warn("theme scan failed to parse:", e)
       }
     }
   }

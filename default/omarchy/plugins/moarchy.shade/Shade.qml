@@ -695,24 +695,20 @@ Item {
   // Airplane mode is one lever over wifi, bluetooth and the modem, which is
   // what a phone means by it -- `nmcli radio` would leave bluetooth up. The
   // user is in group rfkill, so none of this needs root.
-  Process {
+  Shared.Probe {
     id: airplaneProbe
     command: ["bash", "-c", "cat /sys/class/rfkill/*/soft 2>/dev/null | sort -u | tr -d '\\n'"]
-    stdout: StdioCollector {
-      // "1" means every switch reads blocked. "0" or "01" means at least one
-      // radio is live, so this is not airplane mode.
-      onStreamFinished: root.airplane = String(text || "").trim() === "1"
-    }
+    // "1" means every switch reads blocked. "0" or "01" means at least one
+    // radio is live, so this is not airplane mode.
+    onAnswered: root.airplane = text.trim() === "1"
   }
 
-  Process {
+  Shared.Probe {
     id: brightnessProbe
     command: ["bash", "-c", "brightnessctl -d backlight -m | cut -d, -f4 | tr -d '%\\n'"]
-    stdout: StdioCollector {
-      onStreamFinished: {
-        var v = parseInt(String(text || "").trim(), 10)
-        if (isFinite(v)) root.brightness = Math.max(1, Math.min(100, v))
-      }
+    onAnswered: {
+      var v = parseInt(text.trim(), 10)
+      if (isFinite(v)) root.brightness = Math.max(1, Math.min(100, v))
     }
   }
 
@@ -720,15 +716,13 @@ Item {
   // bare install, so the tile is dead until install/session.sh has added the
   // user and they have logged in again. Probe rather than assume: a tile that
   // is drawn but does nothing is worse than one that is not drawn.
-  Process {
+  Shared.Probe {
     id: torchProbe
     command: ["bash", "-c", "[ -w /sys/class/leds/white:flash/brightness ] && cat /sys/class/leds/white:flash/brightness || echo unavailable"]
-    stdout: StdioCollector {
-      onStreamFinished: {
-        var out = String(text || "").trim()
-        root.torchAvailable = out !== "unavailable" && out !== ""
-        root.torchOn = root.torchAvailable && out !== "0"
-      }
+    onAnswered: {
+      var out = text.trim()
+      root.torchAvailable = out !== "unavailable" && out !== ""
+      root.torchOn = root.torchAvailable && out !== "0"
     }
   }
 
@@ -897,21 +891,19 @@ Item {
   // spray toasts over the top of the shade that is displaying it.
   property var historyRows: []
 
-  Process {
+  Shared.Probe {
     id: historyRead
     command: ["bash", "-c", "cat " + root.historyDir + "/*.json 2>/dev/null | tail -40"]
-    stdout: StdioCollector {
-      onStreamFinished: {
-        var rows = []
-        var lines = String(text || "").split("\n")
-        for (var i = 0; i < lines.length; i++) {
-          var line = lines[i].trim()
-          if (!line) continue
-          try { rows.push(JSON.parse(line)) } catch (e) { /* half-written file */ }
-        }
-        rows.sort(function(a, b) { return (b.timestamp || 0) - (a.timestamp || 0) })
-        root.historyRows = rows
+    onAnswered: {
+      var rows = []
+      var lines = text.split("\n")
+      for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim()
+        if (!line) continue
+        try { rows.push(JSON.parse(line)) } catch (e) { /* half-written file */ }
       }
+      rows.sort(function(a, b) { return (b.timestamp || 0) - (a.timestamp || 0) })
+      root.historyRows = rows
     }
   }
 
