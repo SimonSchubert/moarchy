@@ -1922,6 +1922,26 @@ taken after it flips.
 
 ## 8. Known-bad / open
 
+- **The drawer's shelf does not answer a synthetic touch: M5 and M6 are red,
+  and were before the drag tracker landed.** Measured 2026-09-15 with an A/B
+  against the packaged 0.2.2-4 tree on the same phone, the same warm shell and
+  the same probe: a flick from the leading tile's centre, up 220 panel px,
+  closes nothing on either build (4 windows before, 4 after), and a tap on that
+  tile leaves the drawer open on the packaged build.
+
+  The coordinates are right and the gesture is reaching *something* — under the
+  tracker the same tap does close the drawer, which is more than the packaged
+  build manages. What it does not do is reach the app the tile names.
+  `openTarget 0` answers `rect=10,102 size=85x86` in surface pixels and the
+  probe adds the bar's 26 and multiplies by the output scale, which is the
+  convention every other aimed check here uses and which those checks pass on.
+
+  Not chased further, because it is not what this change was for and because
+  the suite's own environment is part of the suspect: these two run after a
+  section that leaves `moa-selftest` windows behind, and the leading tile in
+  the failures is one of them. Whoever picks it up should start by driving
+  `drawer openTarget`/`openApps` by hand on a phone with exactly one app open.
+
 - **Compositor renders only the background layer** in some states: sway tracks
   windows and the bar reserves its exclusive zone (`foot y=27`), but nothing above
   swaybg paints. First seen after running a browser; a reboot cleared it once,
