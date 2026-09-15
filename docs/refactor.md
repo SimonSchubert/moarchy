@@ -129,6 +129,22 @@ walks a list of open overlays looking for one that owns a page stack; it asks
 which window is focused, and hands the gesture to that window's plugin. The
 same `goBack()`-then-close pair, keyed on something the compositor knows.
 
+**B6** A sheet opening puts away every sheet on **its own layer or above it**,
+and none of the ones below it. The shade is the only sheet on Overlay, so it
+puts nothing away; the drawer and the theme picker are both Top, so each puts
+away the other and the shade above them.
+
+*Done, 2026-09-15.* B2's table asked which ids each `open()` should name and
+took the answer to be one list. It is not a list — it is the layer the sheet
+sits on — and reading it as a list produced a defect in each direction. The
+shade dismissed the drawer it was about to draw over, which cost you the sheet
+you were reading; the drawer did not dismiss the theme picker, so two Top
+surfaces with `Exclusive` keyboard focus stacked in map order, the same fault
+`gestures.md` G10b records for two Overlay surfaces contesting a corner.
+→ `grep -n 'hide("moarchy' moarchy.shade/Shade.qml` matches nothing; the same
+grep matches `moarchy.shade` and `moarchy.themes` in `Drawer.qml`, and
+`moarchy.shade` and `moarchy.drawer` in `Themes.qml`
+
 ---
 
 ## C. One workspace policy
@@ -360,7 +376,7 @@ able to break it silently.
 coverage lines specifically so a refactor could not pass by measuring nothing
 (`green-is-not-verified`).
 
-**G4** No behaviour changes except D2, which is named as a change and given a
+**G4** No behaviour changes except D2 and B6, each named as a change and given a
 reason. A refactor that fixes B4 and C1 is fixing defects against the existing
 specification, not changing it.
 

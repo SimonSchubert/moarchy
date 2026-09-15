@@ -1108,12 +1108,23 @@ Item {
   }
 
   function open(payloadJson) {
-    // Only one of the two overlays is ever up. Asking the host rather than
-    // tracking it here means this still holds when the shade was opened by its
-    // own drag and this plugin never heard about it.
-    if (root.shell && typeof root.shell.isPluginOpen === "function"
-        && root.shell.isPluginOpen("moarchy.shade"))
-      root.shell.hide("moarchy.shade")
+    // A sheet opening puts away every sheet on its own layer or above it, and
+    // none of the ones below it (docs/refactor.md B6). This one is Top, so
+    // that is the shade above it and the theme picker beside it -- not a
+    // preference for one sheet at a time, which is why the shade keeps this
+    // one standing (shade.md S28) while this keeps hiding the shade.
+    //
+    // Themes was missing and the omission was invisible: it is Top and
+    // Exclusive like this surface, so which of the two drew on top was decided
+    // by map order rather than by anything the specification says -- the same
+    // fault G10b records for two Overlay surfaces contesting the corner.
+    //
+    // Asking the host rather than tracking it here means this still holds when
+    // a sheet was raised by its own drag and this plugin never heard about it.
+    if (root.shell && typeof root.shell.isPluginOpen === "function") {
+      if (root.shell.isPluginOpen("moarchy.shade")) root.shell.hide("moarchy.shade")
+      if (root.shell.isPluginOpen("moarchy.themes")) root.shell.hide("moarchy.themes")
+    }
 
     root.query = ""
     searchField.text = ""

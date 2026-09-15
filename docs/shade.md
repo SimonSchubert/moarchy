@@ -378,6 +378,22 @@ names what each card would do, one line per row
 
 ---
 
+## S28. What the shade is drawn over
+
+**S28** Pulling the shade down over an open app drawer leaves the drawer open,
+and closing the shade reveals it still there. The shade is on `Overlay` and the
+drawer on `Top`, so it draws above it without either of them being put away
+— the hide that used to be here cost you the sheet you were reading.
+
+The back gesture takes them one at a time, shade first, because
+`moarchy.gestures`' `overlayIds` is in dismissal order and the shade leads it
+(`gestures.md` G1, G3). An up-swipe from the strip clears the shade and leaves
+the drawer, which is A8 applied to a drawer that is already up.
+→ with `omarchy-shell drawer state` == `open`, `omarchy-shell shade open`
+leaves it `open`, and so does `omarchy-shell shade close`
+
+---
+
 ## Constraints
 
 - **The shade covers the whole screen and reserves nothing.** Growing it with
@@ -385,6 +401,10 @@ names what each card would do, one line per row
   the drag.
 - **It takes no keyboard focus**, so a tap on a tile and a flick back up leaves
   you exactly where you were.
+- **A drawer open underneath keeps the seat's keyboard.** The drawer declares
+  `WlrKeyboardFocus.Exclusive` while it is up and this surface declares `None`,
+  so a keyboard the drawer's search field raised stays up behind the shade
+  (S28) and is still there when the shade goes.
 - **The bar underneath has no tap targets** and cannot have any: the shade's
   grab strip is on Overlay and covers the bar's top band, so a button there
   would never receive a touch and the cause would not be anywhere near it.

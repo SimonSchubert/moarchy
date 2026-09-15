@@ -326,9 +326,14 @@ Item {
   }
 
   function open(payloadJson) {
-    if (root.shell && typeof root.shell.isPluginOpen === "function"
-        && root.shell.isPluginOpen("moarchy.drawer"))
-      root.shell.hide("moarchy.drawer")
+    // S28. The drawer is deliberately left alone, where this used to dismiss
+    // it. Layer order already does the work: this surface is Overlay and the
+    // drawer is Top, so the shade has always drawn above it and the only thing
+    // the hide added was losing what you were looking at.
+    //
+    // Not symmetrical, and Drawer.open() keeps hiding *this* for the same
+    // reason read the other way: a drawer raised under a live shade would map
+    // invisibly underneath it.
     root.expanded = true
     root.progress = 1
 

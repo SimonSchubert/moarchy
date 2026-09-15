@@ -102,7 +102,19 @@ The list is derived from the one the back gesture already walks, minus the
 drawer and minus the shell apps — which are excluded by being windows rather
 than by being named (K1). Three hand-kept lists of overlay ids is how Settings
 and Themes came to be missing from the back gesture.
-→ `omarchy-shell shade state` == `closed`; nothing else opened
+→ `omarchy-shell shade state` == `closed`; nothing else opened, and a drawer
+that was open under the shade is still open
+
+**A10** An up-swipe from the strip with the shade over an open drawer puts the
+shade away and leaves the drawer where it is. One gesture clears one covering
+sheet, so what is on screen afterwards is the drawer the shade was over.
+→ with both open, a strip up-flick leaves `omarchy-shell shade state` ==
+`closed` and `omarchy-shell drawer state` == `open`
+
+`run("clear")` puts away the topmost sheet where `hideCoveringSurfaces()` sweeps
+every one of them, and beside each other the narrower call reads as the
+oversight. It is the deliberate one; collapsing the two takes the drawer with
+the shade.
 
 ## B. Strip — swipe sideways
 
@@ -287,7 +299,8 @@ leaves the focused workspace's `representation` empty
 **G1** The back swipe undoes the **topmost thing on screen**, in this order:
 
 1. the on-screen keyboard, if it is up
-2. any open overlay — drawer, shade or theme picker
+2. each open overlay — drawer, shade or theme picker — topmost first, one
+   per swipe
 3. the focused app
 4. nothing, on a bare home screen
 
@@ -369,6 +382,17 @@ leftmost 16px of every app still belongs to the back gesture (D3), and G8's
 property is still the only knob for its width. This is an edge gesture, and
 Android pays the same price — `getMandatorySystemGestureInsets()` exists
 precisely so apps can move their own controls out of the way.
+
+**G11** With two sheets on screen the swipe closes the one on top and leaves the
+one under it. That is G1's rung 2 taken one at a time, and the order is the
+layer order — the shade is Overlay, the drawer and the theme picker are Top —
+so the sheet that goes is always the one being looked at.
+
+`overlayIds` leads with the shade for that reason and not by accident, so
+reordering it changes which sheet a back swipe reaches first.
+→ with the shade over an open drawer, one `omarchy-shell gestures back` leaves
+`shade state` == `closed` and `drawer state` == `open`; a second leaves both
+`closed` with the open-window count unchanged
 
 ## H. Closing an overlay by dragging it
 

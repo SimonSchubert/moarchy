@@ -366,8 +366,13 @@ Item {
            && root.shell.isPluginOpen(id)
   }
 
-  // Every full-screen overlay this shell can put over an app, in dismissal
-  // order rather than z-order.
+  // Every full-screen overlay this shell can put over an app, topmost first.
+  //
+  // G11. That order is the layer order and it is load-bearing: the shade is
+  // Overlay and the other two are Top, so a back swipe walking this list from
+  // the front closes the sheet being looked at. Two of them can be up at once
+  // since the shade stopped dismissing the drawer (shade.md S28), which is
+  // what made the order matter rather than merely read well.
   //
   // This used to be three ids written out at each of the two call sites, and
   // Settings and Themes were in neither. A back swipe over Settings therefore

@@ -11,6 +11,13 @@ cites their ids, so a criterion with no test is visible.
 `structure.md`, `devices.md`, `upstream.md`. They have no checks. Rationale is
 their content, not an intrusion into it.
 
+`refactor.md` is a contract doc about the *shape of the code* rather than about
+what the phone does, so its criteria are greppable rather than runnable on the
+device. It is the only file with an end: every section is either done or the
+work that is left, and when the last one is done it goes. Twenty-nine comments
+across the tree cite it by section id, so it cannot simply be deleted — the
+citations go first.
+
 `build-log.md` is neither — it is the chronological account, and it is where the
 archaeology belongs.
 
@@ -86,4 +93,5 @@ alongside the change that made them untrue.
 | [`structure.md`](structure.md) | Decisions — repos, packages, the package repository, the image |
 | [`devices.md`](devices.md) | Decisions — what a second device would need, and what is device-specific |
 | [`upstream.md`](upstream.md) | Decisions — the boundary with Omarchy, and what a version bump may break |
+| [`refactor.md`](refactor.md) | Contract — what has to be true when the duplication is gone. Cited by ~29 comments |
 | [`build-log.md`](build-log.md) | How this went, including the dead ends. The archaeology lives here |
