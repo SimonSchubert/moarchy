@@ -270,7 +270,16 @@ Item {
     // Smoothed, so one jittery frame at the end of a slow drag cannot read as
     // a fling. Signed in scene coordinates -- positive is downward -- and the
     // surface reads it against its own fling limit in the same frame.
-    var dt = Math.max(1, now - drag.lastT)
+    //
+    // The floor is one frame, not one millisecond. Two move events delivered
+    // closer together than the compositor can draw say nothing about how fast
+    // the finger is going, and dividing by the gap between them multiplies the
+    // answer by up to 16: measured, a deliberately slow 8% drag came through
+    // as two samples and opened the drawer as though it had been flung. A real
+    // 60Hz gesture sits at ~16ms and never meets this floor; what does meet it
+    // is a burst after a stalled frame, and a burst is exactly the thing that
+    // should not be read as speed.
+    var dt = Math.max(16, now - drag.lastT)
     drag.velocity = drag.velocity * 0.6 + ((sceneY - drag.lastY) / dt) * 0.4
     drag.lastY = sceneY
     drag.lastT = now
