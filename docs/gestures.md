@@ -394,8 +394,9 @@ It is the one gesture on this phone with nothing to look at: the edge surface
 is transparent and reserves nothing, so where it stops is invisible from
 outside and unmeasurable with a finger.
 → `omarchy-shell gestures backTrace` leaves ≥ 8 samples across a slow drag in
-from the edge, rising monotonically; a drag that never commits leaves samples
-and closes nothing
+from the edge, rising monotonically, and ends `-1` on a cancel or `-2` on a
+touch the watchdog retired; a drag that never commits leaves samples and closes
+nothing
 
 **G13** The surface is wider than the band it takes touches in, and the extra
 width is masked out of its input region. Everything right of the 16px falls

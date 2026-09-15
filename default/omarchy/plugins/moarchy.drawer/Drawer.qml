@@ -179,7 +179,8 @@ Item {
     id: sheetDrag
     travel: root.closeTravel
     openDirection: -1
-    latchAxis: "down"
+    // Downward only -- this sheet is open, and down is the way out of it.
+    latchSign: 1
     slop: root.dragSlop
     startFrom: root.progress
 
@@ -203,6 +204,10 @@ Item {
 
     onStranded: root.markTrace(-2)
     onCanceled: from => {
+      // -1, so F2's evidence sentence is true of this tracker too (H5). The
+      // handle below marked it and the sheet did not, which left the same check
+      // passing for a surface that could not fail it.
+      root.markTrace(-1)
       root.dragging = false
       root.progress = from
     }
@@ -1833,7 +1838,7 @@ Item {
           id: handleDrag
           travel: root.closeTravel
           openDirection: -1
-          latchAxis: "either"
+          latchSign: 0
           latchOnPress: true
           startFrom: root.progress
 

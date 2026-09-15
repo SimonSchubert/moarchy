@@ -259,7 +259,8 @@ Item {
     id: sheetDrag
     travel: root.sheetHeight
     openDirection: 1
-    latchAxis: "up"
+    // Upward only, which on Y is a negative delta.
+    latchSign: -1
     slop: root.dragSlop
     startFrom: root.progress
 
@@ -283,6 +284,10 @@ Item {
 
     onStranded: root.markTrace(-2)
     onCanceled: from => {
+      // -1 for a real cancel, against -2 for a stranded one (H5). Only the
+      // drawer's handle marked this, so "a real cancel ends -1" was a check
+      // three of the four trackers could not fail.
+      root.markTrace(-1)
       root.dragging = false
       root.progress = from >= 0.5 ? 1 : 0
     }
@@ -301,7 +306,7 @@ Item {
     id: bandDrag
     travel: root.sheetHeight
     openDirection: 1
-    latchAxis: "either"
+    latchSign: 0
     latchOnPress: true
     slop: root.progress > 0 ? 0 : root.slop
     startFrom: root.progress
@@ -327,6 +332,7 @@ Item {
 
     onStranded: root.markTrace(-2)
     onCanceled: from => {
+      root.markTrace(-1)
       root.dragging = false
       root.progress = from >= 0.5 ? 1 : 0
     }

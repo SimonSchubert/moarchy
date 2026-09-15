@@ -7,7 +7,7 @@
 //       id: sheetDrag
 //       travel: root.closeTravel
 //       openDirection: -1
-//       latchAxis: "down"
+//       latchSign: +1
 //       slop: root.dragSlop
 //       startFrom: root.progress
 //       onBegan: root.dragging = true
@@ -22,6 +22,12 @@
 // cleared-on-press flag that stops a drag ending as a tap. Two of the four had
 // a watchdog and two did not, so a stranded touch left the drawer parked where
 // it left the shade recovered (F2).
+//
+// A fifth wrote it out and was missed: the back edge, which travels sideways
+// (refactor.md H1). It is the reason `axis` exists. It was not a Y-axis
+// component that grew an X one -- it was a component that had assumed an axis
+// without saying so, and the one gesture on the other axis kept its own copy of
+// everything here including, alone among the six, no watchdog at all.
 //
 // ---------------------------------------------------------------------------
 // What it does not own
@@ -77,15 +83,28 @@ Item {
   // the four surfaces differ only in this.
   property int openDirection: -1
 
-  // Which way a finger has to go before this claims the gesture: "up", "down",
-  // or "either". Read every frame rather than once, so a surface whose answer
-  // depends on its own state -- the shade's band latches either way once open
-  // and downward only while shut -- expresses that as a binding.
-  property string latchAxis: "either"
+  // Which axis this gesture travels on: "y" or "x". Everything below is
+  // written in terms of *along* and *across* rather than dy and dx, so the
+  // back edge is this component with one property set rather than a second copy
+  // of it (H1, H2).
+  property string axis: "y"
 
-  // Also require the travel to be more vertical than horizontal. The strip and
-  // the wallpaper set it, because a sideways swipe on the strip is a different
-  // gesture (B2) and must not latch this one.
+  // How far along the axis a finger has to go before this claims the gesture:
+  // +1 claims a positive delta only (down on Y, right on X), -1 a negative one
+  // (up, left), 0 either. Read every frame rather than once, so a surface whose
+  // answer depends on its own state -- the shade's band latches either way once
+  // open and downward only while shut -- expresses that as a binding.
+  //
+  // A sign rather than the compass word this took until H2, for the reason
+  // `openDirection` is one: "up" says nothing on the axis the back edge
+  // travels, and a component that takes a direction as a number takes both axes
+  // without a translation table in the middle.
+  property int latchSign: 0
+
+  // Also require the travel to be more along the axis than across it. The strip
+  // and the wallpaper set it, because a sideways swipe on the strip is a
+  // different gesture (B2) and must not latch this one; the back edge sets it
+  // because a vertical scroll that begins at the edge is not a back (G6).
   property bool axisDominant: false
 
   // The surface's own veto, tested at the moment of latching rather than at
@@ -145,8 +164,9 @@ Item {
   // that gets found by hand a week later.
   property real travelled: 0
 
-  // Scene-signed: positive is downward, because that is what the coordinates
-  // do. Almost nothing wants it in these terms -- read `openVelocity`.
+  // Scene-signed along the axis: positive is downward on Y and rightward on X,
+  // because that is what the coordinates do. Almost nothing wants it in these
+  // terms -- read `openVelocity`.
   property real velocity: 0
 
   // The same speed signed **toward open**, which is what a fling test means on
@@ -167,6 +187,13 @@ Item {
   readonly property real openVelocity: drag.velocity * drag.openDirection
   property real dx: 0
   property real dy: 0
+
+  // The same two deltas as along-the-axis and across-it. Everything that
+  // decides anything reads these; `dx` and `dy` stay because a surface's own
+  // commit rule may want a named axis -- the back edge's does (G6).
+  readonly property real along: drag.axis === "x" ? drag.dx : drag.dy
+  readonly property real across: drag.axis === "x" ? drag.dy : drag.dx
+
   property real startProgress: 0
 
   // Cleared on the next press, never on release, and that ordering is the
@@ -208,7 +235,8 @@ Item {
 
   // ----------------------------------------------------------- driving
 
-  property real lastY: 0
+  // The last sample on the axis, whichever axis that is.
+  property real lastPos: 0
   property real lastT: 0
   property real startX: 0
   property real startY: 0
@@ -221,7 +249,7 @@ Item {
     drag.wasDrag = false
     drag.startX = sceneX
     drag.startY = sceneY
-    drag.lastY = sceneY
+    drag.lastPos = drag.axis === "x" ? sceneX : sceneY
     drag.lastT = Date.now()
     drag.dx = 0
     drag.dy = 0
@@ -245,12 +273,11 @@ Item {
     if (!drag.latched) {
       if (!drag.latchable) { watchdog.restart(); return }
       // Re-tested every frame rather than only on the first movement, so a
-      // thumb that starts its arc sideways still latches once the vertical
-      // travel dominates (B2).
-      var far = drag.latchAxis === "up" ? drag.dy < -drag.slop
-              : drag.latchAxis === "down" ? drag.dy > drag.slop
-              : Math.abs(drag.dy) > drag.slop
-      if (!far || (drag.axisDominant && Math.abs(drag.dy) <= Math.abs(drag.dx))) {
+      // thumb that starts its arc across the axis still latches once the travel
+      // along it dominates (B2).
+      var far = drag.latchSign === 0 ? Math.abs(drag.along) > drag.slop
+                                     : drag.along * drag.latchSign > drag.slop
+      if (!far || (drag.axisDominant && Math.abs(drag.along) <= Math.abs(drag.across))) {
         watchdog.restart()
         return
       }
@@ -263,7 +290,7 @@ Item {
     // above -- so this is a no-op for the second kind and the gate for the
     // first.
     if (!drag.travelling) {
-      if (Math.abs(drag.dy) <= drag.slop) { watchdog.restart(); return }
+      if (Math.abs(drag.along) <= drag.slop) { watchdog.restart(); return }
       drag.travelling = true
     }
 
@@ -279,13 +306,14 @@ Item {
     // 60Hz gesture sits at ~16ms and never meets this floor; what does meet it
     // is a burst after a stalled frame, and a burst is exactly the thing that
     // should not be read as speed.
+    var pos = drag.axis === "x" ? sceneX : sceneY
     var dt = Math.max(16, now - drag.lastT)
-    drag.velocity = drag.velocity * 0.6 + ((sceneY - drag.lastY) / dt) * 0.4
-    drag.lastY = sceneY
+    drag.velocity = drag.velocity * 0.6 + ((pos - drag.lastPos) / dt) * 0.4
+    drag.lastPos = pos
     drag.lastT = now
 
     drag.travelled = drag.startProgress
-                     + drag.openDirection * drag.dy / Math.max(1, drag.travel)
+                     + drag.openDirection * drag.along / Math.max(1, drag.travel)
     drag.progress = Math.max(0, Math.min(1, drag.travelled))
     drag.moved(drag.progress, drag.openVelocity)
     watchdog.restart()

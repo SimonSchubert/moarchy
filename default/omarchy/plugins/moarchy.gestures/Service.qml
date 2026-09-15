@@ -189,6 +189,16 @@ Item {
   // threshold would look identical in a screenshot.
   property var backTrace: []
 
+  // One entry, capped. -1 marks a real cancel and -2 a stranded touch the
+  // watchdog retired, which the drawer's trace has distinguished since F2 and
+  // this one could not: the back edge had no watchdog to fire (H1, H5).
+  function markBackTrace(v: int): void {
+    if (root.backTrace.length >= 200) return
+    var next = root.backTrace.slice()
+    next.push(v)
+    root.backTrace = next
+  }
+
   // Travel that commits a sideways swipe. Below this the pill springs back and
   // nothing happens, so resting a thumb on the edge is not a workspace switch.
   readonly property int commitDistance: Style.space(56)
@@ -1077,7 +1087,8 @@ Item {
     id: stripDrag
     travel: root.targetTravel()
     openDirection: -1
-    latchAxis: "up"
+    // Upward only, which on Y is a negative delta.
+    latchSign: -1
     // B2. A sideways swipe on this strip is a different gesture and must never
     // latch this one, however far the thumb's arc wanders vertically.
     axisDominant: true
@@ -1101,7 +1112,7 @@ Item {
     id: homeDrag
     travel: root.targetTravel()
     openDirection: -1
-    latchAxis: "up"
+    latchSign: -1
     axisDominant: true
     slop: root.slop
     latchable: root.dragTarget !== null && root.dragStartPull < 1
@@ -1113,6 +1124,47 @@ Item {
       root.openVelocity >= root.fling
       || (root.openVelocity > -root.fling && root.pull >= root.drawerCommit))
     onCanceled: from => root.dropDrag()
+  }
+
+  // G6, G8. The back edge, which is the fifth gesture and was the one §F did
+  // not reach (H1). It travels sideways, so it is this component with `axis`
+  // set rather than the private copy of it that stood here -- start
+  // coordinates, clamp, axis test and per-frame trace ring, and no watchdog, so
+  // a touch the compositor took away left the cue drawn on screen with nothing
+  // to retire it.
+  Shared.DragTracker {
+    id: backDrag
+    axis: "x"
+    travel: root.backCommit
+    // Inward raises it, and only inward latches: rightward is a positive delta
+    // on X the way downward is on Y.
+    openDirection: 1
+    latchSign: 1
+    // G6. A vertical scroll that begins at the edge is not a back.
+    axisDominant: true
+
+    onBegan: root.backTrace = []
+
+    // The cue is the release rule as a ramp, and the axis test stays in it: a
+    // gesture the release would refuse must never show an arc, or the arc
+    // promises something that then does not happen. The tracker latches once
+    // and keeps tracking; whether *this frame* still counts as sideways is the
+    // surface's own question (F3).
+    onMoved: p => {
+      root.backPull = Math.abs(backDrag.dx) > Math.abs(backDrag.dy) ? p : 0
+      root.markBackTrace(Math.round(root.backPull * 100))
+    }
+
+    onFinished: (p, v) => {
+      // G6. Inward, far enough, and more sideways than not.
+      var commits = backDrag.dx >= root.backCommit
+                    && Math.abs(backDrag.dx) > Math.abs(backDrag.dy)
+      root.backPull = 0
+      if (commits) { backFlashAnim.restart(); root.performBack() }
+    }
+
+    onStranded: root.markBackTrace(-2)
+    onCanceled: from => { root.backPull = 0; root.markBackTrace(-1) }
   }
 
   // Lets the wiring be tested without a finger:
@@ -1606,16 +1658,13 @@ Item {
       anchors.fill: parent
       maximumTouchPoints: 1
 
-      property real edgeStartX: 0
-      property real edgeStartY: 0
-
+      // `backCueY` is where the arc is drawn and belongs to the touch, not to
+      // the drag, so it stays here. Everything else backDrag owns.
       onPressed: pts => {
         if (pts.length === 0) return
-        edgeStartX = pts[0].sceneX
-        edgeStartY = pts[0].sceneY
         root.backCueY = pts[0].y
         root.backPull = 0
-        root.backTrace = []
+        backDrag.press(pts[0].sceneX, pts[0].sceneY)
         // Started now so it has answered by the time the swipe has travelled
         // far enough to commit.
         root.startKeyboardProbe()
@@ -1623,33 +1672,16 @@ Item {
 
       onUpdated: pts => {
         if (pts.length === 0) return
-        var edx = pts[0].sceneX - edgeStartX
-        var edy = pts[0].sceneY - edgeStartY
         root.backCueY = pts[0].y
-        // The same test the release commits on, as a ramp: a gesture the
-        // release would refuse never shows a cue, so the arc cannot promise
-        // something that then does not happen.
-        root.backPull = (Math.abs(edx) > Math.abs(edy))
-          ? Math.max(0, Math.min(1, edx / root.backCommit)) : 0
-        if (root.backTrace.length < 200) {
-          var next = root.backTrace.slice()
-          next.push(Math.round(root.backPull * 100))
-          root.backTrace = next
-        }
+        backDrag.move(pts[0].sceneX, pts[0].sceneY)
       }
 
-      onReleased: pts => {
-        if (pts.length === 0) { root.backPull = 0; return }
-        var edx = pts[0].sceneX - edgeStartX
-        var edy = pts[0].sceneY - edgeStartY
-        // G6. Inward, far enough, and more sideways than not -- so a vertical
-        // scroll that begins at the edge is never a back.
-        var commits = edx >= root.backCommit && Math.abs(edx) > Math.abs(edy)
-        root.backPull = 0
-        if (commits) { backFlashAnim.restart(); root.performBack() }
-      }
-
-      onCanceled: pts => root.backPull = 0
+      // A release with no points still ends the gesture on what the last frame
+      // measured, where this used to throw the whole swipe away. Every other
+      // surface has always committed that way, and F8 is the reason: a press
+      // that returns without ending leaves the watchdog armed.
+      onReleased: pts => backDrag.release()
+      onCanceled: pts => backDrag.cancel()
     }
 
     // The cue's own moment, borrowed from the hold's flash (C2) rather than
