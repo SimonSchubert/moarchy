@@ -165,88 +165,73 @@ Item {
   // dragging the sheet shut.
   readonly property int dragSlop: Style.space(10)
 
-  // Where the finger went down, in *scene* coordinates. Local coordinates are
-  // useless for this: every input item on the sheet is a child of the sheet,
-  // so its frame moves as the sheet does, and a delta measured in it feeds
-  // back into itself. Scene coordinates are stationary, so a finger that stops
-  // moving produces a delta that stops changing.
-  property real sheetPressY: 0
-  // X as well, and only the hold reads it (L3). The sheet itself is a
-  // one-axis gesture and has never needed it; a long press has to be cancelled
-  // by travel in *any* direction, because a finger that has gone 40px sideways
-  // has plainly stopped meaning "tell me about this one".
-  property real sheetPressX: 0
-  property bool sheetDragging: false
-
-  // Cleared on the next press, not on release, and that ordering is the whole
-  // point. Qt delivers `released` and *then* `clicked`, so a flag cleared in
-  // the release handler is already false when the click arrives -- and the
-  // delegate launches the app the finger happened to start the drag on. The
-  // symptom was a short drag that "closed" the drawer: it had not closed, it
-  // had launched something, which dismisses the drawer on its way out.
-  property bool sheetWasDrag: false
-
-  // A short, fast flick means the same as a long slow drag. Without this, a
-  // drag that begins near the far end of the sheet cannot reach the commit
-  // threshold at all -- there is not enough sheet left to travel.
-  property real sheetVelocity: 0
-  property real sheetLastY: 0
-  property real sheetLastT: 0
   readonly property real sheetFling: 0.6
+
+  // H1, on the shared tracker (docs/refactor.md F1). Downward closes, so
+  // `openDirection` is -1: travelling up is what would raise progress, and
+  // this sheet is already up.
+  //
+  // Scene coordinates are the tracker's whole input convention, and the reason
+  // is this surface's: every input item here is a child of the sheet, so its
+  // frame moves as the sheet does and a delta measured in it feeds back into
+  // itself.
+  Shared.DragTracker {
+    id: sheetDrag
+    travel: root.closeTravel
+    openDirection: -1
+    latchAxis: "down"
+    slop: root.dragSlop
+    startFrom: root.progress
+
+    onBegan: root.dragging = true
+    onMoved: p => root.progress = p
+
+    // H3, and the numbers stay here (F3). A short, fast flick means the same
+    // as a long slow drag: a drag beginning near the far end of the sheet
+    // cannot reach the commit threshold at all, because there is not enough
+    // sheet left to travel.
+    onFinished: (p, v) => {
+      root.dragging = false
+      if (v >= root.sheetFling) root.dismiss()
+      else if (v <= -root.sheetFling) root.progress = 1
+      else if (p <= root.closeCommit) root.dismiss()
+      else root.progress = 1
+    }
+
+    onStranded: root.markTrace(-2)
+    onCanceled: from => {
+      root.dragging = false
+      root.progress = from
+    }
+  }
+
+  // The names the controls on this sheet already read. `sheetPressX` and
+  // `sheetPressY` are the hold's (L3) and the shelf tile's: a long press has
+  // to be cancelled by travel in *any* direction, because a finger that has
+  // gone 40px sideways has plainly stopped meaning "tell me about this one",
+  // and the sheet's own gesture is one axis and has never needed x.
+  readonly property bool sheetDragging: sheetDrag.latched
+  readonly property bool sheetWasDrag: sheetDrag.wasDrag
+  readonly property real sheetPressX: sheetDrag.startX
+  readonly property real sheetPressY: sheetDrag.startY
 
   function sheetPress(item, mouse): void {
     var p = item.mapToItem(null, mouse.x, mouse.y)
-    root.sheetPressY = p.y
-    root.sheetPressX = p.x
-    root.sheetDragging = false
-    root.sheetWasDrag = false
-    // L2. Cleared here rather than on release, for the reason sheetWasDrag is:
+    // L2. Cleared here rather than on release, for the reason `wasDrag` is:
     // Qt delivers `released` and then `clicked`, so a flag cleared in the
     // release handler is already false when the click arrives -- and the app
     // whose card is on screen is the app that launches behind it.
     root.holdFired = false
-    root.sheetVelocity = 0
-    root.sheetLastY = root.sheetPressY
-    root.sheetLastT = Date.now()
+    sheetDrag.press(p.x, p.y)
   }
 
   function sheetMove(item, mouse): void {
-    var dy = item.mapToItem(null, mouse.x, mouse.y).y - root.sheetPressY
-    if (!root.sheetDragging) {
-      // Downward only. An upward drag on the sheet means nothing here, and
-      // claiming it would fight the grid the moment it has enough apps to
-      // scroll (H5).
-      if (dy <= root.dragSlop) return
-      root.sheetDragging = true
-      root.dragging = true
-    }
-    var nowY = item.mapToItem(null, mouse.x, mouse.y).y
-    var now = Date.now()
-    var dt = Math.max(1, now - root.sheetLastT)
-    // Positive is downward, which for this sheet is the closing direction.
-    root.sheetVelocity = root.sheetVelocity * 0.6 + ((nowY - root.sheetLastY) / dt) * 0.4
-    root.sheetLastY = nowY
-    root.sheetLastT = now
-    root.progress = Math.max(0, Math.min(1, 1 - dy / root.closeTravel))
+    var p = item.mapToItem(null, mouse.x, mouse.y)
+    sheetDrag.move(p.x, p.y)
   }
 
-  function sheetRelease(): void {
-    if (!root.sheetDragging) return
-    root.sheetWasDrag = true
-    root.sheetDragging = false
-    root.dragging = false
-    if (root.sheetVelocity >= root.sheetFling) root.dismiss()
-    else if (root.sheetVelocity <= -root.sheetFling) root.progress = 1
-    else if (root.progress <= root.closeCommit) root.dismiss()
-    else root.progress = 1
-  }
-
-  function sheetCancel(): void {
-    if (!root.sheetDragging) return
-    root.sheetDragging = false
-    root.dragging = false
-    root.progress = 1
-  }
+  function sheetRelease(): void { sheetDrag.release() }
+  function sheetCancel(): void { sheetDrag.cancel() }
 
   // ------------------------------------------------------- the hold (L1-L4)
   //
@@ -340,6 +325,14 @@ Item {
     if (!root.dragging) return
     var next = root.dragTrace.slice()
     if (next.length < 200) next.push(Math.round(root.progress * 100))
+    root.dragTrace = next
+  }
+
+  // A failed drag says *which* way it ended: a cancel and a stranded touch both
+  // leave the drawer where the finger did, and they want opposite fixes.
+  function markTrace(marker): void {
+    var next = root.dragTrace.slice()
+    next.push(marker)
     root.dragTrace = next
   }
 
@@ -1811,8 +1804,6 @@ Item {
         anchors.right: parent.right
         height: Style.space(26)
 
-        property real dragStartY: 0
-
         Rectangle {
           anchors.centerIn: parent
           width: Style.space(36)
@@ -1822,41 +1813,54 @@ Item {
           Behavior on color { ColorAnimation { duration: 140 } }
         }
 
+        // Its own tracker instance, not the sheet's. A finger starts on one or
+        // the other and never both, and their release rules differ: this one
+        // commits on distance alone where the sheet also takes a fling (A3).
+        // One instance would have to pick, and picking is a behaviour change
+        // this refactor may not make (refactor.md G4).
+        //
+        // `latchOnPress`, because the whole strip is a handle: there is
+        // nothing else a touch here could mean, and `dragging` from the press
+        // is what lights the bar under a thumb that has not moved yet.
+        Shared.DragTracker {
+          id: handleDrag
+          travel: root.closeTravel
+          openDirection: -1
+          latchAxis: "either"
+          latchOnPress: true
+          startFrom: root.progress
+
+          onBegan: root.dragging = true
+          onMoved: p => root.progress = p
+
+          onFinished: (p, v) => {
+            root.dragging = false
+            if (p <= root.closeCommit) root.dismiss()
+            else root.progress = 1
+          }
+
+          // A stranded touch must not leave the drawer parked half-open, and
+          // until F2 nothing here stopped it: this area handled cancel and not
+          // the touch that never ends. The watchdog arrives with the tracker.
+          onStranded: root.markTrace(-2)
+          onCanceled: from => {
+            root.markTrace(-1)
+            root.dragging = false
+            root.progress = from
+          }
+        }
+
         MultiPointTouchArea {
           anchors.fill: parent
           maximumTouchPoints: 1
 
           onPressed: pts => {
             if (pts.length === 0) return
-            handleStrip.dragStartY = pts[0].sceneY
-            root.dragging = true
+            handleDrag.press(pts[0].sceneX, pts[0].sceneY)
           }
-
-          onUpdated: pts => {
-            if (pts.length === 0 || !root.dragging) return
-            var dy = pts[0].sceneY - handleStrip.dragStartY
-            root.progress = Math.max(0, Math.min(1, 1 - dy / root.closeTravel))
-          }
-
-          onReleased: pts => {
-            if (!root.dragging) return
-            root.dragging = false
-            if (root.progress <= root.closeCommit) root.dismiss()
-            else root.progress = 1
-          }
-
-          // A stranded touch must not leave the drawer parked half-open. The
-          // -1 marks the trace so a failed drag says *which* way it ended:
-          // a cancel and a short drag both leave the drawer open, and they
-          // want opposite fixes.
-          onCanceled: pts => {
-            if (!root.dragging) return
-            var marked = root.dragTrace.slice()
-            marked.push(-1)
-            root.dragTrace = marked
-            root.dragging = false
-            root.progress = 1
-          }
+          onUpdated: pts => { if (pts.length > 0) handleDrag.move(pts[0].sceneX, pts[0].sceneY) }
+          onReleased: pts => handleDrag.release()
+          onCanceled: pts => handleDrag.cancel()
         }
       }
 
