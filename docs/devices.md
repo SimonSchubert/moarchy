@@ -501,8 +501,23 @@ rmtfs, tqftpserv), whose two units ship **enabled** by their own symlinks.
 > `qca/crnv21.bin` — both already in the image, in `linux-firmware-atheros`,
 > which plain `linux-firmware` does pull in (checked with `pacman -Fx`, not read
 > off the upstream git tree). `bluez` is installed and `moarchy-firstboot`
-> enables `bluetooth`. So nothing identifiable is missing for Bluetooth, and it
-> is a measurement on the device rather than a package to write.
+> enables `bluetooth`. So nothing identifiable is missing, and the next step is
+> a measurement rather than a package.
+>
+> **The one named suspect, so the measurement knows what it is looking for:**
+> `sdm670-google-common.dtsi`'s `bluetooth` node has no `local-bd-address`, and
+> the vendor keeps the real BD address outside the filesystem. postmarketOS
+> covers this with `bootmac`, which every Qualcomm device gets through
+> `soc-qcom`: a shell script on a udev rule that derives a stable
+> locally-administered address (prefix `0200`) from `androidboot.serialno` in
+> `/proc/cmdline`, then applies it with `btmgmt public-addr` for `hci0` and
+> `ip link set address` for `wlan0`. Roughly `qbootctl`-sized to package.
+>
+> So the measurement is two questions in order: **does `hci0` exist at all**
+> (`bluetoothctl list`, `dmesg | grep -i qca`), and if it does, **what address
+> does it have** — `00:00:00:00:00:00` or a shared vendor default means bootmac,
+> and no `hci0` at all means something earlier and unguessed. Writing bootmac
+> before asking would be packaging on a hunch.
 
 **D23** **There is no console on this device, and there cannot be one.** ABL
 strips any `console=` from the boot image and appends its own `console=null`.
@@ -704,7 +719,12 @@ booting, and this file should not say otherwise until one has.
   `BT_QCA`, the DT enables `&uart6` with a `qcom,wcn3990-bt` child, the firmware
   is in `linux-firmware-atheros` (which `linux-firmware` pulls in), `bluez` is
   in `moarchy-meta` and `moarchy-firstboot` enables it. So the next step is to
-  look at the device rather than to write a package — and the first suspect is
-  that the DT carries no `local-bd-address`, which on WCN3990 can leave `hci0`
-  present and unconfigured rather than absent. **?**
+  look at the device rather than to write a package — and D27 names the suspect
+  (no `local-bd-address` in the DT) and the package that would answer it
+  (`bootmac`, which pmOS gives every Qualcomm device) precisely so that the
+  measurement has something to confirm or rule out. **?**
+
+  The same `bootmac` question applies to Wi-Fi once it works, and is not a
+  blocker either way: a `wlan0` on a firmware-default MAC associates fine and
+  only becomes a problem when two of these phones meet one network.
 
