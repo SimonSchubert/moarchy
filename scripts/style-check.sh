@@ -112,8 +112,24 @@ for path in sorted(pathlib.Path(sys.argv[1]).glob("*/*.qml")):
     #
     # Spelled `style.md H7` and not `H7`: a bare (H7) in Shade.qml or
     # Drawer.qml already means gestures.md, and both files have one.
+    #
+    # `SheetArea` counts, and leaving it out was a silent hole for exactly as
+    # long as it took to test for: a sheet's controls are MouseAreas by
+    # inheritance (refactor.md H3), and ten of them became invisible here the
+    # moment they were declared by their new name. The failing branch was run --
+    # one `.pressed` read taken away from a converted tile, which this passed --
+    # so the type list is part of the check and not a detail of it.
     whole = "\n".join(lines)
-    for start, _kind, block in blocks(lines, r"MouseArea"):
+    for start, _kind, block in blocks(lines, r"MouseArea|SheetArea"):
+        # H3. Declaring one of the four on an instance replaces the shared
+        # handler rather than adding to it, so the control silently stops driving
+        # the sheet. The hooks are onGrabbed, onDragged and onUngrabbed.
+        if _kind == "SheetArea":
+            for h in ("onPressed", "onPositionChanged", "onReleased", "onCanceled"):
+                if re.search(r"^\s*%s\s*:" % h, block, re.M):
+                    problems.append(
+                        f"{path}:{start}  SheetArea declares {h}, which replaces "
+                        "the shared one: use onGrabbed/onDragged/onUngrabbed (H3)")
         if "onClicked" not in block:
             continue
         if re.search(r"//\s*no press state \(style\.md H7\)", block):

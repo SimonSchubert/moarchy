@@ -467,6 +467,10 @@ Item {
   // surface's own, which is the half a shared type cannot know (style.md H2).
   component PressVeil: Shared.PressVeil { ink: root.textOnSurface }
 
+  // H3. The three controls on this sheet that also drag it, bound to the
+  // sheet once rather than forwarding four handlers apiece.
+  component SheetArea: Shared.SheetDragArea { sheet: root }
+
 
   readonly property var appRows: {
     // Re-read on every appsChanged() as well as on every keystroke: the bump
@@ -1777,14 +1781,10 @@ Item {
       // Declared before the handle and the column so it sits *under* them:
       // later siblings take input first, so this only ever sees touches
       // nothing else claimed.
-      MouseArea {
+      SheetArea {
         // no press state (style.md H7): a drag catcher under the content, not
         // a control.
         anchors.fill: parent
-        onPressed: mouse => root.sheetPress(this, mouse)
-        onPositionChanged: mouse => root.sheetMove(this, mouse)
-        onReleased: root.sheetRelease()
-        onCanceled: root.sheetCancel()
       }
 
       // Pull the sheet down to close it, by the handle across its top.
@@ -2478,16 +2478,12 @@ Item {
             // the gesture disarms. `onCanceled` covers the scroll case (L4) --
             // QQuickMouseArea::ungrabMouse() clears `pressed` and emits it when
             // the Flickable steals the grab.
-            MouseArea {
+            SheetArea {
               id: cellArea
               anchors.fill: parent
-              onPressed: mouse => { root.sheetPress(this, mouse); root.armHold(entry) }
-              onPositionChanged: mouse => {
-                root.sheetMove(this, mouse)
-                root.holdMove(this, mouse)
-              }
-              onReleased: { root.cancelHold(); root.sheetRelease() }
-              onCanceled: { root.cancelHold(); root.sheetCancel() }
+              onGrabbed: (area, mouse) => root.armHold(entry)
+              onDragged: (area, mouse) => root.holdMove(area, mouse)
+              onUngrabbed: root.cancelHold()
               onClicked: if (!root.sheetWasDrag && !root.holdFired) root.launch(entry)
             }
           }
@@ -2613,13 +2609,9 @@ Item {
               // reason: this MouseArea holds the exclusive grab for the whole
               // gesture, so a downward drag that starts on a settings row can
               // only close the sheet (H1) if it is this area that drags it.
-              MouseArea {
+              SheetArea {
                 id: resultArea
                 anchors.fill: parent
-                onPressed: mouse => root.sheetPress(this, mouse)
-                onPositionChanged: mouse => root.sheetMove(this, mouse)
-                onReleased: root.sheetRelease()
-                onCanceled: root.sheetCancel()
                 onClicked: if (!root.sheetWasDrag) root.activateSetting(resultRow.modelData)
               }
             }

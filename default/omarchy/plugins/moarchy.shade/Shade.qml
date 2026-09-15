@@ -219,6 +219,10 @@ Item {
   // surface's own, which is the half a shared type cannot know (style.md H2).
   component PressVeil: Shared.PressVeil { ink: root.textOnSurface }
 
+  // H3. The seven controls on this sheet that also drag it, bound to the
+  // sheet once rather than forwarding four handlers apiece.
+  component SheetArea: Shared.SheetDragArea { sheet: root }
+
 
   // ---------------------------------------------------------- drag state
   property real progress: 0        // 0 shut .. 1 open
@@ -1178,23 +1182,18 @@ Item {
       onTriggered: { tile.heldFired = true; tile.held() }
     }
 
-    MouseArea {
+    SheetArea {
       id: tileArea
       anchors.fill: parent
-      onPressed: mouse => {
-        root.sheetPress(this, mouse)
+      onGrabbed: (area, mouse) => {
         tile.heldFired = false
         if (tile.holdable) hold.restart()
       }
-      onPositionChanged: mouse => {
-        root.sheetMove(this, mouse)
-        // Cancelled by the sheet drag latching, not by any movement at all: a
-        // thumb held still for half a second still travels a few pixels, and a
-        // hold that a steady hand cannot complete is not a gesture.
-        if (root.sheetDragging) hold.stop()
-      }
-      onReleased: { hold.stop(); root.sheetRelease() }
-      onCanceled: { hold.stop(); root.sheetCancel() }
+      // Cancelled by the sheet drag latching, not by any movement at all: a
+      // thumb held still for half a second still travels a few pixels, and a
+      // hold that a steady hand cannot complete is not a gesture.
+      onDragged: (area, mouse) => { if (root.sheetDragging) hold.stop() }
+      onUngrabbed: hold.stop()
       onClicked: if (!root.sheetWasDrag && !tile.heldFired) tile.activated()
     }
   }
@@ -1245,13 +1244,9 @@ Item {
       }
     }
 
-    MouseArea {
+    SheetArea {
       id: smallArea
       anchors.fill: parent
-      onPressed: mouse => root.sheetPress(this, mouse)
-      onPositionChanged: mouse => root.sheetMove(this, mouse)
-      onReleased: root.sheetRelease()
-      onCanceled: root.sheetCancel()
       onClicked: if (!root.sheetWasDrag) small.activated()
     }
   }
@@ -1431,14 +1426,10 @@ Item {
     // sit 8px apart, so 4 each is the most either may take without the later
     // one eating the earlier one's edge (E3) -- and 4 is exactly what 36 needs.
     // Vertically it fills the 44px header the pair is centred in.
-    MouseArea {
+    SheetArea {
       id: rbArea
       anchors.fill: parent
       anchors.margins: -Style.space(4)
-      onPressed: mouse => root.sheetPress(this, mouse)
-      onPositionChanged: mouse => root.sheetMove(this, mouse)
-      onReleased: root.sheetRelease()
-      onCanceled: root.sheetCancel()
       onClicked: if (!root.sheetWasDrag) rb.activated()
     }
   }
@@ -1515,15 +1506,11 @@ Item {
       // `canceled`, which snapped the sheet back to fully open and then dropped
       // it on a canned 220ms ramp. Holding it live until the sheet is all the
       // way down keeps the gesture intact.
-      MouseArea {
+      SheetArea {
         // no press state (style.md H7): a dismiss scrim. Lighting the whole
         // screen is not feedback, and the shade leaving is what answers.
         anchors.fill: parent
         enabled: root.progress > 0
-        onPressed: mouse => root.sheetPress(this, mouse)
-        onPositionChanged: mouse => root.sheetMove(this, mouse)
-        onReleased: root.sheetRelease()
-        onCanceled: root.sheetCancel()
         onClicked: if (!root.sheetWasDrag) root.dismiss()
       }
     }
@@ -1565,14 +1552,10 @@ Item {
       // H2, for a drag that starts on empty sheet rather than on a tile.
       // Declared before the Column so it sits under it: later siblings take
       // input first, so this only sees what nothing else claimed.
-      MouseArea {
+      SheetArea {
         // no press state (style.md H7): a drag catcher under the content, not
         // a control.
         anchors.fill: parent
-        onPressed: mouse => root.sheetPress(this, mouse)
-        onPositionChanged: mouse => root.sheetMove(this, mouse)
-        onReleased: root.sheetRelease()
-        onCanceled: root.sheetCancel()
       }
 
       Column {
@@ -1816,13 +1799,9 @@ Item {
                     color: root.textOnSurface
                   }
 
-                  MouseArea {
+                  SheetArea {
                     id: mediaArea
                     anchors.fill: parent
-                    onPressed: mouse => root.sheetPress(this, mouse)
-                    onPositionChanged: mouse => root.sheetMove(this, mouse)
-                    onReleased: root.sheetRelease()
-                    onCanceled: root.sheetCancel()
                     onClicked: if (!root.sheetWasDrag
                                    && root.media && typeof root.media.runAction === "function")
                       root.media.runAction(modelData.action)
@@ -1882,14 +1861,10 @@ Item {
             font.pixelSize: Style.font.caption
             font.weight: root.textWeight
             color: root.accent
-            MouseArea {
+            SheetArea {
               id: clearArea
               anchors.fill: parent
               anchors.margins: -Style.space(10)
-              onPressed: mouse => root.sheetPress(this, mouse)
-              onPositionChanged: mouse => root.sheetMove(this, mouse)
-              onReleased: root.sheetRelease()
-              onCanceled: root.sheetCancel()
               onClicked: if (!root.sheetWasDrag) root.clearNotifications()
             }
           }

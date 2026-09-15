@@ -487,8 +487,11 @@ input and its comments, and nothing that assumes Y
 four handlers. The quartet stands twelve times — eight in `Shade.qml`, four in
 `Drawer.qml` — and a control that omits one of the four silently cannot be
 dragged, or strands the watchdog §F2 added (§F8).
-→ `scripts/style-check.sh` asserts that every drag-forwarding area in a sheet is
-the shared component and that it names a tracker
+→ `grep -rn 'onPressed: mouse => root.sheetPress' default/omarchy/plugins/`
+matches nothing, and `scripts/style-check.sh` fails when a `SheetArea` instance
+declares one of the four handlers the shared component forwards -- which
+replaces it rather than adding to it, and is the one way back to the failure
+above
 
 **H4** The drawer's shelf-tile flick and the shade's brightness slider read
 their own tracker, not another one's origin. Both reach through the sheet
