@@ -22,10 +22,29 @@ IMAGE="${IMAGE%/}"
 [ -e "$IMAGE" ] || { echo "No such image: $IMAGE" >&2; exit 1; }
 echo "==> verifying $(basename "$IMAGE")"
 
+# Resolved to an absolute path HERE, and the bind mount built from that rather
+# than from "$REPO_ROOT/$IMAGE".
+#
+# The prefix used to be unconditional, so an absolute path -- which is exactly
+# what build-image.sh's own "verify it:" line prints for an Android artifact --
+# became $REPO_ROOT/Users/simon/Projects/moarchy/images/..., a path that does
+# not exist. Docker does not refuse a missing bind source: it CREATES it, as an
+# empty directory. So the run mounted nothing, verified nothing, and failed
+# with
+#
+#   FAIL /img/moarchy-sargo-... is not a directory -- an Android artifact is a
+#        directory of images (D10)
+#   FAIL could not mount the rootfs
+#
+# which is a report about a broken image, from a perfectly good one, because of
+# a path. The relative form worked, so this hid behind whichever form you
+# happened to type.
+IMAGE_ABS=$(cd "$(dirname "$IMAGE")" && pwd)/$(basename "$IMAGE")
+
 docker build --platform linux/arm64 -f image/Dockerfile -t moarchy-image . >/dev/null
 # --privileged for the loop mount of the rootfs and for the chroot the
 # behavioural checks run in.
 docker run --rm --privileged --platform linux/arm64 \
-  -v "$REPO_ROOT/$(dirname "$IMAGE")":/img:ro \
+  -v "$(dirname "$IMAGE_ABS")":/img:ro \
   --entrypoint bash moarchy-image \
-  /repo/image/verify.sh "/img/$(basename "$IMAGE")"
+  /repo/image/verify.sh "/img/$(basename "$IMAGE_ABS")"
