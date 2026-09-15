@@ -162,6 +162,18 @@ Item {
         // on it worth a tap.
         if (root.opened && present && lk === "none" && st !== "" && st !== "locked")
           simWindow.hide()
+
+        // And raise it when the answer is "the SIM is asking". Latched either
+        // way: once shown, a deliberate close stays closed rather than being
+        // re-opened four seconds later by the same check.
+        if (!root.autoPromptDone && present) {
+          if (lk === "sim-pin" || lk === "sim-puk") {
+            root.autoPromptDone = true
+            if (!root.opened) root.open("{}")
+          } else if (lk === "none" && st !== "" && st !== "locked") {
+            root.autoPromptDone = true
+          }
+        }
       }
     }
   }
@@ -193,6 +205,35 @@ Item {
     repeat: true
     triggeredOnStart: true
     onTriggered: root.refresh()
+  }
+
+  // ------------------------------------------------------------ auto-prompt
+  //
+  // A locked SIM has to raise this screen by itself, and that is not a
+  // convenience. A phone that boots with a locked SIM has no calls and no
+  // texts, and NOTHING else on the screen says so: the bar's cellular glyph
+  // draws the same "failed" rune it draws for a modem that is simply unhappy,
+  // and the first symptom otherwise is a text that never arrives.
+  //
+  // Bounded, so it cannot become the very poll the timer above refuses to be.
+  // It stops the moment the question is answered either way -- asked and
+  // shown, or not asking at all -- and gives up after ~100s on a phone whose
+  // modem never enumerates, which is the no-SIM and no-modem case.
+  property bool autoPromptDone: false
+  property int autoChecks: 0
+
+  Timer {
+    running: !root.autoPromptDone
+    interval: 5000
+    repeat: true
+    // Not triggeredOnStart: at shell start the modem has usually not
+    // enumerated yet, and a first answer of "no modem" is a fact about the
+    // clock rather than about the phone.
+    onTriggered: {
+      root.autoChecks += 1
+      if (root.autoChecks > 20) { root.autoPromptDone = true; return }
+      root.refresh()
+    }
   }
 
   Shared.AppWindow {

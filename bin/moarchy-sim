@@ -27,6 +27,26 @@ MMCLI=/usr/bin/mmcli
 # Reads need no privilege and do not get sudo.
 _mm_root() { sudo -n "$MMCLI" "$@" 2>&1; }
 
+# The SIM's object path, which is NOT the modem's.
+#
+# `--pin` is a SIM option, not a modem one -- `mmcli --help-sim` lists it -- so
+# `mmcli -m any --pin=1234` does not send a PIN to the modem's SIM. It fails
+# with
+#
+#     error: no SIM was specified
+#
+# which arrives at exactly the moment a wrong PIN would, and reads like one. It
+# cost three "wrong PIN" reports from a correct PIN before the journal was
+# read; the only reason it cost nothing worse is that mmcli refused before the
+# modem could count an attempt.
+#
+# Resolved from the modem every time rather than cached, for the same reason
+# `-m any` is: ModemManager renumbers both when the modem re-enumerates.
+_sim_path() {
+  "$MMCLI" -m any --output-keyvalue 2>/dev/null |
+    sed -n 's/^modem\.generic\.sim  *: *//p' | head -1
+}
+
 usage() {
   cat <<'EOF'
 moarchy-sim status         what the SIM is doing, as key=value lines
@@ -117,7 +137,14 @@ unlock() {
     return 1
   fi
 
-  out=$(_mm_root -m any --pin="$pin")
+  local sim
+  sim=$(_sim_path)
+  if [ -z "$sim" ] || [ "$sim" = "--" ]; then
+    echo "The modem is asking for a PIN but reports no SIM object to send it to." >&2
+    return 3
+  fi
+
+  out=$(_mm_root -i "$sim" --pin="$pin")
   if [ $? -eq 0 ] && ! printf '%s' "$out" | grep -qi error; then
     echo "unlocked"
     return 0
