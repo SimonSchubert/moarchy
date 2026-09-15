@@ -1058,7 +1058,16 @@ print(found[0] if found else "")'; }
   # neither root nor a finger. It also cannot be driven by one -- a tap below
   # the cut and a tap on a dead edge are indistinguishable from the outside,
   # which is exactly how the keyboard's left column stayed swallowed.
+  # Read twice if the first comes back empty. This is the first IPC call of the
+  # suite and the shell has usually just been restarted; an empty answer here
+  # is the round trip losing a race, not a verdict on the back edge, and it
+  # reported one on a build whose geometry was exactly right when asked by hand
+  # a minute later.
   geom=$(timeout 8 omarchy-shell gestures geometry 2>/dev/null)
+  if [[ -z $geom ]]; then
+    sleep 3
+    geom=$(timeout 8 omarchy-shell gestures geometry 2>/dev/null)
+  fi
   gv() { tr ' ' '\n' <<<"$geom" | sed -n "s/^$1=//p"; }
   bh=$(gv h); bi=$(gv inset); bs=$(gv strip); bp=$(gv panel); bscr=$(gv screen)
   # G10b's inset too, and leaving it out is how this check spent a release
