@@ -650,6 +650,12 @@ Item {
     var loader = root.shell.panelLoaders[id]
     if (!loader || !loader.item) return
     root.dragTarget = loader.item
+    // gestures.md N3. Ask the sheet to map now, while the finger is still
+    // crossing the slop. resolveTarget runs on the press, which is the only
+    // moment early enough to be worth anything -- by the first drawn frame the
+    // map, the configure and a full grid layout are all on the critical path.
+    if (typeof root.dragTarget.warming !== "undefined")
+      root.dragTarget.warming = true
     // The drawer's progress *is* the pull, on both surfaces, now that both
     // measure against the same travel. An already-open drawer therefore starts
     // the next drag at 1.0, which is what lets a second swipe carry straight on
@@ -1006,6 +1012,11 @@ Item {
     // press retires it (C3), which is L2's correction over again.
     root.lastDrag = null
     root.cancelHold()
+    // N3. A sheet warmed for a gesture that never became one goes back to
+    // unmapped. `progress` keeps it up while it is actually being drawn, so
+    // this only retires a map nothing used.
+    if (root.dragTarget && typeof root.dragTarget.warming !== "undefined")
+      root.dragTarget.warming = false
     root.dragMode = "none"
     root.pendingMode = "none"
     root.dragSource = ""

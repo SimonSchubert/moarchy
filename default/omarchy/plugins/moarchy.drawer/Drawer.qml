@@ -473,6 +473,12 @@ Item {
   // Whether this shell has paid for one icon rescan yet -- see open().
   property bool iconsRefreshed: false
 
+  // N3. Written by moarchy.gestures when a finger lands on a surface that
+  // might drag this one, so the map happens during the slop rather than on the
+  // first drawn frame. Not a state this plugin can decide for itself: the
+  // press is on somebody else's surface.
+  property bool warming: false
+
   Connections {
     target: root.shell ? root.shell.appLibrary : null
     function onAppsChanged() { root.appsRevision++; root.buildIndex() }
@@ -1601,9 +1607,35 @@ Item {
     // and no phone this runs on has a 200px-tall sheet.
     onHeightChanged: if (drawerWindow.height > 200) root.sheetHeight = drawerWindow.height
 
-    visible: root.progress > 0
+    // gestures.md N3. Mapped while the finger is still crossing the slop, not
+    // on the first drawn frame.
+    //
+    // The shade is the comparison: its surface is never unmapped -- shut, it is
+    // a bar-height band across the top -- so a pull-down costs a resize and
+    // this cost a map, a configure round trip, and a first layout of the whole
+    // grid. While unmapped this window reports Qt's 100x100 default (see
+    // `sheetHeight` above), so `grid.cellWidth` is computed against 100 and
+    // every delegate on screen is rebuilt when the real size arrives. All of
+    // that landed on the frames the sheet was arriving on.
+    //
+    // `warming` is set by moarchy.gestures on the press, before the gesture has
+    // latched, and cleared by its reset(). It pays the same debt sheetHeight's
+    // note describes: the first drag of a session was 3.6% off 1:1 because
+    // there was no real height to divide by until the surface had been up once.
+    visible: root.progress > 0 || root.warming
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
+
+    // N3. Mapped is not live. While warming this surface is full-screen, on
+    // Top, and over everything -- so its input region is cut to one pixel
+    // until the sheet is actually being drawn.
+    //
+    // One pixel and not none: Qt treats an empty mask as unset, and an unset
+    // input region is the *whole surface* -- the opposite of what is being
+    // asked for. moarchy.splash carries the same workaround for the same
+    // reason (windows.md L3).
+    Region { id: warmRegion; x: 0; y: 0; width: 1; height: 1 }
+    mask: root.progress > 0 ? null : warmRegion
 
 
     WlrLayershell.namespace: "moarchy-drawer"

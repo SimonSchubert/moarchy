@@ -1076,6 +1076,20 @@ about; on the device, opening the drawer twice with nothing closed in between
 leaves `omarchy-shell drawer openApps` byte-identical and the tiles' icons
 already drawn on the first frame of the second open
 
+**N3** The drawer's surface is mapped before the drag latches, and takes no
+input until the sheet is being drawn. The gesture plugin asks for the map on
+the press — the only moment early enough to be worth anything — and the sheet
+goes back to unmapped if the touch turns out to have meant something else.
+
+Unmapped, a layer surface reports Qt's 100x100 default, so `grid.cellWidth` is
+computed against 100 and every delegate is rebuilt when the real size arrives.
+The map, the configure round trip and that layout all landed on the frames the
+sheet was arriving on; the shade pays none of it, because its surface is never
+unmapped.
+→ with a finger resting on the strip and `drawer state` == `closed`,
+`omarchy-shell drawer geometry` reports real dimensions rather than `w=100
+h=100`, and a tap anywhere but the strip still reaches the app underneath
+
 ---
 
 ## Constraints
