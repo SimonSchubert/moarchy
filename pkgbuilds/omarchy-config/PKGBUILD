@@ -52,7 +52,11 @@ pkgver=${_ver#v}
 # existing artifact -- which is exactly what happened to moarchy.recents: it was
 # deleted from the patch in d258680 and the packaged shell.json on a phone
 # flashed 2026-09-15 still listed it, naming a plugin that is not there.
-pkgrel=3
+# 4: shell.json gained the fourteen org.moarchy.* apps, and pluginIsTrusted
+# grew the same prefix. A phone holding 4.0.3-3 has the phone UI and none of
+# the calculator, calendar, clock, contacts or files plugins, so without this
+# line the image would enable plugins the running shell never loads.
+pkgrel=4
 pkgdesc="Omarchy's configuration and theme layer, ported to Sway"
 arch=('any')
 url="$_url"
@@ -63,7 +67,7 @@ source=("omarchy-$_ref.tar.gz::$_url/archive/$_ref.tar.gz"
         'port-4x.patch'
         'notification-popups-bar-opt-out.patch')
 sha256sums=('25f8c87b89c97aef352ddae02d61902ad9d1a3a07ad44efec0e1436f1c65a5e5'
-            '1919829bcc97822513d42a1f690703f339ad4dd21e0b5d248daa10ea8b577aa4'
+            'cee087eb8f0334b7e834d216500a719ab000fa8b88fb2a21f23ff01eb56d839c'
             '8ab33f7810b721c82f0bea5a0b7756868274f61d59bae4639c028012c9a87160')
 
 # Two patches, and they are different kinds of thing.

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Two discs, one of each colour, side by side.
+
+     The board went: a green square with discs on it is a board, and two discs
+     are the game.
+
+     The dark one is outlined rather than filled flat, and that is the whole
+     difficulty with this icon. A black disc on the drawer's dark background is
+     not a disc, it is a hole — the first two attempts both read as one white
+     ball with a bite taken out of it. The outline is what makes the pair
+     legible, and the overlap is small enough that both are still circles. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+
+  <circle cx="44" cy="64" r="34" fill="#241f31" stroke="#9a9996" stroke-width="5"/>
+  <circle cx="34" cy="52" r="7" fill="#ffffff" opacity="0.3"/>
+  <circle cx="86" cy="64" r="34" fill="#f6f5f4" stroke="#c0bfbc" stroke-width="5"/>
+  <circle cx="76" cy="52" r="7" fill="#ffffff" opacity="0.9"/>
+</svg>

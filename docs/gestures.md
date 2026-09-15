@@ -921,7 +921,7 @@ what matters is the failure `structure.md` P5 exists to prevent.
 
 **L11** **The shell will not uninstall itself.** No package whose name begins
 `moarchy` or `omarchy` can be removed from this card, whatever pacman says
-about it. That is `moarchy`, `moarchy-meta`, `moarchy-keep`, `moarchy-store-git`
+about it. That is `moarchy`, `moarchy-meta`, `moarchy-qml-apps`, `moarchy-store-git`
 and `omarchy-config` today, and it is whatever else this project ships later
 without anyone remembering to come back here.
 → a hold on `moarchy.device` reports `info.protected=1`, `drawer uninstall` ==
@@ -931,10 +931,10 @@ without anyone remembering to come back here.
 exception, and the exception is the whole reason this section needs stating.
 `moarchy-meta` is a package with no files whose entire content is a `depends`
 line (`structure.md` P5), so *every* app on this phone has it as a dependent and
-a plain `pacman -Rs gnome-clocks` fails with
+a plain `pacman -Rs gnome-text-editor` fails with
 
 ```
-:: removing gnome-clocks breaks dependency 'gnome-clocks' required by moarchy-meta
+:: removing gnome-text-editor breaks dependency 'gnome-text-editor' required by moarchy-meta
 ```
 
 That is the record of the set objecting, not a package that needs the app. So

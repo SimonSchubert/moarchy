@@ -2,6 +2,13 @@
 # Prefer a GUI file manager if one is installed (see moarchy-meta's optdepends),
 # otherwise open a TUI one in the terminal. Nautilus is deliberately not in the
 # base set: it is heavy for 2-3 GB of RAM.
+#
+# The Files plugin is the default on this image. omarchy-shell toggle ignores
+# path arguments, so a caller that handed us a directory (theme wallpaper
+# install) falls through to a process that can open one.
+if [[ $# -eq 0 ]] && command -v omarchy-shell >/dev/null; then
+  exec omarchy-shell shell toggle org.moarchy.files
+fi
 for f in nautilus thunar pcmanfm-qt; do
   if command -v "$f" >/dev/null; then exec "$f" "$@"; fi
 done

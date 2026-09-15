@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A mine, which is what the game is named for.
+
+     Eight short spikes rather than four long ones: four read as a compass. The
+     specular is small and off-centre — a big one turned the whole thing into a
+     sun, which is the other round object with spikes coming off it. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+
+  <g stroke="#241f31" stroke-width="12" stroke-linecap="round">
+    <path d="M64 22v84M22 64h84M36 36l56 56M92 36l-56 56"/>
+  </g>
+  <circle cx="64" cy="64" r="36" fill="#241f31"/>
+  <circle cx="52" cy="52" r="7" fill="#ffffff" opacity="0.9"/>
+  <rect x="59" y="8" width="10" height="16" rx="5" fill="#e01b24"/>
+</svg>

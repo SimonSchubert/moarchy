@@ -81,7 +81,20 @@ pkgver=$_ver
 # what ended that was a flashed IMAGE, which is an artifact that leaves the
 # building. Reinstalling the same version over itself on a phone I am holding
 # costs one `pacman -U` and hides nothing from anyone.
-pkgrel=3
+#
+# 4: the default calculator, calendar, contacts, file manager and clocks are
+# the moarchy-apps Quickshell plugins now, not kalk / calindori /
+# gnome-contacts / portfolio-file-manager / gnome-clocks. GTK Keep and Vitals
+# leave with them, because the plugins are the same apps (same notes file,
+# same /proc reader) and two tiles for one job is the thing this list has
+# been deleting since kclock. A removal under an unchanged version is the
+# invisible case the paragraphs above exist for: the phone would keep all
+# seven forever. moarchy-qml-apps is the one name that replaces them.
+#
+# 5: kweather leaves too. The Weather plugin is already in moarchy-qml-apps,
+# and two weather tiles is the clocks cut again. The phone holds 0.2.2-4, so
+# a removal under that number would never be offered.
+pkgrel=5
 pkgdesc="The moarchy package set -- install this and you have the phone"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
@@ -89,13 +102,14 @@ license=('MIT')
 
 depends=(
   # The aarch64 package set. Most of it is Arch Linux ARM; mmsd-tng and
-  # portfolio-file-manager come from [danctnix]
+  # megapixels come from [danctnix]
   # (archmobile.mirror.danctnix.org), which the DanctNIX image's pacman.conf
   # carries and a bare ALARM install does not. The list this replaced claimed
   # at the top that every entry was on archlinuxarm.org, which was not true of
   # those two -- `pacman -U --print` in a bare container is what found it.
-  # It was three until lisgd left with bin/moarchy-gestures; the repo stays,
-  # because the other two still need it.
+  # It was three until lisgd left with bin/moarchy-gestures, and two until
+  # portfolio-file-manager left with the Files plugin; the repo stays,
+  # because mmsd-tng and megapixels still need it.
   #
   # Packages Omarchy installs that are x86_64-only are listed at the bottom as
   # comments, with the reason.
@@ -349,7 +363,8 @@ depends=(
   # list rather than the extras one: without it a fresh install has eight
   # launchable entries, six of which are terminals, and pulling the drawer up
   # gives you an app grid with nothing in it. A phone with no clock, no file
-  # manager and no browser is not finished.
+  # manager and no browser is not finished -- and those three are now the
+  # Quickshell plugins in moarchy-qml-apps, not a GTK/KDE process apiece.
   #
   # These were hand-installed for the docs/apps.md screenshots and never recorded
   # in any list the installer reads, so the first unattended provision wiped them
@@ -358,52 +373,33 @@ depends=(
   # Both families are chosen for the 360px screen: GNOME's libadwaita and KDE's
   # Kirigami apps reflow natively, and neither needs its own session -- they are
   # ordinary Wayland clients under Sway.
-  # Ours, and in this list for the same reason the rest of it is here: a phone
-  # you cannot write a note on is missing something a phone is for, and the
-  # drawer should not send you to the store for it. Pure Python on the
-  # GTK4/libadwaita stack the apps below already pull in, so it adds a
-  # dependency to nothing.
+  # The default calculator, calendar, clock, contacts, files, keep, vitals,
+  # weather and the rest of the moarchy-apps Quickshell set. They are plugins
+  # the shell already holds, so summoning one is a window becoming visible
+  # rather than a process starting -- which is the whole reason they replace
+  # kalk, calindori, gnome-clocks, gnome-contacts, portfolio-file-manager and
+  # the GTK Keep / Vitals packages that used to sit on this line.
   #
-  # Pinned in manifest.toml like the keyboard and the store, and built from the
-  # PKGBUILD its own repo carries (docs/structure.md B1-B2).
-  'moarchy-keep'
+  # Packaged by pkgbuilds/moarchy-qml-apps from the snapshot in qml-apps/,
+  # enabled by the packaged shell.json. ui.catalog is a kit review window
+  # and is not in that package.
+  'moarchy-qml-apps'
 
-  # Ours too, and the same argument one step along: a phone that cannot answer
-  # "what is eating the battery" makes you guess, and guessing is how people end
-  # up power-cycling a phone that was fine. btop and bottom are three lines
-  # above and neither is an answer on a touchscreen -- they are terminal
-  # programs, so the answer costs a terminal and a keyboard covering half the
-  # screen, and btop does not fit that terminal at 47 columns anyway, which is
-  # why bottom is in the set beside it.
-  #
-  # Processor, memory, storage, battery and network on three pages with the
-  # switcher along the bottom, and a task list that groups an app's processes
-  # into one row and can end it. Pure Python on the same GTK4/libadwaita stack,
-  # 160 KB installed, and it depends on nothing that is not already here: every
-  # number in it is read out of /proc and /sys.
-  #
-  # Pinned in manifest.toml like Keep, the keyboard and the store, and built
-  # from the PKGBUILD moarchy-apps carries at apps/vitals -- which sources a
-  # release asset by sha256, so the pin names the code and not just the recipe.
-  'moarchy-vitals'
-
-  'gnome-clocks'
   'gnome-text-editor'
   'loupe'
   'papers'
   'foliate'
-  'portfolio-file-manager'
-  'kalk'
-  # kclock removed 2026-09-06: gnome-clocks covers the same ground and is the
-  # more adaptive of the two (docs/apps.md), and two clock apps in a drawer this
-  # size is one too many.
-  'kweather'
+  # gnome-clocks, portfolio-file-manager, kalk, calindori and kweather left
+  # 2026-09-15: the org.moarchy.{clock,files,calculator,calendar,weather}
+  # plugins cover the same ground and are already loaded. kclock and index-fm
+  # had already gone for being a second clock and a second file manager; this
+  # is the same cut against the first of each, now that there is a first that
+  # is ours. upower stays: moarchy declares it, so removing the weather app
+  # cannot take the battery indicator (the failure that put upower in
+  # pkgbuilds/moarchy in the first place).
   'keysmith'
-  'calindori'
   # qmlkonsole removed 2026-09-08 with alacritty, for the reason the Terminal
   # section above gives: foot is the terminal, and this was a second tile for it.
-  # index-fm removed 2026-09-06: portfolio-file-manager is already the file
-  # manager, and Index brings the whole MauiKit stack with it for a second one.
 
   # WebKit, ~260 MB, and the URL bar is at the bottom where a thumb is. Firefox
   # and Chromium both run and both cost far more memory for no layout benefit.
@@ -426,12 +422,13 @@ depends=(
   # 360px screen is. Every dependency of all five resolves inside the repos
   # the image already enables; nothing new is turned on for them.
 
-  # Contacts, and the one that changes the most. gnome-calls and chatty are
-  # both installed and both resolve numbers to names through
-  # evolution-data-server -- with no app that can WRITE that store there is no
-  # way to enter a name, so the dialer and the SMS app show bare numbers
-  # forever. 2.3 MB fixes it.
-  'gnome-contacts'
+  # gnome-contacts left with the others above. The plugin writes
+  # ~/.local/share/moarchy-contacts/contacts.json, not evolution-data-server,
+  # so Calls and Chats still show bare numbers until someone installs
+  # gnome-contacts from the store -- that remains the only app here that can
+  # write the store they read. It is a real gap and it is documented in
+  # docs/apps.md rather than quietly putting a 2.3 MB GTK app back on the
+  # image to paper over it.
 
   # Email. The obvious-looking pick from [danctnix] is geary-mobile, and it is
   # a trap: its description is "This is a dummy package. It is no longer

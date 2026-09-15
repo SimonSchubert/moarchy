@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- An hourglass, for the timer tab.
+
+     Two solid triangles and two bars, which is the shape the sand glass has
+     had in print since the fourteenth century and the only one that survives
+     being 18px across. An outline version of the same thing turns into a pair
+     of grey diamonds at that size.
+
+     Not in Adwaita, not in hicolor, and not something the phone's icon theme
+     can be asked for. Same canvas and weight as its two neighbours, and no
+     clip path for the reason given in glyph-alarm.svg. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <g fill="#2e3436">
+    <path d="M3.4 1.1h9.2a.8.8 0 0 1 .8.8.8.8 0 0 1-.8.8H3.4a.8.8 0 0 1-.8-.8.8.8 0 0 1 .8-.8z"/>
+    <path d="M3.4 13.2h9.2a.8.8 0 0 1 .8.8.8.8 0 0 1-.8.8H3.4a.8.8 0 0 1-.8-.8.8.8 0 0 1 .8-.8z"/>
+    <path d="M4.5 2.9h7L8 7.5z"/>
+    <path d="M8 8.5l3.5 4.6h-7z"/>
+  </g>
+</svg>

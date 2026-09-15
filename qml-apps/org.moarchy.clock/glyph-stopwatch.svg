@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A stopwatch: a crown, a side button and a hand at two o'clock.
+
+     No icon theme on this phone has one. GNOME Clocks draws its own and ships
+     it inside the application's resource bundle, which a Quickshell plugin
+     cannot read, so this is that glyph drawn again at the same size.
+
+     The hand points up and to the right rather than straight up, because a
+     stopwatch with its hand at twelve is a clock. Same canvas, same weight and
+     the same absence of a clip path as its two neighbours. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <g fill="#2e3436">
+    <path d="M6.6 0.6h2.8a.7.7 0 0 1 .7.7.7.7 0 0 1-.7.7H6.6a.7.7 0 0 1-.7-.7.7.7 0 0 1 .7-.7z"/>
+    <path d="M7.2 1.9h1.6v1.7H7.2z"/>
+    <path d="M13.35 1.85l1.24 1.24a.6.6 0 0 1 0 .85l-.72.72-2.09-2.09.72-.72a.6.6 0 0 1 .85 0z"/>
+    <path d="M8 3.3a6 6 0 1 0 0 12 6 6 0 0 0 0-12zm0 1.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9z"/>
+    <path d="M10.66 7.02a.75.75 0 0 0-1.06 0L7.47 9.15a.75.75 0 1 0 1.06 1.06l2.13-2.13a.75.75 0 0 0 0-1.06z"/>
+  </g>
+</svg>

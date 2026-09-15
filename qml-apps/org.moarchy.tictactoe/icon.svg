@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A cross and a ring, without the paper.
+
+     The sheet it used to sit on was the only thing making it a tile. The two
+     marks differ in shape before they differ in colour, which is the same rule
+     the app itself draws them by. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+
+  <g stroke="#3584e4" stroke-width="15" stroke-linecap="round">
+    <path d="M18 20l40 40M58 20l-40 40"/>
+  </g>
+  <circle cx="90" cy="88" r="26" fill="none" stroke="#ff7800" stroke-width="15"/>
+</svg>

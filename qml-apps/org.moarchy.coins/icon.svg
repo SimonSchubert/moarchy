@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A coin with a star struck into it.
+
+     It was this already — a gold disc with a star cut out of it — sitting on
+     a slate plate that added nothing but a square. Round is the whole point:
+     nothing else in this set is, so at 42px in the drawer the outline alone
+     says which app it is. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+
+  <circle cx="64" cy="66" r="46" fill="#b5830a"/>
+  <circle cx="64" cy="62" r="46" fill="#f5c211"/>
+  <circle cx="64" cy="62" r="37" fill="none" stroke="#e5a50a" stroke-width="4"/>
+  <polygon points="64,36 71.4,56.6 93.3,57.3 76,70.8 82.2,91.8 64,79.4 45.8,91.8 52,70.8 34.7,57.3 56.6,56.6" fill="#b5830a"/>
+</svg>

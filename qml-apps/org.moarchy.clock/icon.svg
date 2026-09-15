@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- An alarm clock: a face, two bells and two feet.
+
+     The object rather than a symbol of the app, and specifically an *alarm*
+     clock rather than a clock. A bare round face is what a dozen widgets on
+     this phone already look like, starting with the shell's own; the two bells
+     are what say at 42px that this is the app you set a morning with. They
+     also keep it apart from the calendar's icon in the same drawer.
+
+     No plate behind it, for the reason Calculator's icon gives: the drawer
+     paints a desktop icon bare, so an icon that fills its own square is the
+     one thing in the grid that reads as a tile instead of as a thing. A clock
+     is round, which makes this easy.
+
+     No clip path anywhere. QtSvg ignores clip-path and paints a clipPath that
+     is declared outside defs, so an unfilled rect comes out black; that is how
+     another icon here drew as a black square on a phone whose image does not
+     carry the repair hook. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+
+  <g fill="#3584e4">
+    <path d="M14 18a11 11 0 0 1 15.5-1.2l16 14a11 11 0 0 1-14.4 16.6l-16-14A11 11 0 0 1 14 18z"/>
+    <path d="M114 18a11 11 0 0 0-15.5-1.2l-16 14a11 11 0 0 0 14.4 16.6l16-14A11 11 0 0 0 114 18z"/>
+    <path d="M31 104.5a9 9 0 0 1 14.4 10.8l-6 8a9 9 0 0 1-14.4-10.8z"/>
+    <path d="M97 104.5a9 9 0 0 0-14.4 10.8l6 8a9 9 0 0 0 14.4-10.8z"/>
+  </g>
+
+  <circle cx="64" cy="70" r="47" fill="#3584e4"/>
+  <circle cx="64" cy="70" r="38" fill="#f6f5f4"/>
+  <circle cx="64" cy="70" r="38" fill="#deddda" fill-opacity="0.45"/>
+  <circle cx="64" cy="67" r="38" fill="#f6f5f4"/>
+
+  <g fill="#241f31">
+    <path d="M64 41a5 5 0 0 1 5 5v19.5a5 5 0 0 1-10 0V46a5 5 0 0 1 5-5z"/>
+    <path d="M64.5 62.5a5 5 0 0 1 3.6 1.5l15 15a5 5 0 0 1-7.1 7.1l-15-15a5 5 0 0 1 3.5-8.6z"/>
+  </g>
+
+  <circle cx="64" cy="67" r="6" fill="#e01b24"/>
+</svg>

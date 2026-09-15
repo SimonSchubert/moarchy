@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Minesweeper
+GenericName=Puzzle game
+Comment=A portrait board, a latching flag, and a clock that stops
+Exec=omarchy-shell shell toggle org.moarchy.minesweeper
+Icon=org.moarchy.Minesweeper
+Terminal=false
+Categories=Game;LogicGame;
+Keywords=minesweeper;mines;puzzle;game;
+StartupNotify=false
+X-Moarchy-Plugin=org.moarchy.minesweeper

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A sheet of paper with a checklist on it, folded at one corner.
+
+     The sheet is the object, so this one needed no plate to begin with — it
+     had one anyway. The fold is what stops a yellow rectangle reading as a
+     button: paper has a corner, a tile does not. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+
+  <path d="M26 14h58l20 20v80H26z" fill="#f6d32d"/>
+  <path d="M84 14l20 20H84z" fill="#b5830a"/>
+  <rect x="38" y="48" width="14" height="14" rx="3" fill="#26a269"/>
+  <path d="M41.5 55l3 3 6-6.5" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="58" y="52" width="34" height="6" rx="3" fill="#b5830a"/>
+  <rect x="38" y="72" width="14" height="14" rx="3" fill="#e5a50a"/>
+  <rect x="58" y="76" width="34" height="6" rx="3" fill="#b5830a"/>
+  <rect x="38" y="94" width="14" height="6" rx="3" fill="#e5a50a"/>
+  <rect x="58" y="94" width="34" height="6" rx="3" fill="#b5830a"/>
+</svg>

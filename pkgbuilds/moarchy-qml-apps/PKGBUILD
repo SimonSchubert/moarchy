@@ -1,0 +1,71 @@
+# The Quickshell apps from moarchy-apps, packaged so a fresh image has them.
+#
+# Each one is QML that omarchy-shell already holds: summoning Calculator is
+# `visible = true` on a window, not four seconds of starting a process. They
+# live under /usr/share/moarchy/plugins next to the phone UI, which is the
+# directory PluginRegistry scans (pkgbuilds/omarchy-config/port-4x.patch),
+# and they are enabled by the packaged shell.json -- a user copy of that file
+# would mask the list, which is why image/verify.sh forbids one.
+#
+# The sources are a snapshot in qml-apps/, not a GitHub tarball. Several of
+# the plugins that replace the old GTK/KDE defaults are not on a published
+# commit in moarchy-apps yet; pinning that repo would ship an image whose
+# drawer still had no calculator. scripts/sync-qml-apps.sh is how the
+# snapshot moves. When those plugins are tagged, this package should grow a
+# source= tarball and drop the in-tree copy, the same shape moarchy-keep has.
+#
+# ui.catalog is not here. It is a review window for the widget kit, not an
+# app a phone is for.
+
+. "$startdir/../../scripts/manifest.sh"
+_ver=$(manifest_get moarchy version) || return 1
+_repo="$startdir/../.."
+
+pkgname=moarchy-qml-apps
+pkgver=$_ver
+pkgrel=1
+pkgdesc="Omarchy-apps Quickshell plugins shipped as default phone apps"
+arch=('any')
+url='https://github.com/SimonSchubert/moarchy'
+license=('MIT')
+# quickshell is what loads them, and it is already a dependency of
+# omarchy-config. Named here so removing this package does not take the
+# shell with it, and so a hand-built system that installs only this still
+# has the runtime. qt6-5compat is what Icon.qml tints through
+# (Qt5Compat.GraphicalEffects); namcap would flag a missing one.
+depends=('quickshell' 'qt6-5compat')
+source=()
+
+package() {
+  local src="$_repo/qml-apps"
+  local kit="$src/qs_ui"
+  local plugdir="$pkgdir/usr/share/moarchy/plugins"
+  local appdir="$pkgdir/usr/share/applications"
+  local icondir="$pkgdir/usr/share/icons/hicolor/scalable/apps"
+
+  [[ -d $kit ]] || { echo "==> ERROR: $kit missing -- run scripts/sync-qml-apps.sh" >&2; return 1; }
+
+  install -d "$plugdir" "$appdir" "$icondir"
+
+  local dir id dest entry icon
+  for dir in "$src"/org.moarchy.*/; do
+    [[ -d $dir ]] || continue
+    id=$(basename "$dir")
+    dest="$plugdir/$id"
+    install -d "$dest/ui"
+    # Runtime files. The .desktop is moved to /usr/share/applications rather
+    # than left in the plugin directory, for the same reason pkgbuilds/moarchy
+    # does it: the drawer lists desktop entries, and the shell should not also
+    # scan one sitting next to the manifest.
+    find "$dir" -maxdepth 1 -type f ! -name '*.desktop' -exec cp -a {} "$dest/" \;
+    cp -a "$kit"/. "$dest/ui/"
+    entry=$(find "$dir" -maxdepth 1 -name '*.desktop' -type f | head -1)
+    if [[ -n $entry ]]; then
+      install -m644 "$entry" "$appdir/$(basename "$entry")"
+      icon=$(awk -F= '/^Icon=/{print $2; exit}' "$entry")
+      if [[ -n $icon && -f $dir/icon.svg ]]; then
+        install -m644 "$dir/icon.svg" "$icondir/$icon.svg"
+      fi
+    fi
+  done
+}

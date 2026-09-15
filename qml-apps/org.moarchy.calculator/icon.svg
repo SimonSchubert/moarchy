@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The four operations, two by two.
+
+     A calculator is a rounded rectangle with a screen and a grid of buttons on
+     it, and that is exactly the icon this cannot be: the drawer paints a
+     .desktop icon bare, with no tile behind it, so an icon that fills its own
+     square is the one thing in the grid that reads as a tile instead of as a
+     thing. Mill's icon says the same and lost its plate for it.
+
+     So the object is the arithmetic rather than the instrument. Four glyphs,
+     four hues, nothing finer than 10px at 128 which is three pixels at the 42
+     the drawer asks for. Nothing else in this set is four separate marks, so
+     the shape alone says which app it is at a glance.
+
+     No clip path: QtSvg ignores clip-path and paints an out-of-defs clipPath as
+     a black rectangle, which is how Chess's first icon drew as a black square. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+
+  <g stroke-width="10" stroke-linecap="round" fill="none">
+    <path d="M40 23v34M23 40h34" stroke="#3584e4"/>
+    <path d="M71 40h34" stroke="#33d17a"/>
+    <path d="M29 77l22 22M51 77l-22 22" stroke="#ff7800"/>
+    <path d="M71 88h34" stroke="#c061cb"/>
+  </g>
+  <circle cx="88" cy="74" r="6" fill="#c061cb"/>
+  <circle cx="88" cy="102" r="6" fill="#c061cb"/>
+</svg>

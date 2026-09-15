@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A leaf of a calendar, hung on two rings.
+
+     Four days and not thirty: the drawer asks for 42px, and at 42px a month
+     of squares is a texture rather than a grid. Mill and Peg solitaire both
+     shipped an icon that lost its figure at that size, so this one was drawn
+     against the small render. The green square is today, which is the only
+     thing anybody looks for on a calendar they are not reading. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+
+  <rect x="36" y="14" width="11" height="20" rx="5.5" fill="#1a5fb4"/>
+  <rect x="81" y="14" width="11" height="20" rx="5.5" fill="#1a5fb4"/>
+
+  <rect x="16" y="24" width="96" height="88" rx="11" fill="#f6f5f4"/>
+  <path d="M16 35a11 11 0 0 1 11-11h74a11 11 0 0 1 11 11v17H16z" fill="#3584e4"/>
+
+  <rect x="36" y="64" width="22" height="20" rx="5" fill="#c0bfbc"/>
+  <rect x="70" y="64" width="22" height="20" rx="5" fill="#c0bfbc"/>
+  <rect x="36" y="90" width="22" height="20" rx="5" fill="#c0bfbc"/>
+  <rect x="70" y="90" width="22" height="20" rx="5" fill="#2ec27e"/>
+</svg>

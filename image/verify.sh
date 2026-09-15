@@ -208,10 +208,49 @@ fi
 
 # Counted from the repo rather than hardcoded. The literal 9 here failed the
 # build that added a tenth plugin, which is a check reporting on itself.
-want=$(ls -1d /repo/default/omarchy/plugins/*/ 2>/dev/null | wc -l | tr -d ' ')
+# qml-apps/ is the other half: the org.moarchy.* plugins ship in
+# moarchy-qml-apps, not in the moarchy package, and a check that only counted
+# default/omarchy/plugins would pass an image that had the phone UI and no
+# calculator.
+want_shell=$(ls -1d /repo/default/omarchy/plugins/*/ 2>/dev/null | wc -l | tr -d ' ')
+want_apps=$(ls -1d /repo/qml-apps/org.moarchy.*/ 2>/dev/null | wc -l | tr -d ' ')
+want=$((want_shell + want_apps))
 n=$(ls -1d "$R"/usr/share/moarchy/plugins/*/ 2>/dev/null | wc -l | tr -d ' ')
 [ "$n" = "$want" ] && ok "$n shell plugins (all of the repo's)" \
                    || no "repo has $want plugins, image has $n"
+
+# The default apps the plugins replaced must not sneak back in. Checking the
+# desktop entry, not the package name: that is what the drawer lists.
+for e in org.gnome.clocks org.kde.kalk org.kde.calindori org.gnome.Contacts \
+         dev.tchx84.Portfolio org.kde.kweather; do
+  if [ -e "$R/usr/share/applications/${e}.desktop" ]; then
+    no "$e.desktop is still in the image -- the plugin replaced it"
+  else
+    ok "$e is not a default app"
+  fi
+done
+# And the plugins that replaced them must be launchable, not merely present
+# as QML the shell never enables.
+for e in org.moarchy.Calculator org.moarchy.Calendar org.moarchy.Clock \
+         org.moarchy.Contacts org.moarchy.Files; do
+  have /usr/share/applications/${e}.plugin.desktop
+done
+have /usr/share/moarchy/plugins/org.moarchy.calculator/Calculator.qml
+have /usr/share/moarchy/plugins/org.moarchy.calculator/ui/qmldir
+grep -q '"id": "org.moarchy.calculator"' "$R/usr/share/omarchy/config/omarchy/shell.json" \
+  && ok "packaged shell.json enables org.moarchy.calculator" \
+  || no "shell.json does not enable the calculator plugin"
+# Every snapshotted plugin must be in that list. A directory in qml-apps/
+# that shell.json does not name is a tile that does nothing, which is how
+# a plugin can land in the package and never load.
+_shelljson="$R/usr/share/omarchy/config/omarchy/shell.json"
+for _pdir in /repo/qml-apps/org.moarchy.*/; do
+  _pid=$(basename "$_pdir")
+  grep -q "\"id\": \"$_pid\"" "$_shelljson" \
+    && ok "shell.json enables $_pid" \
+    || no "shell.json does not enable $_pid"
+done
+unset _pdir _pid _shelljson
 
 hy=$(grep -rl 'import Quickshell.Hyprland' "$R/usr/share/omarchy/shell" --include=*.qml 2>/dev/null | wc -l)
 i3=$(grep -rl 'import Quickshell.I3'       "$R/usr/share/omarchy/shell" --include=*.qml 2>/dev/null | wc -l)

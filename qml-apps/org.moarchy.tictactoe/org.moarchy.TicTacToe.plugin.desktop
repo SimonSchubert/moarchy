@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Noughts and crosses
+GenericName=Board game
+Comment=The game solved at startup, then told to err
+Exec=omarchy-shell shell toggle org.moarchy.tictactoe
+Icon=org.moarchy.TicTacToe
+Terminal=false
+Categories=Game;BoardGame;
+Keywords=tictactoe;noughts;crosses;xo;game;
+StartupNotify=false
+X-Moarchy-Plugin=org.moarchy.tictactoe

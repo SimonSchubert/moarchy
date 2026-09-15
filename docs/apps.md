@@ -20,9 +20,30 @@ seen one run and taken a screenshot.
 
 ## Ours
 
+The phone UI is a set of Quickshell plugins the shell already holds, so
+summoning one is a window becoming visible rather than a process starting.
+They ship as `moarchy-qml-apps` and are enabled by the packaged `shell.json`.
+`ui.catalog` is a kit review window and is not in that package.
+
+| App | Plugin | What it is |
+| --- | --- | --- |
+| Calculator | `org.moarchy.calculator` | The four operations, a tape, and arithmetic that counts in tens |
+| Calendar | `org.moarchy.calendar` | The month, the day under it, and what is next. Local, no accounts |
+| Clock | `org.moarchy.clock` | Alarms, stopwatch, timer |
+| Contacts | `org.moarchy.contacts` | A name, a number, an email, a note. One JSON file, no accounts |
+| Files | `org.moarchy.files` | One folder at a time. `$mod+f` opens it |
+| Keep | `org.moarchy.keep` | Notes and checklists. Same `notes.json` the GTK app writes |
+| Vitals | `org.moarchy.vitals` | Processor, memory, tasks, network, from `/proc` |
+| Weather | `org.moarchy.weather` | Now, today and the week, for places you typed |
+| Coins | `org.moarchy.coins` | Top hundred by market cap, and the ones you star |
+| Habits | `org.moarchy.habits` | A tap a day, a streak, sixteen weeks of history |
+| Launches | `org.moarchy.launches` | Upcoming rockets: a countdown, a pad, the ones you star |
+| Minesweeper | `org.moarchy.minesweeper` | A portrait board and a latching flag |
+| Reversi | `org.moarchy.reversi` | A board drawn for 360px, an opponent on a clock |
+| Noughts and crosses | `org.moarchy.tictactoe` | The game solved at startup, then told to err |
+
 | App | Package | What it is |
 | --- | --- | --- |
-| Keep | `moarchy-keep` | Notes and checklists. Pure Python on the GTK4/libadwaita stack the rest of the set already pulls in |
 | Store | `moarchy-store-git` | Install and remove packages against a signed catalogue |
 | foot | `foot` | The terminal, and the only one — see [One terminal](#one-terminal) |
 
@@ -46,27 +67,22 @@ These reflow to a phone width natively and are the most comfortable fit.
 
 | App | Package | What it is |
 | --- | --- | --- |
-| Clocks | `gnome-clocks` | Alarms, timers, world clocks; bottom tab bar, fully adaptive |
 | Text Editor | `gnome-text-editor` | Works well with the on-screen keyboard |
 | Loupe | `loupe` | Image viewer, gesture zoom |
 | Papers | `papers` | PDF viewer (Evince's successor) |
 | Foliate | `foliate` | E-book reader; genuinely good on this screen |
-| Portfolio | `portfolio-file-manager` | File manager built for touch. From `[danctnix]` |
 | Maps | `gnome-maps` | Adaptive; reflows to 360px like the rest of the set |
 | Web | `epiphany` | The browser — see [Browsers](#browsers) |
-| Contacts † | `gnome-contacts` | The only app here that can *write* the store Calls and Chats read, so without it both show bare numbers forever |
 | Geary † | `geary` | Email. `geary-mobile` is a dummy package; the plain build is the mobile one |
 | Secrets † | `secrets` | KeePass v4 `.kdbx` passwords, which Keysmith is not: that holds TOTP codes only |
 
 <p align="center">
-  <img src="screenshots/apps/01-gnome-clocks.png" width="30%" alt="GNOME Clocks">
   <img src="screenshots/apps/02-gnome-text-editor.png" width="30%" alt="GNOME Text Editor">
   <img src="screenshots/apps/05-foliate.png" width="30%" alt="Foliate">
+  <img src="screenshots/apps/03-loupe.png" width="30%" alt="Loupe">
 </p>
 <p align="center">
-  <img src="screenshots/apps/03-loupe.png" width="30%" alt="Loupe">
   <img src="screenshots/apps/04-papers.png" width="30%" alt="Papers">
-  <img src="screenshots/apps/06-portfolio.png" width="30%" alt="Portfolio">
 </p>
 
 ## Plasma Mobile (Kirigami)
@@ -76,18 +92,10 @@ run without a KDE session — they are ordinary Wayland clients under Sway.
 
 | App | Package | What it is |
 | --- | --- | --- |
-| Kalk | `kalk` | Calculator with unit conversion |
-| KWeather | `kweather` | Weather |
 | Keysmith | `keysmith` | TOTP / 2FA codes |
-| Calindori | `calindori` | Calendar |
 
 <p align="center">
-  <img src="screenshots/apps/07-kalk.png" width="30%" alt="Kalk">
-  <img src="screenshots/apps/09-kweather.png" width="30%" alt="KWeather">
   <img src="screenshots/apps/10-keysmith.png" width="30%" alt="Keysmith">
-</p>
-<p align="center">
-  <img src="screenshots/apps/11-calindori.png" width="30%" alt="Calindori">
 </p>
 
 ## Telephony, camera, reference
@@ -151,6 +159,8 @@ commented block at the foot of `pkgbuilds/moarchy-meta/PKGBUILD`.
 | --- | --- |
 | `alacritty`, `qmlkonsole` | The second and third terminals, dropped 2026-09-08 — [One terminal](#one-terminal) |
 | `kclock`, `index-fm` | A second clock and a second file manager, dropped 2026-09-06. Index drags the whole MauiKit stack in behind it |
+| `gnome-clocks`, `kalk`, `calindori`, `gnome-contacts`, `portfolio-file-manager`, `kweather` | Replaced 2026-09-15 by the `org.moarchy.*` shell plugins. gnome-contacts is the one that still does something the plugin does not: it writes evolution-data-server, which is what Calls and Chats resolve names through, so without it both show bare numbers. It installs from the store |
+| `moarchy-keep`, `moarchy-vitals` | The GTK halves of Keep and Vitals. The plugins are the same apps (same notes file, same `/proc` reader) and two tiles for one job is the cut this list has been making since kclock |
 | `spot-client` | Spot, a native Spotify client over librespot — the reason there is no Spotify *web* app here (B3) |
 | `chromium`, `signal-desktop`, `libreoffice-fresh`, `nautilus`, `mpv`, `imv`, `kdenlive`, `gpu-screen-recorder` | Each is heavy for an A64 with 2 GB of RAM; none is needed for the phone to be a phone |
 | `waydroid` | Android in an LXC container. `waydroid init` pulls a ~1 GB image on first run and then shares 2 GB of RAM and a GLES 2.0 Mali-400 — not something a dependency should commit a fresh phone to |
@@ -159,6 +169,17 @@ commented block at the foot of `pkgbuilds/moarchy-meta/PKGBUILD`.
   <img src="screenshots/apps/12-qmlkonsole.png" width="30%" alt="QMLKonsole">
   <img src="screenshots/apps/08-kclock.png" width="30%" alt="KClock">
   <img src="screenshots/apps/13-index-fm.png" width="30%" alt="Index">
+</p>
+<p align="center">
+  <img src="screenshots/apps/01-gnome-clocks.png" width="30%" alt="GNOME Clocks">
+  <img src="screenshots/apps/07-kalk.png" width="30%" alt="Kalk">
+  <img src="screenshots/apps/11-calindori.png" width="30%" alt="Calindori">
+</p>
+<p align="center">
+  <img src="screenshots/apps/09-kweather.png" width="30%" alt="KWeather">
+</p>
+<p align="center">
+  <img src="screenshots/apps/06-portfolio.png" width="30%" alt="Portfolio">
 </p>
 
 ## What limits app choice

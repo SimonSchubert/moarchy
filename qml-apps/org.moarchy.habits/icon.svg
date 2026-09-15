@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Six days of marks, five of them kept.
+
+     The app is a grid of squares you tap once a day, so the icon is that grid —
+     including the gap, because a habit nobody misses is not a habit anybody
+     tracks, and a full grid would be a claim the app never makes. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+
+  <rect x="14" y="26" width="30" height="30" rx="8" fill="#2ec27e"/>
+  <rect x="50" y="26" width="30" height="30" rx="8" fill="#2ec27e"/>
+  <rect x="86" y="26" width="30" height="30" rx="8" fill="#26a269"/>
+  <rect x="14" y="72" width="30" height="30" rx="8" fill="#26a269"/>
+  <rect x="50" y="72" width="30" height="30" rx="8" fill="#3d3846" opacity="0.28"/>
+  <rect x="86" y="72" width="30" height="30" rx="8" fill="#2ec27e"/>
+  <path d="M92 86l4.5 4.5L110 78" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

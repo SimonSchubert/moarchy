@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A rocket, nose up, with the flame under it.
+
+     Drawn as the object rather than as a launch button: the app is a list of
+     rockets and the drawer is a grid of objects — a handset, a briefcase, a
+     book — so a rocket belongs there and a grey square with a rocket in it
+     does not. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+
+  <path d="M64 10c14 14 21 32 21 52v18H43V62c0-20 7-38 21-52z" fill="#f6f5f4"/>
+  <path d="M64 10c14 14 21 32 21 52v18H64z" fill="#deddda"/>
+  <circle cx="64" cy="54" r="12" fill="#3584e4"/>
+  <circle cx="64" cy="54" r="7" fill="#1c71d8"/>
+  <path d="M43 68 26 92v10h17z" fill="#e01b24"/>
+  <path d="M85 68l17 24v10H85z" fill="#c01c28"/>
+  <path d="M52 100h24l-12 20z" fill="#ff7800"/>
+  <path d="M58 100h12l-6 11z" fill="#f5c211"/>
+</svg>

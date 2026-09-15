@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Coins
+GenericName=Coin tracker
+Comment=The top hundred by market cap, and the ones you star
+Exec=omarchy-shell shell toggle org.moarchy.coins
+Icon=org.moarchy.Coins
+Terminal=false
+Categories=Utility;Finance;
+Keywords=coins;crypto;bitcoin;price;market;
+StartupNotify=false
+X-Moarchy-Plugin=org.moarchy.coins

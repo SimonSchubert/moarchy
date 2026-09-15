@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A folder, with the sheet it is holding showing above it.
+
+     A file manager's icon is the one glyph on this phone that everybody
+     already knows, so the job here is not invention: it is drawing the known
+     shape as an object rather than as a tile. The drawer paints a .desktop
+     icon bare, with no plate behind it, so anything that fills its own square
+     reads as a tile with a picture on it instead of as a thing. The tab and
+     the sheet are what give this an outline that is not a rectangle.
+
+     Two blues and no outline, because the front of a folder is lighter than
+     its back at 42px and a stroke at that size is one grey pixel. The sheet is
+     the theme's dim grey rather than white so it survives a light palette.
+
+     No clip path: QtSvg ignores clip-path and paints an out-of-defs clipPath
+     as a black rectangle, which is how one icon here drew as a black square. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+
+  <rect x="42" y="14" width="46" height="34" rx="5" fill="#9a9996"/>
+
+  <path d="M12 46a8 8 0 0 1 8-8h26l10 12h52a8 8 0 0 1 8 8v54a8 8 0 0 1-8 8H20a8 8 0 0 1-8-8z"
+        fill="#1c71d8"/>
+
+  <rect x="12" y="64" width="104" height="56" rx="8" fill="#3584e4"/>
+</svg>

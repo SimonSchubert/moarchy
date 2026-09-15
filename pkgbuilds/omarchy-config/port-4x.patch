@@ -13,7 +13,7 @@ index e6202da..b16db36 100644
            "verticalFormat": "HH\n\u2014\nmm"
          },
          {
-@@ -60,7 +60,39 @@
+@@ -60,7 +60,81 @@
            "id": "omarchy.power"
          }
        ]
@@ -52,6 +52,48 @@ index e6202da..b16db36 100644
 +    },
 +    {
 +      "id": "moarchy.splash"
++    },
++    {
++      "id": "org.moarchy.calculator"
++    },
++    {
++      "id": "org.moarchy.calendar"
++    },
++    {
++      "id": "org.moarchy.clock"
++    },
++    {
++      "id": "org.moarchy.contacts"
++    },
++    {
++      "id": "org.moarchy.files"
++    },
++    {
++      "id": "org.moarchy.keep"
++    },
++    {
++      "id": "org.moarchy.vitals"
++    },
++    {
++      "id": "org.moarchy.weather"
++    },
++    {
++      "id": "org.moarchy.coins"
++    },
++    {
++      "id": "org.moarchy.habits"
++    },
++    {
++      "id": "org.moarchy.launches"
++    },
++    {
++      "id": "org.moarchy.minesweeper"
++    },
++    {
++      "id": "org.moarchy.reversi"
++    },
++    {
++      "id": "org.moarchy.tictactoe"
 +    }
 +  ]
  }
@@ -468,7 +510,7 @@ diff --git a/shell/shell.qml b/shell/shell.qml
 index 0cc0575..235daf6 100644
 --- a/shell/shell.qml
 +++ b/shell/shell.qml
-@@ -736,15 +736,46 @@ ShellRoot {
+@@ -736,15 +736,56 @@ ShellRoot {
      return api
    }
  
@@ -498,9 +540,19 @@ index 0cc0575..235daf6 100644
 +  // moarchy.shade is the same UI at the same id, which is the point of it --
 +  // and any genuinely foreign plugin the user installs is still scoped, which
 +  // is a protection 4.0.2 did not offer at all.
++  //
++  // `org.moarchy.` is the same decision one step along: those are the
++  // calculator, calendar, clock, contacts, files and the rest of the
++  // moarchy-apps plugins, packaged into /usr/share/moarchy/plugins. Their
++  // AppWindow.focusWindow() reads shell.panelLoaders["moarchy.gestures"] to
++  // raise a window on this compositor, and Plugin.js hideOverlays() hides
++  // the shade and the drawer by name. Both return nothing through the scoped
++  // surface, so an untrusted Keep opens and then cannot be focused from the
++  // shelf. They are our apps, shipped in the image, not a third-party clone.
 +  function pluginIsTrusted(manifest) {
 +    if (!manifest || manifest.__isFirstParty) return true
-+    return String(manifest.id || "").indexOf("moarchy.") === 0
++    var id = String(manifest.id || "")
++    return id.indexOf("moarchy.") === 0 || id.indexOf("org.moarchy.") === 0
 +  }
 +
    function pluginShellFor(manifest) {
@@ -517,7 +569,7 @@ index 0cc0575..235daf6 100644
      var key = String(manifest.id || "")
      if (!key) return null
      if (_pluginRegistryApis[key]) return _pluginRegistryApis[key]
-@@ -768,8 +799,8 @@ ShellRoot {
+@@ -768,8 +809,8 @@ ShellRoot {
    }
  
    function pluginBarWidgetRegistryFor(manifest) {

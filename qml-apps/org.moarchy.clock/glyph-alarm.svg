@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- An alarm clock, at Adwaita's symbolic size and weight.
+
+     Adwaita has status/alarm-symbolic.svg and the kit knows where it is, so
+     this file is not filling a gap on its own account. It is here because the
+     two glyphs beside it, a stopwatch and an hourglass, are not in any icon
+     theme this phone has, and a tab bar whose three icons come from two
+     different hands is a tab bar that looks wrong without anybody being able
+     to say why. So all three are drawn as a set, and Adwaita's stays as the
+     fallback in the names list.
+
+     16px canvas, filled paths, no strokes and no clip path. QtSvg ignores
+     clip-path and paints a clipPath declared outside defs, which is how an
+     icon in this repository once drew as a black square. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <g fill="#2e3436">
+    <path d="M1.85 2.48a1 1 0 0 1 1.41-.1l1.78 1.55a1 1 0 0 1-1.31 1.51L1.95 3.89a1 1 0 0 1-.1-1.41z"/>
+    <path d="M14.15 2.48a1 1 0 0 0-1.41-.1l-1.78 1.55a1 1 0 0 0 1.31 1.51l1.78-1.55a1 1 0 0 0 .1-1.41z"/>
+    <path d="M8 3.2a6 6 0 1 0 0 12 6 6 0 0 0 0-12zm0 1.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9z"/>
+    <path d="M7.9 6.1a.75.75 0 0 0-.75.75v2.4c0 .2.08.39.22.53l1.35 1.35a.75.75 0 0 0 1.06-1.06L8.65 8.94V6.85a.75.75 0 0 0-.75-.75z"/>
+  </g>
+</svg>
