@@ -1061,14 +1061,22 @@ print(found[0] if found else "")'; }
   geom=$(timeout 8 omarchy-shell gestures geometry 2>/dev/null)
   gv() { tr ' ' '\n' <<<"$geom" | sed -n "s/^$1=//p"; }
   bh=$(gv h); bi=$(gv inset); bs=$(gv strip); bp=$(gv panel); bscr=$(gv screen)
-  if [[ -z $bh || -z $bscr ]]; then
-    noac G10 "gestures geometry did not answer" "is the shell running with moarchy.gestures loaded?"
+  # G10b's inset too, and leaving it out is how this check spent a release
+  # red: `topInset` was added to `geometry` by the commit that cut the band
+  # short at the top as well, and this went on wanting `screen - inset`. It
+  # reported a 447px band as wanting 520 -- which is the surface being exactly
+  # right, measured against a formula that predates it. A check that is red for
+  # a reason that is not the behaviour is a check people learn to scroll past.
+  bt=$(gv topInset)
+  if [[ -z $bh || -z $bscr || -z $bt ]]; then
+    noac G10 "gestures geometry did not answer with h, screen and topInset" \
+             "is the shell running with moarchy.gestures loaded?"
   elif (( bi != bs + bp )); then
     noac G10 "inset $bi is not strip $bs plus panel $bp"
-  elif (( bh == bscr - bi )); then
-    okac G10 "the back edge stops $bi short of the bottom (h $bh of $bscr)"
+  elif (( bh == bscr - bi - bt )); then
+    okac G10 "the back edge stops $bi short of the bottom and $bt short of the top (h $bh of $bscr)"
   else
-    noac G10 "the back edge is ${bh}px tall, wanted $(( bscr - bi ))" \
+    noac G10 "the back edge is ${bh}px tall, wanted $(( bscr - bi - bt ))" \
              "a full-height band swallows the keyboard's leftmost key column"
   fi
 
@@ -2280,6 +2288,29 @@ walk(tree)' 2>/dev/null
   fi
 
   swaymsg '[app_id=moa-selftest] kill' >/dev/null 2>&1
+
+  # --- F8. no gesture above left a touch open -------------------------------
+  # docs/refactor.md F8. Last, deliberately: every gesture this suite can drive
+  # has run by now, so a tracker still reporting `active` names a control that
+  # pressed and never ended -- which nothing else here can see, because the
+  # sheet sits exactly where the finger left it either way.
+  #
+  # It is worth a check because the failure is delayed and lands somewhere
+  # else: the stranded watchdog fires four seconds later and puts `progress`
+  # back, so the *next* gesture is what appears to be broken. Found exactly
+  # that way -- M5 read the drawer as open because M6's flick had reopened it
+  # from behind.
+  sleep 6
+  f8_dr=$(timeout 8 omarchy-shell drawer geometry 2>/dev/null | tr ' ' '\n' | sed -n 's/^drag=//p')
+  f8_sh=$(timeout 8 omarchy-shell shade sheet 2>/dev/null | tr ' ' '\n' | sed -n 's/^drag=//p')
+  if [[ -z $f8_dr || -z $f8_sh ]]; then
+    printf '  \033[90m%-4s\033[0m   \033[90mF8 skipped: this shell publishes no `drag=` field\033[0m\n' ""
+  elif [[ $f8_dr == idle && $f8_sh == idle ]]; then
+    okac F8 "no gesture left a touch open on either sheet"
+  else
+    noac F8 "drawer drag=$f8_dr, shade drag=$f8_sh, with no finger down" \
+            "a control pressed a tracker and returned without releasing or cancelling it"
+  fi
 
   # An AC with no check here is a gap, and a gap nobody can see is the same as
   # a gap nobody fixed. These are the ones this suite does not prove:

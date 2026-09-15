@@ -383,6 +383,20 @@ path that cannot afford it.
 → `grep -nE 'panelLoaders|shell\.|execDetached|Quickshell\.'` over
 `DragTracker.qml` matches only comments
 
+**F8** A control that presses a tracker ends that touch on every path out,
+with a release or a cancel. The press arms the watchdog, so one that returns
+without ending leaves it running — and four seconds later the tracker concludes
+the touch was stranded and puts `progress` back, which lands on whatever
+gesture comes *next*.
+
+Two controls did exactly this and had done for as long as they existed: the
+drawer's shelf-tile flick and the shade's brightness slider both returned early
+on their own branch. Neither cost anything before F2, because there was no
+watchdog to strand — which is why the imbalance survived to be found.
+→ with no finger on the screen, `omarchy-shell drawer geometry` and
+`omarchy-shell shade sheet` both report `drag=idle`; `bin/moarchy-selftest
+--gestures` asserts it after every gesture it drives
+
 **F7** Latching and moving are separate. A surface whose whole area is a
 handle — the drawer's grab bar, the shade's band — claims the gesture on the
 press, because `dragging` from the touch is what keeps the shade's input mask

@@ -518,7 +518,14 @@ Item {
               "listmax=" + notificationList.listMax,
               "list=" + Math.round(notificationList.height),
               "content=" + Math.round(notificationList.contentHeight),
-              "scrolls=" + (notificationList.interactive ? 1 : 0)].join(" ")
+              "scrolls=" + (notificationList.interactive ? 1 : 0),
+              // refactor.md F8. Whether a touch is still open on either
+              // tracker; `idle` whenever no finger is down. A control that
+              // presses without ending leaves it otherwise, and nothing else
+              // shows it -- the sheet is where the finger left it either way.
+              "drag=" + (sheetDrag.latched || bandDrag.latched ? "latched"
+                       : sheetDrag.active || bandDrag.active ? "active" : "idle")
+             ].join(" ")
     }
 
     // S19 by another route. The check for a growing sheet has to start from a
@@ -1332,15 +1339,23 @@ Item {
         if (slider.live) slider.committed(slider.dragValue)
       }
 
+      // The sheet's touch is ended on every path, not only the handed-over
+      // one. A slider drag never latches the sheet, so this used to be
+      // harmless; since F2 it strands a live watchdog that fires four seconds
+      // later and puts `progress` back under whatever is on screen.
       onReleased: mouse => {
-        if (handedOver) { root.sheetRelease(); handedOver = false; return }
+        var handed = handedOver
+        handedOver = false
+        root.sheetRelease()
+        if (handed) return
         if (!slider.dragging) return
         slider.dragging = false
         slider.committed(valueAt(mouse.x))
       }
 
       onCanceled: {
-        if (handedOver) { root.sheetCancel(); handedOver = false }
+        root.sheetCancel()
+        handedOver = false
         slider.dragging = false
       }
     }

@@ -1357,6 +1357,15 @@ Item {
            + " gap=" + gap
            + " screen=" + (drawerWindow.screen
                ? drawerWindow.screen.width + "x" + drawerWindow.screen.height : "?")
+           // refactor.md F8. Whether a touch is still open on either tracker.
+           // It must read `idle` whenever no finger is down, and a control that
+           // presses without ending is the only way it does not -- which is
+           // invisible from every other instrument, because the sheet is
+           // exactly where the finger left it either way. Published as one
+           // word rather than two flags: what a check wants to know is whether
+           // anything is outstanding.
+           + " drag=" + (sheetDrag.latched || handleDrag.latched ? "latched"
+                       : sheetDrag.active || handleDrag.active ? "active" : "idle")
     }
 
     // Drives a launch down the same path a tap does: find the entry the grid
@@ -2349,6 +2358,14 @@ Item {
                       tileSlot.wasFlick = true
                       if (tile.y <= -root.openDismissTravel) flickOut.start()
                       else tile.y = 0
+                      // The sheet's touch still has to be ended. It never
+                      // latched -- a flick is upward and this sheet latches
+                      // downward -- so before F2 leaving it unfinished cost
+                      // nothing. It now strands a live watchdog that fires
+                      // four seconds later and puts `progress` back: measured
+                      // on the device, M5 read the drawer as open because M6's
+                      // flick had reopened it from behind.
+                      root.sheetCancel()
                       return
                     }
                     root.sheetRelease()
