@@ -3,11 +3,12 @@
 How moarchy stops being a PinePhone project and becomes a project that runs on
 phones, of which the PinePhone is one.
 
-Status: **moarchy boots on the Pixel 3a from a boot image this repo produces
-(2026-09-14).** The full stack runs: our kernel, our device and firmware
-packages, the Arch rootfs, systemd, autologin, sway and the shell, reached
-through `fastboot boot` of an image built by `image/boot/android-bootimg.sh`
-with nothing of postmarketOS's in it. There is no initramfs at all (D24).
+Status: **moarchy runs on the Pixel 3a, flashed (2026-09-15).**
+`moarchy-sargo-0.2.2-20260915` was built by `image/build.sh`, verified (108
+checks), flashed over fastboot, and booted to the shell from a clean rootfs
+with nothing of postmarketOS's anywhere in it. Our kernel, our device and
+firmware packages, systemd, autologin, sway. There is no initramfs at all
+(D24), and the bootloader confirms the slot is marked successful (D26).
 
 **The PinePhone has not been re-verified** since D1–D6 — the ⚠ note below, and
 the one thing here still owed.
@@ -447,6 +448,12 @@ installed rather than from the moment a first-boot script succeeds.
 > `flash.sh` runs `fastboot --set-active` for the same reason: it is the only
 > thing that clears the unbootable flag, and without it a freshly flashed
 > phone can refuse the image just written to it.
+>
+> **Observed working 2026-09-15**, which is a different claim from "the package
+> is installed": after one boot of an image carrying the unit, the bootloader
+> reports `slot-successful:a:yes` and `slot-retry-count:a:3`. It had read
+> `no` at every check before that, and had been counting down — 3 to 1 across
+> the boots of one afternoon.
 
 **D23** **There is no console on this device, and there cannot be one.** ABL
 strips any `console=` from the boot image and appends its own `console=null`.
