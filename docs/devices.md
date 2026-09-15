@@ -493,8 +493,8 @@ rmtfs, tqftpserv), whose two units ship **enabled** by their own symlinks.
 > is NOT shipped … it goes in when the daemons that drive it do." The
 > *dependency* was right and the *reason* was wrong — 66 MB of `modem.mbn` was
 > written off as telephony that nobody had built, when it is what Wi-Fi runs on.
-> Telephony still needs `q6voiced` and `hexagonrpcd` on top and is untouched
-> by this.
+> Telephony turned out to need `q6voiced` (D32) and nothing else on this SIM;
+> `hexagonrpcd` is the sensors daemon and was never part of it.
 >
 > **Bluetooth is not part of this chain and never was.** WCN3990's BT is a UART
 > controller on `&uart6` driven by `hci_qca`, wanting `qca/crbtfw21.tlv` and
@@ -608,9 +608,9 @@ registers and PipeWire exposes an earpiece, a speaker and a microphone.
 > Microphone", a tone played through `pw-play` and a 3 s capture that came back
 > 48 kHz stereo at full scale rather than silence.
 >
-> **Still open:** call audio specifically. The profile carries a VoiceCall verb,
-> but routing a call through it also wants `q6voiced`, which is not packaged for
-> Arch. Calls connect and are what exposed all of this. **?**
+> **Closed by D32:** routing a call through the profile's VoiceCall verb also
+> wants `q6voiced`. Calls connect, carry audio, and are what exposed all of
+> this.
 
 **D32** *Added 2026-09-15.* **Fixing sound broke calling, and that is the
 correct order of events.** `moarchy-device-sargo` depends on `q6voiced` and
@@ -859,10 +859,15 @@ Restated as a checklist, in build order. Each carries its state.
    needs no IMS); and audio, once D29's two missing files were added — card,
    earpiece, speaker and microphone all measured.
 
-   **Still open:** call audio through the VoiceCall verb, which wants
-   `q6voiced` (D29); camera colour (D30); and sound on a *fresh image*, since
-   both audio fixes were proved by hand-installing onto a running phone and
-   the packaged form has been built but not yet flashed.
+   **Calls carry audio** (D32), measured on a real call after `q6voiced`
+   landed. So on this handset the phone is a phone: Wi-Fi, Bluetooth, camera,
+   vibration, sound, and calls in both directions with voice on them.
+
+   **Still open:** camera colour (D30); SMS, which should work on this SIM
+   (`CS: 'attached'`) and has not been sent or received; and **all of it on a
+   fresh image** — every fix from D27 onward was proved by hand-installing onto
+   a running phone, and the packaged form has been built but not yet flashed.
+   That last one is the gap most likely to be mistaken for done.
 
    The Bluetooth AC that the previous revision of this file declined to write
    is now written, because the measurement it was waiting for has been taken.
@@ -891,8 +896,9 @@ booting, and this file should not say otherwise until one has.
 - **Fairphone codename and tier.** FP4 and FP5 are both pmOS community, both
   fastboot; which one, and whether the `android-bootimg` backend covers it
   unchanged, is unverified.
-- **Calls, Wi-Fi and Bluetooth — one decision, not three.** *Wi-Fi answered
-  2026-09-15; see D27.* The modem stack is built and shipped: `mba.mbn` and
+- **Calls, Wi-Fi and Bluetooth — one decision, not three.** *All three
+  answered and measured on the handset 2026-09-15; see D27, D28, D29, D32.*
+  The modem stack is built and shipped: `mba.mbn` and
   `modem.mbn` from a third upstream, and `moarchy-qcom-modem` carrying qrtr,
   rmtfs and tqftpserv at three pins. `qbootctl` was the precedent and it held —
   upstream C projects, pinned and packaged, at the price of being the ones who
@@ -901,22 +907,25 @@ booting, and this file should not say otherwise until one has.
   cheapest kind of scope cut and the reason D27 quotes sources rather than
   wikis.
 
-  **Still open:** whether any of it works. Nothing has run on the handset, and
-  D27 is "built, not measured" until it has.
+  **It works.** Wi-Fi associates, Bluetooth pairs, and a call connects in both
+  directions with voice on it — all read off the device rather than inferred.
 
-  **Telephony is closer than this file claimed, and the order is now known.**
-  D31: the modem is alive and ModemManager drives it; it fails only on
-  `sim-missing`. Correcting the earlier sentence — `hexagonrpcd` is the
-  sensors/FastRPC daemon and has nothing to do with calls. What is actually
-  needed, cheapest first:
+  **Telephony was far closer than this file claimed,** and the order it
+  actually went in is worth keeping, because almost none of it was the order
+  predicted. `hexagonrpcd` was never involved — it is the sensors/FastRPC
+  daemon. What it took, in the sequence it took:
 
-  1. **A SIM.** Everything below is untestable without one, and this project
-     does not ship claims it has not measured.
-  2. **`q6voiced`** — call audio, routing voice to the ADSP. Note it is blocked
-     behind D29's remaining half: the card and the VoiceCall verb are there
-     now, but routing a call through them wants this daemon.
-  3. **`81voltd`** (`gitlab.com/flamingradian/81voltd`, GPL-2.0, in pmaports as
-     `temp/81voltd`) — a host-side implementation of the QMI IMS Data service.
+  1. **A SIM**, and its PIN — which is why `moarchy.sim` exists (D28).
+  2. ~~**`q6voiced`**~~ — done (D32). It is what holds `VoiceMMode1` open for
+     the duration of a call; without it a dial is torn down immediately.
+  3. **`81voltd`** — **not needed on this SIM, and that was luck rather than
+     design.** `qmicli --nas-get-serving-system` reports `CS: 'attached'` as
+     well as `PS`, capability `cs-ps`: o2's network still offers
+     circuit-switched fallback, so the modem carries voice without IMS at all.
+     A VoLTE-only operator would need this and the two below, and the next SIM
+     is the thing that decides. (`gitlab.com/flamingradian/81voltd`, GPL-2.0,
+     in pmaports as `temp/81voltd`) — a host-side implementation of the QMI IMS
+     Data service.
      LTE carries no circuit-switched voice, so on a network with no 2G/3G
      fallback the modem must register with IMS, and it will not until something
      answers its request for an IMS PDN. Its only deps are `mm-glib` and

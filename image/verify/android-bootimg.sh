@@ -242,6 +242,61 @@ for _f in crbtfw21.tlv crnv21.bin; do
   [ -s "$R/usr/lib/firmware/qca/$_f" ] && ok "Bluetooth firmware $_f present" \
     || no "no qca/$_f -- hci_qca has no patch/NVM to download"
 done
+
+# 8. And the address, without which all of the above is true and bluez still
+# lists no adapter at all (D28).
+[ -x "$R/usr/bin/bootmac" ] && ok "bootmac is installed" \
+  || no "no /usr/bin/bootmac -- hci0 comes up unconfigured and bluez shows nothing"
+[ -s "$R/usr/lib/udev/rules.d/90-bootmac-bluetooth.rules" ] \
+  && ok "bootmac's Bluetooth rule is installed" \
+  || no "no 90-bootmac-bluetooth.rules -- nothing sets the BD address"
+
+sec "the audio chain (D29, D32)"
+# The same shape as the Wi-Fi chain above and for the same reason: every link
+# fails quietly, and the symptom of the first one is four errors downstream.
+#
+# 1. The calibration blob. qcom-q6core will not probe without it, q6afe sits on
+# q6core, and the end of that is /proc/asound/cards reading "no soundcards".
+[ -s "$R/usr/lib/firmware/qcom/sdm670/sargo/Global_cal.acdb" ] \
+  && ok "Global_cal.acdb present (q6core probes, so there is a sound card)" \
+  || no "no Global_cal.acdb -- qcom-q6core will not probe and the phone is silent"
+
+# 2. The use-case profile. Without it the card exists and PipeWire shows no
+# sink and no source, because WirePlumber will not expose a card it cannot
+# route. The conf.d name has to be the card's name exactly.
+[ -s "$R/usr/share/alsa/ucm2/Google/sargo/sargo.conf" ] \
+  && ok "the sargo ALSA use-case profile is installed" \
+  || no "no ucm2/Google/sargo/sargo.conf -- the card would expose no sink or source"
+if [ -e "$R/usr/share/alsa/ucm2/conf.d/sdm660/Google Pixel 3a.conf" ]; then
+  ok "ALSA can find it by card name (conf.d/sdm660)"
+else
+  no "no conf.d/sdm660/'Google Pixel 3a'.conf -- the profile exists and nothing looks it up"
+fi
+
+# 3. Call audio specifically. A call is not carried by the modem alone: q6voiced
+# holds VoiceMMode1 open for its duration, and without it a dial is torn down
+# the moment it is made -- which looks like a network problem and is not.
+[ -x "$R/usr/bin/q6voiced" ] && ok "q6voiced is installed" \
+  || no "no /usr/bin/q6voiced -- calls terminate the moment they are dialled (D32)"
+_u=q6voiced.service
+if [ -L "$R/usr/lib/systemd/system/multi-user.target.wants/$_u" ] ||
+   [ -L "$R/etc/systemd/system/multi-user.target.wants/$_u" ]; then
+  ok "$_u is enabled"
+else
+  no "$_u is not enabled in either tree -- installed and never started"
+fi
+
+# 4. And the numbers it needs. Its unit ConditionPathExists on this file, so a
+# missing one is not an error anywhere: the unit is simply skipped, for ever.
+if [ -s "$R/usr/share/q6voiced/q6voiced.conf" ]; then
+  if grep -q '^q6voice_device=' "$R/usr/share/q6voiced/q6voiced.conf"; then
+    ok "q6voiced.conf names a voice PCM ($(sed -n 's/^q6voice_device=/device /p' "$R/usr/share/q6voiced/q6voiced.conf"))"
+  else
+    no "q6voiced.conf has no q6voice_device -- the unit would start with no PCM"
+  fi
+else
+  no "no /usr/share/q6voiced/q6voiced.conf -- q6voiced's unit is condition-skipped silently"
+fi
 }
 
 # The rootfs growing to fill its partition.

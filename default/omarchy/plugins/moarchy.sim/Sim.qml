@@ -188,17 +188,6 @@ Item {
         if (root.opened && present && lk === "none" && st !== "" && st !== "locked")
           simWindow.hide()
 
-        // And raise it when the answer is "the SIM is asking". Latched either
-        // way: once shown, a deliberate close stays closed rather than being
-        // re-opened four seconds later by the same check.
-        if (!root.autoPromptDone && present) {
-          if (lk === "sim-pin" || lk === "sim-puk") {
-            root.autoPromptDone = true
-            if (!root.opened) root.open("{}")
-          } else if (lk === "none" && st !== "" && st !== "locked") {
-            root.autoPromptDone = true
-          }
-        }
       }
     }
   }
@@ -232,34 +221,25 @@ Item {
     onTriggered: root.refresh()
   }
 
-  // ------------------------------------------------------------ auto-prompt
+  // --------------------------------------------------- no auto-prompt here
   //
-  // A locked SIM has to raise this screen by itself, and that is not a
-  // convenience. A phone that boots with a locked SIM has no calls and no
-  // texts, and NOTHING else on the screen says so: the bar's cellular glyph
-  // draws the same "failed" rune it draws for a modem that is simply unhappy,
-  // and the first symptom otherwise is a text that never arrives.
+  // There WAS one: a timer that polled on startup and opened this screen when
+  // the SIM turned out to be locked. It is deleted rather than left in,
+  // because it could never fire.
   //
-  // Bounded, so it cannot become the very poll the timer above refuses to be.
-  // It stops the moment the question is answered either way -- asked and
-  // shown, or not asking at all -- and gives up after ~100s on a phone whose
-  // modem never enumerates, which is the no-SIM and no-modem case.
-  property bool autoPromptDone: false
-  property int autoChecks: 0
-
-  Timer {
-    running: !root.autoPromptDone
-    interval: 5000
-    repeat: true
-    // Not triggeredOnStart: at shell start the modem has usually not
-    // enumerated yet, and a first answer of "no modem" is a fact about the
-    // clock rather than about the phone.
-    onTriggered: {
-      root.autoChecks += 1
-      if (root.autoChecks > 20) { root.autoPromptDone = true; return }
-      root.refresh()
-    }
-  }
+  // A plugin is not constructed until something summons it, `keepLoaded` or
+  // not -- measured by restarting the shell with a locked SIM and watching for
+  // the status probe, which never ran, then summoning the screen and watching
+  // the same timer start polling immediately. So the code only worked once the
+  // screen had already been opened, which is the one case it was not for.
+  //
+  // Raising this unprompted needs a watcher in something always loaded.
+  // moarchy.bar is the obvious home: it already polls the modem for the
+  // cellular glyph and already parses this exact output. What it does today is
+  // draw a distinct glyph for a locked SIM, which is the information that was
+  // actually missing -- a phone that will not call because its SIM wants a PIN
+  // now says so. Summoning a window from the bar is a bigger change than that,
+  // and the bar's manifest says display-only for reasons worth respecting.
 
   Shared.AppWindow {
     id: simWindow

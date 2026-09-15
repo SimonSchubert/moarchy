@@ -161,7 +161,10 @@ var PAGES = {
   // row you learn to scroll past. `when` is the same mechanism the QR row
   // below uses.
   { id: "sim", type: "action", glyph: "󰯙", label: "Unlock SIM",
-    when: "[[ $(moarchy-sim status) == *lock=sim-p* ]]",
+    // `blocking`, not `lock`: a working phone reports lock=sim-pin2 (PIN2
+    // guards fixed dialling, not the SIM), and a substring match on "sim-p"
+    // offered to unlock a SIM that was registered and placing calls.
+    when: "[[ $(moarchy-sim status) == *blocking=yes* ]]",
     keywords: "sim pin puk unlock modem cellular mobile carrier",
     run: "omarchy-shell shell summon moarchy.sim '{\"returnTo\":\"moarchy.settings\",\"page\":\"net\"}'",
     launch: "none" },

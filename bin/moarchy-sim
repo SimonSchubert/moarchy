@@ -60,9 +60,21 @@ EOF
 #
 #   present   is there a modem at all
 #   state     mmcli's modem.generic.state, verbatim
-#   lock      sim-pin | sim-puk | none   -- what is being asked for
+#   lock      sim-pin | sim-pin2 | sim-puk | none -- what is being asked for
+#   blocking  whether the modem is UNUSABLE until that is answered
 #   retries   attempts left for whatever `lock` names, or -1 if unknown
 #   operator  once registered
+#
+# `blocking` exists because `lock` alone is a trap, and it caught this script's
+# own caller. A modem happily registered on a network and placing calls still
+# reports
+#
+#   modem.generic.unlock-required : sim-pin2
+#
+# because PIN2 guards fixed dialling and call-cost limits, not the SIM. A
+# Settings row keyed on "does lock start with sim-p" therefore offered to
+# unlock a SIM that was working. The modem's own `state` is the honest signal:
+# it says `locked` when it means it.
 status() {
   local kv
   kv=$("$MMCLI" -m any --output-keyvalue 2>/dev/null)
@@ -70,6 +82,7 @@ status() {
     echo "present=no"
     echo "state="
     echo "lock=none"
+    echo "blocking=no"
     echo "retries=-1"
     echo "operator="
     return 0
@@ -94,9 +107,14 @@ status() {
 
   [ "$lock" = "--" ] && lock=none
   [ "$operator" = "--" ] && operator=
+
+  local blocking=no
+  [ "$state" = "locked" ] && blocking=yes
+
   echo "present=yes"
   echo "state=${state:-}"
   echo "lock=${lock:-none}"
+  echo "blocking=$blocking"
   echo "retries=$retries"
   echo "operator=$operator"
 }
@@ -120,6 +138,9 @@ unlock() {
       echo "This SIM wants its PUK, not a PIN. A PIN here is a wasted attempt." >&2
       return 2 ;;
     sim-pin) ;;
+    sim-pin2)
+      echo "The SIM is unlocked; PIN2 guards fixed dialling, not the SIM." >&2
+      return 0 ;;
     *)
       echo "No modem is asking for a PIN (lock=$lock)." >&2
       return 3 ;;

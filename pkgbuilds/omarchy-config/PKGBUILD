@@ -63,7 +63,7 @@ source=("omarchy-$_ref.tar.gz::$_url/archive/$_ref.tar.gz"
         'port-4x.patch'
         'notification-popups-bar-opt-out.patch')
 sha256sums=('25f8c87b89c97aef352ddae02d61902ad9d1a3a07ad44efec0e1436f1c65a5e5'
-            '20e8e569ca0f966cf29da2ac41335be7e8f64dcd6db94f2bc6180fbe5bfbd06d'
+            '1919829bcc97822513d42a1f690703f339ad4dd21e0b5d248daa10ea8b577aa4'
             '8ab33f7810b721c82f0bea5a0b7756868274f61d59bae4639c028012c9a87160')
 
 # Two patches, and they are different kinds of thing.

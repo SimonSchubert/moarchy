@@ -300,14 +300,23 @@ Item {
   // disappears rather than sitting there as a permanent zero-bars scold.
   property string modemState: ""
   property string modemFailedReason: ""
+  property string modemLock: ""
   property int modemSignal: -1
 
   readonly property bool simMissing: root.modemFailedReason === "sim-missing"
+  // A SIM that wants its PIN, which is a different thing from a SIM that is
+  // absent and from a modem that is unwell -- and it used to draw the same
+  // rune as the latter. On a phone that boots with a locked SIM nothing else
+  // on screen says why calls fail, and the answer is four taps away in the
+  // drawer under "SIM".
+  readonly property bool simLocked: root.modemLock === "sim-pin" ||
+                                    root.modemLock === "sim-puk"
   readonly property bool modemUsable: root.modemState !== "" && !root.simMissing
 
   readonly property string cellGlyph: {
     if (root.modemState === "") return ""       // no modem at all: draw nothing
     if (root.simMissing) return "󰓥"
+    if (root.simLocked) return "󰿅"              // U+F0FC5, md-sim-alert-outline
     if (root.modemState === "failed" || root.modemState === "disabled") return "󰞃"
     if (root.modemSignal < 0) return "󰣂"
     var ramp = ["󰣂", "󰢿", "󰣀", "󰣁"]
@@ -321,6 +330,7 @@ Item {
       onStreamFinished: {
         var state = ""
         var reason = ""
+        var lock = ""
         var signal = -1
         var lines = String(text || "").split("\n")
         for (var i = 0; i < lines.length; i++) {
@@ -330,10 +340,12 @@ Item {
           var value = parts.slice(1).join(":").trim()
           if (key === "modem.generic.state") state = value
           else if (key === "modem.generic.state-failed-reason") reason = value
+          else if (key === "modem.generic.unlock-required") lock = value
           else if (key === "modem.generic.signal-quality.value") signal = parseInt(value, 10)
         }
         root.modemState = state
         root.modemFailedReason = reason === "--" ? "" : reason
+        root.modemLock = lock === "--" ? "" : lock
         root.modemSignal = isFinite(signal) ? signal : -1
       }
     }
