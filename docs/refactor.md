@@ -493,12 +493,28 @@ declares one of the four handlers the shared component forwards -- which
 replaces it rather than adding to it, and is the one way back to the failure
 above
 
-**H4** The drawer's shelf-tile flick and the shade's brightness slider read
-their own tracker, not another one's origin. Both reach through the sheet
-tracker's sampled press coordinates and both carry their own copy of the
-slop-and-axis test that `DragTracker` already applies.
-→ `grep -n 'sheetPressX\|sheetPressY' moarchy.drawer/Drawer.qml
-moarchy.shade/Shade.qml` matches nothing
+**H4** *Not done, and the measurement is the reason.* The drawer's shelf-tile
+flick and the shade's brightness slider each carry their own slop-and-axis test
+against the sheet tracker's sampled origin, and neither becomes a tracker
+instance for less than it costs.
+
+> **Both were written and both were reverted.** The slider's hand-over is the
+> sheet's latch *plus* an axis-dominance term, applied by a control that must not
+> feed the sheet's tracker at all before it hands over -- so sharing the test
+> means a second tracker instance on the same touch, which measured **+9 code
+> lines** to remove two lines of arithmetic. The tile flick's two tests are each
+> a *different* half of the tracker's condition -- a 3px dominance check with no
+> slop for the axis arbitration, and a slop check with no dominance for the flick
+> -- so there is no single copy to remove; converting it came out size-neutral
+> across three criteria (M6, M7, M8) that cannot be re-run without the phone.
+>
+> F3 already says the commit rule belongs to the surface. These two are commit
+> rules, and the honest reading is that H4 mistook them for copies of the latch
+> because they are spelled like it. What remains true, and is H5, is that the
+> *trace* had to be marked on every surface; that landed.
+→ `grep -n dyScene moarchy.shade/Shade.qml` matches the slider's hand-over and
+`grep -n 'tileArea.preventStealing' moarchy.drawer/Drawer.qml` the tile's axis
+arbitration; nothing else in either file carries a slop-and-axis test of its own
 
 **H5** A cancel marks the trace on every surface that has one. §F2's evidence
 sentence — "a real cancel ends `-1`" — is true of the drawer's handle and of
