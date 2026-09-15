@@ -211,6 +211,9 @@ say "rootfs image"
 local ROOT_USED_MIB ROOT_MIB
 ROOT_USED_MIB=$(du -sm "$ROOTDIR" | cut -f1)
 ROOT_MIB=$(( ROOT_USED_MIB + ROOT_SLACK_MIB ))
+# Checked here because here is the earliest it can be checked without
+# guessing: the rootfs exists, so its size is a fact rather than an estimate.
+need_space "$ROOT_MIB" "the rootfs image"
 truncate -s "${ROOT_MIB}M" "$WORK/rootfs.raw"
 mkfs.ext4 -q -L "$ROOT_LABEL" -d "$ROOTDIR" \
   -O ^has_journal,^metadata_csum_seed "$WORK/rootfs.raw"

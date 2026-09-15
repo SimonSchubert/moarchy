@@ -63,6 +63,35 @@ say() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 info() { printf '    %s\n' "$*"; }
 die() { printf '\033[31m!! %s\033[0m\n' "$*" >&2; exit 1; }
 
+# need_space <mib> <what> -- die unless $WORK's filesystem has that much free.
+#
+# Both backends build a filesystem image beside the rootfs directory they made
+# it from, so $WORK briefly holds the rootfs TWICE. /work is the container's
+# own writable layer and not a bind mount, so the space it is spending is the
+# container runtime's disk, which nothing in this repo controls and which other
+# work on the same machine fills.
+#
+# Without this, running out there surfaces as mkfs.ext4's own message:
+#
+#   libwebkit2gtk-4.1.so.0.21.10: No space left on device while looking up ...
+#   mkfs.ext4: No space left on device while populating file system
+#
+# -- a named library, thirty minutes into a build, about a device that is not
+# full. Docker Desktop's VM was at 88% with 7.2 GiB free against a 6.3 GiB
+# rootfs; `docker builder prune` returned 33 GiB and the same build passed.
+# Same trade as the kernel PKGBUILD's case-sensitivity check (devices.md D21):
+# one cheap assertion in exchange for a failure that reads like its cause.
+need_space() {
+  local want_mib="$1" what="$2" have_mib
+  have_mib=$(df -Pm "$WORK" 2>/dev/null | awk 'NR==2 {print $4}')
+  [ -n "$have_mib" ] || return 0   # no df, no opinion -- never block on that
+  [ "$have_mib" -ge "$want_mib" ] && return 0
+  die "$WORK has ${have_mib}M free and $what needs ${want_mib}M.
+   This is the build filesystem, not the phone's. It is the container
+   runtime's disk: \`docker system df\` shows what is on it and
+   \`docker builder prune\` is the reclaim that costs nothing but rebuild time."
+}
+
 # The boot backend (docs/devices.md D8, D9). Sourced AFTER say/info/die, which
 # its hook bodies call, and after the variables above, which they read -- it
 # defines three functions and runs nothing at source time.

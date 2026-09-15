@@ -108,6 +108,9 @@ mkfs.vfat -F 32 -n BOOT "$BOOTIMG" >/dev/null
 # (I7), so this only has to be big enough to boot and run growpart once.
 ROOT_USED_MIB=$(du -sm "$ROOTDIR" | cut -f1)
 ROOT_MIB=$(( ROOT_USED_MIB + ROOT_SLACK_MIB ))
+# Checked here because here is the earliest it can be checked without
+# guessing: the rootfs exists, so its size is a fact rather than an estimate.
+need_space "$ROOT_MIB" "the rootfs image"
 ROOTIMG="$WORK/root.img"
 truncate -s "${ROOT_MIB}M" "$ROOTIMG"
 # -d populates from a directory with no mount and no loop device.
