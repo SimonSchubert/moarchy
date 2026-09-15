@@ -1062,6 +1062,19 @@ means; `launch` opens whichever one already is, and chooses nothing. The tile's
 settings openAt apps.default.agent`, and neither path installs an agent to find
 out which
 
+**P13** Grok on this SoC is **pinned**. linux-aarch64 1.0.30's TUI executes
+`sha512su0` and dies `SIGILL` (Pixel 3a SDM670, PinePhone A64; same fault as
+xai-org/plugin-marketplace#694 / #700). 1.0.25's TUI does not. The wrapper
+`moarchy-agent` writes for grok is therefore not omarchy-mise-install's five
+lines: those run `mise use -g npm:@xai-official/grok` with no version, and
+omarchy-default-agent treats a file containing a line that *begins* with
+`mise use -g` as its own wrapper and upgrades to latest on every tap. The pin
+is `1.0.25`, auto-update is off (`GROK_DISABLE_AUTOUPDATER` and
+`~/.grok/config.toml`), and the process exec'd is `~/.grok/bin/grok-1.0.25`,
+not the `grok` symlink the npm launcher would follow into 1.0.30.
+→ after `moarchy-agent shim grok`, `~/.local/bin/grok` names `1.0.25` and
+`GROK_DISABLE_AUTOUPDATER`, and no line in it begins with `mise use -g`
+
 ## The IPC surface
 
 These verbs exist so the ACs above are checkable without touching the screen.

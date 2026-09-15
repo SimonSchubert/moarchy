@@ -528,6 +528,21 @@ P5PY
     no "P7 ~/.local/bin/claude was replaced" "a real install vanishes on the next seed"
   fi
 
+  # P13. grok's linux-aarch64 1.0.30 TUI SIGILLs on this SoC. The wrapper must
+  # pin 1.0.25 and must not look like omarchy-mise-install's output, or
+  # omarchy-default-agent upgrades to latest on every tap.
+  ag shim grok >/dev/null 2>&1
+  grok_shim="$agent_home/.local/bin/grok"
+  if [[ -x $grok_shim ]] \
+     && grep -q '1.0.25' "$grok_shim" \
+     && grep -q GROK_DISABLE_AUTOUPDATER "$grok_shim" \
+     && ! grep -q '^mise use -g' "$grok_shim"; then
+    ok "P13 grok is pinned to 1.0.25 and will not be upgraded by omarchy-default-agent"
+  else
+    no "P13 grok wrapper is not the aarch64 pin" \
+       "1.0.30 TUI dies SIGILL (sha512su0) on sargo and pinephone"
+  fi
+
   # P12. `moarchy-agent launch` -- the verb the strip's press-and-hold runs
   # (docs/gestures.md C1). Both of its states, and neither may install anything.
   #

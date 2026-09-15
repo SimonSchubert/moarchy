@@ -94,7 +94,14 @@ pkgver=$_ver
 #    on a device that has a flash LED (docs/shade.md S10a). A phone holding
 #    0.2.2-4 shows three tiles and nothing anywhere says why, so this is a
 #    bump a field upgrade has to carry.
-pkgrel=5
+# 6: bin/moarchy-launch-files opens the Files plugin. $mod+f is the binding,
+#    and without this bump a phone holding 0.2.2-5 still walks nautilus /
+#    thunar / a TUI and never the app the image now ships.
+# 7: grok's wrapper pins 1.0.25. 1.0.30's linux-aarch64 TUI executes
+#    sha512su0 and SIGILLs on this SoC; a phone holding 0.2.2-6 writes
+#    omarchy-mise-install's unversioned wrapper and upgrades to it on
+#    every tap (docs/settings.md P13).
+pkgrel=7
 pkgdesc="Omarchy's look, keybindings and theming on a phone, under Sway"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'

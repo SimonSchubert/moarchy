@@ -30,6 +30,10 @@ case ":$PATH:" in
 esac
 export PATH
 
+# linux-aarch64 grok 1.0.30 TUI executes sha512su0 (SIGILL on sargo/pinephone).
+# The wrapper pins 1.0.25; this stops that pin from replacing itself.
+export GROK_DISABLE_AUTOUPDATER=1
+
 # --- the session -----------------------------------------------------------
 # Last in this file, and this file sorts last: everything above has to be in
 # place before sway inherits it.

@@ -92,13 +92,18 @@ agent_name() {
 
 agents() { printf '%s\n' claude codex copilot crush gemini grok omp opencode pi; }
 
+# Last linux-aarch64 grok TUI that does not execute sha512su0. 1.0.30's TUI
+# does, and this SoC does not have that instruction (Pixel 3a / PinePhone:
+# SIGILL at 0x7bfd6f8, same as xai-org/plugin-marketplace#694 and #700).
+GROK_AARCH64_PIN=1.0.25
+
 # What mise is asked for, which is the agent's own name for seven of the nine.
 # omarchy-default-agent spells that `agent_package=${agent_package:-$agent}`
 # and names the two exceptions; they are named here for the same reason the
-# labels are.
+# labels are. grok is pinned, not latest: see GROK_AARCH64_PIN.
 agent_package() {
   case "$1" in
-    grok) echo "npm:@xai-official/grok" ;;
+    grok) echo "npm:@xai-official/grok@$GROK_AARCH64_PIN" ;;
     omp)  echo "github:can1357/oh-my-pi" ;;
     *)    echo "$1" ;;
   esac
@@ -128,6 +133,64 @@ current_agent() {
 # terminal installs and runs claude, `omarchy-cmd-present claude` is true, and
 # upstream's keybinding launcher -- which refuses on `omarchy-cmd-missing
 # "$agent"` before it ever reaches mise -- has something to find.
+# grok is not omarchy-mise-install's five lines, on purpose.
+#
+# That wrapper's third line is `mise use -g "npm:@xai-official/grok"`, no
+# version. omarchy-default-agent treats a file containing a line that BEGINS
+# with `mise use -g` as its own wrapper and runs the same unversioned
+# `mise use -g` on every tap, which is how a working 1.0.25 became a SIGILL
+# the day 1.0.30 shipped. Indenting that line, pinning the package, and
+# exec'ing ~/.grok/bin/grok-1.0.25 (not the `grok` symlink) is what stops
+# both upgrades: mise's, and grok's own auto-updater via GROK_DISABLE_AUTOUPDATER
+# plus config.toml. docs/settings.md P13.
+write_grok_shim() {
+  local bin=$1 pin=$GROK_AARCH64_PIN cfg="$HOME/.grok/config.toml"
+
+  mkdir -p "$(dirname "$bin")" "$HOME/.grok"
+
+  # Freeze auto-update before the first TUI. 1.0.25 will otherwise replace
+  # itself with 1.0.30 and the next tap SIGILLs. Idempotent: a value already
+  # there is forced false; a missing [cli] is appended.
+  if [[ -f $cfg ]] && grep -qE '^[[:space:]]*auto_update[[:space:]]*=' "$cfg"; then
+    sed -i 's/^[[:space:]]*auto_update[[:space:]]*=.*/auto_update = false/' "$cfg"
+  elif [[ -f $cfg ]] && grep -q '^\[cli\]' "$cfg"; then
+    sed -i '/^\[cli\]/a auto_update = false' "$cfg"
+  else
+    printf '\n[cli]\nauto_update = false\n' >>"$cfg"
+  fi
+
+  cat >"$bin" <<EOF
+#!/bin/bash
+# linux-aarch64 grok 1.0.30 executes sha512su0; this SoC does not have it.
+# Not omarchy-mise-install's five lines. A line that BEGINS with
+# "mise use -g" makes omarchy-default-agent treat this as its own wrapper
+# and upgrade to latest on every tap.
+export GROK_DISABLE_AUTOUPDATER=1
+export MISE_MINIMUM_RELEASE_AGE=0
+pkg="npm:@xai-official/grok@${pin}"
+pin="${pin}"
+bindir="\$HOME/.grok/bin"
+versioned="\$bindir/grok-\$pin"
+canonical="\$bindir/grok"
+
+if ! mise where "\$pkg" &>/dev/null; then
+  mise use -g --quiet "\$pkg" || exit 1
+fi
+
+mkdir -p "\$bindir"
+if [[ -x \$versioned ]]; then
+  ln -sfn "grok-\$pin" "\$canonical"
+  exec "\$versioned" "\$@"
+fi
+
+# npm's grok launcher execs \$canonical if it exists, even when the package
+# on PATH is this pin. A leftover 1.0.30 would SIGILL.
+rm -f "\$canonical"
+exec mise x "\$pkg" -- grok "\$@"
+EOF
+  chmod +x "$bin"
+}
+
 write_shim() {
   local agent=$1 bin="$HOME/.local/bin/$1"
 
@@ -138,6 +201,11 @@ write_shim() {
   if [[ -e $bin ]] && ! grep -q mise "$bin" 2>/dev/null; then
     echo "moarchy-agent: leaving $bin alone, it is not a mise wrapper" >&2
     return 0
+  fi
+
+  if [[ $agent == grok ]]; then
+    write_grok_shim "$bin"
+    return
   fi
 
   omarchy-mise-install "$(agent_package "$agent")" "$agent"
