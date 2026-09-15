@@ -455,6 +455,47 @@ installed rather than from the moment a first-boot script succeeds.
 > `no` at every check before that, and had been counting down — 3 to 1 across
 > the boots of one afternoon.
 
+**D27** *Added 2026-09-15.* **Wi-Fi on this SoC is a modem feature.** The chain
+is `rmtfs -s` → modem DSP → `wlanmdsp.mbn` → QMI → `ath10k_snoc` → `wlan0`, and
+every link of it is shipped: `firmware-moarchy-sargo` carries `mba.mbn`,
+`modem.mbn` and the five `.jsn` protection-domain maps, and
+`moarchy-device-sargo` depends on `moarchy-qcom-modem` (qrtr, rmtfs, pd-mapper,
+tqftpserv), whose three units ship **enabled** by their own symlinks.
+
+> The four facts that make this non-obvious, each read out of a source rather
+> than a wiki:
+>
+> 1. **The Wi-Fi firmware does not run on the Wi-Fi chip.** WCN3990's
+>    `wlanmdsp.mbn` executes on the modem DSP as a protection domain;
+>    `ath10k_snoc` reaches it over QMI. This package already shipped that blob,
+>    which is why the situation looked like a driver problem.
+> 2. **Nothing in the kernel boots that DSP.** `qcom_q6v5_mss.c` sets
+>    `rproc->auto_boot = false`. The remoteproc sits idle until userspace writes
+>    `start` to its `state` file.
+> 3. **`rmtfs` is what writes it.** Its `-s` flag calls `rproc_init()`, which
+>    hunts `/sys/class/remoteproc/*` for the `-mss-pil` modalias. The daemon
+>    named for the remote *filesystem* service is also the ignition — the name
+>    tells you nothing about the job that matters here.
+> 4. **`mba.mbn` and `modem.mbn` are not in TheMuppets tree.** That is a dump of
+>    `/vendor/firmware`; the modem images live in sargo's own `modem` partition.
+>    They come from a third upstream, the one postmarketOS uses, pinned in
+>    `manifest.toml` as `modem-url`/`modem-ref`.
+>
+> The decision this reverses is `firmware-moarchy-sargo`'s own: "the modem pair
+> is NOT shipped … it goes in when the daemons that drive it do." The
+> *dependency* was right and the *reason* was wrong — 66 MB of `modem.mbn` was
+> written off as telephony that nobody had built, when it is what Wi-Fi runs on.
+> Telephony still needs `q6voiced` and `hexagonrpcd` on top and is untouched
+> by this.
+>
+> **Bluetooth is not part of this chain and never was.** WCN3990's BT is a UART
+> controller on `&uart6` driven by `hci_qca`, wanting `qca/crbtfw21.tlv` and
+> `qca/crnv21.bin` — both already in the image, in `linux-firmware-atheros`,
+> which plain `linux-firmware` does pull in (checked with `pacman -Fx`, not read
+> off the upstream git tree). `bluez` is installed and `moarchy-firstboot`
+> enables `bluetooth`. So nothing identifiable is missing for Bluetooth, and it
+> is a measurement on the device rather than a package to write.
+
 **D23** **There is no console on this device, and there cannot be one.** ABL
 strips any `console=` from the boot image and appends its own `console=null`.
 Verified from a shell on the handset: with `console=tty0` in the boot image,
@@ -585,6 +626,28 @@ Restated as a checklist, in build order. Each carries its state.
    `include/generated/timeconst.h ... Error 127` — make's code for "command not
    found", about a header, four directories from the missing tool.
 
+8. **D27 — BUILT, NOT MEASURED.** The radios. What is true off the device:
+   `moarchy-qcom-modem` builds and installs `qrtr`, `rmtfs`, `pd-mapper` and
+   `tqftpserv`; all three daemons link `libqrtr.so.1` (`readelf -d`, asserted
+   in `build()` so a silent unlinked build fails rather than ships); their
+   units name `/usr/bin/…` rather than `/usr/local/bin/…` and land in
+   `multi-user.target.wants`; `firmware-moarchy-sargo` 0.2.2-2 carries thirteen
+   files including `mba.mbn`, `modem.mbn` and five `.jsn` maps, with the two
+   modem blobs checked for `\x7fELF` + `EM_QDSP6` so a truncated download fails
+   the build rather than the boot. `image/verify/android-bootimg.sh` asserts
+   every link of the chain in the image, and the Bluetooth firmware beside it.
+
+   **Not yet done, and it is the only claim that matters:** no image has been
+   built from this and nothing has run on the handset. "wlan0 exists" and "it
+   associates" are both still unmeasured, and this file should not say
+   otherwise until they are. The thing to read first on the device is
+   `systemctl status rmtfs`, then `journalctl -b | grep -iE 'q6v5|mss|ath10k'`
+   — a skipped `ConditionPathExists` and a failed firmware load look nothing
+   alike and both end as "no Wi-Fi".
+
+   Bluetooth carries no AC here because nothing was changed for it: D27's last
+   paragraph says why, and the next step for it is a measurement, not a build.
+
 AC 7 was the one that could fail for reasons none of the others predicted,
 which is why it was last and why nothing above it depended on owning a Pixel
 3a. It did fail that way, three times over, and D24–D26 are what came back.
@@ -609,22 +672,28 @@ booting, and this file should not say otherwise until one has.
 - **Fairphone codename and tier.** FP4 and FP5 are both pmOS community, both
   fastboot; which one, and whether the `android-bootimg` backend covers it
   unchanged, is unverified.
-- **Calls, Wi-Fi and Bluetooth — one decision, not three.** **?** On SDM670 the
-  Wi-Fi chip lives *on the modem DSP*: `ath10k_snoc` reaches WCN3990 over QMI,
-  and `wlanmdsp.mbn` — which `firmware-moarchy-sargo` already ships — is loaded
-  by the modem remoteproc, not by the driver alone. So Wi-Fi needs `mba.mbn` and
-  `modem.mbn`, deliberately absent, plus `rmtfs`, `pd-mapper` and `tqftpserv`,
-  none packaged for Arch. Telephony needs all of that and then `q6voiced` and
-  `hexagonrpcd` on top. That is why the phone has no Wi-Fi and no calls today,
-  and it is *one* missing piece rather than two unrelated ones.
+- **Calls, Wi-Fi and Bluetooth — one decision, not three.** *Wi-Fi answered
+  2026-09-15; see D27.* The modem stack is built and shipped: `mba.mbn` and
+  `modem.mbn` from a third upstream, and `moarchy-qcom-modem` carrying qrtr,
+  rmtfs, pd-mapper and tqftpserv at four pins. `qbootctl` was the precedent and
+  it held — four upstream C projects, pinned and packaged, at the price of
+  being the ones who notice when they move.
 
-  Bluetooth is not part of it: WCN3990's BT is a UART controller driven by
-  `hci_qca`, wanting `qca/crbtfw21.tlv` and `qca/crnv21.bin` from
-  `linux-firmware-atheros` and a BD address the vendor keeps outside the
-  filesystem. Cheaper than the modem stack and independent of it.
+  **Still open:** whether any of it works. Nothing has run on the handset, and
+  D27 is "built, not measured" until it has.
 
-  Unbudgeted, and the shape of the work is now known rather than guessed:
-  `qbootctl` is the precedent — an upstream C project, pinned and packaged, at
-  the price of being the ones who notice when it moves. Three more of those,
-  plus the two blobs, and the radios come up together.
+  **Telephony is still open on its own terms.** It needs everything above and
+  then `q6voiced` and `hexagonrpcd`, neither packaged for Arch, so the empty
+  `DEVICE_SERVICES` in `moarchy-device-sargo` stays empty. What changed is only
+  that Wi-Fi no longer waits behind it: the two were one decision because they
+  shared the blob, not because they shared the work.
+
+  **Bluetooth was never part of it,** and that is now a finding rather than a
+  guess. Nothing identifiable is missing: the kernel has `BT_HCIUART_QCA` and
+  `BT_QCA`, the DT enables `&uart6` with a `qcom,wcn3990-bt` child, the firmware
+  is in `linux-firmware-atheros` (which `linux-firmware` pulls in), `bluez` is
+  in `moarchy-meta` and `moarchy-firstboot` enables it. So the next step is to
+  look at the device rather than to write a package — and the first suspect is
+  that the DT carries no `local-bd-address`, which on WCN3990 can leave `hci0`
+  present and unconfigured rather than absent. **?**
 

@@ -12,17 +12,42 @@
 #   qcom/sdm670/sargo/cdsp.mbn        compute DSP
 #   qcom/sdm670/sargo/ipa_fws.mbn     IP accelerator (networking offload)
 #   qcom/sdm670/sargo/venus.mbn       video codec
-#   qcom/sdm670/sargo/mba.mbn         modem \ deliberately absent, see below
+#   qcom/sdm670/sargo/mba.mbn         modem \ the DSP Wi-Fi runs on
 #   qcom/sdm670/sargo/modem.mbn       modem /
-#
-# The modem pair is NOT shipped. sargo telephony needs q6voiced and hexagonrpcd
-# to be any use, neither is packaged for Arch, and modem.mbn is tens of
-# megabytes of blob that would sit in every image doing nothing. It goes in
-# when the daemons that drive it do -- same reasoning as the empty
-# DEVICE_SERVICES in moarchy-device-sargo.
 #
 # wlanmdsp.mbn is shipped and is not in that list: ath10k loads it for wifi
 # rather than the DTB naming it.
+#
+# --- The modem pair, and why it stopped being optional ----------------------
+#
+# Until 2026-09-15 this package shipped neither, on the reasoning that sargo
+# telephony needs q6voiced and hexagonrpcd, neither is packaged for Arch, and
+# 66 MB of modem.mbn would sit in every image doing nothing.
+#
+# The second half of that was wrong, and it is the sentence that cost the
+# device its Wi-Fi. WCN3990's firmware does not run on the Wi-Fi chip: it runs
+# on the modem DSP as a protection domain, `ath10k_snoc` reaches it over QMI,
+# and `wlanmdsp.mbn` -- which this package already shipped -- is loaded by the
+# modem remoteproc rather than by the driver. `&mss_pil` in
+# sdm670-google-common.dtsi names this pair; without them the DSP never boots,
+# the WLAN service never appears on QRTR, and ath10k_snoc waits forever.
+#
+# So the pair is the price of Wi-Fi. Telephony is a later, separate question
+# and still needs those two daemons; this no longer blocks on it.
+#
+# They come from a THIRD upstream (manifest [device.sargo] modem-url), because
+# they are not in TheMuppets tree at all -- that is a dump of /vendor/firmware
+# and the modem images live in sargo's own `modem` partition. Same repo and
+# same commit postmarketOS's firmware-google-sargo uses.
+#
+# --- The .jsn files are not documentation -----------------------------------
+#
+# adspr, adspua, cdspr, modemr, modemuw: protection-domain maps, read by
+# pd-mapper, which serves them over QMI so that a client can ask where a
+# service lives. pd-mapper finds them by walking /sys/class/remoteproc/*/firmware,
+# taking dirname() of each value and listing that directory under /lib/firmware
+# -- so they are not merely *somewhere*, they have to be in this exact
+# directory, beside the .mbn files that named it.
 #
 # --- On the free half -------------------------------------------------------
 #
@@ -37,19 +62,26 @@
 #
 # --- Individual files, not the vendor tarball -------------------------------
 #
-# postmarketOS fetches the whole TheMuppets repo. This fetches the fourteen
+# postmarketOS fetches the whole TheMuppets repo. This fetches the twenty-one
 # files it needs, each pinned to the same commit in its URL. The tarball is a
-# full Android vendor tree against 24 MB of what we use, and the explicit list
+# full Android vendor tree against 90 MB of what we use, and the explicit list
 # means `pacman -Ql` and this file agree about what a phone is carrying.
 
 . "$startdir/../../scripts/manifest.sh"
 _ver=$(manifest_get moarchy version) || return 1
 _commit=$(manifest_get device.sargo firmware-ref) || return 1
 _url=$(manifest_get device.sargo firmware-url) || return 1
+_modem_commit=$(manifest_get device.sargo modem-ref) || return 1
+_modem_url=$(manifest_get device.sargo modem-url) || return 1
 
 pkgname=firmware-moarchy-sargo
 pkgver=$_ver
-pkgrel=1
+# 2: gained the modem pair and the five protection-domain maps, without which
+# the phone has no Wi-Fi. pkgver comes from manifest.toml and did not move, and
+# docker/build-packages.sh skips a package whose pkgver-pkgrel is already in
+# PKGDEST -- so without this bump the build keeps yesterday's file and the
+# whole change ships as nothing at all.
+pkgrel=2
 pkgdesc="Proprietary firmware for the Google Pixel 3a (sargo)"
 arch=('any')
 url="$_url"
@@ -57,13 +89,19 @@ license=('LicenseRef-proprietary')
 options=('!strip')
 
 _fw="$_url/raw/$_commit/proprietary/vendor/firmware"
+_modem="$_modem_url/-/raw/$_modem_commit/modemfw"
 
-# The split-ELF pieces first, then the blobs that ship whole.
+# The split-ELF pieces first, then the blobs that ship whole, then the modem
+# pair and the protection-domain maps. Order is load-bearing: sha256sums below
+# is positional, so an entry inserted anywhere but the end silently reassigns
+# every checksum after it.
 source=(
   "$_fw/a615_zap.mdt"  "$_fw/a615_zap.b00"  "$_fw/a615_zap.b01"  "$_fw/a615_zap.b02"
   "$_fw/ipa_fws.mdt"   "$_fw/ipa_fws.b00"   "$_fw/ipa_fws.b01"
   "$_fw/ipa_fws.b02"   "$_fw/ipa_fws.b03"   "$_fw/ipa_fws.b04"
   "$_fw/adsp.mbn"      "$_fw/cdsp.mbn"      "$_fw/venus.mbn"     "$_fw/wlanmdsp.mbn"
+  "$_modem/mba.mbn"    "$_modem/modem.mbn"  "$_modem/modemr.jsn"
+  "$_fw/adspr.jsn"     "$_fw/adspua.jsn"    "$_fw/cdspr.jsn"     "$_fw/modemuw.jsn"
   'pil-squash.py'
 )
 sha256sums=('25487bfa1522db87ab5abd8aed82d322f1eda06226c39ef6181af407166d743b'
@@ -80,6 +118,13 @@ sha256sums=('25487bfa1522db87ab5abd8aed82d322f1eda06226c39ef6181af407166d743b'
             'e5368943533cc1cfbc4afc1a3e2cd3e24a125955508c534d669c7cbd50fce524'
             '5187a4edb51ebb1d81e9cbe7d65b8c00312bd4430c1c0542732ffb59de9ef8e0'
             '2242bf300366d266d902416f00a0cb0c1ae91dd4629eb73766482600120a5e8a'
+            'c5b9ebadd1385e4940b8c6254b65772906fb83939106c1bfba6eb59d09072555'
+            'e8c3b67a416227adafb51191a9d8ae0ed7f770b0b495558e75cf69c830fa243c'
+            '44ebb965dd299e798c69914718ae23525db343b5f2169b81e686bdd7db841e3d'
+            '4781dc9312fa017b0e611c752dae2183c0f205af8300b28417a496dae511b0a5'
+            'd6c6376f53e5449eb4f7b9e5a30679ebc2a9afaad28c13ff171f979e7b1af1f6'
+            '15e148599165b38f68e62302d63c87caa5f0b164deb81aa419bbb4ecf920bc4b'
+            'e75d94b61df3e86c5b3f7a976d93f726cb85f2b897a8ea80a0924b9bb9c1a3bf'
             'SKIP')
 
 build() {
@@ -99,7 +144,9 @@ package() {
   # it is a phone that boots to a black screen because the GPU never came up.
   local d="$pkgdir/usr/lib/firmware/qcom/sdm670/sargo"
   install -d "$d"
-  for f in a615_zap.mbn ipa_fws.mbn adsp.mbn cdsp.mbn venus.mbn wlanmdsp.mbn; do
+  for f in a615_zap.mbn ipa_fws.mbn adsp.mbn cdsp.mbn venus.mbn wlanmdsp.mbn \
+           mba.mbn modem.mbn \
+           adspr.jsn adspua.jsn cdspr.jsn modemr.jsn modemuw.jsn; do
     install -Dm644 "$srcdir/$f" "$d/$f"
   done
 
@@ -107,4 +154,18 @@ package() {
   # boot naming the firmware rather than the build. Cheap to rule out here.
   [ -s "$d/a615_zap.mbn" ] || { echo "!! a615_zap.mbn is empty"; return 1; }
   [ -s "$d/ipa_fws.mbn" ]  || { echo "!! ipa_fws.mbn is empty";  return 1; }
+
+  # The two the modem DSP boots from, checked for shape rather than size. A
+  # truncated or HTML-error download would pass a size test and fail at boot
+  # as "failed to load", which on a device with no console (devices.md D23) is
+  # a black screen and nothing else. Both are Hexagon ELFs: \x7fELF, e_machine
+  # 0xa4 (EM_QDSP6) at offset 18.
+  local f
+  for f in mba.mbn modem.mbn; do
+    if [ "$(od -An -tx1 -N2 -j18 "$d/$f" | tr -d ' ')" != "a400" ] ||
+       [ "$(od -An -c   -N4       "$d/$f" | tr -d ' ')" != "177ELF" ]; then
+      echo "!! $f is not a Hexagon ELF -- a bad download, not a bad phone"
+      return 1
+    fi
+  done
 }

@@ -29,7 +29,8 @@ pkgver=$_ver
 # manifest.toml -- so without this bump docker/build-packages.sh keeps
 # yesterday's file (it compares pkgver-pkgrel against PKGDEST) and a phone in
 # the field sees no upgrade to take.
-pkgrel=2
+# 3: gained moarchy-qcom-modem, which is what gives this phone Wi-Fi (D27).
+pkgrel=3
 pkgdesc="Google Pixel 3a (sargo) hardware support for moarchy"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
@@ -58,9 +59,23 @@ conflicts=('moarchy-device')
 # an artifact of their minimal initramfs.
 #
 # firmware-moarchy-sargo carries the proprietary half: the a615_zap shader the
-# Adreno needs on top of that free microcode, plus adsp, cdsp, ipa_fws, venus
-# and wlanmdsp -- every path the device tree names except the modem pair, which
-# waits for the daemons that would drive it.
+# Adreno needs on top of that free microcode, plus adsp, cdsp, ipa_fws, venus,
+# wlanmdsp and -- since 0.2.2-2 -- mba and modem. That is every path the device
+# tree names, with nothing held back.
+#
+# moarchy-qcom-modem is Wi-Fi, which is not what its name suggests and is the
+# reason that package's header is as long as it is. The short version: WCN3990's
+# Wi-Fi firmware runs on the modem DSP, nothing in the kernel boots that DSP
+# (`rproc->auto_boot = false`), and `rmtfs -s` is what does. Without this
+# dependency the phone has a bound ath10k_snoc, a present board file, and no
+# wlan0 -- which reads like a driver problem and is a missing daemon.
+#
+# linux-firmware-atheros is NOT named here and that is deliberate: `linux-firmware`
+# already pulls it in (it is one of the thirteen vendor subpackages, unlike
+# qcom), and it carries both ath10k/WCN3990/hw1.0/board-2.bin for Wi-Fi and
+# qca/crbtfw21.tlv + qca/crnv21.bin for Bluetooth. Verified with `pacman -Fx`
+# against the real database rather than read off the upstream git tree, which
+# is the mistake that cost this device its GPU twice.
 #
 # qbootctl is what stops this phone bricking itself. An A/B bootloader counts
 # down a retry counter on every handoff and marks the slot unbootable at zero
@@ -73,6 +88,7 @@ depends=(
   'linux-firmware'
   'linux-firmware-qcom'
   'firmware-moarchy-sargo'
+  'moarchy-qcom-modem'
   'qbootctl'
 )
 

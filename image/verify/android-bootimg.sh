@@ -172,6 +172,70 @@ if grep -q '^ExecStart=/usr/bin/qbootctl -m' "$R/usr/lib/systemd/system/$_u" 2>/
 else
   no "the unit's ExecStart is not /usr/bin/qbootctl -m"
 fi
+
+sec "the Wi-Fi chain (D27)"
+# Every link, because on this SoC Wi-Fi is not one component failing loudly but
+# a chain going quiet: ath10k_snoc binds, the interface never appears, and
+# nothing in dmesg says the word modem. Each of these is separately capable of
+# producing that exact picture, so each is asserted separately.
+#
+# 1. The firmware the modem DSP boots from, and the WLAN image that runs on it.
+_fwd=$R/usr/lib/firmware/qcom/sdm670/sargo
+for _f in mba.mbn modem.mbn wlanmdsp.mbn; do
+  if [ -s "$_fwd/$_f" ]; then ok "firmware $_f present"
+  else no "no $_fwd/$_f -- the modem DSP never boots, so the WLAN firmware never runs"; fi
+done
+
+# 2. The protection-domain maps, which have to be in THIS directory: pd-mapper
+# finds them by dirname()-ing /sys/class/remoteproc/*/firmware, not by search.
+_jsn=$(ls "$_fwd"/*.jsn 2>/dev/null | wc -l)
+[ "$_jsn" -ge 5 ] \
+  && ok "$_jsn protection-domain maps beside the firmware" \
+  || no "only $_jsn .jsn files in $_fwd -- pd-mapper has nothing to serve"
+
+# 3. The board file, from linux-firmware-atheros. Named here because it comes
+# from a package nothing names explicitly (`linux-firmware` pulls it in), which
+# is exactly how the Adreno lost its microcode twice.
+[ -s "$R/usr/lib/firmware/ath10k/WCN3990/hw1.0/board-2.bin" ] \
+  && ok "ath10k WCN3990 board file present" \
+  || no "no ath10k/WCN3990/hw1.0/board-2.bin -- install linux-firmware-atheros"
+
+# 4. The daemons. rmtfs is the one that is not optional and does not look
+# load-bearing: its -s flag is what writes "start" to the modem remoteproc,
+# because the kernel sets rproc->auto_boot = false and starts nothing itself.
+for _b in rmtfs pd-mapper tqftpserv; do
+  [ -x "$R/usr/bin/$_b" ] && ok "$_b is installed" \
+    || no "no /usr/bin/$_b -- moarchy-qcom-modem is missing from the image"
+done
+
+# 5. And that something runs them. Same two-tree rule as qbootctl above.
+for _u in rmtfs.service pd-mapper.service tqftpserv.service; do
+  if [ -L "$R/usr/lib/systemd/system/multi-user.target.wants/$_u" ] ||
+     [ -L "$R/etc/systemd/system/multi-user.target.wants/$_u" ]; then
+    ok "$_u is enabled"
+  else
+    no "$_u is not enabled in either tree -- installed and never started"
+  fi
+done
+
+# 6. The condition rmtfs.service will be judged by at boot. The kernel names
+# the node after the device tree's qcom,client-id, and sdm670-google-common.dtsi
+# says 1 -- so a unit asking for mem0 would be enabled, correct-looking, and
+# skipped at every boot with nothing but a "condition failed" in the journal.
+if grep -q '^ConditionPathExists=/dev/qcom_rmtfs_mem1' \
+     "$R/usr/lib/systemd/system/rmtfs.service" 2>/dev/null; then
+  ok "rmtfs.service waits on /dev/qcom_rmtfs_mem1 (DT client-id 1)"
+else
+  no "rmtfs.service's ConditionPathExists is not /dev/qcom_rmtfs_mem1 -- it would never start"
+fi
+
+# 7. Bluetooth is a different radio and shares none of the above: WCN3990's BT
+# is a UART controller on &uart6 driven by hci_qca, wanting only these two.
+# Cheap to check and it costs a rebuild to discover on the device.
+for _f in crbtfw21.tlv crnv21.bin; do
+  [ -s "$R/usr/lib/firmware/qca/$_f" ] && ok "Bluetooth firmware $_f present" \
+    || no "no qca/$_f -- hci_qca has no patch/NVM to download"
+done
 }
 
 # The rootfs growing to fill its partition.

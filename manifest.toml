@@ -167,6 +167,47 @@ ref     = "0.2.2"
 version = "0.2.2"
 
 # ---------------------------------------------------------------------------
+# The Qualcomm modem-side userspace, four upstreams built as one package
+# (pkgbuilds/moarchy-qcom-modem). On SDM670 this is what Wi-Fi runs on, which
+# is not obvious and is the whole reason these are here -- devices.md D27.
+#
+# The chain: the WCN3990 Wi-Fi firmware (`wlanmdsp.mbn`) executes on the modem
+# DSP, `ath10k_snoc` reaches it over QMI, and nothing in the kernel boots that
+# DSP -- `qcom_q6v5_mss.c` sets `rproc->auto_boot = false`. `rmtfs -s` is what
+# writes "start" to its remoteproc (rmtfs's own `rproc.c` hunts for the
+# `-mss-pil` modalias), so the daemon named after remote *filesystem* service
+# is also the ignition. No rmtfs, no modem; no modem, no Wi-Fi.
+#
+# qrtr is the shared library the other three link, not a daemon we run:
+# `net/qrtr/Makefile` is `qrtr-y := af_qrtr.o ns.o`, so the name service is in
+# the kernel and `qrtr-ns` must NOT be started beside it. The package builds
+# with `-Dqrtr-ns=disabled` for that reason.
+#
+# Tags, not commits: all four are tagged and the tarball sha256s live in the
+# PKGBUILD, so a moved tag stops the build rather than changing what a phone
+# runs. Not device-scoped -- nothing in any of them is sargo-specific.
+# ---------------------------------------------------------------------------
+[qrtr]
+url     = "https://github.com/linux-msm/qrtr"
+ref     = "v1.2"
+version = "1.2"
+
+[rmtfs]
+url     = "https://github.com/linux-msm/rmtfs"
+ref     = "v1.3"
+version = "1.3"
+
+[pd-mapper]
+url     = "https://github.com/linux-msm/pd-mapper"
+ref     = "v1.1"
+version = "1.1"
+
+[tqftpserv]
+url     = "https://github.com/linux-msm/tqftpserv"
+ref     = "v1.2"
+version = "1.2"
+
+# ---------------------------------------------------------------------------
 # AUR packages with no aarch64 binary anywhere -- neither in Arch Linux ARM nor
 # in Omarchy's own repo, which has no aarch64 tree at all
 # (pkgs.omarchy.org/stable/aarch64/omarchy.db -> 404).
@@ -389,3 +430,17 @@ config-path   = "device/community/linux-postmarketos-qcom-sdm670/config-postmark
 # file list came from.
 firmware-url  = "https://github.com/TheMuppets/proprietary_vendor_google_sargo"
 firmware-ref  = "c631f0f2aa24ea60cfb505d327cd4ae56ca27f16"
+
+# The modem pair, from a THIRD upstream, and the reason it is a third one is
+# worth writing down: `mba.mbn` and `modem.mbn` are not in TheMuppets tree at
+# all. That tree carries `/vendor/firmware`; the modem images live in sargo's
+# own `modem` partition, which an Android vendor dump does not include. This
+# repo is where postmarketOS's firmware-google-sargo gets them, pinned at the
+# same commit pmaports uses.
+#
+# 66 MB of it is `modem.mbn`, which reads like a lot of blob for a phone that
+# makes no calls -- and calls are not what it is for. The Wi-Fi firmware runs
+# on the DSP this boots (devices.md D27), so this pair is the price of Wi-Fi
+# and telephony is the thing that comes later, not the other way round.
+modem-url     = "https://gitlab.com/flamingradian/firmware-google-sargo-modem"
+modem-ref     = "34bbe2c27f35537f13747c9eba67ece6ae141806"
