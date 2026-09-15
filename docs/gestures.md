@@ -1060,6 +1060,37 @@ like the hold-to-close C4 refuses, it has no undo.
 
 ---
 
+## N. What opening the drawer costs
+
+The sheet is dragged open by a finger at 60Hz on a Mali-400, and everything the
+open path does lands on the frames the sheet is arriving on. The shade is the
+comparison that makes this measurable rather than a feeling: it does none of
+it, and it is the surface people say comes up instantly.
+
+**N1** Opening the drawer starts no filesystem scan. The icon index refreshes
+itself — `AppLibrary` watches `DesktopEntries` and restarts a 750ms
+`iconIndexDebounce` on every change — so an app installed while the shell is
+running has its icon without the drawer asking. One scan per shell start
+remains, on the first open, for the first-boot race where a package places its
+icons after the shell has read them and touches no `.desktop` file afterwards.
+→ `grep -c 'appLibrary.refreshIcons()' moarchy.drawer/Drawer.qml` is 1, and
+that call sits behind a flag `open()` sets; on the device, a second
+`omarchy-shell drawer open` spawns no `find` under the shell —
+`pgrep -af 'find .*icons' -P $(pgrep -x quickshell)` during the open is empty
+
+**N2** Opening the drawer rebuilds the open-apps shelf only when the shelf has
+changed. `openApps` is a binding, so assigning its dependency notifies whether
+or not the value moved, and the `ListView` then discards and rebuilds every
+delegate — icon, glyph and name resolved again per tile, for a list that is
+usually identical.
+→ `open()`'s reset of `closingApps` is guarded by a test of its own length —
+the other assignment is `closeOpen()` adding to it, which is the change M10 is
+about; on the device, opening the drawer twice with nothing closed in between
+leaves `omarchy-shell drawer openApps` byte-identical and the tiles' icons
+already drawn on the first frame of the second open
+
+---
+
 ## Constraints
 
 Not acceptance criteria — the boundaries any implementation works inside.

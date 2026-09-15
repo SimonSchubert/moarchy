@@ -494,6 +494,9 @@ Item {
   }
   property int appsRevision: 0
 
+  // Whether this shell has paid for one icon rescan yet -- see open().
+  property bool iconsRefreshed: false
+
   Connections {
     target: root.shell ? root.shell.appLibrary : null
     function onAppsChanged() { root.appsRevision++; root.buildIndex() }
@@ -1131,7 +1134,16 @@ Item {
 
     // M10. A window that refused to close is still running, and this is where
     // it gets its tile back.
-    root.closingApps = []
+    //
+    // Guarded, and the guard is not a micro-optimisation. `openApps` is a
+    // binding over this, so an assignment notifies whether or not the value
+    // changed; it re-evaluates to a fresh JS array, and the shelf's ListView
+    // discards and rebuilds every delegate -- each one re-resolving an icon, a
+    // glyph and a name. That landed on the frame the sheet arrives, which is
+    // the frame the drawer looked slow on. Nothing was ever closed on most
+    // opens, so most of those rebuilds produced the list that was already
+    // there.
+    if (root.closingApps.length > 0) root.closingApps = []
 
     // L5. The drawer opens on the grid, never on somebody's half-read card.
     root.closeDetail()
@@ -1150,13 +1162,30 @@ Item {
     root.dragging = false
     root.progress = 1
 
-    // Icons are indexed off a directory scan that never re-runs on its own, so
-    // an app installed since the shell started has no icon until this. Deferred
-    // rather than blocking: a blocking reload inside open() spins a nested
-    // event loop and the surface never becomes visible -- the same trap the
-    // launcher's back-button patch hit.
-    if (root.shell && root.shell.appLibrary)
+    // Once per shell, not once per open.
+    //
+    // The scan behind refreshIcons() is two `find` passes over ~/.icons,
+    // ~/.local/share/icons, every $XDG_DATA_DIRS/icons and /usr/share/pixmaps,
+    // finishing by swapping `iconIndex` -- which by design re-evaluates every
+    // `iconSource()` binding on screen. On every open, both of those landed on
+    // the frame the sheet was settling onto, on a Mali-400.
+    //
+    // It was there because "a directory scan that never re-runs on its own",
+    // and that stopped being true: AppLibrary watches DesktopEntries and
+    // restarts a 750ms `iconIndexDebounce` on every change -- the same event
+    // appsChanged arrives on. So an app installed while the shell is running
+    // already gets its icon, and calling this from here only ran the scan a
+    // second time.
+    //
+    // What upstream's own comment says the call is for is narrower and real:
+    // the shell can start before a first-install package has finished placing
+    // its icons, and nothing touches a .desktop file afterwards to notice it.
+    // One scan on the first open covers that; every open after it was paying
+    // again for an answer that had not moved.
+    if (!root.iconsRefreshed && root.shell && root.shell.appLibrary) {
+      root.iconsRefreshed = true
       Qt.callLater(function() { root.shell.appLibrary.refreshIcons() })
+    }
   }
 
   function close() {
