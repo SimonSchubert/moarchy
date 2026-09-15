@@ -56,7 +56,17 @@ Item {
   readonly property color containerHigh: Util.alpha(Color.popups.text, 0.14)
   readonly property color accent: Color.accent
   readonly property color textOnAccent: Color.background
-  readonly property color danger: "#e5534b"
+
+  // style.md B3 and D1. This screen was written without either, which is what
+  // the checker's header says happened to moarchy.device once: every comment in
+  // it claimed to mirror the others while it mirrored none of them.
+  readonly property int textWeight: Font.DemiBold
+  readonly property int radiusTile: Style.space(20)
+  // The theme's own red, not a chosen one: `Color.urgent` is what upstream's
+  // polkit error text falls back to, so a theme that sets a red gets its red
+  // here (style.md C4 -- this was a literal, and the only one left in the
+  // plugins).
+  readonly property color danger: Color.urgent
 
   // ---------------------------------------------------------------- state
   // Straight out of `moarchy-sim status`, which is the only thing that talks to
@@ -274,8 +284,9 @@ Item {
           width: parent.width
           horizontalAlignment: Text.AlignHCenter
           color: root.textOnSurface
+          font.family: Style.font.family
           font.pixelSize: Style.space(17)
-          font.bold: true
+          font.weight: Font.Bold
           text: !root.present ? "No modem"
               : root.pukRequired ? "This SIM needs its PUK"
               : root.locked ? "Enter your SIM PIN"
@@ -289,8 +300,9 @@ Item {
           horizontalAlignment: Text.AlignHCenter
           visible: root.locked && root.retries >= 0
           color: root.retries <= 1 ? root.danger : Theme.readableOn(root.surface, root.textOnSurface)
+          font.family: Style.font.family
           font.pixelSize: Style.space(13)
-          font.bold: root.retries <= 1
+          font.weight: root.retries <= 1 ? Font.Bold : root.textWeight
           text: root.retries === 1
               ? "1 attempt left — the next wrong PIN locks the SIM"
               : root.retries + " attempts left"
@@ -302,7 +314,9 @@ Item {
           visible: root.pukRequired
           wrapMode: Text.WordWrap
           color: root.danger
+          font.family: Style.font.family
           font.pixelSize: Style.space(13)
+          font.weight: root.textWeight
           text: "A PIN will not help now. The PUK came with the SIM; entering it is not something this screen does yet."
         }
 
@@ -331,7 +345,9 @@ Item {
           visible: root.errorText !== ""
           wrapMode: Text.WordWrap
           color: root.danger
+          font.family: Style.font.family
           font.pixelSize: Style.space(12)
+          font.weight: root.textWeight
           text: root.errorText
         }
 
@@ -364,7 +380,7 @@ Item {
 
               width: Style.space(64)
               height: Style.space(52)
-              radius: Style.space(12)
+              radius: root.radiusTile
               opacity: key.enabledKey ? 1 : 0.35
               color: key.isOk ? root.accent
                    : tap.pressed ? root.containerHigh
@@ -374,8 +390,9 @@ Item {
                 anchors.centerIn: parent
                 text: key.modelData
                 color: key.isOk ? root.textOnAccent : root.textOnSurface
+                font.family: Style.font.family
                 font.pixelSize: key.isOk || key.isBack ? Style.space(16) : Style.space(21)
-                font.bold: key.isOk
+                font.weight: key.isOk ? Font.Bold : root.textWeight
               }
 
               MouseArea {
