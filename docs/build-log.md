@@ -1922,25 +1922,23 @@ taken after it flips.
 
 ## 8. Known-bad / open
 
-- **The drawer's shelf does not answer a synthetic touch: M5 and M6 are red,
-  and were before the drag tracker landed.** Measured 2026-09-15 with an A/B
-  against the packaged 0.2.2-4 tree on the same phone, the same warm shell and
-  the same probe: a flick from the leading tile's centre, up 220 panel px,
-  closes nothing on either build (4 windows before, 4 after), and a tap on that
-  tile leaves the drawer open on the packaged build.
+- ~~**The drawer's shelf does not answer a synthetic touch.**~~ **Root-caused
+  2026-09-15, and it was the check.** M5, M6, L1 and L3 aimed their touches by
+  multiplying a surface coordinate by sway's **output scale** (`3.0` here), and
+  `bin/moarchy-touch` declares a panel of its own — 720x1440 against a 360x740
+  logical output, so the factor is **2**. The output's scale is the HiDPI ratio
+  between logical and physical pixels (1080x2220): a different number about a
+  different thing.
 
-  The coordinates are right and the gesture is reaching *something* — under the
-  tracker the same tap does close the drawer, which is more than the packaged
-  build manages. What it does not do is reach the app the tile names.
-  `openTarget 0` answers `rect=10,102 size=85x86` in surface pixels and the
-  probe adds the bar's 26 and multiplies by the output scale, which is the
-  convention every other aimed check here uses and which those checks pass on.
+  M6's flick therefore landed 171 logical px below the tile it named, on the
+  app grid, and the shelf appeared not to answer a flick at all — on this build
+  and on the packaged 0.2.2-4 alike, which is what an A/B established before
+  anyone looked at the arithmetic. Aimed by the injector's own ratio, the same
+  flick closes the app: 2 windows to 1.
 
-  Not chased further, because it is not what this change was for and because
-  the suite's own environment is part of the suspect: these two run after a
-  section that leaves `moa-selftest` windows behind, and the leading tile in
-  the failures is one of them. Whoever picks it up should start by driving
-  `drawer openTarget`/`openApps` by hand on a phone with exactly one app open.
+  Three other checks in the same file already derived it as `720 / lw` and
+  passed throughout, which is the tell. It is now derived once, near `STRIP_Y`,
+  read out of `moarchy-touch` itself so the two cannot drift.
 
 - **Compositor renders only the background layer** in some states: sway tracks
   windows and the bar reserves its exclusive zone (`foot y=27`), but nothing above

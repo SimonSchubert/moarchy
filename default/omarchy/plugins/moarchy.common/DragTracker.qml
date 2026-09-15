@@ -145,7 +145,26 @@ Item {
   // that gets found by hand a week later.
   property real travelled: 0
 
+  // Scene-signed: positive is downward, because that is what the coordinates
+  // do. Almost nothing wants it in these terms -- read `openVelocity`.
   property real velocity: 0
+
+  // The same speed signed **toward open**, which is what a fling test means on
+  // every surface: positive is "let go now and it should end up more open".
+  //
+  // It exists because the six areas this replaced did not agree. Four measured
+  // `nowY - lastY` and two -- the strip and the wallpaper, the two whose sheet
+  // opens *upward* -- measured `lastY - y`, flipping the sign so that "faster
+  // open" was positive in their own release rule. Unifying on the scene sign
+  // without flipping those two back inverted their fling test: a quick flick
+  // up produced a large negative number, which is neither `>= fling` nor
+  // `> -fling`, so the drawer sprang shut from above halfway. A slow drag past
+  // the commit still opened, which is why a 2000ms synthetic drag never caught
+  // it.
+  //
+  // So the sign lives here, once, derived from the direction the surface has
+  // already declared -- rather than in each surface's head.
+  readonly property real openVelocity: drag.velocity * drag.openDirection
   property real dx: 0
   property real dy: 0
   property real startProgress: 0
@@ -169,11 +188,12 @@ Item {
   // the shade latches its own height (S23) -- this is the frame to do it on.
   signal began()
 
-  // Per frame, after the state above is updated.
+  // Per frame, after the state above is updated. The velocity is
+  // `openVelocity`, signed toward open.
   signal moved(real progress, real velocity)
 
   // The finger lifted after a latched drag. The surface decides commit versus
-  // spring-back; this knows neither (F3).
+  // spring-back; this knows neither (F3). The velocity is `openVelocity`.
   signal finished(real progress, real velocity)
 
   // The gesture ended without a decision: the compositor took the touch, or
@@ -258,7 +278,7 @@ Item {
     drag.travelled = drag.startProgress
                      + drag.openDirection * drag.dy / Math.max(1, drag.travel)
     drag.progress = Math.max(0, Math.min(1, drag.travelled))
-    drag.moved(drag.progress, drag.velocity)
+    drag.moved(drag.progress, drag.openVelocity)
     watchdog.restart()
   }
 
@@ -269,7 +289,7 @@ Item {
     if (!drag.latched) return
     drag.latched = false
     drag.wasDrag = true
-    drag.finished(drag.progress, drag.velocity)
+    drag.finished(drag.progress, drag.openVelocity)
   }
 
   // Fired whether or not the gesture ever latched, unlike `finished`. A

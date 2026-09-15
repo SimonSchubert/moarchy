@@ -190,10 +190,13 @@ Item {
     // as a long slow drag: a drag beginning near the far end of the sheet
     // cannot reach the commit threshold at all, because there is not enough
     // sheet left to travel.
+    // `v` is signed toward open, so a fling *shut* is the negative one. This
+    // sheet opens upward, which is why the two read the other way round from
+    // the shade's.
     onFinished: (p, v) => {
       root.dragging = false
-      if (v >= root.sheetFling) root.dismiss()
-      else if (v <= -root.sheetFling) root.progress = 1
+      if (v <= -root.sheetFling) root.dismiss()
+      else if (v >= root.sheetFling) root.progress = 1
       else if (p <= root.closeCommit) root.dismiss()
       else root.progress = 1
     }

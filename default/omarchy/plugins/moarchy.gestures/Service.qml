@@ -291,7 +291,12 @@ Item {
   readonly property bool tracking: root.lastDrag !== null
   readonly property real dx: root.lastDrag ? root.lastDrag.dx : 0
   readonly property real dy: root.lastDrag ? root.lastDrag.dy : 0
-  readonly property real velocity: root.lastDrag ? root.lastDrag.velocity : 0
+  // Signed **toward open**, not in scene coordinates: positive means "let go
+  // now and the sheet should end up further open". Named for it, because both
+  // release rules below are fling tests and reading the scene sign into one of
+  // them is what sprang the drawer shut on a quick flick up.
+  readonly property real openVelocity:
+    root.lastDrag ? root.lastDrag.openVelocity : 0
 
   // Whether this gesture has latched onto the drawer: "none" or "drawer".
   // Latched on the first clearly-upward movement and held for the rest of the
@@ -1035,8 +1040,8 @@ Item {
       root.releaseTarget(false)
       root.run("home")
     } else {
-      root.releaseTarget(root.velocity >= root.fling
-        || (root.velocity > -root.fling && root.pull >= root.drawerCommit))
+      root.releaseTarget(root.openVelocity >= root.fling
+        || (root.openVelocity > -root.fling && root.pull >= root.drawerCommit))
     }
   }
 
@@ -1093,8 +1098,8 @@ Item {
     onBegan: root.dragMode = "drawer"
     onMoved: p => root.setTargetProgress(homeDrag.travelled)
     onFinished: (p, v) => root.releaseTarget(
-      root.velocity >= root.fling
-      || (root.velocity > -root.fling && root.pull >= root.drawerCommit))
+      root.openVelocity >= root.fling
+      || (root.openVelocity > -root.fling && root.pull >= root.drawerCommit))
     onCanceled: from => root.dropDrag()
   }
 

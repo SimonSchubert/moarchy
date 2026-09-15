@@ -269,6 +269,10 @@ Item {
     // H3, and the thresholds stay here where the numbers are (F3). A short,
     // fast flick means the same as a long slow drag: from 150px down there is
     // not 25% of the sheet left above the finger to travel.
+    //
+    // `v` is signed toward open. This sheet opens *downward*, so that happens
+    // to be the scene sign as well -- unlike the drawer's, which reads the
+    // other way round for the same rule.
     onFinished: (p, v) => {
       root.dragging = false
       if (v <= -root.flingVelocity) root.dismiss()

@@ -1049,6 +1049,26 @@ print(found[0] if found else "")'; }
   # point of the bands being distance-only.
   STRIP_Y=1420
 
+  # Surface pixels -> injector pixels, for every aimed touch below.
+  #
+  # `bin/moarchy-touch` declares a panel of its own -- 720x1440 -- and sway's
+  # output here is 360x740 logical, so a surface coordinate is doubled to reach
+  # it. That ratio is NOT the output's `scale`, which is 3.0 on this phone: the
+  # HiDPI factor between logical and *physical* pixels (1080x2220) is a
+  # different number about a different thing, and two checks used it.
+  #
+  # They missed by half the screen and looked like shell bugs for it. M6's
+  # flick landed 171 logical px below the tile it was aimed at -- on the app
+  # grid -- so the shelf appeared not to answer a flick at all, on this build
+  # and on the packaged one alike. With the ratio right the same flick closes
+  # the app. Three other checks in this file already derived it as `720 / lw`
+  # and passed throughout.
+  #
+  # Read off the injector rather than written down, so the two cannot drift.
+  touch_w=$(sed -n 's/^WIDTH, HEIGHT = \([0-9]*\).*/\1/p' "$touch_bin" 2>/dev/null)
+  out_w=$(swaymsg -t get_outputs | jq -r '.[]|select(.active)|.rect.width')
+  TOUCH_SCALE=$(( ${touch_w:-720} / ${out_w:-360} ))
+
   ac() { printf '  \033[90m%-4s\033[0m ' "$1"; }
   okac()  { ac "$1"; shift; ok "$@"; }
   noac()  { ac "$1"; shift; no "$@"; }
@@ -1225,6 +1245,34 @@ print(found[0] if found else "")'; }
       noac A2 "a 9% drag left the drawer $(shell_state drawer)"
     fi
 
+    # --- A3. the fling overrides the distance ------------------------------
+    # The same travel at two speeds, which is the only way to test a fling
+    # rule: one distance, one threshold, opposite outcomes. 500 panel px is
+    # 250 logical, ~35% of the 714 sheet and comfortably under the halfway
+    # commit, so distance alone says "spring back" in both halves.
+    #
+    # It is here because A3 said "a short fast flick up opens the drawer" and
+    # nothing ran it: every other drag in this suite is 900ms or 2000ms, which
+    # is 0.1-0.3 logical px/ms against a 0.6 threshold. A sign error in the
+    # fling term therefore passed the whole suite while the drawer sprang shut
+    # from above halfway on every real flick -- reported by hand, found nowhere
+    # here.
+    timeout 8 omarchy-shell drawer close >/dev/null 2>&1; sleep 2
+    sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 $(( STRIP_Y - 500 )) 250 >/dev/null 2>&1
+    sleep 3
+    a3_fast=$(shell_state drawer)
+    timeout 8 omarchy-shell drawer close >/dev/null 2>&1; sleep 2
+    sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 $(( STRIP_Y - 500 )) 2000 >/dev/null 2>&1
+    sleep 3
+    a3_slow=$(shell_state drawer)
+    if [[ $a3_fast == open && $a3_slow == closed ]]; then
+      okac A3 "a short fast flick opens the drawer where the same travel slowly does not"
+    else
+      noac A3 "35% of the sheet left the drawer $a3_fast fast and $a3_slow slow" \
+              "wanted open then closed; equal outcomes mean the fling term is not being read"
+    fi
+    timeout 8 omarchy-shell drawer close >/dev/null 2>&1; sleep 2
+
     sudo -n "$touch_bin" swipe 360 $STRIP_Y 360 600 2000 >/dev/null 2>&1
     sleep 3
     samples=$(timeout 8 omarchy-shell drawer dragTrace 2>/dev/null | wc -w)
@@ -1266,7 +1314,7 @@ print(found[0] if found else "")'; }
     # the surface starts, and the scale from the output. A hard-coded tile
     # centre would be wrong the moment the theme's spacing scale moved.
     m_bar=$(swaymsg -t get_workspaces | jq -r '.[]|select(.focused)|.rect.y')
-    m_scale=$(swaymsg -t get_outputs | jq -r '.[]|select(.active)|.scale' | cut -d. -f1)
+    m_scale=$TOUCH_SCALE
     m_tile=$(timeout 8 omarchy-shell drawer openTarget 0 2>/dev/null)
     m_rect=$(tr ' ' '\n' <<<"$m_tile" | sed -n 's/^rect=//p')
     m_size=$(tr ' ' '\n' <<<"$m_tile" | sed -n 's/^size=//p')
@@ -2125,7 +2173,7 @@ walk(tree)' 2>/dev/null
     # output. Nothing is written down -- Style.space(86) is a *scaled* number
     # and the row pitch moves with the theme.
     l_bar=$(swaymsg -t get_workspaces | jq -r '.[]|select(.focused)|.rect.y')
-    l_scale=$(swaymsg -t get_outputs | jq -r '.[]|select(.active)|.scale' | cut -d. -f1)
+    l_scale=$TOUCH_SCALE
     l_reset
     l_cell=$(dr cellTarget 0)
     l_id=$(tr ' ' '\n' <<<"$l_cell" | sed -n 's/^id=//p')

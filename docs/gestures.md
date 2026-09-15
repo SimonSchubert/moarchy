@@ -46,7 +46,10 @@ stays. Half the sheet decides, because the sheet is the thing being positioned
 and the question is which end it is nearer. A fling overrides the distance in
 both directions — a short fast flick up opens the drawer, a fast flick down
 closes it — because a flick is not an unfinished drag.
-→ `omarchy-shell drawer state` == `open`
+→ the same travel at two speeds, 35% of the sheet either way: a 250ms flick
+leaves `omarchy-shell drawer state` == `open` and a 2000ms drag leaves it
+`closed`. One distance and one threshold, so equal outcomes mean the fling term
+is not being read at all
 
 **A3a** The strip's drag is the home screen's drag: same 1:1 ratio against the
 sheet's own height, same halfway commit, same fling rule in both directions.

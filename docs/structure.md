@@ -276,8 +276,8 @@ each package**, and a build that finds two refuses rather than choosing.
 > from being released.
 
 **R8a** *Decided 2026-09-07: deliberately not done for 0.1.x.* The image's
-`/etc/pacman.conf` carries `[moarchy]` and nothing else beyond what the `pacman`
-package ships. Stock Arch Linux ARM's copy is
+`/etc/pacman.conf` carries `[moarchy]`, `[moarchy-apps]` since 2026-09-13
+(R8c), and nothing else beyond what the `pacman` package ships. Stock Arch Linux ARM's copy is
 `core`/`extra`/`alarm`/`aur`; `[danctnix]` is added by DanctNIX's own image
 build and by `image/Dockerfile` for the *builder*, not by any package, so a
 flashed phone never gets it.
@@ -319,6 +319,29 @@ stable name.
 > moarchy-keyboard …` and "the phone has no on-screen keyboard" about a package
 > that was sitting right there. A build's loudest line being routinely wrong
 > teaches you to skip it.
+
+**R8c** *Done 2026-09-13.* `[moarchy-apps]` is the second stanza, and it is a
+different decision from R8a rather than the same one revisited. R8a is about
+somebody else's repo moving the device stack under us; this is our own repo,
+signed by our own key -- the same key, in fact, so `moarchy-keyring` already
+trusts it and nothing was added to the keyring.
+
+> It had to happen because the store made it load-bearing. moarchy-store's
+> catalogue lists ten packages that live only in `[moarchy-apps]`, and its
+> helper installs by execing `pacman -S` against a name in a sync database. No
+> stanza, no sync database, no Install button -- so every one of those rows was
+> dead on a freshly flashed phone while working perfectly on the developer's
+> own handset, which had the stanza added to it by hand one afternoon and never
+> written down.
+>
+> `image/configure.sh` no longer reads one hardcoded `[repo]`: it loops over
+> every manifest section that names a `server`, and `image/verify.sh` checks
+> the stanza and the cached `.db.sig` for each of them rather than for
+> `moarchy.db` alone. A third repo is now a manifest edit. Verified the way the
+> claim is worth making: a clean Arch ARM container carrying exactly the two
+> stanzas this writes, trusting nothing but the key fetched from the published
+> URL, syncs both databases and installs `moarchy-chess` with `Validated By :
+> Signature`.
 
 **R9** A published image's own pacman keyring **trusts** the signing key, rather
 than merely carrying the file. **Met 2026-09-07:** `image/verify.sh` asks
