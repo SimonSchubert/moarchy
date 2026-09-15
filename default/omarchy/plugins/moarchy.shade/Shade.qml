@@ -224,11 +224,6 @@ Item {
   property real progress: 0        // 0 shut .. 1 open
   property bool dragging: false
   property bool expanded: false    // the surface is full-screen right now
-  property real startProgress: 0
-  property real startY: 0
-  property real velocity: 0
-  property real lastY: 0
-  property real lastT: 0
 
   // shell.isPluginOpen() reads this. Mid-drag is neither open nor shut, and
   // reporting "open" there would let a swipe on the home pill try to close a
@@ -257,73 +252,102 @@ Item {
   // Android's long-press interval. Milliseconds, not pixels -- not a Style.space.
   readonly property int holdInterval: 500
 
-  // Scene coordinates, because every one of those MouseAreas is a child of the
-  // sheet and the sheet is what moves. A delta measured in a frame that moves
-  // with the thing it is driving feeds back into itself.
-  property real sheetPressY: 0
-  property real sheetStartProgress: 0
-  property bool sheetDragging: false
+  // H2, on the tracker every sheet in this shell now shares
+  // (docs/refactor.md F1). Upward closes, so `openDirection` is +1: travelling
+  // *down* is what would raise progress, and this sheet is already up.
+  Shared.DragTracker {
+    id: sheetDrag
+    travel: root.sheetHeight
+    openDirection: 1
+    latchAxis: "up"
+    slop: root.dragSlop
+    startFrom: root.progress
 
-  // Cleared on the next press rather than on release: Qt delivers `released`
-  // then `clicked`, so a flag cleared on release is already false by the time
-  // the click lands, and the tile fires the action the drag started on.
-  property bool sheetWasDrag: false
+    onBegan: root.beginDrag()
+    onMoved: p => root.progress = p
 
-  // A short, fast flick means the same as a long slow drag. Without this a
-  // gesture that starts near the top of the sheet cannot commit at all: from
-  // 150px down there is not 25% of the sheet left above it to travel.
-  property real sheetVelocity: 0
-  property real sheetLastY: 0
-  property real sheetLastT: 0
+    // H3, and the thresholds stay here where the numbers are (F3). A short,
+    // fast flick means the same as a long slow drag: from 150px down there is
+    // not 25% of the sheet left above the finger to travel.
+    onFinished: (p, v) => {
+      root.dragging = false
+      if (v <= -root.flingVelocity) root.dismiss()
+      else if (v >= root.flingVelocity) root.progress = 1
+      else if (p >= root.closeFraction) root.progress = 1
+      else root.dismiss()
+    }
+
+    onStranded: root.markTrace(-2)
+    onCanceled: from => {
+      root.dragging = false
+      root.progress = from >= 0.5 ? 1 : 0
+    }
+  }
+
+  // The band across the status bar: the same tracker, the other direction.
+  //
+  // `latchOnPress`, because the whole band is a handle -- there is nothing
+  // else a touch on it could mean, and `dragging` from the press is what keeps
+  // the input mask off for the length of the pull. The slop is still crossed
+  // before anything moves, which is why the tracker keeps those two apart.
+  //
+  // Shut, the slop applies; open, it does not, because the gesture is already
+  // in flight as far as the finger is concerned.
+  Shared.DragTracker {
+    id: bandDrag
+    travel: root.sheetHeight
+    openDirection: 1
+    latchAxis: "either"
+    latchOnPress: true
+    slop: root.progress > 0 ? 0 : root.slop
+    startFrom: root.progress
+
+    onBegan: root.beginDrag()
+    onMoved: p => root.progress = p
+
+    onFinished: (p, v) => {
+      var wasOpen = bandDrag.startProgress >= 0.5
+      var target
+      if (v >= root.flingVelocity) target = 1
+      else if (v <= -root.flingVelocity) target = 0
+      else if (wasOpen) target = p >= root.closeFraction ? 1 : 0
+      else target = p >= root.openFraction ? 1 : 0
+
+      root.dragging = false
+      // Through the host, so openPanelIds and this plugin cannot drift apart
+      // and leave the next swipe toggling the wrong way.
+      if (target === 1 && root.shell) root.shell.summon(root.pluginId, "{}")
+      else if (target === 0) root.dismiss()
+      else root.progress = target
+    }
+
+    onStranded: root.markTrace(-2)
+    onCanceled: from => {
+      root.dragging = false
+      root.progress = from >= 0.5 ? 1 : 0
+    }
+  }
+
+  // The names the nine controls on this sheet already read. Kept as aliases
+  // rather than renamed at the call sites: what moved is where the state is
+  // computed, and a rename would bury that under a diff touching every tile.
+  readonly property bool sheetDragging: sheetDrag.latched
+  readonly property bool sheetWasDrag: sheetDrag.wasDrag
+  readonly property real sheetPressY: sheetDrag.startY
 
   function sheetPress(item, mouse): void {
     root.dragTrace = []
-    root.sheetPressY = item.mapToItem(null, mouse.x, mouse.y).y
-    root.sheetStartProgress = root.progress
-    root.sheetDragging = false
-    root.sheetWasDrag = false
-    root.sheetVelocity = 0
-    root.sheetLastY = root.sheetPressY
-    root.sheetLastT = Date.now()
+    var p = item.mapToItem(null, mouse.x, mouse.y)
+    sheetDrag.press(p.x, p.y)
   }
 
   function sheetMove(item, mouse): void {
-    var dy = item.mapToItem(null, mouse.x, mouse.y).y - root.sheetPressY
-    if (!root.sheetDragging) {
-      // Upward only. A downward drag on an open shade means nothing, and
-      // claiming it would fight the notification list (H5).
-      if (dy >= -root.dragSlop) return
-      root.sheetDragging = true
-      root.beginDrag()
-    }
-    var nowY = item.mapToItem(null, mouse.x, mouse.y).y
-    var now = Date.now()
-    var dt = Math.max(1, now - root.sheetLastT)
-    // Negative is upward, which for this sheet is the closing direction.
-    root.sheetVelocity = root.sheetVelocity * 0.6 + ((nowY - root.sheetLastY) / dt) * 0.4
-    root.sheetLastY = nowY
-    root.sheetLastT = now
-    root.progress = Math.max(0, Math.min(1,
-      root.sheetStartProgress + dy / root.sheetHeight))
+    var p = item.mapToItem(null, mouse.x, mouse.y)
+    sheetDrag.move(p.x, p.y)
   }
 
-  function sheetRelease(): void {
-    if (!root.sheetDragging) return
-    root.sheetWasDrag = true
-    root.sheetDragging = false
-    root.dragging = false
-    if (root.sheetVelocity <= -root.flingVelocity) root.dismiss()
-    else if (root.sheetVelocity >= root.flingVelocity) root.progress = 1
-    else if (root.progress >= root.closeFraction) root.progress = 1
-    else root.dismiss()
-  }
-
-  function sheetCancel(): void {
-    if (!root.sheetDragging) return
-    root.sheetDragging = false
-    root.dragging = false
-    root.progress = root.sheetStartProgress >= 0.5 ? 1 : 0
-  }
+  function sheetRelease(): void { sheetDrag.release() }
+  function sheetCancel(): void { sheetDrag.cancel() }
 
   function open(payloadJson) {
     // S28. The drawer is deliberately left alone, where this used to dismiss
@@ -436,15 +460,18 @@ Item {
     NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
   }
 
-  // A touch sequence normally ends in released or canceled, but a compositor
-  // restart or a lost seat can strand one. Left stranded mid-drag the surface
-  // stays full-screen and the phone stops responding to touch entirely, which
-  // is a great deal worse than the stranded pill the gestures plugin guards
-  // against -- so this watchdog is not optional.
-  Timer {
-    id: watchdog
-    interval: 4000
-    onTriggered: { root.dragging = false; root.progress = 0 }
+  // The watchdog against a stranded touch is DragTracker's now (F2), which is
+  // how the drawer finally got one. Left stranded mid-drag this surface stays
+  // full-screen and the phone stops responding to touch at all, so it was
+  // never optional here -- it was simply written twice and omitted twice.
+  //
+  // One difference, deliberate: the tracker's timeout springs back to where
+  // the drag started rather than to 0. A stranded pull-down used to slam the
+  // shade shut even when it had been open before the touch.
+  function markTrace(marker): void {
+    var next = root.dragTrace.slice()
+    next.push(marker)
+    root.dragTrace = next
   }
 
   IpcHandler {
@@ -2075,59 +2102,16 @@ Item {
       height: root.stripHeight
       maximumTouchPoints: 1
 
+      // sceneX/sceneY are already scene-space, so this hands them straight
+      // over where a MouseArea has to map first.
       onPressed: pts => {
         if (pts.length === 0) return
         root.dragTrace = []
-        root.startY = pts[0].sceneY
-        root.lastY = pts[0].sceneY
-        root.lastT = Date.now()
-        root.startProgress = root.progress
-        root.velocity = 0
-        root.beginDrag()
-        watchdog.restart()
+        bandDrag.press(pts[0].sceneX, pts[0].sceneY)
       }
-
-      onUpdated: pts => {
-        if (pts.length === 0 || !root.dragging) return
-        var y = pts[0].sceneY
-        var dy = y - root.startY
-        if (Math.abs(dy) < root.slop && root.startProgress === 0) return
-
-        var now = Date.now()
-        var dt = Math.max(1, now - root.lastT)
-        // Smoothed, so one jittery frame at the end of a slow drag cannot read
-        // as a fling and open something the user was putting back.
-        root.velocity = root.velocity * 0.6 + ((y - root.lastY) / dt) * 0.4
-        root.lastY = y
-        root.lastT = now
-
-        root.progress = Math.max(0, Math.min(1, root.startProgress + dy / root.sheetHeight))
-        watchdog.restart()
-      }
-
-      onReleased: pts => {
-        if (!root.dragging) return
-        var wasOpen = root.startProgress >= 0.5
-        var target
-        if (root.velocity >= root.flingVelocity) target = 1
-        else if (root.velocity <= -root.flingVelocity) target = 0
-        else if (wasOpen) target = root.progress >= root.closeFraction ? 1 : 0
-        else target = root.progress >= root.openFraction ? 1 : 0
-
-        root.dragging = false
-        watchdog.stop()
-        // Through the host, so openPanelIds and this plugin cannot drift apart
-        // and leave the next swipe toggling the wrong way.
-        if (target === 1 && root.shell) root.shell.summon(root.pluginId, "{}")
-        else if (target === 0) root.dismiss()
-        else root.progress = target
-      }
-
-      onCanceled: pts => {
-        root.dragging = false
-        watchdog.stop()
-        root.progress = root.startProgress >= 0.5 ? 1 : 0
-      }
+      onUpdated: pts => { if (pts.length > 0) bandDrag.move(pts[0].sceneX, pts[0].sceneY) }
+      onReleased: pts => bandDrag.release()
+      onCanceled: pts => bandDrag.cancel()
     }
   }
 
