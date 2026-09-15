@@ -1976,6 +1976,38 @@ measurement taken before it is checked meaningless.
 
 ## 8. Known-bad / open
 
+- **A downward flick starting on the open-apps shelf does not close the drawer,
+  where the same flick closes it from everywhere else.** Reported 2026-09-15 by
+  the session that fixed the speed reading (a7045b4), measured at five of six
+  start positions closing — y=120, 200, 500, 800, 1100 panel — and y≈300-400
+  panel failing, with a drag trace of `98 95 93 … 78` indistinguishable from the
+  runs that succeed.
+
+  **The trace is what identifies it, by being identical.** It records progress,
+  not speed. Ending at 78 with `closeCommit: 0.7` means the distance rule could
+  never have committed that gesture in *any* of the six runs — 0.78 is above the
+  threshold, so every one of them closed on the fling term or not at all. So this
+  is not a threshold that wants moving and not a travel that fell short: it is a
+  flick that stops being read as a flick in one horizontal band.
+
+  **That band is the shelf row.** Bar 26 + handle strip + the 46px search pill +
+  spacing puts `openRow` at roughly 120-206 logical, and y=300-400 panel is
+  150-200 logical, inside it.
+
+  **?** The hypothesis, not concluded: `tileArea` is the one control on this
+  sheet that still hand-rolls its own axis arbitration — `preventStealing: false`
+  until `|dx| > 3 || |dy| > 3`, inside a horizontal `ListView` that competes for
+  the same grab. `refactor.md` H4 names it and deliberately left it, on the
+  grounds that its two tests are each a different half of the tracker's condition.
+  A few opening frames spent deciding who owns the gesture is exactly what would
+  starve an interval-based speed reading of its early samples, and a7045b4 made
+  the reading an interval. If that is it, the defect is older than a7045b4 and was
+  invisible while speed was read between two adjacent events.
+
+  Cheapest next step: drive the same flick from inside and outside the band with a
+  probe on the tracker, and compare the number of position events each delivers
+  before the latch — not the traces, which already agree.
+
 - ~~**The drawer's shelf does not answer a synthetic touch.**~~ **Root-caused
   2026-09-15, and it was the check.** M5, M6, L1 and L3 aimed their touches by
   multiplying a surface coordinate by sway's **output scale** (`3.0` here), and
