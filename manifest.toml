@@ -50,13 +50,26 @@ version = "0.2.2"
 # ---------------------------------------------------------------------------
 [moarchy-keyboard]
 url        = "https://github.com/SimonSchubert/moarchy-keyboard"
-ref        = "59acf6493e7e459159b6d5f38c9185f13917fb90"
-# Carries AC 50 as it now stands: text focus does not raise the keyboard. It
-# comes up when its restore handle is tapped or when something drives
-# sm.puri.OSK0 -- the back gesture, $mod+i -- and nothing else writes the bool,
-# so a dismissal holds until a person ends it. An app asking for text input is
-# not an app asking for a keyboard, and reading it as one put half the screen
-# under every focused terminal and every tap in the drawer's search box.
+ref        = "1a4585d986b350b3fad533abfb1750f6873681fd"
+# The restore handle can be dragged along the right edge -- that repo's SPEC.md
+# §4.10, ACs 54-60. It rested bottom right, which is where a chat app puts Send,
+# and floating on Overlay (AC 52 below) it covered whatever was there. A drag
+# never raises the keyboard, the place survives a restart, and its corners
+# follow `corners` in ui.toml the way the shell's Pill, Fab and IconButton do.
+# Retracted, the exclusive zone is -1 rather than 0, so the handle sits against
+# the output's edge whatever order the surfaces mapped in (AC 4, amended).
+#
+# And AC 50 as it now stands: text focus does not raise the keyboard. It comes
+# up when its restore handle is tapped, when a text field is tapped, or when
+# something drives sm.puri.OSK0 -- the back gesture, $mod+i -- and nothing else
+# writes the bool, so a dismissal holds until a person ends it. An app asking
+# for text input is not an app asking for a keyboard, and reading it as one put
+# half the screen under every focused terminal and every tap in the drawer's
+# search box. It was slow as well as intrusive: each rise and drop re-arranges
+# every app on every workspace, and 0.1.0-3 -- what every image from 0.2.1 to
+# 0.2.2 carries -- did that on each focus change. Going to this behaviour on the
+# Pixel 3a is what made the keyboard feel faster, with no shell change
+# (2026-09-16).
 #
 # AC 53 went with it, because it debounced the down edge of an event that no
 # longer exists. --retract-delay is gone with the timer.
@@ -66,17 +79,19 @@ ref        = "59acf6493e7e459159b6d5f38c9185f13917fb90"
 # control that brings the keyboard back. That criterion is load-bearing now
 # rather than a convenience -- it is the only way up.
 #
-# This ref is 0.1.0-4. The keyboard's own PKGBUILD moved its pkgrel for it, and
+# This ref is 0.1.0-5. The keyboard's own PKGBUILD moved its pkgrel for it, and
 # that is the half this pin cannot do: pinning by commit here can name a fix
 # that pacman will never offer, because a phone holding 0.1.0-2 compares
 # versions and not contents, and an image hides it completely by installing
 # fresh. The trap is permanent, so the warning stays whether or not the bump
 # was remembered this time.
 #
-# Shipping unverified on the device, stated because the repo states it: this
-# ref compiles and links against Arch Linux ARM's Qt in the aarch64 container,
-# and AC 50's falsifier in that repo's tests/acceptance.sh -- focus a terminal
-# and sample Visible six times -- has not been run on a phone.
+# What has been run, and where, stated because the repo states it. On the Pixel
+# 3a: tests/handle.sh, 14 passed and 0 failed, with one criterion left to an eye
+# -- that the frame a margin rides on is always the new state's. AC 50 there was
+# judged by hand, and its falsifier in tests/acceptance.sh -- focus a terminal
+# and sample Visible six times -- has still not been run on any phone. On the
+# PinePhone, nothing: it was not on the network.
 version    = "0.1.0"
 # The PKGBUILD lives in packaging/, not at the repo root.
 pkgbuilddir = "packaging"
