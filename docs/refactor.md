@@ -830,7 +830,9 @@ same value, and nothing else
 three answers today: a busctl probe the back gesture waits on, and two copies of
 a surface-height threshold with two copies of the `200` it compares against.
 The probe and the threshold answer different questions and both stay; the two
-copies of the threshold do not.
+copies of the threshold do not. *Done, 2026-09-16.* `moarchy.common/Osk.qml`
+declares the height and asks the threshold as `reserving(win)`; the drawer's
+inset and the home strip's fill both call it.
 → `grep -rn 'keyboardPanelHeight' default/omarchy/plugins/` matches one
 declaration
 

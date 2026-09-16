@@ -102,14 +102,20 @@ Item {
   property bool dragging: false
 
   // G14a. The search pill slides under the opening finger as the sheet comes
-  // up, and a TapHandler treats that as a tap on the field. Armed only once
-  // the drawer is sitting still, so the swipe that opened it cannot raise the
+  // up, and a press there must not read as a request. Armed only once the
+  // drawer is sitting still, so the swipe that opened it cannot raise the
   // keyboard.
+  //
+  // Armed off `opened`, not off the end of a drag. A drag released part-way
+  // hands the last stretch to the progress animation, and `drawer open` never
+  // drags at all -- so arming when `dragging` fell with the sheet already at 1
+  // armed only a finger dragged the whole way up, and the field was dead after
+  // every flick.
   property bool keyboardRaiseArmed: false
   Timer {
     id: keyboardRaiseArm
     interval: 120
-    onTriggered: root.keyboardRaiseArmed = root.progress >= 1 && !root.dragging
+    onTriggered: root.keyboardRaiseArmed = root.opened
   }
 
   // shell.isPluginOpen() reads this by name to decide what toggle() means, so
@@ -347,18 +353,15 @@ Item {
     if (root.dragging) {
       root.dragTrace = []
       root.retireTrace = []
-      root.keyboardRaiseArmed = false
-      keyboardRaiseArm.stop()
-    } else if (root.progress >= 1) {
-      keyboardRaiseArm.restart()
     }
+  }
+  onOpenedChanged: {
+    root.keyboardRaiseArmed = false
+    if (root.opened) keyboardRaiseArm.restart()
+    else keyboardRaiseArm.stop()
   }
   onProgressChanged: {
     root.noteRetire()
-    if (root.progress < 1) {
-      root.keyboardRaiseArmed = false
-      keyboardRaiseArm.stop()
-    }
     if (!root.dragging) return
     var next = root.dragTrace.slice()
     if (next.length < 200) next.push(Math.round(root.progress * 100))
@@ -390,35 +393,21 @@ Item {
   // is why nothing here or in the selftest writes the number down.
   readonly property int gestureStrip: Style.space(20)
 
-  // What the on-screen keyboard reserves at the bottom, duplicated from
-  // moarchy.gestures for the reason above. Deliberately *not* through
-  // Style.space, and that is not an oversight the way it would be for every
-  // other length here: this is moarchy-keyboard's own panel and that client
-  // never sees this theme's spacing scale.
-  //
-  // Only ever used as half of a threshold (I5e), so it does not have to be
-  // exact -- it has to be nowhere near either cluster it separates.
-  readonly property int keyboardPanelHeight: 200
-
   // I5e. Is the keyboard up? Asked of the compositor's configure rather than of
   // the search field, because the field answers a different question and I5d is
   // the proof they come apart: the keyboard can be up with nothing here focused
   // at all, and then I5a's inset stays on with the keyboard under it.
   //
-  // Measured on this panel: the granted height is 694 or 674 with the keyboard
-  // down and 494 or 474 with it up, the pair in each cluster being this
-  // surface's own inset on and off. The clusters are 180px apart and the
-  // threshold sits between them, so the 20px the inset moves cannot walk the
-  // answer across it -- the binding settles in one step in either direction
-  // rather than oscillating.
+  // The threshold is Osk.qml's, shared with the home strip's fill. This
+  // surface's own inset moves its height by 20px, and the clusters either side
+  // of the threshold are 180px apart, so the binding settles in one step in
+  // either direction rather than oscillating.
   //
   // False while the surface is down, and that default is the safe one: `height`
   // is whatever the last configure left behind (100 on a surface that has never
   // mapped), so an ungated read would map the first frame with the inset off
   // and flash a band of wallpaper under the pill (I1).
-  readonly property bool keyboardUp:
-    drawerWindow.visible && drawerWindow.screen
-    && drawerWindow.height < drawerWindow.screen.height - root.keyboardPanelHeight / 2
+  readonly property bool keyboardUp: drawerWindow.visible && osk.reserving(drawerWindow)
 
 
   // The weight the bar and every other surface runs at (docs/style.md B3).

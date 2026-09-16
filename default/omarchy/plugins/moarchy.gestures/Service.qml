@@ -86,18 +86,6 @@ Item {
   // that no single value is right. Expect to change it.
   readonly property int backEdgeWidth: Style.space(16)
 
-  // What the on-screen keyboard reserves at the bottom, in logical px.
-  //
-  // Measured, not chosen: it is moarchy-keyboard's panel and this shell does
-  // not set it. The same figure I5b pins the drawer's reflow to -- at 176 the
-  // drawer settles over the top key row.
-  //
-  // Deliberately *not* through Style.space, which every other length here goes
-  // through. Style.space applies this theme's spacing scale, and the keyboard
-  // is a separate client that never sees it: scaling this with the theme would
-  // cut the back edge shorter than the keys it exists to clear.
-  readonly property int keyboardPanelHeight: 200
-
   // G10. How far short of the bottom the back edge stops. Below this the strip
   // wants taps, and above the strip the keyboard does -- and this surface was
   // taking both, because it is on Overlay and they are not.
@@ -108,13 +96,16 @@ Item {
   // .Normal here would move nothing. Nor can a tap be handed down to the
   // keyboard after the fact -- Wayland picks the recipient from the input
   // region before delivering the touch. Cutting the region is the only knob.
+  //
+  // The panel height is not scaled with the theme (Osk.qml says why): scaling
+  // it would cut the back edge shorter than the keys it exists to clear.
   readonly property int backEdgeBottomInset:
-    root.stripHeight + root.keyboardPanelHeight
+    root.stripHeight + osk.keyboardPanelHeight
 
   // G10b. What a GTK app's header bar reserves at the top, in logical px.
   //
   // Measured on the device and not chosen, for the same reason as the
-  // keyboard's 200 above: it is another toolkit's chrome, and libadwaita has
+  // keyboard's 200 in Osk.qml: it is another toolkit's chrome, and libadwaita has
   // never heard of this theme's spacing scale. Spot's header runs from y=52 to
   // y=144 physical at scale 2 -- 46.5 logical plus its divider -- which is
   // AdwHeaderBar's own 47. GTK3 and Kirigami land within a pixel or two of it.
@@ -149,13 +140,10 @@ Item {
   // question -- it is Overlay, and G10's inset is a hand-computed number for
   // exactly that reason.
   //
-  // Half a keyboard is the threshold rather than an exact height, the way
-  // I5e's is: `home` is one strip taller than the free area (its negative
-  // bottom margin), so neither cluster is an exact number and the test only
-  // has to fall between them. The bar's own band is nowhere near it.
-  readonly property bool keyboardReserving:
-    !!home.screen
-    && home.height < home.screen.height - root.keyboardPanelHeight / 2
+  // `home` is one strip taller than the free area (its negative bottom
+  // margin), so neither cluster is an exact number -- which is what the half-
+  // panel threshold in Osk.qml is for. The bar's own band is nowhere near it.
+  readonly property bool keyboardReserving: osk.reserving(home)
 
   // I1a. Fill the band the strip reserves with the theme's background instead
   // of leaving the wallpaper showing through it.
@@ -1290,7 +1278,7 @@ Item {
              + " topInset=" + root.backEdgeTopInset
              + " header=" + root.headerBarHeight
              + " strip=" + root.stripHeight
-             + " panel=" + root.keyboardPanelHeight
+             + " panel=" + osk.keyboardPanelHeight
              + " screen=" + (backEdge.screen ? backEdge.screen.height : 0)
              // I1a. The band under the pill, and the two answers it is decided
              // from. `home` is published because it is the measurement -- a

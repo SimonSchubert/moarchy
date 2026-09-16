@@ -446,9 +446,11 @@ this field — before `open()` can park it in `focusSink` (N4). Reading that as 
 is what raised the keyboard on every drawer open, and hiding on close is what put it
 away again on every launch.
 
-The raise is a TapHandler on a ClickFocus field, so a finger on the pill is what asks
-and a drag that started there is not a tap. The keyboard that tap raised stays up when
-the drawer goes down: back (G2) is the one way down.
+The raise is a press on a ClickFocus field, taken only while the sheet is at rest open,
+so the swipe that brought the pill up under a finger does not ask. At rest however it
+got there: released at the top, released part-way and finished by the animation, or
+opened with `drawer open`. The keyboard that tap raised stays up when the drawer goes
+down: back (G2) is the one way down.
 → with the keyboard down, `omarchy-shell drawer open` then a tap at
 `drawer searchTarget`'s field centre leaves the focused workspace's `rect.height`
 lower by the keyboard's reservation, and `searchTarget` reports `focused=true`;

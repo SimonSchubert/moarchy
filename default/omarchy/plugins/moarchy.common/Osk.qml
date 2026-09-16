@@ -23,8 +23,9 @@
 // against reality in one evening: `b true` with `grim` showing no keyboard at
 // all, and `b false` straight after a tap that left the field focused. A caller
 // that wants to know whether the keyboard is really up asks the compositor
-// instead — the focused workspace drops by the keyboard's reservation, which is
-// what `gestures.md` I5e gates the drawer's inset on.
+// instead — a surface sway arranges below the keyboard's layer comes back
+// shorter by the keyboard's reservation. `reserving()` is that question, asked
+// once for every surface that needs it (`refactor.md` M2).
 //
 // `execDetached` and not a `Process`: nothing here waits for an answer, and the
 // gestures plugin's own note gives the reason — a Process would tie the call to
@@ -48,4 +49,34 @@ Item {
 
   function show(): void { osk.set(true) }
   function hide(): void { osk.set(false) }
+
+  // What the keyboard reserves at the bottom, in logical px.
+  //
+  // Measured, not chosen: it is moarchy-keyboard's panel and this shell does
+  // not set it. The same figure `gestures.md` I5b pins the drawer's reflow to
+  // -- at 176 the drawer settles over the top key row -- and G10 cuts the back
+  // edge short by.
+  //
+  // Deliberately *not* through Style.space, which every other length in the
+  // shell goes through. Style.space applies this theme's spacing scale, and the
+  // keyboard is a separate client that never sees it.
+  readonly property int keyboardPanelHeight: 200
+
+  // I1a, I5e. Is the keyboard reserving space under `win` right now?
+  //
+  // Read off the compositor's configure for `win`, which only works for a
+  // surface sway arranges after the keyboard's zone is taken: sway resolves
+  // exclusive zones from Overlay downwards, and the keyboard is on Top. A Top
+  // sheet mapped later, or a Bottom one, shrinks with it; an Overlay surface
+  // does not, and cannot ask this.
+  //
+  // Half a panel is the threshold rather than an exact height. Measured on the
+  // drawer, the granted height is 694 or 674 with the keyboard down and 494 or
+  // 474 with it up -- each pair being a surface's own strip inset on and off --
+  // so the clusters are 180px apart and the 20px an inset moves cannot walk the
+  // answer across the line. It has to be nowhere near either cluster, not exact.
+  function reserving(win: var): bool {
+    return !!win && !!win.screen
+        && win.height < win.screen.height - osk.keyboardPanelHeight / 2
+  }
 }

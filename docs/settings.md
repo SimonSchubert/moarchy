@@ -650,12 +650,14 @@ by its duration.
 → `omarchy-reminder 9 Tea; omarchy-reminder 11; settings refresh; settings rows`
 holds a row labelled `Tea` and one labelled `11-min reminder`
 
-**J11** While a field has focus the surface gives the on-screen keyboard its room:
-the negative bottom inset that lets a page draw under the gesture strip goes to
-zero, and comes back when focus leaves. This is the first text input in Settings,
-and that inset was unconditional because there had never been one.
-→ `settings geometry` shows `margin=0` while `settings focused` names a field,
-and `margin=-<strip>` when `settings focused` is empty
+**J11** A field needs nothing of its own to make room for the on-screen keyboard.
+Settings is a window (`gestures.md` K1), so sway shrinks it by the keyboard's
+reservation and the rows end above the keys. This used to drop a negative bottom
+inset while a field had focus; the inset went with the layer surface, and focus
+was the wrong signal anyway, because a field can hold focus with the keyboard
+down (G14).
+→ with Settings open, `settings geometry` `h` is 200 smaller with the keyboard
+up than with it down
 
 **J12** Fields do not outlive the screen. Coming back to Set a reminder starts
 empty, so yesterday's message is never attached to today's timer.

@@ -570,9 +570,9 @@ Item {
     root.dynamicLoaded = false
   }
 
-  // Fields do not outlive the screen (J12), and the surface must not be left
-  // holding a bottom inset for a keyboard whose field has just been
-  // destroyed -- a delegate torn down while focused reports no focus loss.
+  // Fields do not outlive the screen (J12), and `settings focused` must not go
+  // on naming a field that has just been destroyed -- a delegate torn down
+  // while focused reports no focus loss.
   function resetFields() {
     root.inputMap = ({})
     root.focusedInput = ""

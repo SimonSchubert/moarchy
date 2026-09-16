@@ -183,7 +183,7 @@ Rectangle {
       onTextChanged: card.edited(text)
       onActiveFocusChanged: card.focusTaken(activeFocus)
       // A delegate destroyed while focused never reports losing it, which would
-      // strand the surface with no bottom inset and no keyboard.
+      // leave `settings focused` naming a field that is gone.
       Component.onDestruction: if (activeFocus) card.focusTaken(false)
       // G14. The tap is the request; focus arriving because Settings mapped
       // is not. Shared.Osk lives here rather than on the card so a nav row

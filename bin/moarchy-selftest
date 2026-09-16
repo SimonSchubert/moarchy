@@ -3834,7 +3834,36 @@ PY
 
     d close >/dev/null; s close >/dev/null; sleep 1
   fi
-  printf '  \033[90m%-4s\033[0m   \033[90mnot covered here: A3 A5 B5 B7 C5 C7 C8 D3 D4 E2 E5 E6 E7 E8 F1 F2 F3 F4 F5 F6 F7 G4 H1 I4 J11 O4a\033[0m\n' ""
+
+  # J11. Room for the keyboard is sway's to make, not a margin of ours: the
+  # window comes back shorter by the keyboard's 200. SetVisible rather than a
+  # tap, because what is measured is the window and not what raised it.
+  j11_osk() { busctl --user call sm.puri.OSK0 /sm/puri/OSK0 sm.puri.OSK0 \
+                     SetVisible b "$1" >/dev/null 2>&1; }
+  j11_h() { omarchy-shell settings geometry 2>/dev/null | tr ' ' '\n' | sed -n 's/^h=//p'; }
+  if ! j11_osk false; then
+    printf '  \033[90m%-4s\033[0m   \033[90mJ11 skipped: nothing owns sm.puri.OSK0\033[0m\n' ""
+  else
+    # Output on first. This suite drives nothing but IPC, so swayidle has
+    # blanked the panel long before it gets here, and a keyboard on a powered-
+    # off output never commits its new zone: Visible reads true and the window
+    # keeps its height, which is this check failing on a phone that is fine.
+    swaymsg 'output * power on' >/dev/null 2>&1; sleep 2
+    omarchy-shell settings open >/dev/null 2>&1; sleep 3
+    j11_down=$(j11_h)
+    j11_osk true; sleep 3
+    j11_up=$(j11_h)
+    j11_osk false; sleep 1
+    omarchy-shell settings close >/dev/null 2>&1; sleep 1
+    if [[ -n $j11_down && -n $j11_up ]] && (( j11_down - j11_up == 200 )); then
+      ok "J11 the Settings window ends above the keyboard ($j11_down -> $j11_up)"
+    else
+      no "J11 Settings h ${j11_down:-?} -> ${j11_up:-?}, wanted 200 shorter with the keyboard up" \
+         "an unchanged height means the keyboard is covering the bottom rows"
+    fi
+  fi
+
+  printf '  \033[90m%-4s\033[0m   \033[90mnot covered here: A3 A5 B5 B7 C5 C7 C8 D3 D4 E2 E5 E6 E7 E8 F1 F2 F3 F4 F5 F6 F7 G4 H1 I4 O4a\033[0m\n' ""
   # A3     needs a real finger or the touch injector
   # B4     is a gesture, and --gestures proves it as M1/K4 with a real swipe
   # A5     needs every reader stubbed slow
@@ -3843,7 +3872,6 @@ PY
   # E2     static: Pages.js against omarchy-menu.jsonc, not a runtime question
   # F3-F7  need PATH stubs that count forks
   # I2/I4  static greps, run at build time
-  # J11    the keyboard inset needs a real focus, which needs a real finger
   # O4a    O4's other half: that the capture does not contain a half-drawn
   #        Settings. `state` and `running` prove the surface never mapped, which
   #        is the cause; only a real grim with the shell running proves the
@@ -4043,6 +4071,14 @@ print(r["x"], r["y"], r["width"], r["height"])'
   # injector and root.
   touch_bin="$MOARCHY_BIN/moarchy-touch"
   if [[ -x $touch_bin ]] && sudo -n true 2>/dev/null; then
+    osk_set() { busctl --user call sm.puri.OSK0 /sm/puri/OSK0 sm.puri.OSK0 \
+                       SetVisible b "$1" >/dev/null 2>&1; }
+    ws_h() { swaymsg -t get_workspaces 2>/dev/null \
+               | jq -r '.[]|select(.focused)|.rect.height'; }
+
+    # Down first, or h_down is whatever an earlier check left behind and G14a
+    # has nothing to raise.
+    osk_set false; sleep 2
     open_ drawer
     h_down=$(g drawer h); gap_down=$(g drawer gap)
     # The search pill: below the 26px handle strip, centred.
@@ -4057,14 +4093,28 @@ print(r["x"], r["y"], r["width"], r["height"])'
       osk_up && break
     done
     h_up=$(g drawer h); gap_up=$(g drawer gap)
+    tapped=$(omarchy-shell drawer searchTarget 2>/dev/null \
+               | tr ' ' '\n' | sed -n 's/^focused=//p')
+
+    # G14a. The field taking focus is the proof the tap landed -- it is
+    # ClickFocus, so nothing else focuses it -- and after that a keyboard that
+    # stays down is G14a failing, not the environment. This used to be one
+    # skip for both, and it hid a drawer that armed the raise only when a drag
+    # ended at the very top: `open_` never drags, so the check skipped on every
+    # run while the field was dead after every flick.
+    if [[ $tapped != true ]]; then
+      printf '  \033[90m%-4s\033[0m   \033[90mG14a skipped: the tap did not reach the search field (focused=%s)\033[0m\n' "" "${tapped:-?}"
+    elif [[ -n $h_up && -n $h_down ]] && (( h_up < h_down )); then
+      ok "G14a a tap on the search field raises the keyboard ($h_down -> $h_up)"
+    else
+      no "G14a the search field took the tap and the keyboard stayed down (h $h_down -> ${h_up:-?})" \
+         "the raise is armed off the sheet resting open; check keyboardRaiseArmed"
+    fi
+
     if ! osk_up; then
       # An environment that will not raise the keyboard cannot answer I5, and
-      # reporting that as an I5 failure teaches you to ignore I5.
-      #
-      # Worth knowing before chasing it: G14 means *focus* does not raise it,
-      # so this branch is reached when the tap did not land on the field or
-      # the injector has not been bound yet -- not because taps are forbidden.
-      # G14a is a TapHandler on this pill, and I5 is the check that it fires.
+      # reporting that as an I5 failure teaches you to ignore I5. G14a above
+      # has already said whether that is the drawer's fault.
       printf '  \033[90m%-4s\033[0m   \033[90mI5 skipped: the keyboard would not come up\033[0m\n' ""
     elif [[ -n $h_up && -n $h_down ]] && (( h_up < h_down )) && [[ $gap_up == "$gap_down" ]]; then
       ok "I5 the drawer reflows above the keyboard ($h_down -> $h_up, gap $gap_up held)"
@@ -4082,14 +4132,27 @@ print(r["x"], r["y"], r["width"], r["height"])'
     # configure alone now (I5a), so the margin half would pass whatever the
     # field did -- a check that cannot fail on the thing it names.
     close_ drawer
+    if osk_up; then
+      # The rect with the drawer gone, against one read after putting the
+      # keyboard down by hand: 474 against 674 on this screen.
+      g14a_closed=$(ws_h)
+      osk_set false; sleep 2
+      g14a_down=$(ws_h)
+      if [[ -n $g14a_closed && -n $g14a_down ]] && (( g14a_closed < g14a_down )); then
+        ok "G14a closing the drawer leaves the keyboard up ($g14a_closed, $g14a_down without it)"
+      else
+        no "G14a closing the drawer took the keyboard down (rect ${g14a_closed:-?}, ${g14a_down:-?} without it)" \
+           "back (G2) is the one way down"
+      fi
+    fi
     open_ drawer
     focused=$(omarchy-shell drawer searchTarget 2>/dev/null \
                 | tr ' ' '\n' | sed -n 's/^focused=//p')
     if [[ $focused == false ]]; then
-      okac N4 "the search field lets go on close"
+      ok "N4 the search field lets go on close"
     else
-      noac N4 "the drawer re-opened with the field still focused (focused=${focused:-?})" \
-              "an item outside the window cannot take active focus, so the field never let go"
+      no "N4 the drawer re-opened with the field still focused (focused=${focused:-?})" \
+         "an item outside the window cannot take active focus, so the field never let go"
     fi
     close_ drawer
 
@@ -4107,11 +4170,6 @@ print(r["x"], r["y"], r["width"], r["height"])'
     # and this passes on an empty stage -- measured 0 of 4 on a bare home screen
     # against 4 of 4 with an app, which is exactly why the bug read as
     # intermittent for so long.
-    osk_set() { busctl --user call sm.puri.OSK0 /sm/puri/OSK0 sm.puri.OSK0 \
-                       SetVisible b "$1" >/dev/null 2>&1; }
-    ws_h() { swaymsg -t get_workspaces 2>/dev/null \
-               | jq -r '.[]|select(.focused)|.rect.height'; }
-
     setsid foot --app-id=moa-i5d -e sh -c 'while :; do sleep 300; done' \
       >/dev/null 2>&1 </dev/null &
     sleep 4
