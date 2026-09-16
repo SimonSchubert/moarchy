@@ -294,14 +294,24 @@ grep -q '"id": "org.moarchy.calculator"' "$R/usr/share/omarchy/config/omarchy/sh
 # Every snapshotted plugin must be in that list. A directory in qml-apps/
 # that shell.json does not name is a tile that does nothing, which is how
 # a plugin can land in the package and never load.
+#
+# And every one must have a tile. The list of names above covers the plugins
+# that replaced a GTK or KDE app; this covers the rest -- Coins, Habits and the
+# games -- which are default apps just the same and had no check that a person
+# could reach them. A tile is an entry that toggles the plugin and is not
+# hidden: the editor's and Mail's second entries summon, and do not count.
 _shelljson="$R/usr/share/omarchy/config/omarchy/shell.json"
 for _pdir in /repo/qml-apps/org.moarchy.*/; do
   _pid=$(basename "$_pdir")
   grep -q "\"id\": \"$_pid\"" "$_shelljson" \
     && ok "shell.json enables $_pid" \
     || no "shell.json does not enable $_pid"
+  _tile=$(grep -lx "Exec=omarchy-shell shell toggle $_pid" "$R"/usr/share/applications/*.desktop 2>/dev/null \
+            | xargs -r grep -Lx 'NoDisplay=true' 2>/dev/null | head -1)
+  [ -n "$_tile" ] && ok "$_pid has a drawer tile ($(basename "$_tile"))" \
+                  || no "$_pid has no drawer tile -- a default app nobody can open"
 done
-unset _pdir _pid _shelljson
+unset _pdir _pid _shelljson _tile
 
 hy=$(grep -rl 'import Quickshell.Hyprland' "$R/usr/share/omarchy/shell" --include=*.qml 2>/dev/null | wc -l)
 i3=$(grep -rl 'import Quickshell.I3'       "$R/usr/share/omarchy/shell" --include=*.qml 2>/dev/null | wc -l)
