@@ -810,7 +810,7 @@ have no twin for
 **L6** The recorded editor has one owner. The state path, the fallback and the
 ten-entry MIME list are written out across three files, two of them carrying a
 comment asking the reader to keep them in step.
-→ `grep -rln 'gnome-text-editor' bin/` matches one file
+→ `grep -rln 'moarchy-editor' bin/` matches one file
 
 ---
 

@@ -9,6 +9,11 @@
 
 var API = "https://api.open-meteo.com/v1/forecast"
 var GEOCODE = "https://geocoding-api.open-meteo.com/v1/search"
+// Where this connection is, by its address. GeoJS because it is HTTPS without
+// a key or an account, and names the country in words -- ipinfo, asked the
+// same question, answers "DE", and the places list would need a table of
+// countries to say Germany.
+var LOCATE = "https://get.geojs.io/v1/ip/geo.json"
 var AGENT = "moarchy-weather/0.1.0 (+https://github.com/SimonSchubert/moarchy-apps)"
 var TIMEOUT = 12
 
@@ -24,6 +29,12 @@ var STRIP_HOURS = 24
 // the clock on screen rather than about the forecast behind it.
 var REFRESH_S = 15 * 60
 var RATE_LIMIT_S = 600
+
+// An address changes when the phone changes network, which is not something a
+// weather app can be told about. So it is asked again on the forecast's own
+// clock: a train out of one town and a café's wifi in the next is a new answer
+// within a quarter of an hour of opening the app.
+var LOCATE_S = 15 * 60
 
 var MAX_RESULTS = 8
 
@@ -298,6 +309,56 @@ function readPlace(record) {
 // keyed on this.
 function placeId(lat, lon) {
   return fixed(lat, 3) + "," + fixed(lon, 3)
+}
+
+// --- where the phone is --------------------------------------------------
+
+// Returns { place: {...}, error: "" }. The place is the same shape a search
+// result is, so everything downstream of it -- the id, the cache, `where()` --
+// cannot tell a town that was typed from one that was looked up.
+function parseLocation(body) {
+  var payload
+  try {
+    payload = JSON.parse(body)
+  } catch (e) {
+    return { place: null, error: "GeoJS sent something that is not JSON." }
+  }
+  if (!payload || typeof payload !== "object")
+    return { place: null, error: "GeoJS sent something that is not a place." }
+
+  var lat = coordinate(payload.latitude, 90)
+  var lon = coordinate(payload.longitude, 180)
+  // Nought and nought is where a lookup that knows nothing puts a phone: the
+  // Gulf of Guinea, whose weather is nobody's.
+  if (lat === null || lon === null || (lat === 0 && lon === 0))
+    return { place: null, error: "GeoJS could not tell where this connection is." }
+  // An address that resolves to a country and no town is that country's
+  // middle, and the forecast for the middle of Germany is not a forecast for
+  // anybody in it.
+  var name = text(payload.city)
+  if (!name)
+    return { place: null, error: "GeoJS knows the country but not the town." }
+
+  return {
+    place: {
+      id: placeId(lat, lon),
+      name: name,
+      admin: text(payload.region),
+      country: text(payload.country),
+      lat: lat,
+      lon: lon
+    },
+    error: ""
+  }
+}
+
+// GeoJS sends coordinates as strings. `Number("")` is nought rather than a
+// failure, which is the one conversion here that would quietly put a phone on
+// the equator, so an empty string is refused before it gets that far.
+function coordinate(value, limit) {
+  var n = typeof value === "string" && value.trim().length ? Number(value) : num(value)
+  if (n === null || !isFinite(n) || Math.abs(n) > limit) return null
+  return n
 }
 
 // --- the numbers as somebody reads them ----------------------------------

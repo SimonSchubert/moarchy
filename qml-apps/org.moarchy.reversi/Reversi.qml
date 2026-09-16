@@ -41,7 +41,6 @@ Item {
 
   property string returnTo: ""
   readonly property var colours: themeFile.colours
-  readonly property int radiusCard: uiFile.radiusCard
   property int bodySize: Metrics.BODY
   Component.onCompleted: root.bodySize = Metrics.shellBody(root)
 
@@ -211,7 +210,9 @@ Item {
     if (root.thinking || root.over || root.humanTurn) return
     root.thinking = true
     root.generation += 1
-    brain.sendMessage({
+    if (!root.brain) brainLoader.active = true
+    if (!root.brain) { root.thinking = false; return }
+    root.brain.sendMessage({
       position: root.position,
       level: root.level,
       generation: root.generation
@@ -267,10 +268,32 @@ Item {
 
   Process { id: ensureDir; running: false; command: ["mkdir", "-p", root.dataDir] }
 
-  WorkerScript {
-    id: brain
-    source: "search.js"
-    onMessage: function (reply) { root.thought(reply) }
+  // The search, behind a Loader so that it can be taken down before the
+  // process is.
+  //
+  // A WorkerScript is a thread. Tearing the QML engine down while one exists
+  // -- even an idle one that has already answered -- takes the process with
+  // it: "QEventLoop: Cannot be used without QCoreApplication", a crash report,
+  // and an exit code nobody wanted. Unloading the Loader joins the thread
+  // first, which is the difference between quitting and crashing on the way
+  // out. `shutdown()` is what every exit path calls.
+  Loader {
+    id: brainLoader
+    active: true
+    sourceComponent: WorkerScript {
+      source: "search.js"
+      onMessage: function (reply) { root.thought(reply) }
+    }
+  }
+
+  // `Loader.item` is a QObject, and a QObject has no sendMessage on it as far
+  // as the linter is concerned. Naming the type here is what keeps the call
+  // site checkable rather than resolved at run time and hoped for.
+  readonly property WorkerScript brain: brainLoader.item as WorkerScript
+
+  function shutdown() {
+    root.thinking = false
+    brainLoader.active = false
   }
 
   Chrome.JsonFile {
@@ -289,7 +312,6 @@ Item {
   }
 
   Chrome.ThemeFile { id: themeFile }
-  Chrome.UiFile { id: uiFile }
 
   IpcHandler {
     target: "reversi"
@@ -363,12 +385,14 @@ Item {
 
           trailing: Row {
             Chrome.IconButton {
+              colours: root.colours
               color: root.textOnSurface
               names: ["edit-undo-symbolic", "go-previous-symbolic"]
               tooltip: "Undo"
               onClicked: root.undo()
             }
             Chrome.IconButton {
+              colours: root.colours
               color: root.textOnSurface
               names: ["view-refresh-symbolic"]
               tooltip: "New game"
@@ -443,7 +467,7 @@ Item {
 
             Rectangle {
               anchors.fill: parent
-              radius: root.radiusCard
+              radius: Metrics.radius(root.colours, Metrics.CARD_RADIUS)
               color: root.feltColour
             }
 
@@ -556,7 +580,7 @@ Item {
 
                 Rectangle {
                   anchors.fill: parent
-                  radius: root.radiusCard
+                  radius: Metrics.radius(root.colours, Metrics.CARD_RADIUS)
                   color: modelData.key === root.level
                          ? Theme.mix(root.accent, root.colours.background, 0.25)
                          : "transparent"

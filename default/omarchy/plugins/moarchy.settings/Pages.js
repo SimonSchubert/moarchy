@@ -450,12 +450,19 @@ var PAGES = {
 // below stay, guarded as they always were, because a user who installs vim or
 // helix from the store should still be able to choose it.
 //
-// `Text Editor` and not `GNOME Text Editor`: that is the name on its own
-// desktop entry and the name under its icon in the drawer, and a settings row
-// that calls an app something the rest of the phone does not is a row people
-// read twice.
+// `Text Editor` for the plugin: that is the name on its desktop entry and under
+// its icon in the drawer, and a settings row that calls an app something the
+// rest of the phone does not is a row people read twice. GNOME's keeps its
+// full name for the same reason in reverse -- two rows both called Text Editor
+// would be a choice nobody could make. It is guarded like the terminal editors,
+// because it left the set on 2026-09-16 and is only here if the store put it
+// back.
 "apps.default.editor": { title: "Editor", reader: "omarchy-default-editor", rows: [
-  { id: "gnome-text-editor", type: "choice", label: "Text Editor",
+  { id: "moarchy-editor", type: "choice", label: "Text Editor",
+    value: "moarchy-editor",
+    when: "omarchy-cmd-present moarchy-editor",
+    write: "omarchy-default-editor moarchy-editor" },
+  { id: "gnome-text-editor", type: "choice", label: "GNOME Text Editor",
     value: "gnome-text-editor",
     when: "omarchy-cmd-present gnome-text-editor",
     write: "omarchy-default-editor gnome-text-editor" },

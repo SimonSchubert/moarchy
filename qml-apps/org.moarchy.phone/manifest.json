@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "org.moarchy.phone",
+  "name": "Phone",
+  "version": "0.1.0",
+  "author": "Simon Schubert",
+  "license": "MIT",
+  "description": "Calls: a keypad, the ones that happened, and the one ringing now -- through ModemManager, with no daemon of its own.",
+  "kinds": ["overlay"],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "Phone.qml"
+  }
+}

@@ -2,7 +2,7 @@
 Type=Application
 Name=Weather
 GenericName=Weather forecast
-Comment=Now, the next day and the week, for the places you named
+Comment=Now, the next day and the week, where you are and in the places you named
 Exec=omarchy-shell shell toggle org.moarchy.weather
 Icon=org.moarchy.Weather
 Terminal=false

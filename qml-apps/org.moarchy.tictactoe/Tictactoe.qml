@@ -34,7 +34,6 @@ Item {
 
   property string returnTo: ""
   readonly property var colours: themeFile.colours
-  readonly property int radiusCard: uiFile.radiusCard
   property int bodySize: Metrics.BODY
   Component.onCompleted: root.bodySize = Metrics.shellBody(root)
 
@@ -218,7 +217,6 @@ Item {
   }
 
   Chrome.ThemeFile { id: themeFile }
-  Chrome.UiFile { id: uiFile }
 
   IpcHandler {
     target: "tictactoe"
@@ -295,12 +293,14 @@ Item {
 
           trailing: Row {
             Chrome.IconButton {
+              colours: root.colours
               color: root.textOnSurface
               names: ["edit-undo-symbolic", "go-previous-symbolic"]
               tooltip: "Undo"
               onClicked: root.undo()
             }
             Chrome.IconButton {
+              colours: root.colours
               color: root.textOnSurface
               names: ["view-refresh-symbolic"]
               tooltip: "New game"
@@ -348,7 +348,7 @@ Item {
                   Rectangle {
                     anchors.fill: parent
                     anchors.margins: 4
-                    radius: root.radiusCard
+                    radius: Metrics.radius(root.colours, Metrics.CARD_RADIUS)
                     color: square.inLine
                            ? Theme.mix(root.accent, root.colours.background, 0.22)
                            : Theme.mix(root.colours.foreground, root.colours.background, 0.07)
@@ -435,7 +435,7 @@ Item {
 
                 Rectangle {
                   anchors.fill: parent
-                    radius: root.radiusCard
+                  radius: Metrics.radius(root.colours, Metrics.CARD_RADIUS)
                   color: modelData.key === root.level
                          ? Theme.mix(root.accent, root.colours.background, 0.25)
                          : "transparent"

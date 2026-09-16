@@ -1,4 +1,5 @@
 import QtQuick
+import "Theme.js" as Theme
 import "Metrics.js" as Metrics
 
 // A popover menu over a scrim — Keep's card/overflow menus, not a sheet.
@@ -8,12 +9,11 @@ import "Metrics.js" as Metrics
 Item {
   id: root
   property bool open: false
+  property var colours: null
   property color background: "#1d1d20"
-  property color line: "#333"
   property color foreground: "#ffffff"
   property color danger: "#e01b24"
   property int bodySize: 16
-  property int radiusCard: Metrics.CARD_RADIUS
   property int menuWidth: Metrics.MENU_WIDTH
   // "topEnd" | "center"
   property string placement: "topEnd"
@@ -31,19 +31,25 @@ Item {
     root.dismissed()
   }
 
-  MouseArea {
+  // A scrim, and not a 1px outline, is what separates a popover from the
+  // screen under it. The outline was the last hairline in the kit, and it was
+  // also the thing that made a menu read as a dialog from 2009.
+  Rectangle {
     anchors.fill: parent
-    onClicked: root.close()
+    color: Theme.alpha(root.background, 0.55)
+
+    MouseArea {
+      anchors.fill: parent
+      onClicked: root.close()
+    }
   }
 
   Rectangle {
     id: panel
     width: root.menuWidth
     height: menuCol.height + 16
-    radius: root.radiusCard
-    color: root.background
-    border.color: root.line
-    border.width: 1
+    radius: Metrics.radius(root.colours, Metrics.RADIUS_LG)
+    color: root.colours ? Theme.surface(root.colours, "raised") : root.background
 
     x: root.placement === "center"
        ? Math.round((root.width - width) / 2)
@@ -64,7 +70,7 @@ Item {
       anchors.right: parent.right
       anchors.top: parent.top
       anchors.margins: 8
-      spacing: 4
+      spacing: 2
     }
   }
 }

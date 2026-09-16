@@ -33,6 +33,10 @@ They ship as `moarchy-qml-apps` and are enabled by the packaged `shell.json`.
 | Contacts | `org.moarchy.contacts` | A name, a number, an email, a note. One JSON file, no accounts |
 | Files | `org.moarchy.files` | One folder at a time. `$mod+f` opens it |
 | Keep | `org.moarchy.keep` | Notes and checklists. Same `notes.json` the GTK app writes |
+| Mail † | `org.moarchy.mail` | One account over IMAP and SMTP: folders, reading, replying, forwarding. No HTML is drawn and no picture is fetched. New mail in the Inbox is looked for every fifteen minutes with the window closed, through `moarchy-mail`, one short run of Python at a time |
+| Messages † | `org.moarchy.messages` | Texts by person, written to one file before they are deleted from the modem. SMS only |
+| Phone † | `org.moarchy.phone` | A keypad, recents with the missed calls in red, and the call screen. It rings with its window closed, because the shell keeps it loaded |
+| Text Editor † | `org.moarchy.editor` | One text file at a time, what a tapped text file opens in, and `$EDITOR` through `moarchy-editor --wait` |
 | Vitals | `org.moarchy.vitals` | Processor, memory, tasks, network, from `/proc` |
 | Weather | `org.moarchy.weather` | Now, today and the week, for places you typed |
 | Coins | `org.moarchy.coins` | Top hundred by market cap, and the ones you star |
@@ -67,23 +71,15 @@ These reflow to a phone width natively and are the most comfortable fit.
 
 | App | Package | What it is |
 | --- | --- | --- |
-| Text Editor | `gnome-text-editor` | Works well with the on-screen keyboard |
-| Loupe | `loupe` | Image viewer, gesture zoom |
-| Papers | `papers` | PDF viewer (Evince's successor) |
-| Foliate | `foliate` | E-book reader; genuinely good on this screen |
 | Maps | `gnome-maps` | Adaptive; reflows to 360px like the rest of the set |
 | Web | `epiphany` | The browser — see [Browsers](#browsers) |
-| Geary † | `geary` | Email. `geary-mobile` is a dummy package; the plain build is the mobile one |
-| Secrets † | `secrets` | KeePass v4 `.kdbx` passwords, which Keysmith is not: that holds TOTP codes only |
 
-<p align="center">
-  <img src="screenshots/apps/02-gnome-text-editor.png" width="30%" alt="GNOME Text Editor">
-  <img src="screenshots/apps/05-foliate.png" width="30%" alt="Foliate">
-  <img src="screenshots/apps/03-loupe.png" width="30%" alt="Loupe">
-</p>
-<p align="center">
-  <img src="screenshots/apps/04-papers.png" width="30%" alt="Papers">
-</p>
+Email was Geary until 2026-09-16, and is **Mail** under [Ours](#ours) now.
+`gnome-keyring` stays, and stays above anything that depends on the virtual
+`org.freedesktop.secrets`: Geary did, and while `moarchy-meta` listed it first,
+pacman resolved the name before anything in the transaction provided it and
+installed the alphabetically first provider, `chipass`, with a tile of its own
+in the drawer. `image/verify.sh` fails an image that has it.
 
 ## Plasma Mobile (Kirigami)
 
@@ -102,17 +98,15 @@ run without a KDE session — they are ordinary Wayland clients under Sway.
 
 | App | Package | What it is |
 | --- | --- | --- |
-| Calls | `gnome-calls` | Dialer and in-call UI |
-| Chats | `chatty` | SMS/MMS |
 | Megapixels | `megapixels` | The camera, and the only one that works here — see [Camera](#camera). From `[danctnix]` |
 | Linux Command Library | `lcl-gui-bin` | Qt6 command reference and cheat sheets, useful on a device whose terminal is 47 columns. Built from the pin in `manifest.toml`; not in ALARM |
 
-`callaudiod` (earpiece/speaker/headset routing) and `mmsd-tng` (MMS transport,
-from `[danctnix]`) come with the first two and have no UI of their own. Their
-systemd units are replaced rather than enabled: both ship
-`Requisite=gnome-session-initialized.target`, which under sway never exists, so
-`pkgbuilds/moarchy` installs same-named units into `/etc/systemd/user`, which
-wins over the `/usr/lib` copies.
+Calls and texts are **Phone** and **Messages**, under [Ours](#ours). What they
+run on has no UI of its own: `modemmanager`, which they reach through `mmcli`
+and a `gdbus monitor` on the system bus, and `callaudiod` for earpiece, speaker
+and mute during a call. Neither needs a unit of ours. The shell keeps both
+plugins loaded, so the shell is the daemon that GNOME Calls and Chatty each
+needed a replacement systemd unit for.
 
 Two web apps ship as well — **X** and **Discord**, entries rather than packages.
 See [Web apps](#web-apps).
@@ -159,7 +153,12 @@ commented block at the foot of `pkgbuilds/moarchy-meta/PKGBUILD`.
 | --- | --- |
 | `alacritty`, `qmlkonsole` | The second and third terminals, dropped 2026-09-08 — [One terminal](#one-terminal) |
 | `kclock`, `index-fm` | A second clock and a second file manager, dropped 2026-09-06. Index drags the whole MauiKit stack in behind it |
-| `gnome-clocks`, `kalk`, `calindori`, `gnome-contacts`, `portfolio-file-manager`, `kweather` | Replaced 2026-09-15 by the `org.moarchy.*` shell plugins. gnome-contacts is the one that still does something the plugin does not: it writes evolution-data-server, which is what Calls and Chats resolve names through, so without it both show bare numbers. It installs from the store |
+| `gnome-clocks`, `kalk`, `calindori`, `gnome-contacts`, `portfolio-file-manager`, `kweather` | Replaced 2026-09-15 by the `org.moarchy.*` shell plugins. gnome-contacts writes evolution-data-server, which Calls and Chats resolved names through; Phone and Messages read the Contacts plugin's file instead, so nothing on the image needs it any more. It installs from the store |
+| `gnome-calls`, `chatty`, `mmsd-tng` | Replaced 2026-09-16 by `org.moarchy.phone` and `org.moarchy.messages`, daemons included. Installing Chatty back beside Messages is worse than a second tile: while it runs it takes every text off the modem and deletes it, so Messages never sees one. `mmsd-tng` was Chatty's MMS transport, and Messages is SMS only |
+| `gnome-text-editor` | Replaced 2026-09-16 by `org.moarchy.editor`, as the drawer's editor, the handler for text files and `$EDITOR`. It still does a great deal the plugin does not — tabs, search, highlighting, spell check — and installs from the store; `omarchy-default-editor gnome-text-editor` makes it the editor again |
+| `geary` | Replaced 2026-09-16 by `org.moarchy.mail`. moarchy-store's sweep had already rejected it for this screen — a desktop-shaped three-pane client that wants an unlocked keyring, whose prompt maps behind its own window — and it is not in the store. `sudo pacman -S geary` still installs it. Mail keeps its password in a 0600 file, not the keyring, so the two do not share an account |
+| `loupe`, `papers`, `foliate`, `secrets` | Dropped 2026-09-16 with no plugin in their place. The default set is the shell's own apps and what a phone cannot be a phone without; an image viewer, a PDF viewer, an e-book reader and a KeePass client are each a tap away in the store. Until one is installed, a picture, PDF or `.epub` tapped in Files has no handler of its own |
+| `chipass` | Never listed, and installed anyway: Geary's `org.freedesktop.secrets` resolved to it while `gnome-keyring` came after `geary` in the list. See [GNOME](#gnome-libadwaita) |
 | `moarchy-keep`, `moarchy-vitals` | The GTK halves of Keep and Vitals. The plugins are the same apps (same notes file, same `/proc` reader) and two tiles for one job is the cut this list has been making since kclock |
 | `spot-client` | Spot, a native Spotify client over librespot — the reason there is no Spotify *web* app here (B3) |
 | `chromium`, `signal-desktop`, `libreoffice-fresh`, `nautilus`, `mpv`, `imv`, `kdenlive`, `gpu-screen-recorder` | Each is heavy for an A64 with 2 GB of RAM; none is needed for the phone to be a phone |
@@ -177,9 +176,15 @@ commented block at the foot of `pkgbuilds/moarchy-meta/PKGBUILD`.
 </p>
 <p align="center">
   <img src="screenshots/apps/09-kweather.png" width="30%" alt="KWeather">
+  <img src="screenshots/apps/02-gnome-text-editor.png" width="30%" alt="GNOME Text Editor">
 </p>
 <p align="center">
   <img src="screenshots/apps/06-portfolio.png" width="30%" alt="Portfolio">
+  <img src="screenshots/apps/05-foliate.png" width="30%" alt="Foliate">
+  <img src="screenshots/apps/03-loupe.png" width="30%" alt="Loupe">
+</p>
+<p align="center">
+  <img src="screenshots/apps/04-papers.png" width="30%" alt="Papers">
 </p>
 
 ## What limits app choice

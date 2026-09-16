@@ -30,7 +30,6 @@ Item {
 
   property string returnTo: ""
   readonly property var colours: themeFile.colours
-  readonly property int radiusCard: uiFile.radiusCard
   property int bodySize: Metrics.BODY
   Component.onCompleted: {
     root.bodySize = Metrics.shellBody(root)
@@ -206,7 +205,6 @@ Item {
   }
 
   Chrome.ThemeFile { id: themeFile }
-  Chrome.UiFile { id: uiFile }
 
   IpcHandler {
     target: "minesweeper"
@@ -282,6 +280,7 @@ Item {
 
           trailing: Row {
             Chrome.IconButton {
+              colours: root.colours
               // The flag mode, latched. It is the one control on this screen
               // that changes what a tap means, so it says so by staying lit.
               color: root.marking ? root.hueColor("red") : root.textOnSurface
@@ -291,6 +290,7 @@ Item {
               onClicked: root.marking = !root.marking
             }
             Chrome.IconButton {
+              colours: root.colours
               color: root.textOnSurface
               names: ["view-refresh-symbolic"]
               tooltip: "New game"
@@ -350,7 +350,7 @@ Item {
                   Rectangle {
                     anchors.fill: parent
                     anchors.margins: 1
-                    radius: 3
+                    radius: Metrics.radius(root.colours, 3)
                     color: square.boom ? root.hueColor("red")
                          : square.isOpen ? Theme.mix(root.colours.foreground, root.colours.background, 0.05)
                          : Theme.mix(root.colours.foreground, root.colours.background, 0.16)
@@ -438,7 +438,7 @@ Item {
 
                 Rectangle {
                   anchors.fill: parent
-                  radius: root.radiusCard
+                  radius: Metrics.radius(root.colours, Metrics.CARD_RADIUS)
                   color: modelData.key === root.levelKey
                          ? Theme.mix(root.accent, root.colours.background, 0.25)
                          : "transparent"

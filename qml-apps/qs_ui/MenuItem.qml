@@ -4,6 +4,8 @@ import "Metrics.js" as Metrics
 // One row in a ContextMenu. Icon optional; whole row is the hit target.
 Item {
   id: root
+  // Only for the shape of the press: the inks are the two below.
+  property var colours: null
   property var names: []
   property string text: ""
   property color foreground: "#ffffff"
@@ -49,7 +51,7 @@ Item {
 
   PressVeil {
     anchors.fill: parent
-    radius: 8
+    radius: Metrics.radius(root.colours, Metrics.RADIUS_SM)
     ink: root.destructive ? root.danger : root.foreground
     on: tap.pressed
   }

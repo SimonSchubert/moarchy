@@ -33,7 +33,7 @@ Rectangle {
   visible: label.text.length > 0
   width: Math.min(parent ? parent.width - 32 : 320, label.implicitWidth + 28)
   height: 40
-  radius: 20
+  radius: Metrics.round(root.colours, height)
   color: root.colours
          ? Theme.mix(root.colours.foreground, root.colours.background, 0.92)
          : "#e8e8e8"

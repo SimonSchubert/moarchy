@@ -40,7 +40,6 @@ Item {
   // `colours` and not `palette`: QQuickItem already has a `palette`, and
   // shadowing it makes a binding resolve to whichever the compiler picked.
   readonly property var colours: themeFile.colours
-  readonly property int radiusCard: uiFile.radiusCard
   property int bodySize: Metrics.BODY
   Component.onCompleted: {
     root.bodySize = Metrics.shellBody(root)
@@ -69,11 +68,9 @@ Item {
 
   property bool fetchingIcons: false
 
-  readonly property color surface: colours.surface
   readonly property color background: colours.background
   readonly property color textOnSurface: colours.foreground
   readonly property color dim: colours.dim
-  readonly property color line: colours.line
   readonly property color accent: colours.accent
 
   readonly property var shownList: Market.filter(root.coins, root.query)
@@ -449,7 +446,6 @@ Item {
   }
 
   Chrome.ThemeFile { id: themeFile }
-  Chrome.UiFile { id: uiFile }
 
   IpcHandler {
     target: "coins"
@@ -520,6 +516,7 @@ Item {
 
           trailing: Row {
             Chrome.IconButton {
+              colours: root.colours
               color: root.textOnSurface
               names: ["system-search-symbolic", "edit-find-symbolic"]
               tooltip: "Search coins"
@@ -529,6 +526,7 @@ Item {
               }
             }
             Chrome.IconButton {
+              colours: root.colours
               color: root.textOnSurface
               names: ["view-refresh-symbolic"]
               tooltip: root.fetching ? "Updating prices" : "Refresh prices"
@@ -549,7 +547,8 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             anchors.left: parent.left
             anchors.right: parent.right
-            color: root.surface
+            colours: root.colours
+            level: "card"
             bodySize: root.bodySize
             leadingNames: ["system-search-symbolic"]
             trailingNames: ["edit-clear-symbolic"]
@@ -567,186 +566,158 @@ Item {
         // --- the list ----------------------------------------------------
 
         Item {
+          id: listPage
           Layout.fillWidth: true
           Layout.fillHeight: true
 
-          Flickable {
-            id: listFlick
-            anchors.fill: parent
-            clip: true
-            contentWidth: width
-            contentHeight: listCol.height
-            boundsBehavior: Flickable.StopAtBounds
+          readonly property var items: root.tab === 0 ? root.shownList : root.starredList
 
-            readonly property var items: root.tab === 0 ? root.shownList : root.starredList
+          // One fill behind the whole list rather than a rule under every row.
+          // A hundred coins is the longest list in this repository and it was
+          // also the one most obviously drawn as a spreadsheet.
+          Chrome.ListFrame {
+            id: listFrame
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.margins: Metrics.GUTTER
+            // Hugs four starred coins and fills the screen for a hundred. A
+            // frame that always reached the bottom nav made a search with one
+            // hit look like a list that had failed to load the other ninety.
+            height: Math.min(parent.height - Metrics.GUTTER * 2,
+                             coinList.contentHeight + listFrame.pad * 2)
+            visible: listPage.items.length > 0
+            colours: root.colours
 
-            Column {
-              id: listCol
-              width: listFlick.width
+            ListView {
+              id: coinList
+              anchors.fill: parent
+              spacing: 0
+              boundsBehavior: Flickable.StopAtBounds
+              model: listPage.items
+              // A hundred rows with a logo each: recycled rather than all
+              // instantiated, which is what the Column of Repeater delegates
+              // this replaced could not do.
+              cacheBuffer: 400
 
-              Repeater {
-                model: listFlick.items
+              delegate: Chrome.ListRow {
+                id: row
+                required property var modelData
+                readonly property var coin: row.modelData
 
-                delegate: Item {
-                  id: row
-                  width: listCol.width
-                  height: 68
+                width: ListView.view.width
+                minHeight: 64
+                radius: listFrame.innerRadius
+                colours: root.colours
+                bodySize: root.bodySize
+                title: row.coin.name
+                subtitle: row.coin.symbol + " · " + Market.compact(row.coin.cap, root.currency)
+                onClicked: root.toggleStar(row.coin.id)
 
-                  required property var modelData
-                  readonly property var coin: row.modelData
+                // The disc is tinted and the digits are the theme's own
+                // foreground: a solid hue with light text on it is unreadable
+                // on a yellow coin in a light theme.
+                leading: Rectangle {
+                  id: badge
+                  anchors.verticalCenter: parent.verticalCenter
+                  width: 36
+                  height: 36
+                  radius: Metrics.round(root.colours, width)
+                  color: root.badgeFill(row.coin)
 
-                  Rectangle {
-                    anchors.fill: parent
-                    color: rowTap.pressed
-                           ? Theme.mix(root.colours.foreground, root.colours.background, 0.06)
-                           : "transparent"
+                  // The rank, which is what the disc was for and still is
+                  // whenever there is no logo on the disk: a phone that has
+                  // never been online, a coin whose image 404s, or the second
+                  // before the batch lands.
+                  Chrome.TypedText {
+                    anchors.centerIn: parent
+                    visible: logo.status !== Image.Ready
+                    role: "overline"
+                    text: String(row.coin.rank)
+                    color: root.textOnSurface
+                    bodySize: root.bodySize
                   }
 
-                  MouseArea {
-                    id: rowTap
+                  Image {
+                    id: logo
                     anchors.fill: parent
-                    onClicked: root.toggleStar(row.coin.id)
-                  }
-
-                  RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 12
-                    anchors.rightMargin: 4
-                    spacing: 10
-
-                    // The disc is tinted and the digits are the theme's own
-                    // foreground: a solid hue with light text on it is
-                    // unreadable on a yellow coin in a light theme.
-                    Rectangle {
-                      id: badge
-                      Layout.preferredWidth: 36
-                      Layout.preferredHeight: 36
-                      Layout.alignment: Qt.AlignVCenter
-                      radius: 18
-                      color: root.badgeFill(row.coin)
-
-                      // The rank, which is what the disc was for and still is
-                      // whenever there is no logo on the disk: a phone that has
-                      // never been online, a coin whose image 404s, or the
-                      // second before the batch lands.
-                      Chrome.TypedText {
-                        anchors.centerIn: parent
-                        visible: logo.status !== Image.Ready
-                        role: "overline"
-                        text: String(row.coin.rank)
-                        color: root.textOnSurface
-                        bodySize: root.bodySize
-                      }
-
-                      Image {
-                        id: logo
-                        anchors.fill: parent
-                        source: root.iconSource(row.coin)
-                        // 50x50 down to 36 at scale 1 and up to 72 at scale 2,
-                        // so it is asked for at the size it is drawn rather
-                        // than scaled by the scene graph every frame.
-                        sourceSize.width: 72
-                        sourceSize.height: 72
-                        fillMode: Image.PreserveAspectFit
-                        smooth: true
-                        asynchronous: true
-                        // A missing file is the ordinary case, not an error
-                        // worth a line in the shell's log.
-                        onStatusChanged: if (status === Image.Error) logo.visible = false
-                        visible: status === Image.Ready
-                        layer.enabled: true
-                        layer.effect: OpacityMask {
-                          maskSource: Rectangle {
-                            width: badge.width
-                            height: badge.height
-                            radius: badge.radius
-                          }
-                        }
+                    source: root.iconSource(row.coin)
+                    // 50x50 down to 36 at scale 1 and up to 72 at scale 2, so
+                    // it is asked for at the size it is drawn rather than
+                    // scaled by the scene graph every frame.
+                    sourceSize.width: 72
+                    sourceSize.height: 72
+                    fillMode: Image.PreserveAspectFit
+                    smooth: true
+                    asynchronous: true
+                    // A missing file is the ordinary case, not an error worth
+                    // a line in the shell's log.
+                    onStatusChanged: if (status === Image.Error) logo.visible = false
+                    visible: status === Image.Ready
+                    layer.enabled: true
+                    layer.effect: OpacityMask {
+                      maskSource: Rectangle {
+                        width: badge.width
+                        height: badge.height
+                        radius: badge.radius
                       }
                     }
-
-                    Column {
-                      Layout.fillWidth: true
-                      Layout.alignment: Qt.AlignVCenter
-                      spacing: 1
-
-                      Chrome.TypedText {
-                        width: parent.width
-                        role: "body"
-                        text: row.coin.name
-                        color: root.textOnSurface
-                        bodySize: root.bodySize
-                        elide: Text.ElideRight
-                        maximumLineCount: 1
-                      }
-                      Chrome.TypedText {
-                        width: parent.width
-                        role: "caption"
-                        text: row.coin.symbol + " · " + Market.compact(row.coin.cap, root.currency)
-                        color: root.dim
-                        bodySize: root.bodySize
-                        elide: Text.ElideRight
-                        maximumLineCount: 1
-                      }
-                    }
-
-                    Column {
-                      Layout.alignment: Qt.AlignVCenter
-                      spacing: 1
-
-                      Chrome.TypedText {
-                        anchors.right: parent.right
-                        role: "body"
-                        text: Market.money(row.coin.price, root.currency)
-                        color: root.textOnSurface
-                        bodySize: root.bodySize
-                      }
-                      Chrome.TypedText {
-                        anchors.right: parent.right
-                        role: "caption"
-                        text: Market.percent(row.coin.change)
-                        color: root.changeColor(row.coin)
-                        bodySize: root.bodySize
-                      }
-                    }
-
-                    Chrome.IconButton {
-                      Layout.alignment: Qt.AlignVCenter
-                      color: root.isStarred(row.coin.id) ? root.hueColor("yellow") : root.dim
-                      names: root.isStarred(row.coin.id)
-                             ? ["starred-symbolic"]
-                             : ["non-starred-symbolic", "starred-symbolic"]
-                      tooltip: root.isStarred(row.coin.id) ? "Unstar" : "Star"
-                      onClicked: root.toggleStar(row.coin.id)
-                    }
-                  }
-
-                  Rectangle {
-                    anchors.bottom: parent.bottom
-                    width: parent.width
-                    height: 1
-                    color: root.line
                   }
                 }
+
+                trailing: [
+                  Column {
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 1
+
+                    Chrome.TypedText {
+                      anchors.right: parent.right
+                      role: "body"
+                      text: Market.money(row.coin.price, root.currency)
+                      color: root.textOnSurface
+                      bodySize: root.bodySize
+                    }
+                    Chrome.TypedText {
+                      anchors.right: parent.right
+                      role: "caption"
+                      text: Market.percent(row.coin.change)
+                      color: root.changeColor(row.coin)
+                      bodySize: root.bodySize
+                    }
+                  },
+                  Chrome.IconButton {
+                    colours: root.colours
+                    anchors.verticalCenter: parent.verticalCenter
+                    color: root.isStarred(row.coin.id) ? root.hueColor("yellow") : root.dim
+                    names: root.isStarred(row.coin.id)
+                           ? ["starred-symbolic"]
+                           : ["non-starred-symbolic", "starred-symbolic"]
+                    tooltip: root.isStarred(row.coin.id) ? "Unstar" : "Star"
+                    onClicked: root.toggleStar(row.coin.id)
+                  }
+                ]
               }
             }
           }
 
           // The empty states, which are three different facts and say so.
-          Chrome.TypedText {
+          Chrome.EmptyState {
             anchors.centerIn: parent
-            width: parent.width - 48
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.WordWrap
-            visible: listFlick.items.length === 0
-            role: "body"
-            color: root.dim
+            width: parent.width - Metrics.GUTTER * 2
+            visible: listPage.items.length === 0
+            colours: root.colours
             bodySize: root.bodySize
-            text: root.query.length
-                  ? "No coin here is called that."
-                  : (root.tab === 1
-                     ? "Star a coin on the Market page and it is kept here."
-                     : (root.coins.length ? "" : "No prices yet."))
+            names: root.query.length
+                   ? ["system-search-symbolic"]
+                   : (root.tab === 1 ? ["non-starred-symbolic"] : ["view-refresh-symbolic"])
+            title: root.query.length
+                   ? "Nothing called that"
+                   : (root.tab === 1 ? "No coins starred" : "No prices yet")
+            detail: root.query.length
+                    ? "No coin in the top hundred has that name or symbol."
+                    : (root.tab === 1
+                       ? "Tap the star beside a coin on the Market page and it is kept here."
+                       : "Pull the market with the refresh button, or wait a minute for the next one.")
           }
 
           Chrome.Toast {

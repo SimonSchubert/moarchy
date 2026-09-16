@@ -2,8 +2,10 @@
 # Sway/phone override. Upstream's version is a closed allowlist of eight names
 # -- code, cursor, zed, sublime_text, helix, vim, emacs, nvim -- and every one
 # of them is either a desktop IDE with no aarch64 build or a TUI. This phone
-# ships exactly one editor now, GNOME Text Editor, and upstream's script exits 1
-# on the name, so Settings could not write it and nothing could select it.
+# ships exactly one editor now, the Text Editor plugin (moarchy-editor), and
+# upstream's script exits 1 on the name, so Settings could not write it and
+# nothing could select it. GNOME Text Editor was that one until 2026-09-16 and
+# stays a name this accepts, for a phone that installs it from the store.
 #
 # A superset, not a replacement: all eight of upstream's names still work, so a
 # phone that has installed vim or helix from the AUR can still pick it and the
@@ -18,14 +20,14 @@
 # one layer down and solves it the same way.
 
 # omarchy:summary=Set the default editor used by omarchy-launch-editor
-# omarchy:args=[gnome-text-editor|code|cursor|zed|sublime_text|helix|vim|emacs|nvim]
-# omarchy:examples=omarchy default editor | omarchy default editor gnome-text-editor
+# omarchy:args=[moarchy-editor|gnome-text-editor|code|cursor|zed|sublime_text|helix|vim|emacs|nvim]
+# omarchy:examples=omarchy default editor | omarchy default editor moarchy-editor
 
 editor_file="$HOME/.local/state/omarchy/defaults/editor"
 
 # The one this image ships, and the answer when nothing has been chosen. Named
 # once here because omarchy-launch-editor has to agree with it.
-FALLBACK="gnome-text-editor"
+FALLBACK="moarchy-editor"
 
 if (($# == 0)); then
   if [[ -f $editor_file ]]; then
@@ -43,7 +45,8 @@ if (($# == 0)); then
 fi
 
 case "$1" in
-gnome-text-editor | text-editor) editor="gnome-text-editor"; name="Text Editor"; glyph=󰷈 ;;
+moarchy-editor | text-editor) editor="moarchy-editor"; name="Text Editor"; glyph=󰷈 ;;
+gnome-text-editor) editor="gnome-text-editor"; name="GNOME Text Editor"; glyph=󰷈 ;;
 code) editor="code"; name="VSCode"; glyph= ;;
 cursor) editor="cursor"; name="Cursor"; glyph= ;;
 zed | zeditor) editor="zeditor"; name="Zed"; glyph= ;;
@@ -53,7 +56,7 @@ vim) editor="vim"; name="Vim"; glyph= ;;
 emacs) editor="emacs"; name="Emacs"; glyph= ;;
 nvim) editor="nvim"; name="Neovim"; glyph= ;;
 *)
-  echo "Usage: omarchy-default-editor <gnome-text-editor|code|cursor|zed|sublime_text|helix|vim|emacs|nvim>"
+  echo "Usage: omarchy-default-editor <moarchy-editor|gnome-text-editor|code|cursor|zed|sublime_text|helix|vim|emacs|nvim>"
   exit 1
   ;;
 esac
@@ -69,6 +72,9 @@ printf '%s\n' "$editor" >"$editor_file"
 # a TUI has none, and xdg-mime would record a name nothing can resolve.
 _desktop=""
 case "$editor" in
+# The hidden entry, not the drawer's: the drawer's toggles, and a toggle with a
+# path in it hides an editor that is already open instead of opening the file.
+moarchy-editor) _desktop="org.moarchy.Editor.open.desktop" ;;
 gnome-text-editor) _desktop="org.gnome.TextEditor.desktop" ;;
 nvim) _desktop="nvim.desktop" ;;
 esac
@@ -77,7 +83,7 @@ if [[ -n $_desktop && -r /usr/share/applications/$_desktop ]]; then
   # and exits 0 when the touch fails -- so this directory is ensured rather than
   # assumed. See moarchy-user-setup, which hit exactly that.
   mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}"
-  # The text/* types nvim.desktop claims, so picking Text Editor takes all of
+  # The text/* types nvim.desktop claims, so picking an editor takes all of
   # them and does not leave half the file types opening in a terminal.
   for _t in text/plain text/markdown text/x-csrc text/x-chdr text/x-c++src \
             text/x-c++hdr text/x-shellscript application/x-shellscript \

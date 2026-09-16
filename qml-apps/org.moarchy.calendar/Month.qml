@@ -128,6 +128,7 @@ Item {
       model: 7
 
       delegate: Rectangle {
+        id: column
         required property int index
 
         width: root.cellWidth
@@ -135,7 +136,14 @@ Item {
         // before it is given to its parent, so the binding runs once against a
         // null and says so in the log of every run.
         height: root.cellHeight * Dates.ROWS
-        color: Dates.isWeekend((index + root.weekStart) % 7) ? root.weekendWash : "transparent"
+        // Rounded, like everything else on this phone -- when the phone is. A
+        // hard-edged rectangle of grey down the side of a rounded screen reads
+        // as a panel somebody forgot to finish; the same wash with the
+        // screen's own corner on it reads as part of the grid, and on a square
+        // phone that corner is none.
+        radius: Metrics.radius(root.colours, Metrics.RADIUS_MD)
+        color: Dates.isWeekend((column.index + root.weekStart) % 7)
+               ? root.weekendWash : "transparent"
       }
     }
   }
@@ -173,19 +181,20 @@ Item {
           y: root.compact ? Math.round((cell.height - height) / 2) : 3
           width: root.disc
           height: root.disc
-          radius: width / 2
+          radius: Metrics.round(root.colours, width)
 
           color: {
             if (!root.colours) return "transparent"
             if (cell.isSelected)
               return cell.isToday ? root.colours.accent
-                                  : Theme.mix(root.colours.foreground, root.colours.background, 0.14)
+                                  : Theme.surface(root.colours, "pressed")
+            // Today is a wash of the accent until it is chosen, and the accent
+            // itself once it is. It used to be a 1.5px ring, which on a phone
+            // is the first thing to go in daylight -- and this app is read
+            // outdoors more than most.
+            if (cell.isToday) return Theme.tint(root.colours, root.colours.accent, "well")
             return "transparent"
           }
-          // Today is a ring until it is chosen, and filled once it is. Nothing
-          // else on the grid is a ring, so the ring means one thing.
-          border.width: cell.isToday && !cell.isSelected ? 1.5 : 0
-          border.color: root.colours ? root.colours.accent : "transparent"
           Behavior on color { ColorAnimation { duration: Metrics.PRESS_MS } }
 
           Text {
@@ -216,7 +225,7 @@ Item {
 
               width: 5
               height: 5
-              radius: 2.5
+              radius: Metrics.round(root.colours, width)
               color: Events.hue(root.colours, modelData)
               opacity: cell.modelData.inMonth ? 1.0 : 0.45
             }

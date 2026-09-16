@@ -56,7 +56,17 @@ pkgver=${_ver#v}
 # grew the same prefix. A phone holding 4.0.3-3 has the phone UI and none of
 # the calculator, calendar, clock, contacts or files plugins, so without this
 # line the image would enable plugins the running shell never loads.
-pkgrel=4
+# 5: shell.json enables org.moarchy.editor, the text editor that replaces
+# gnome-text-editor. The plugin ships in moarchy-qml-apps, and a phone holding
+# 4.0.3-4 would install it and never load it: a Text Editor tile that does
+# nothing, and a default editor whose window never comes.
+# The same unbuilt release also enables org.moarchy.phone and
+# org.moarchy.messages, which replace gnome-calls and chatty. For those two a
+# plugin that is shipped and not loaded is worse than a dead tile: nothing else
+# is listening to the modem, so a call never rings and a text is never read.
+# And org.moarchy.mail, which replaces geary: shipped and not loaded, it would
+# be a Mail tile that opens nothing on an image with no other mail app.
+pkgrel=5
 pkgdesc="Omarchy's configuration and theme layer, ported to Sway"
 arch=('any')
 url="$_url"
@@ -67,7 +77,7 @@ source=("omarchy-$_ref.tar.gz::$_url/archive/$_ref.tar.gz"
         'port-4x.patch'
         'notification-popups-bar-opt-out.patch')
 sha256sums=('25f8c87b89c97aef352ddae02d61902ad9d1a3a07ad44efec0e1436f1c65a5e5'
-            'cee087eb8f0334b7e834d216500a719ab000fa8b88fb2a21f23ff01eb56d839c'
+            'ef4f1016e846438be0920067b6d5231c7b0a0fb78e80a4a7cfefd2937edc4945'
             '8ab33f7810b721c82f0bea5a0b7756868274f61d59bae4639c028012c9a87160')
 
 # Two patches, and they are different kinds of thing.

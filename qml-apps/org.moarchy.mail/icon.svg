@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- An envelope, the flap folded down.
+
+     Orange, where Messages' bubble is blue and Phone's handset is green: the
+     three ways to reach somebody sit next to each other in the drawer, and at
+     42px a colour is what tells them apart before a shape does. The flap is a
+     second, lighter orange rather than a line, so the envelope still reads with
+     the stroke gone at that size.
+
+     No plate behind it (the drawer paints icons bare) and no clip path: QtSvg
+     ignores clip-path and paints an out-of-defs clipPath as a black square. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <path fill="#e66100" d="M24 26h80a16 16 0 0 1 16 16v44a16 16 0 0 1-16 16H24A16 16 0 0 1 8 86V42a16 16 0 0 1 16-16z"/>
+  <path fill="#ffa348" d="M12.6 32.2A16 16 0 0 1 24 26h80a16 16 0 0 1 11.4 6.2L70.6 67.4a10.4 10.4 0 0 1-13.2 0z"/>
+  <path fill="#f6f5f4" d="M20 84l30-24 7.4 6a10.4 10.4 0 0 0 13.2 0l7.4-6 30 24a4 4 0 0 1-2.5 7.1H22.5A4 4 0 0 1 20 84z" opacity="0.28"/>
+</svg>

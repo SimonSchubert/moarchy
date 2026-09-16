@@ -95,7 +95,17 @@ Item {
     "document-open-symbolic": "/usr/share/icons/Adwaita/symbolic/actions/document-open-symbolic.svg",
     "go-up-symbolic": "/usr/share/icons/Adwaita/symbolic/actions/go-up-symbolic.svg",
     "go-home-symbolic": "/usr/share/icons/Adwaita/symbolic/actions/go-home-symbolic.svg",
-    "view-sort-ascending-symbolic": "/usr/share/icons/Adwaita/symbolic/actions/view-sort-ascending-symbolic.svg"
+    "view-sort-ascending-symbolic": "/usr/share/icons/Adwaita/symbolic/actions/view-sort-ascending-symbolic.svg",
+
+    // The text editor's. An editor with no undo key is one mistyped word from
+    // retyping a paragraph, because the phone's keyboard has no Ctrl.
+    "document-new-symbolic": "/usr/share/icons/Adwaita/symbolic/actions/document-new-symbolic.svg",
+    "document-save-symbolic": "/usr/share/icons/Adwaita/symbolic/actions/document-save-symbolic.svg",
+    "document-save-as-symbolic": "/usr/share/icons/Adwaita/symbolic/actions/document-save-as-symbolic.svg",
+    "edit-undo-symbolic": "/usr/share/icons/Adwaita/symbolic/actions/edit-undo-symbolic.svg",
+    "edit-redo-symbolic": "/usr/share/icons/Adwaita/symbolic/actions/edit-redo-symbolic.svg",
+    "format-justify-left-symbolic": "/usr/share/icons/Adwaita/symbolic/actions/format-justify-left-symbolic.svg",
+    "dialog-warning-symbolic": "/usr/share/icons/Adwaita/symbolic/status/dialog-warning-symbolic.svg"
   })
 
   // A name that is already a path is used as it is: "/usr/share/...",

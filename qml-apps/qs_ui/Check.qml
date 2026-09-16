@@ -5,6 +5,8 @@ import "Metrics.js" as Metrics
 // tap is a desktop habit, and on 360px the box alone is easy to miss.
 Item {
   id: root
+  // Only for the shape of the box: the inks are the four below.
+  property var colours: null
   property bool checked: false
   property string text: ""
   property color foreground: "#ffffff"
@@ -16,8 +18,6 @@ Item {
   property int bodySize: 16
 
   signal toggled(bool checked)
-
-  UiFile { id: chrome }
 
   implicitWidth: root.text.length
                  ? box.width + 12 + label.implicitWidth
@@ -48,11 +48,10 @@ Item {
       height: Metrics.TARGET
 
       Rectangle {
-        id: boxFill
         width: Metrics.CHECK
         height: Metrics.CHECK
         anchors.centerIn: parent
-        radius: chrome.radiusOn(width)
+        radius: Metrics.radius(root.colours, Metrics.RADIUS_XXS)
         color: root.checked ? root.accent : "transparent"
         border.color: root.checked ? root.accent : root.dim
         border.width: 1.5
@@ -64,13 +63,6 @@ Item {
           size: 12
           color: root.tickColor
           names: ["object-select-symbolic"]
-        }
-
-        PressVeil {
-          anchors.fill: parent
-          radius: parent.radius
-          ink: root.foreground
-          on: tap.pressed
         }
       }
     }
@@ -87,7 +79,6 @@ Item {
   }
 
   MouseArea {
-    id: tap
     anchors.fill: parent
     enabled: root.interactive
     onClicked: root._flip()

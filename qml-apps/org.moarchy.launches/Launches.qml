@@ -38,15 +38,21 @@ Item {
   // that could silently draw the wrong thing. (A comment must not open with
   // the linter's own name: it reads the rest of the line as a directive.)
   readonly property var colours: themeFile.colours
-  readonly property int radiusCard: uiFile.radiusCard
   // The shell's text size when the shell is there to ask, 16 otherwise.
   property int bodySize: Metrics.BODY
-  Component.onCompleted: root.bodySize = Metrics.shellBody(root)
+  Component.onCompleted: {
+    root.bodySize = Metrics.shellBody(root)
+    root.applyHarness()
+  }
 
   property var launches: []
   property var favourites: []
   property real fetched: 0
   property double now: Date.now()
+  // The clock, pinned. Zero everywhere except under the screenshot harness,
+  // which pins it for Weather's reason: a countdown photographed against the
+  // real clock is a picture that disagrees with the next one taken.
+  property real pinnedNow: 0
 
   property string query: ""
   property bool searching: false
@@ -59,14 +65,17 @@ Item {
   property real retryAt: 0
   property bool dirty: false
   property bool loaded: false
+  property bool offline: false
+  // The mission a screenshot run asked for, held until the cache has been read
+  // -- the file arrives a turn or two after the window does.
+  property string wantOpen: ""
+  onLaunchesChanged: if (root.wantOpen && !root.openId) root.openNamed(root.wantOpen)
 
   readonly property var backoff: [60, 150, 300, 600]
 
-  readonly property color surface: colours.surface
   readonly property color background: colours.background
   readonly property color textOnSurface: colours.foreground
   readonly property color dim: colours.dim
-  readonly property color line: colours.line
   readonly property color accent: colours.accent
 
   readonly property var shownList: Launches.filter(root.launches, root.query)
@@ -76,6 +85,45 @@ Item {
   readonly property string dataDir: Plugin.dataDir(
     "launches", Quickshell.env("HOME"), Quickshell.env("XDG_DATA_HOME"),
     Quickshell.env("MOARCHY_LAUNCHES_DIR"))
+
+  // --- the harness ------------------------------------------------------
+
+  // The variables plugins/org.moarchy.launches/shots.sh sets. _OFFLINE is the
+  // one that matters, and Coins has it for the same reason: with it the window
+  // draws the pad demo.py wrote and never opens a socket, which is what makes
+  // two shots taken a minute apart agree -- and what keeps a check run off the
+  // network entirely.
+  function applyHarness() {
+    root.offline = (Quickshell.env("MOARCHY_LAUNCHES_OFFLINE") || "") !== ""
+    var page = Quickshell.env("MOARCHY_LAUNCHES_PAGE") || ""
+    if (page === "favourites" || page === "starred") root.tab = 1
+    var search = Quickshell.env("MOARCHY_LAUNCHES_SEARCH") || ""
+    if (search.length) { root.searching = true; root.query = search }
+    root.wantOpen = Quickshell.env("MOARCHY_LAUNCHES_OPEN") || ""
+    var pinned = parseFloat(Quickshell.env("MOARCHY_LAUNCHES_NOW") || "0")
+    if (isFinite(pinned) && pinned > 0) {
+      root.pinnedNow = pinned * 1000
+      root.now = root.pinnedNow
+    }
+  }
+
+  function clock() {
+    return root.pinnedNow > 0 ? root.pinnedNow : Date.now()
+  }
+
+  // The detail page, by mission name rather than by id: an id is a UUID from
+  // an API nobody can read, and a shots.sh naming one would be a screenshot
+  // list that rots the first time the fixture is regenerated.
+  function openNamed(name) {
+    var want = String(name || "").toLowerCase()
+    if (!want.length) return
+    for (var i = 0; i < root.launches.length; i++) {
+      if (String(root.launches[i].name).toLowerCase().indexOf(want) >= 0) {
+        root.openId = root.launches[i].id
+        return
+      }
+    }
+  }
 
   // --- what the header says --------------------------------------------
 
@@ -162,6 +210,7 @@ Item {
   // --- the network ------------------------------------------------------
 
   function due() {
+    if (root.offline) return false
     if (root.fetching) return false
     if (root.retryAt && root.now / 1000 < root.retryAt) return false
     if (root.fetched <= 0) return true
@@ -170,6 +219,7 @@ Item {
   }
 
   function fetch(manual) {
+    if (root.offline) return
     if (root.fetching) return
     root.fetching = true
     fetcher.manual = !!manual
@@ -249,7 +299,7 @@ Item {
     repeat: true
     running: launchWindow.visible
     onTriggered: {
-      root.now = Date.now()
+      root.now = root.clock()
       if (root.due()) root.fetch(false)
     }
   }
@@ -301,7 +351,6 @@ Item {
   }
 
   Chrome.ThemeFile { id: themeFile }
-  Chrome.UiFile { id: uiFile }
 
   IpcHandler {
     target: "launches"
@@ -328,7 +377,7 @@ Item {
     color: root.background
 
     onMapped: {
-      root.now = Date.now()
+      root.now = root.clock()
       Qt.callLater(root.ensureLoaded)
     }
     onUnmapped: root.saveCache()
@@ -357,6 +406,7 @@ Item {
           bodySize: root.bodySize
 
           leading: Chrome.BackButton {
+            colours: root.colours
             visible: !!root.openId
             color: root.textOnSurface
             onClicked: root.openId = ""
@@ -364,6 +414,7 @@ Item {
 
           trailing: Row {
             Chrome.IconButton {
+              colours: root.colours
               visible: !root.openId
               color: root.textOnSurface
               names: ["system-search-symbolic", "edit-find-symbolic"]
@@ -374,6 +425,7 @@ Item {
               }
             }
             Chrome.IconButton {
+              colours: root.colours
               visible: !!root.openId
               color: root.openId && root.isStarred(root.openId) ? root.hueColor("yellow") : root.textOnSurface
               names: root.openId && root.isStarred(root.openId)
@@ -383,6 +435,7 @@ Item {
               onClicked: root.toggleStar(root.openId)
             }
             Chrome.IconButton {
+              colours: root.colours
               color: root.textOnSurface
               names: ["view-refresh-symbolic"]
               tooltip: root.fetching ? "Updating launches" : "Refresh launches"
@@ -403,7 +456,8 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             anchors.left: parent.left
             anchors.right: parent.right
-            color: root.surface
+            colours: root.colours
+            level: "card"
             bodySize: root.bodySize
             leadingNames: ["system-search-symbolic"]
             trailingNames: ["edit-clear-symbolic"]
@@ -421,168 +475,148 @@ Item {
         // --- the list ----------------------------------------------------
 
         Item {
+          id: listPage
           Layout.fillWidth: true
           Layout.fillHeight: true
 
-          Flickable {
-            id: listFlick
-            anchors.fill: parent
-            visible: !root.openId
-            clip: true
-            contentWidth: width
-            contentHeight: listCol.height
-            boundsBehavior: Flickable.StopAtBounds
+          readonly property var items: root.tab === 0 ? root.shownList : root.starredList
 
-            readonly property var items: root.tab === 0 ? root.shownList : root.starredList
+          Chrome.ListFrame {
+            id: listFrame
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.margins: Metrics.GUTTER
+            height: Math.min(parent.height - Metrics.GUTTER * 2,
+                             launchList.contentHeight + listFrame.pad * 2)
+            visible: !root.openId && listPage.items.length > 0
+            colours: root.colours
 
-            Column {
-              id: listCol
-              width: listFlick.width
+            ListView {
+              id: launchList
+              anchors.fill: parent
+              spacing: 0
+              boundsBehavior: Flickable.StopAtBounds
+              model: listPage.items
 
-              Repeater {
-                model: listFlick.items
+              delegate: Chrome.ListRow {
+                id: row
+                required property var modelData
+                readonly property var item: row.modelData
 
-                delegate: Item {
-                  id: row
-                  width: listCol.width
-                  height: 72
+                width: ListView.view.width
+                minHeight: 72
+                radius: listFrame.innerRadius
+                colours: root.colours
+                bodySize: root.bodySize
+                // Four things compete for 360px here -- a disc, three lines of
+                // text, a countdown and a star -- and the mission name is the
+                // one that must not lose. Everything else is at its floor.
+                spacing: 8
+                onClicked: root.openId = row.item.id
 
-                  readonly property var item: modelData
+                leading: Rectangle {
+                  anchors.verticalCenter: parent.verticalCenter
+                  width: 34
+                  height: 34
+                  radius: Metrics.round(root.colours, width)
+                  color: root.badgeFill(row.item)
 
-                  Rectangle {
-                    anchors.fill: parent
-                    color: rowTap.pressed ? Theme.mix(root.colours.foreground, root.colours.background, 0.06)
-                                          : "transparent"
-                  }
-
-                  MouseArea {
-                    id: rowTap
-                    anchors.fill: parent
-                    onClicked: root.openId = row.item.id
-                  }
-
-                  RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 12
-                    anchors.rightMargin: 4
-                    spacing: 10
-
-                    Rectangle {
-                      Layout.preferredWidth: 36
-                      Layout.preferredHeight: 36
-                      Layout.alignment: Qt.AlignVCenter
-                      radius: 18
-                      color: root.badgeFill(row.item)
-
-                      Chrome.TypedText {
-                        anchors.centerIn: parent
-                        role: "overline"
-                        text: Launches.disc(row.item)
-                        color: root.textOnSurface
-                        bodySize: root.bodySize
-                      }
-                    }
-
-                    Column {
-                      Layout.fillWidth: true
-                      Layout.alignment: Qt.AlignVCenter
-                      spacing: 1
-
-                      Chrome.TypedText {
-                        width: parent.width
-                        role: "body"
-                        text: row.item.name
-                        color: root.textOnSurface
-                        bodySize: root.bodySize
-                        elide: Text.ElideRight
-                        maximumLineCount: 1
-                      }
-                      Chrome.TypedText {
-                        width: parent.width
-                        visible: text.length > 0
-                        role: "caption"
-                        text: Launches.note(row.item)
-                        color: root.dim
-                        bodySize: root.bodySize
-                        elide: Text.ElideRight
-                        maximumLineCount: 1
-                      }
-                      Chrome.TypedText {
-                        width: parent.width
-                        visible: text.length > 0
-                        role: "caption"
-                        text: row.item.location || row.item.pad
-                        color: root.dim
-                        bodySize: root.bodySize
-                        elide: Text.ElideRight
-                        maximumLineCount: 1
-                      }
-                    }
-
-                    Chrome.TypedText {
-                      Layout.alignment: Qt.AlignVCenter
-                      role: "body"
-                      text: Launches.headline(row.item, root.now)
-                      color: root.toneColor(row.item)
-                      bodySize: root.bodySize
-                    }
-
-                    Chrome.IconButton {
-                      Layout.alignment: Qt.AlignVCenter
-                      names: root.isStarred(row.item.id)
-                             ? ["starred-symbolic"]
-                             : ["non-starred-symbolic", "starred-symbolic"]
-                      color: root.isStarred(row.item.id) ? root.hueColor("yellow") : root.dim
-                      tooltip: root.isStarred(row.item.id) ? "Unstar" : "Star"
-                      onClicked: root.toggleStar(row.item.id)
-                    }
-                  }
-
-                  Rectangle {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
-                    height: 1
-                    color: root.line
+                  Chrome.TypedText {
+                    anchors.centerIn: parent
+                    role: "overline"
+                    text: Launches.disc(row.item)
+                    color: root.textOnSurface
+                    bodySize: root.bodySize
                   }
                 }
+
+                // Three lines rather than the two a ListRow names, because a
+                // launch is a mission, a rocket and a place, and dropping the
+                // place is dropping the one of the three a person searches by.
+                centre: Column {
+                  anchors.left: parent.left
+                  anchors.right: parent.right
+                  spacing: 1
+
+                  Chrome.TypedText {
+                    width: parent.width
+                    role: "body"
+                    text: row.item.name
+                    color: root.textOnSurface
+                    bodySize: root.bodySize
+                    elide: Text.ElideRight
+                    maximumLineCount: 1
+                  }
+                  Chrome.TypedText {
+                    width: parent.width
+                    visible: text.length > 0
+                    role: "caption"
+                    text: Launches.note(row.item)
+                    color: root.dim
+                    bodySize: root.bodySize
+                    elide: Text.ElideRight
+                    maximumLineCount: 1
+                  }
+                  Chrome.TypedText {
+                    width: parent.width
+                    visible: text.length > 0
+                    role: "caption"
+                    text: row.item.location || row.item.pad
+                    color: root.dim
+                    bodySize: root.bodySize
+                    elide: Text.ElideRight
+                    maximumLineCount: 1
+                  }
+                }
+
+                trailing: [
+                  Chrome.TypedText {
+                    anchors.verticalCenter: parent.verticalCenter
+                    role: "caption"
+                    font.weight: Font.DemiBold
+                    text: Launches.headline(row.item, root.now)
+                    color: root.toneColor(row.item)
+                    bodySize: root.bodySize
+                  },
+                  Chrome.IconButton {
+                    colours: root.colours
+                    anchors.verticalCenter: parent.verticalCenter
+                    slot: 36
+                    names: root.isStarred(row.item.id)
+                           ? ["starred-symbolic"]
+                           : ["non-starred-symbolic", "starred-symbolic"]
+                    color: root.isStarred(row.item.id) ? root.hueColor("yellow") : root.dim
+                    tooltip: root.isStarred(row.item.id) ? "Unstar" : "Star"
+                    onClicked: root.toggleStar(row.item.id)
+                  }
+                ]
               }
             }
           }
 
           // --- nothing to show ---------------------------------------------
 
-          Column {
+          Chrome.EmptyState {
             anchors.centerIn: parent
-            width: parent.width - 64
-            spacing: 8
-            visible: !root.openId && listFlick.items.length === 0
-
-            Chrome.TypedText {
-              width: parent.width
-              role: "subtitle"
-              text: {
-                if (root.query) return "No match"
-                if (root.tab === 1) return "Nothing starred"
-                return "No launches yet"
-              }
-              color: root.textOnSurface
-              bodySize: root.bodySize
-              horizontalAlignment: Text.AlignHCenter
+            width: parent.width - Metrics.GUTTER * 2
+            visible: !root.openId && listPage.items.length === 0
+            colours: root.colours
+            bodySize: root.bodySize
+            names: root.query.length
+                   ? ["system-search-symbolic"]
+                   : (root.tab === 1 ? ["non-starred-symbolic"] : ["view-refresh-symbolic"])
+            title: {
+              if (root.query) return "No match"
+              if (root.tab === 1) return "Nothing starred"
+              return "No launches yet"
             }
-            Chrome.TypedText {
-              width: parent.width
-              role: "caption"
-              text: {
-                if (root.query) return "Nothing here is called “" + root.query + "”."
-                if (root.tab === 1)
-                  return "Tap the star beside a launch and it stays on this page until it flies."
-                if (root.trouble) return root.trouble
-                return "Fetching launches…"
-              }
-              color: root.dim
-              bodySize: root.bodySize
-              horizontalAlignment: Text.AlignHCenter
+            detail: {
+              if (root.query) return "Nothing here is called “" + root.query + "”."
+              if (root.tab === 1)
+                return "Tap the star beside a launch and it stays on this page until it flies."
+              if (root.trouble) return root.trouble
+              return "Fetching launches…"
             }
           }
 
@@ -594,112 +628,112 @@ Item {
             visible: !!root.openId
             clip: true
             contentWidth: width
-            contentHeight: detailCol.height
+            contentHeight: detailCol.implicitHeight + Metrics.GUTTER * 2
             boundsBehavior: Flickable.StopAtBounds
 
-            Column {
+            ColumnLayout {
               id: detailCol
-              width: detailFlick.width
-              leftPadding: 16
-              rightPadding: 16
-              topPadding: 12
-              bottomPadding: 24
-              spacing: 10
+              x: Metrics.GUTTER
+              y: Metrics.GUTTER
+              width: detailFlick.width - Metrics.GUTTER * 2
+              spacing: Metrics.GAP
 
-              Row {
-                spacing: 12
+              // The mission, the rocket and the clock, in one box. They are
+              // the answer to "what is this and when" and a person who opened
+              // this row asked exactly that.
+              Chrome.Card {
+                Layout.fillWidth: true
+                colours: root.colours
 
-                Rectangle {
-                  width: 44
-                  height: 44
-                  radius: 22
-                  visible: !!root.current
-                  color: root.current ? root.badgeFill(root.current) : "transparent"
+                RowLayout {
+                  Layout.fillWidth: true
+                  spacing: 12
 
-                  Chrome.TypedText {
-                    anchors.centerIn: parent
-                    role: "caption"
-                    text: root.current ? Launches.disc(root.current) : ""
-                    color: root.textOnSurface
-                    bodySize: root.bodySize
+                  Rectangle {
+                    Layout.preferredWidth: 44
+                    Layout.preferredHeight: 44
+                    Layout.alignment: Qt.AlignTop
+                    visible: !!root.current
+                    radius: Metrics.round(root.colours, width)
+                    color: root.current ? root.badgeFill(root.current) : "transparent"
+
+                    Chrome.TypedText {
+                      anchors.centerIn: parent
+                      role: "caption"
+                      text: root.current ? Launches.disc(root.current) : ""
+                      color: root.textOnSurface
+                      bodySize: root.bodySize
+                    }
+                  }
+
+                  ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 2
+
+                    Chrome.TypedText {
+                      Layout.fillWidth: true
+                      role: "subtitle"
+                      text: root.current ? root.current.name : ""
+                      color: root.textOnSurface
+                      bodySize: root.bodySize
+                      wrapMode: Text.WordWrap
+                    }
+                    Chrome.TypedText {
+                      Layout.fillWidth: true
+                      visible: text.length > 0
+                      role: "caption"
+                      text: root.current ? Launches.note(root.current) : ""
+                      color: root.dim
+                      bodySize: root.bodySize
+                      wrapMode: Text.WordWrap
+                    }
                   }
                 }
 
-                Column {
-                  width: detailCol.width - detailCol.leftPadding - detailCol.rightPadding - 56
-                  anchors.verticalCenter: parent.verticalCenter
-                  spacing: 2
-
-                  Chrome.TypedText {
-                    width: parent.width
-                    role: "subtitle"
-                    text: root.current ? root.current.name : ""
-                    color: root.textOnSurface
-                    bodySize: root.bodySize
-                    wrapMode: Text.WordWrap
-                  }
-                  Chrome.TypedText {
-                    width: parent.width
-                    visible: text.length > 0
-                    role: "caption"
-                    text: root.current ? Launches.note(root.current) : ""
-                    color: root.dim
-                    bodySize: root.bodySize
-                    wrapMode: Text.WordWrap
-                  }
+                Chrome.TypedText {
+                  Layout.fillWidth: true
+                  Layout.topMargin: 2
+                  role: "title"
+                  text: root.current ? Launches.headline(root.current, root.now) : ""
+                  color: root.current ? root.toneColor(root.current) : root.dim
+                  bodySize: root.bodySize
                 }
               }
 
-              Chrome.TypedText {
-                width: parent.width - parent.leftPadding - parent.rightPadding
-                role: "title"
-                text: root.current ? Launches.headline(root.current, root.now) : ""
-                color: root.current ? root.toneColor(root.current) : root.dim
-                bodySize: root.bodySize
-              }
-
+              // Every fact is its own box. They were rows with a rule under
+              // each, which is a table -- and a table of five one-line facts
+              // on a 360px screen is five rules doing the work of five gaps.
               Repeater {
                 model: Launches.facts(root.current)
 
-                delegate: Column {
-                  width: detailCol.width - detailCol.leftPadding - detailCol.rightPadding
-                  spacing: 1
-                  topPadding: 6
-                  bottomPadding: 6
-
-                  Chrome.TypedText {
-                    width: parent.width
-                    role: "caption"
-                    text: modelData.label
-                    color: root.dim
-                    bodySize: root.bodySize
-                  }
-                  Chrome.TypedText {
-                    width: parent.width
-                    role: "body"
-                    text: modelData.value
-                    color: root.textOnSurface
-                    bodySize: root.bodySize
-                    wrapMode: Text.WordWrap
-                  }
-
-                  Rectangle {
-                    width: parent.width
-                    height: 1
-                    color: root.line
-                  }
+                delegate: Chrome.Tile {
+                  id: fact
+                  required property var modelData
+                  Layout.fillWidth: true
+                  colours: root.colours
+                  bodySize: root.bodySize
+                  label: fact.modelData.label
+                  value: fact.modelData.value
+                  valueColour: root.textOnSurface
+                  valueRole: "body"
                 }
               }
 
-              Chrome.TypedText {
-                width: parent.width - parent.leftPadding - parent.rightPadding
-                visible: text.length > 0
-                role: "body"
-                text: root.current ? root.current.description : ""
-                color: root.textOnSurface
+              Chrome.Section {
+                Layout.fillWidth: true
+                visible: !!root.current && String(root.current.description).length > 0
+                colours: root.colours
                 bodySize: root.bodySize
-                wrapMode: Text.WordWrap
-                topPadding: 8
+                title: "Description"
+
+                Chrome.TypedText {
+                  Layout.fillWidth: true
+                  role: "body"
+                  text: root.current ? root.current.description : ""
+                  color: root.textOnSurface
+                  bodySize: root.bodySize
+                  wrapMode: Text.WordWrap
+                }
               }
             }
           }

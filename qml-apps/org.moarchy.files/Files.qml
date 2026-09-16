@@ -49,7 +49,6 @@ Item {
   // `colours` and not `palette`: QQuickItem already has a `palette`, and
   // shadowing it makes a binding resolve to whichever the compiler picked.
   readonly property var colours: themeFile.colours
-  readonly property int radiusCard: uiFile.radiusCard
   property int bodySize: Metrics.BODY
 
   // The real home is where the trash is and where user-dirs.dirs lives.
@@ -109,11 +108,9 @@ Item {
   property string dialog: ""
   property var subject: null
 
-  readonly property color surface: colours.surface
   readonly property color background: colours.background
   readonly property color textOnSurface: colours.foreground
   readonly property color dim: colours.dim
-  readonly property color line: colours.line
   readonly property color accent: colours.accent
   readonly property color pressed: Theme.mix(colours.foreground, colours.background, 0.08)
   readonly property color raised: Theme.mix(colours.foreground, colours.background, 0.06)
@@ -464,9 +461,15 @@ Item {
     root.saveView()
   }
 
+  // The page a screenshot run asked for, held rather than applied: the first
+  // listing goes through go(), and go() puts the window back on the Files tab
+  // -- which is right when a person taps a folder and wrong when the harness
+  // asked for Places before anything had been listed at all.
+  property bool wantPlaces: false
+
   Component.onCompleted: {
     root.bodySize = Metrics.shellBody(root)
-    if ((Quickshell.env("MOARCHY_FILES_PAGE") || "") === "places") root.tab = 1
+    root.wantPlaces = (Quickshell.env("MOARCHY_FILES_PAGE") || "") === "places"
     root.wantMenu = Quickshell.env("MOARCHY_FILES_MENU") || ""
     root.wantHolding = Quickshell.env("MOARCHY_FILES_HOLDING") || ""
   }
@@ -552,7 +555,6 @@ Item {
   }
 
   Chrome.ThemeFile { id: themeFile }
-  Chrome.UiFile { id: uiFile }
 
   IpcHandler {
     target: "files"
@@ -591,6 +593,11 @@ Item {
     onMapped: {
       root.now = root.pinnedNow > 0 ? root.pinnedNow : Date.now()
       Qt.callLater(root.ensureLoaded)
+      if (root.wantPlaces) Qt.callLater(function () {
+        root.wantPlaces = false
+        root.tab = 1
+        root.probePlaces()
+      })
       if (root.tab === 1) root.probePlaces()
     }
     // The folder is written down when the window leaves the screen, which on
@@ -627,6 +634,7 @@ Item {
           bodySize: root.bodySize
 
           leading: Chrome.IconButton {
+            colours: root.colours
             visible: root.tab === 0 && !Path.isRoot(root.path)
             color: root.textOnSurface
             names: ["go-up-symbolic", "go-previous-symbolic", "pan-start-symbolic"]
@@ -636,6 +644,7 @@ Item {
 
           trailing: Row {
             Chrome.IconButton {
+              colours: root.colours
               visible: root.tab === 0
               color: root.textOnSurface
               names: ["system-search-symbolic", "edit-find-symbolic"]
@@ -647,6 +656,7 @@ Item {
               }
             }
             Chrome.IconButton {
+              colours: root.colours
               color: root.textOnSurface
               names: ["view-more-symbolic", "open-menu-symbolic"]
               tooltip: "More"
@@ -672,7 +682,8 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             anchors.left: parent.left
             anchors.right: parent.right
-            color: root.surface
+            colours: root.colours
+            level: "card"
             bodySize: root.bodySize
             leadingNames: ["system-search-symbolic"]
             trailingNames: ["edit-clear-symbolic"]
@@ -693,137 +704,144 @@ Item {
 
         Item {
           Layout.fillWidth: true
-          Layout.preferredHeight: 34
+          Layout.preferredHeight: 38
           visible: root.tab === 0 && !root.searching
 
-          Flickable {
-            id: crumbFlick
+          Rectangle {
             anchors.fill: parent
-            clip: true
-            contentWidth: crumbRow.width
-            contentHeight: height
-            flickableDirection: Flickable.HorizontalFlick
-            boundsBehavior: Flickable.StopAtBounds
-            // The strip is 360px wide and the interesting end is the right
-            // one, so it sits there whenever the path changes length.
-            onContentWidthChanged: crumbFlick.contentX =
-              Math.max(0, crumbFlick.contentWidth - crumbFlick.width)
+            anchors.leftMargin: Metrics.GUTTER
+            anchors.rightMargin: Metrics.GUTTER
+            anchors.bottomMargin: 4
+            radius: Metrics.round(root.colours, height)
+            color: Theme.surface(root.colours, "card")
 
-            Row {
-              id: crumbRow
-              height: crumbFlick.height
-              leftPadding: 12
-              rightPadding: 12
+            Flickable {
+              id: crumbFlick
+              anchors.fill: parent
+              clip: true
+              contentWidth: crumbRow.width
+              contentHeight: height
+              flickableDirection: Flickable.HorizontalFlick
+              boundsBehavior: Flickable.StopAtBounds
+              // The strip is 360px wide and the interesting end is the right
+              // one, so it sits there whenever the path changes length.
+              onContentWidthChanged: crumbFlick.contentX =
+                Math.max(0, crumbFlick.contentWidth - crumbFlick.width)
 
-              Repeater {
-                model: root.crumbs
+              Row {
+                id: crumbRow
+                height: crumbFlick.height
+                leftPadding: 10
+                rightPadding: 10
 
-                delegate: Row {
-                  id: crumb
-                  required property var modelData
-                  required property int index
-                  height: crumbRow.height
+                Repeater {
+                  model: root.crumbs
 
-                  Chrome.TypedText {
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: crumb.index > 0
-                    role: "caption"
-                    text: " › "
-                    color: root.dim
-                    bodySize: root.bodySize
-                  }
-
-                  Item {
+                  delegate: Row {
+                    id: crumb
+                    required property var modelData
+                    required property int index
                     height: crumbRow.height
-                    width: label.implicitWidth + 12
 
                     Chrome.TypedText {
-                      id: label
-                      anchors.centerIn: parent
+                      anchors.verticalCenter: parent.verticalCenter
+                      visible: crumb.index > 0
                       role: "caption"
-                      text: crumb.modelData.label
-                      // The last crumb is where we are, so it is the one that
-                      // is not a link anywhere.
-                      color: crumb.index === root.crumbs.length - 1
-                             ? root.textOnSurface : root.dim
+                      text: " › "
+                      color: root.dim
                       bodySize: root.bodySize
                     }
 
-                    MouseArea {
-                      anchors.fill: parent
-                      onClicked: root.go(crumb.modelData.path)
+                    Item {
+                      height: crumbRow.height
+                      width: label.implicitWidth + 12
+
+                      Chrome.TypedText {
+                        id: label
+                        anchors.centerIn: parent
+                        role: "caption"
+                        text: crumb.modelData.label
+                        // The last crumb is where we are, so it is the one
+                        // that is not a link anywhere.
+                        color: crumb.index === root.crumbs.length - 1
+                               ? root.textOnSurface : root.dim
+                        bodySize: root.bodySize
+                      }
+
+                      MouseArea {
+                        anchors.fill: parent
+                        onClicked: root.go(crumb.modelData.path)
+                      }
                     }
                   }
                 }
               }
             }
           }
-
-          Rectangle {
-            anchors.bottom: parent.bottom
-            width: parent.width
-            height: 1
-            color: root.line
-          }
         }
 
         // --- what is waiting to be pasted ------------------------------------
 
-        Rectangle {
+        Item {
           Layout.fillWidth: true
-          Layout.preferredHeight: 52
+          Layout.preferredHeight: 60
           visible: !!root.holding && root.tab === 0
-          color: root.raised
-
-          RowLayout {
-            anchors.fill: parent
-            anchors.leftMargin: 12
-            anchors.rightMargin: 6
-            spacing: 8
-
-            Chrome.Icon {
-              Layout.preferredWidth: 22
-              Layout.preferredHeight: 22
-              slot: 22
-              size: 16
-              color: root.dim
-              names: root.holding && root.holding.kind === "move"
-                     ? ["edit-cut-symbolic"] : ["edit-copy-symbolic"]
-            }
-
-            Chrome.TypedText {
-              Layout.fillWidth: true
-              role: "caption"
-              text: root.holding ? root.holding.name : ""
-              color: root.textOnSurface
-              bodySize: root.bodySize
-              elide: Text.ElideMiddle
-              maximumLineCount: 1
-            }
-
-            Chrome.Pill {
-              Layout.alignment: Qt.AlignVCenter
-              text: root.busyText().length ? root.busyText() : "Paste here"
-              color: root.accent
-              ink: root.colours.dark ? root.textOnSurface : root.background
-              bodySize: root.bodySize
-              onClicked: root.paste()
-            }
-
-            Chrome.IconButton {
-              Layout.alignment: Qt.AlignVCenter
-              names: ["window-close-symbolic"]
-              color: root.dim
-              tooltip: "Forget it"
-              onClicked: root.holding = null
-            }
-          }
 
           Rectangle {
-            anchors.bottom: parent.bottom
-            width: parent.width
-            height: 1
-            color: root.line
+            anchors.fill: parent
+            anchors.leftMargin: Metrics.GUTTER
+            anchors.rightMargin: Metrics.GUTTER
+            anchors.bottomMargin: Metrics.GAP
+            radius: Metrics.radius(root.colours, Metrics.CARD_RADIUS)
+            color: Theme.surface(root.colours, "card")
+
+            RowLayout {
+              anchors.fill: parent
+              anchors.leftMargin: Metrics.PAD
+              anchors.rightMargin: 6
+              spacing: 8
+
+              Chrome.Icon {
+                Layout.preferredWidth: 22
+                Layout.preferredHeight: 22
+                slot: 22
+                size: 16
+                color: root.dim
+                names: root.holding && root.holding.kind === "move"
+                       ? ["edit-cut-symbolic"] : ["edit-copy-symbolic"]
+              }
+
+              Chrome.TypedText {
+                Layout.fillWidth: true
+                role: "caption"
+                text: root.holding ? root.holding.name : ""
+                color: root.textOnSurface
+                bodySize: root.bodySize
+                elide: Text.ElideMiddle
+                maximumLineCount: 1
+              }
+
+              Chrome.Button {
+                Layout.alignment: Qt.AlignVCenter
+                Layout.preferredHeight: 38
+                colours: root.colours
+                kind: "filled"
+                text: root.busyText().length ? root.busyText() : "Paste here"
+                bodySize: root.bodySize
+                pad: 14
+                onClicked: root.paste()
+              }
+
+              Chrome.IconButton {
+                colours: root.colours
+                Layout.alignment: Qt.AlignVCenter
+                slot: 36
+                names: ["window-close-symbolic"]
+                color: root.dim
+                tooltip: "Forget it"
+                onClicked: root.holding = null
+              }
+            }
           }
         }
 
@@ -833,74 +851,77 @@ Item {
           Layout.fillWidth: true
           Layout.fillHeight: true
 
-          ListView {
-            id: browse
-            anchors.fill: parent
-            visible: root.tab === 0
-            clip: true
-            boundsBehavior: Flickable.StopAtBounds
-            // Empty until the window is up. A ListView that lays itself out
-            // while the shell is still starting is the fault that takes a
-            // phone down rather than an app, and there is no cheaper guard
-            // than not giving it anything to lay out.
-            model: filesWindow.visible ? root.shown : []
+          Chrome.ListFrame {
+            id: browseFrame
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.leftMargin: Metrics.GUTTER
+            anchors.rightMargin: Metrics.GUTTER
+            // Hugs a folder with three things in it and fills the screen for a
+            // camera roll. A frame that always reached the bottom made every
+            // small folder look like a list that had failed to load.
+            height: Math.min(parent.height - Metrics.GAP,
+                             browse.contentHeight + browseFrame.pad * 2)
+            visible: root.tab === 0 && root.shown.length > 0
+            colours: root.colours
 
-            delegate: EntryRow {
-              id: entryRow
-              required property var modelData
-              width: browse.width
-              entry: entryRow.modelData
-              note: Listing.note(entryRow.modelData, root.now)
-              glyphs: Listing.glyphs(entryRow.modelData)
-              foreground: root.textOnSurface
-              dim: root.dim
-              line: root.line
-              press: root.pressed
-              accent: root.accent
-              bodySize: root.bodySize
-              onActivated: root.enter(entryRow.modelData)
-              onMenuWanted: root.menuFor = entryRow.modelData
+            ListView {
+              id: browse
+              anchors.fill: parent
+              clip: true
+              boundsBehavior: Flickable.StopAtBounds
+              // Empty until the window is up. A ListView that lays itself out
+              // while the shell is still starting is the fault that takes a
+              // phone down rather than an app, and there is no cheaper guard
+              // than not giving it anything to lay out.
+              model: filesWindow.visible ? root.shown : []
+
+              delegate: EntryRow {
+                id: entryRow
+                required property var modelData
+                width: browse.width
+                radius: browseFrame.innerRadius
+                colours: root.colours
+                entry: entryRow.modelData
+                note: Listing.note(entryRow.modelData, root.now)
+                glyphs: Listing.glyphs(entryRow.modelData)
+                foreground: root.textOnSurface
+                accent: root.accent
+                bodySize: root.bodySize
+                onActivated: root.enter(entryRow.modelData)
+                onMenuWanted: root.menuFor = entryRow.modelData
+              }
             }
           }
 
           // --- nothing to show ---------------------------------------------
 
-          Column {
+          Chrome.EmptyState {
             anchors.centerIn: parent
-            width: parent.width - 64
-            spacing: 8
+            width: parent.width - Metrics.GUTTER * 2
             visible: root.tab === 0 && !root.listing && root.shown.length === 0
-
-            Chrome.TypedText {
-              width: parent.width
-              role: "subtitle"
-              text: {
-                if (root.trouble.length) return "Nothing to show"
-                if (root.query.length) return "No match"
-                if (root.entries.length) return "Nothing but hidden files"
-                return "This folder is empty"
-              }
-              color: root.textOnSurface
-              bodySize: root.bodySize
-              horizontalAlignment: Text.AlignHCenter
+            colours: root.colours
+            bodySize: root.bodySize
+            names: {
+              if (root.trouble.length) return ["action-unavailable-symbolic"]
+              if (root.query.length) return ["system-search-symbolic"]
+              return ["folder-symbolic"]
             }
-
-            Chrome.TypedText {
-              width: parent.width
-              role: "caption"
-              text: {
-                if (root.trouble.length) return root.trouble
-                if (root.query.length)
-                  return "Nothing in this folder is called " + root.query + "."
-                if (root.entries.length)
-                  return "There are " + root.entries.length + " hidden files here. "
-                       + "Show them from the menu."
-                return "Paste something in, or make a folder from the menu."
-              }
-              color: root.dim
-              bodySize: root.bodySize
-              horizontalAlignment: Text.AlignHCenter
-              wrapMode: Text.WordWrap
+            title: {
+              if (root.trouble.length) return "Nothing to show"
+              if (root.query.length) return "No match"
+              if (root.entries.length) return "Nothing but hidden files"
+              return "This folder is empty"
+            }
+            detail: {
+              if (root.trouble.length) return root.trouble
+              if (root.query.length)
+                return "Nothing in this folder is called " + root.query + "."
+              if (root.entries.length)
+                return "There are " + root.entries.length + " hidden files here. "
+                     + "Show them from the menu."
+              return "Paste something in, or make a folder from the menu."
             }
           }
 
@@ -912,53 +933,45 @@ Item {
             visible: root.tab === 1
             clip: true
             contentWidth: width
-            contentHeight: placesCol.height
+            contentHeight: placesCol.implicitHeight + Metrics.GUTTER * 2
             boundsBehavior: Flickable.StopAtBounds
 
-            Column {
+            ColumnLayout {
               id: placesCol
-              width: placesFlick.width
-              topPadding: 4
+              x: Metrics.GUTTER
+              y: 4
+              width: placesFlick.width - Metrics.GUTTER * 2
+              spacing: 0
 
-              Repeater {
-                model: root.placeRows
+              Chrome.Group {
+                id: placesGroup
+                Layout.fillWidth: true
+                colours: root.colours
 
-                delegate: Item {
-                  id: place
-                  required property var modelData
-                  width: placesCol.width
-                  height: place.modelData.volume ? 72 : 60
+                Repeater {
+                  model: root.placeRows
 
-                  Rectangle {
-                    anchors.fill: parent
-                    color: placeTap.pressed ? root.pressed : "transparent"
-                  }
-
-                  MouseArea {
-                    id: placeTap
-                    anchors.fill: parent
+                  delegate: Chrome.ListRow {
+                    id: place
+                    required property var modelData
+                    Layout.fillWidth: true
+                    radius: placesGroup.innerRadius
+                    minHeight: place.modelData.volume ? 76 : 60
+                    colours: root.colours
+                    bodySize: root.bodySize
                     onClicked: root.go(place.modelData.path)
-                  }
 
-                  RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 12
-                    anchors.rightMargin: 12
-                    spacing: 10
-
-                    Chrome.Icon {
-                      Layout.preferredWidth: 28
-                      Layout.preferredHeight: 28
-                      Layout.alignment: Qt.AlignVCenter
+                    leading: Chrome.Icon {
+                      anchors.verticalCenter: parent.verticalCenter
                       slot: 28
                       size: 20
                       color: root.accent
                       names: [place.modelData.glyph, "folder-symbolic"]
                     }
 
-                    Column {
-                      Layout.fillWidth: true
-                      Layout.alignment: Qt.AlignVCenter
+                    centre: Column {
+                      anchors.left: parent.left
+                      anchors.right: parent.right
                       spacing: 3
 
                       Chrome.TypedText {
@@ -997,15 +1010,15 @@ Item {
                       Rectangle {
                         visible: !!place.modelData.volume
                         width: parent.width
-                        height: 4
-                        radius: 2
-                        color: Theme.mix(root.colours.foreground, root.colours.background, 0.12)
+                        height: 5
+                        radius: Metrics.round(root.colours, height)
+                        color: Theme.surface(root.colours, "raised")
 
                         Rectangle {
                           id: usedBar
                           readonly property real used: place.modelData.total > 0
                             ? 1 - place.modelData.free / place.modelData.total : 0
-                          width: Math.max(2, parent.width * usedBar.used)
+                          width: Math.max(parent.height, parent.width * usedBar.used)
                           height: parent.height
                           radius: parent.radius
                           color: usedBar.used >= 0.9 ? root.hueColor("red")
@@ -1014,15 +1027,6 @@ Item {
                         }
                       }
                     }
-                  }
-
-                  Rectangle {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
-                    anchors.leftMargin: 50
-                    height: 1
-                    color: root.line
                   }
                 }
               }
@@ -1073,12 +1077,11 @@ Item {
       Chrome.ContextMenu {
         open: !!root.menuFor
         placement: "center"
-        background: root.surface
-        line: root.line
+        colours: root.colours
+        background: root.background
         foreground: root.textOnSurface
         danger: root.hueColor("red")
         bodySize: root.bodySize
-        radiusCard: root.radiusCard
         menuWidth: 248
         onDismissed: root.menuFor = null
 
@@ -1094,6 +1097,7 @@ Item {
         }
 
         Chrome.MenuItem {
+          colours: root.colours
           names: root.menuFor && root.menuFor.folder
                  ? ["folder-symbolic"] : ["document-open-symbolic"]
           text: root.menuFor && root.menuFor.folder ? "Open folder" : "Open"
@@ -1103,6 +1107,7 @@ Item {
         }
 
         Chrome.MenuItem {
+          colours: root.colours
           names: ["edit-copy-symbolic"]
           text: "Copy"
           foreground: root.textOnSurface
@@ -1111,6 +1116,7 @@ Item {
         }
 
         Chrome.MenuItem {
+          colours: root.colours
           names: ["edit-cut-symbolic"]
           text: "Move"
           foreground: root.textOnSurface
@@ -1119,6 +1125,7 @@ Item {
         }
 
         Chrome.MenuItem {
+          colours: root.colours
           names: ["document-edit-symbolic"]
           text: "Rename"
           foreground: root.textOnSurface
@@ -1127,6 +1134,7 @@ Item {
         }
 
         Chrome.MenuItem {
+          colours: root.colours
           names: root.inTrash ? ["edit-delete-symbolic"] : ["user-trash-symbolic"]
           // The word changes because the act does. Everywhere else this moves
           // a file to the trash and the trash is the undo; in the trash there
@@ -1144,14 +1152,14 @@ Item {
       Chrome.ContextMenu {
         open: root.overflow
         placement: "topEnd"
-        background: root.surface
-        line: root.line
+        colours: root.colours
+        background: root.background
         foreground: root.textOnSurface
         bodySize: root.bodySize
-        radiusCard: root.radiusCard
         onDismissed: root.overflow = false
 
         Chrome.MenuItem {
+          colours: root.colours
           names: ["folder-new-symbolic"]
           text: "New folder"
           foreground: root.textOnSurface
@@ -1159,10 +1167,11 @@ Item {
           onClicked: root.askNewFolder()
         }
 
-        Rectangle {
+        // A gap groups these three, and the one under them, without a rule
+        // across a 248px menu.
+        Item {
           width: parent ? parent.width : 0
-          height: 1
-          color: root.line
+          height: Metrics.GAP
         }
 
         Repeater {
@@ -1171,6 +1180,7 @@ Item {
                   { key: "modified", label: "Modified" }]
 
           delegate: Chrome.MenuItem {
+            colours: root.colours
             id: sortItem
             required property var modelData
             readonly property bool current: root.sort === sortItem.modelData.key
@@ -1186,13 +1196,15 @@ Item {
           }
         }
 
-        Rectangle {
+        // A gap groups these three, and the one under them, without a rule
+        // across a 248px menu.
+        Item {
           width: parent ? parent.width : 0
-          height: 1
-          color: root.line
+          height: Metrics.GAP
         }
 
         Chrome.Check {
+          colours: root.colours
           text: "Show hidden files"
           checked: root.hidden
           foreground: root.textOnSurface
@@ -1212,19 +1224,22 @@ Item {
         visible: root.dialog.length > 0
         z: 120
 
-        MouseArea {
+        Rectangle {
           anchors.fill: parent
-          onClicked: root.dialog = ""
+          color: Theme.alpha(root.colours.background, 0.55)
+
+          MouseArea {
+            anchors.fill: parent
+            onClicked: root.dialog = ""
+          }
         }
 
         Rectangle {
           anchors.centerIn: parent
           width: parent.width - 48
           height: sheetCol.height + 28
-          radius: root.radiusCard
-          color: root.surface
-          border.width: 1
-          border.color: root.line
+          radius: Metrics.radius(root.colours, Metrics.RADIUS_LG)
+          color: Theme.surface(root.colours, "raised")
 
           MouseArea {
             anchors.fill: parent
@@ -1269,7 +1284,8 @@ Item {
               id: nameField
               visible: root.dialog === "folder" || root.dialog === "rename"
               width: parent.width
-              color: root.raised
+              colours: root.colours
+              level: "pressed"
               bodySize: root.bodySize
               placeholderText: "Name"
               foreground: root.textOnSurface
@@ -1285,21 +1301,19 @@ Item {
               anchors.right: parent.right
               spacing: 8
 
-              Chrome.Pill {
+              Chrome.Button {
+                colours: root.colours
+                kind: "plain"
                 text: "Cancel"
-                outlined: true
-                color: "transparent"
-                ink: root.textOnSurface
-                line: root.line
                 bodySize: root.bodySize
                 onClicked: root.dialog = ""
               }
 
-              Chrome.Pill {
+              Chrome.Button {
+                colours: root.colours
+                kind: "filled"
+                destructive: root.dialog === "purge"
                 text: root.dialog === "purge" ? "Delete" : "Save"
-                color: root.dialog === "purge" ? root.hueColor("red") : root.accent
-                ink: root.dialog === "purge" || root.colours.dark
-                     ? "#ffffff" : root.background
                 bodySize: root.bodySize
                 onClicked: root.confirm()
               }

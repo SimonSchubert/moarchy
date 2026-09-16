@@ -11,11 +11,12 @@ FROM --platform=linux/arm64 menci/archlinuxarm@sha256:f7c6f64c0f246f41775e017933
 
 RUN sed -i '/^\[options\]/a DisableSandbox' /etc/pacman.conf
 
-# [danctnix] carries the kernel, u-boot, the modem stack and two packages the
-# base set needs that Arch Linux ARM does not have (mmsd-tng, megapixels).
+# [danctnix] carries the kernel, u-boot, the modem stack and megapixels, which
+# the base set needs and Arch Linux ARM does not have.
 # Read out of the shipped image's /etc/pacman.conf. Three until lisgd left
-# with bin/moarchy-gestures (docs/refactor.md A2), and portfolio-file-manager
-# left with the Files plugin -- one fewer foreign package, not one fewer repo.
+# with bin/moarchy-gestures (docs/refactor.md A2), portfolio-file-manager
+# left with the Files plugin, and mmsd-tng left with chatty -- each one fewer
+# foreign package, not one fewer repo.
 RUN printf '\n[danctnix]\nSigLevel = Never\nServer = https://archmobile.mirror.danctnix.org/$repo/$arch/\n' \
       >> /etc/pacman.conf
 

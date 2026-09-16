@@ -1,8 +1,10 @@
 #!/bin/bash
 # Sway/phone override. Two things differ from upstream's, and both are
 # consequences of this image no longer shipping a terminal editor
-# (docs/apps.md): neovim left the package set, and GNOME Text Editor is what
-# "the editor" means here now.
+# (docs/apps.md): neovim left the package set, and the Text Editor plugin
+# (org.moarchy.editor, run as moarchy-editor) is what "the editor" means here
+# now. GNOME Text Editor was, until 2026-09-16, and is still handled below for
+# anybody who installs it from the store.
 #
 # 1. THE FALLBACK IS A COMMAND THAT EXISTS. Upstream reads the chosen editor out
 #    of ~/.local/state/omarchy/defaults/editor and falls back to `nvim` twice --
@@ -24,11 +26,17 @@
 #    and `systemctl edit` would write nothing and say nothing. The editor would
 #    still be sitting on screen when it happened.
 #
-#    gnome-text-editor --standalone does block: it is a fresh instance rather
-#    than a message to the running one, so the process lives until the window
-#    closes. Measured on the phone -- `timeout 10 gnome-text-editor --standalone
-#    file` exits 124, still running -- which is the whole reason this is
-#    workable at all and the reason the flag is not optional here. Without
+#    The plugin is the extreme case of that: it is not a process at all, so
+#    opening a file in it is an IPC call that returns at once. moarchy-editor
+#    --wait is the process that stays -- it hands the plugin a marker path and
+#    returns when the plugin touches it, which it does when the file is closed
+#    or the window goes. plugins/org.moarchy.editor/README.md in moarchy-apps
+#    has the rest.
+#
+#    gnome-text-editor --standalone blocks the same way for the same reason: it
+#    is a fresh instance rather than a message to the running one, so the
+#    process lives until the window closes. Measured on the phone -- `timeout
+#    10 gnome-text-editor --standalone file` exits 124, still running. Without
 #    --standalone GApplication hands the file to the existing instance and exits
 #    in milliseconds, which is the failure above wearing the right window.
 
@@ -39,7 +47,7 @@ default_editor="$HOME/.local/state/omarchy/defaults/editor"
 
 # Must agree with omarchy-default-editor beside this file, which writes the
 # state this reads and answers the same name when there is nothing to read.
-FALLBACK="gnome-text-editor"
+FALLBACK="moarchy-editor"
 
 if [[ ${1:-} == "--inline" ]]; then
   inline=true
@@ -63,6 +71,13 @@ nvim | vim | nano | micro | hx | helix | fresh)
     exec "$editor" "$@"
   else
     exec omarchy-launch-tui "$editor" "$@"
+  fi
+  ;;
+moarchy-editor)
+  if [[ $inline == "true" ]]; then
+    exec moarchy-editor --wait "$@"
+  else
+    exec moarchy-editor "$@"
   fi
   ;;
 gnome-text-editor)

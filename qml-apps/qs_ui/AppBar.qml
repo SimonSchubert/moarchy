@@ -46,6 +46,11 @@ Item {
           color: root.foreground
           bodySize: root.bodySize
           elide: Text.ElideRight
+          // One line, or the elide above never happens: TypedText wraps, and a
+          // wrapped title with no line limit grows a second line instead --
+          // which in a bar this height pushes the subtitle out of it. A file
+          // called "Letter to the landlord.txt" was enough.
+          maximumLineCount: 1
         }
 
         TypedText {
@@ -56,6 +61,7 @@ Item {
           color: root.dim
           bodySize: root.bodySize
           elide: Text.ElideRight
+          maximumLineCount: 1
         }
       }
 

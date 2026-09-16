@@ -448,7 +448,7 @@ switch is picked up with no knowledge of where themes are installed.
 | keyboard | [`moarchy-keyboard`](https://github.com/SimonSchubert/moarchy-keyboard) | Qt / QML, standalone | its own theme load; `scripts/fetch-themes.sh` |
 | store | [`moarchy-store`](https://github.com/SimonSchubert/moarchy-store) | Python / GTK4 / libadwaita | `moarchy_store/theme.py` reads `colors.toml` and injects a stylesheet |
 | GNOME's apps | upstream GNOME, unmodified | GTK4 / libadwaita | `~/.config/gtk-4.0/gtk.css`, a symlink to what `default/themed/gtk.css.tpl` renders per theme |
-| Geary, and GTK3 | upstream GNOME, unmodified | GTK3 / libhandy | `~/.config/gtk-3.0/gtk.css` from `default/themed/gtk3.css.tpl`, on top of `adw-gtk3` — GTK3's own Adwaita bakes its colours in and ignores the file |
+| GTK3: the portal's file chooser, and what the store installs | upstream, unmodified | GTK3 / libhandy | `~/.config/gtk-3.0/gtk.css` from `default/themed/gtk3.css.tpl`, on top of `adw-gtk3` — GTK3's own Adwaita bakes its colours in and ignores the file |
 
 **I1a** Those last two rows are the only ones that read the palette without
 being written to. Calculator, Contacts, Clocks, Maps and the rest are stock

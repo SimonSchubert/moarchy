@@ -222,19 +222,70 @@ n=$(ls -1d "$R"/usr/share/moarchy/plugins/*/ 2>/dev/null | wc -l | tr -d ' ')
 # The default apps the plugins replaced must not sneak back in. Checking the
 # desktop entry, not the package name: that is what the drawer lists.
 for e in org.gnome.clocks org.kde.kalk org.kde.calindori org.gnome.Contacts \
-         dev.tchx84.Portfolio org.kde.kweather; do
+         dev.tchx84.Portfolio org.kde.kweather org.gnome.TextEditor \
+         org.gnome.Calls sm.puri.Chatty org.gnome.Geary; do
   if [ -e "$R/usr/share/applications/${e}.desktop" ]; then
     no "$e.desktop is still in the image -- the plugin replaced it"
   else
     ok "$e is not a default app"
   fi
 done
+# And the ones that left with no plugin in their place. ChiPass was never in
+# the list at all: geary pulled it in as the org.freedesktop.secrets provider
+# whenever gnome-keyring came after geary in moarchy-meta's depends, which is
+# exactly the kind of reordering nobody would think to check.
+for e in org.gnome.Loupe org.gnome.Papers com.github.johnfactotum.Foliate \
+         org.gnome.World.Secrets org.chipass.ChiPass; do
+  if [ -e "$R/usr/share/applications/${e}.desktop" ]; then
+    no "$e.desktop is in the image -- it left the default set"
+  else
+    ok "$e is not a default app"
+  fi
+done
+# Calls and Chatty were daemons as well as windows, and the daemons are the
+# half that does harm beside the plugins: Chatty deletes every text it takes
+# off the modem, so Messages would never see one. The units that started them
+# under sway were ours, so they are checked by name rather than by package.
+for u in calls-daemon.service sm.puri.Chatty-daemon.service; do
+  if [ -e "$R/etc/systemd/user/$u" ] || [ -L "$R/usr/lib/systemd/user/default.target.wants/$u" ]; then
+    no "$u is still installed or enabled -- Phone and Messages replaced it"
+  else
+    ok "$u is not in the image"
+  fi
+done
 # And the plugins that replaced them must be launchable, not merely present
 # as QML the shell never enables.
 for e in org.moarchy.Calculator org.moarchy.Calendar org.moarchy.Clock \
-         org.moarchy.Contacts org.moarchy.Files; do
+         org.moarchy.Contacts org.moarchy.Files org.moarchy.Editor \
+         org.moarchy.Phone org.moarchy.Messages org.moarchy.Mail; do
   have /usr/share/applications/${e}.plugin.desktop
 done
+# Mail is a window over a command. Every word it says to a server is a run of
+# /usr/bin/moarchy-mail, a Python script, so a package that shipped the plugin
+# without it -- or an image without python -- is a sign-in screen that can
+# never sign in, and nothing above would notice. The mailto: entry is what a
+# tapped address opens now that Geary is not there to claim it.
+have /usr/bin/moarchy-mail
+[ -x "$R/usr/bin/moarchy-mail" ] && ok "moarchy-mail is executable" \
+                                 || no "moarchy-mail is not executable"
+have /usr/bin/python3
+have /usr/share/applications/org.moarchy.Mail.compose.desktop
+grep -q '^MimeType=x-scheme-handler/mailto;' "$R/usr/share/applications/org.moarchy.Mail.compose.desktop" \
+  && ok "Mail handles mailto: links" \
+  || no "nothing in the image handles mailto: links"
+
+# The editor is the one plugin that is also a default for something outside
+# the drawer, and both of those halves are files the package has to lay down:
+# the hidden entry xdg-open is pointed at, and the command $EDITOR runs. A
+# package that shipped the plugin without them would pass every line above
+# and leave `git commit` with an editor that is not there.
+have /usr/share/applications/org.moarchy.Editor.open.desktop
+have /usr/bin/moarchy-editor
+[ -x "$R/usr/bin/moarchy-editor" ] && ok "moarchy-editor is executable" \
+                                   || no "moarchy-editor is not executable"
+grep -q '^FALLBACK="moarchy-editor"' "$R/usr/lib/moarchy/bin/omarchy-launch-editor" \
+  && ok "omarchy-launch-editor falls back to moarchy-editor" \
+  || no "omarchy-launch-editor falls back to an editor the image does not ship"
 have /usr/share/moarchy/plugins/org.moarchy.calculator/Calculator.qml
 have /usr/share/moarchy/plugins/org.moarchy.calculator/ui/qmldir
 grep -q '"id": "org.moarchy.calculator"' "$R/usr/share/omarchy/config/omarchy/shell.json" \

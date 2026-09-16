@@ -30,9 +30,9 @@
 # L12, nothing another installed package needs -- except moarchy-meta, which is
 # a package with no files whose whole content is a depends line
 # (docs/structure.md P5). Every app on this phone has it as a dependent, so a
-# plain `pacman -Rs gnome-text-editor` fails with
+# plain `pacman -Rs gnome-maps` fails with
 #
-#   :: removing gnome-text-editor breaks dependency 'gnome-text-editor' required by moarchy-meta
+#   :: removing gnome-maps breaks dependency 'gnome-maps' required by moarchy-meta
 #
 # That is the record of the set objecting, not a package that needs the app.
 # When moarchy-meta is the ONLY blocker the plan is recomputed with

@@ -13,14 +13,133 @@ var ICON = 22
 var ICON_INK = 18
 var PILL = 40
 var FAB = 56
-// D1's card radius at the large corners preset. Surfaces that follow
-// ~/.config/omarchy/ui.toml read UiFile.radiusCard instead; this is the
-// fallback for kit chrome that has not been handed one.
-var CARD_RADIUS = 18
 var CHECK = 22
 var MENU_WIDTH = 220
 var MENU_ROW = 40
 var BOTTOM_NAV = 56
+
+// --- shape -------------------------------------------------------------
+//
+// Every app on this phone draws the same three shapes: a box on the page, a
+// box inside a box, and a chip inside that. One scale for the three, so a
+// card in Weather and a card in Files are the same object seen twice rather
+// than 12 in one file and 14 in another.
+//
+// XXS is below all three: a mark rather than a box -- a heat-map cell, a dot
+// under a date, a tick. It is the same ratio of radius to size that RADIUS_SM
+// has on a 30px square, which is what keeps a 15px cell a rounded square
+// instead of a circle.
+var RADIUS_XXS = 4
+var RADIUS_XS = 6
+var RADIUS_SM = 8
+var RADIUS_MD = 14
+var RADIUS_LG = 20
+// The name the plugins already use for "a box on the page".
+var CARD_RADIUS = RADIUS_MD
+
+// The rule for a box inside a box: the inner radius is the outer one less the
+// gap between the two edges, so the curves stay concentric. Anything else
+// leaves a crescent of the outer fill at each corner -- the tell that a card
+// was dropped into a list rather than designed into it. Floored at RADIUS_XS
+// because a 2px corner reads as a mistake rather than as a square one -- and
+// capped at the outer radius, because a box rounder than the box it sits in is
+// the same mistake the other way round, and `modest` corners are small enough
+// to reach it.
+//
+//   inner(RADIUS_LG, GROUP_PAD) === RADIUS_MD
+//   inner(RADIUS_MD, GROUP_PAD) === RADIUS_SM
+function inner(outer, pad) {
+  var o = Number(outer)
+  if (!isFinite(o) || o <= 0) return 0
+  var p = Number(pad)
+  if (!isFinite(p) || p <= 0) return Math.round(o)
+  return Math.min(Math.round(o), Math.max(RADIUS_XS, Math.round(o - p)))
+}
+
+// --- corners -----------------------------------------------------------
+//
+// The scale above is drawn at `corners = "large"`, the look this phone shipped
+// with. `~/.config/omarchy/ui.toml` can say `modest` or `square` instead, and
+// the shell's sheets, tiles and cards follow it (moarchy's docs/style.md D1).
+// An app that read the scale straight off this file was the one rounded thing
+// left on a square phone, so every corner an app draws goes through one of
+// these two:
+//
+//   radius(colours, px)    a box -- a card, a group, a key, a heat-map cell.
+//                          The px is the large one; modest scales it down by
+//                          the ratio of the two tile radii, square is 0.
+//   round(colours, size)   a capsule or a circle -- a button, a field, a chip,
+//                          the ring round today's date. Fully round at large;
+//                          at modest and square it is a box with the tile's
+//                          corner, capped at half the side the way the shell's
+//                          own Pill is.
+//
+// Neither is for artwork. A sun, a clock face, a reversi disc and a mine are
+// round because the thing drawn is round, and squaring them would be squaring
+// the content rather than the chrome.
+//
+// The shape arrives on `colours`, which ThemeFile folds ui.toml into. That is
+// not where it belongs by name, and it is where it has to be: `colours` is the
+// one object every box on every screen is already handed, and a second
+// property would be two hundred call sites of which the one a new screen
+// forgets is the corner this section exists for. No colours, or colours with
+// no shape on them, is large -- the scale above, unchanged.
+var LARGE_TILE = 20
+
+// The part of ui.toml an app draws with, from UiFile's `chrome`.
+function shape(chrome) {
+  var c = chrome || {}
+  var tile = Number(c.tile)
+  return {
+    corners: String(c.corners || "large"),
+    scale: isFinite(tile) && tile >= 0 ? tile / LARGE_TILE : 1
+  }
+}
+
+// `colours` with the shape on it. A copy, so the palette Theme.parse returned
+// is never the object a binding sees change.
+function shaped(colours, chrome) {
+  var out = {}
+  for (var k in (colours || {})) out[k] = colours[k]
+  out.shape = shape(chrome)
+  return out
+}
+
+function scale(colours) {
+  var s = colours && colours.shape ? Number(colours.shape.scale) : 1
+  return isFinite(s) && s >= 0 ? s : 1
+}
+
+function radius(colours, px) {
+  var n = Number(px)
+  if (!isFinite(n) || n <= 0) return 0
+  var s = scale(colours)
+  return s === 1 ? n : Math.round(n * s)
+}
+
+function round(colours, size) {
+  var half = Number(size) / 2
+  if (!isFinite(half) || half <= 0) return 0
+  var s = scale(colours)
+  if (s >= 1) return half
+  return Math.min(half, Math.round(LARGE_TILE * s))
+}
+
+// --- spacing -----------------------------------------------------------
+//
+// Five numbers, and the first four nest: the page insets its content by
+// GUTTER, a box insets its own by PAD, two boxes are GAP apart, and a box that
+// holds boxes insets them by GROUP_PAD -- which is the number `inner()`
+// subtracts.
+var GUTTER = 12
+var PAD = 12
+var GAP = 8
+var GROUP_PAD = 6
+// Label to the box under it. Closer than GAP on purpose: the two are one
+// thing, and equal spacing would make the label read as a caption for the box
+// above it instead.
+var LABEL_GAP = 5
+
 var FONT = "Adwaita Sans"
 // What Style.font.body is on a stock image, and what every type role
 // multiplies when the shell is not there to say otherwise.

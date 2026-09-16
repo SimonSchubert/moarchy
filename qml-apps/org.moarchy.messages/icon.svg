@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A speech bubble with three dots in it.
+
+     The dots are what make it a conversation still going rather than a
+     rounded square with a tail, which at the 42px the drawer draws icons is
+     all a plain bubble is. Blue, where Phone's handset is green, so the two
+     apps that are one conversation apart are not one colour apart too.
+
+     No plate behind it (the drawer paints icons bare) and no clip path: QtSvg
+     ignores clip-path and paints an out-of-defs clipPath as a black square. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <path fill="#3584e4" d="M30 18h68a20 20 0 0 1 20 20v44a20 20 0 0 1-20 20H58l-26 20a4 4 0 0 1-6.4-3.2V102H30a20 20 0 0 1-20-20V38a20 20 0 0 1 20-20z"/>
+  <g fill="#f6f5f4">
+    <circle cx="40" cy="60" r="9"/>
+    <circle cx="64" cy="60" r="9"/>
+    <circle cx="88" cy="60" r="9"/>
+  </g>
+</svg>

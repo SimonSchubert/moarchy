@@ -10,6 +10,8 @@
 //
 // The places live on their own page, reached by the place name in the title
 // bar, which carries a chevron to say so. That is the whole of the navigation.
+// The first of them is wherever the phone is, looked up from its connection's
+// address; the rest are the towns somebody typed.
 //
 // Nothing here is a port: the GTK half of this repository has no weather app.
 // It was written for the shell first, which means summoning it is a window
@@ -48,8 +50,6 @@ Item {
   // `colours` and not `palette`: QQuickItem already has a `palette`, and
   // shadowing it makes a binding resolve to whichever the compiler picked.
   readonly property var colours: themeFile.colours
-  readonly property int radiusCard: uiFile.radiusCard
-  readonly property int radiusTile: uiFile.radiusTile
   property int bodySize: Metrics.BODY
   Component.onCompleted: {
     root.bodySize = Metrics.shellBody(root)
@@ -61,6 +61,12 @@ Item {
   property var places: []
   property string currentId: ""
   property string units: "metric"
+  // Whether to ask where the phone is, and the last answer: a place with a
+  // `found` stamp, or null. Null until a lookup has answered and whenever
+  // `locate` is off -- never a guess, and never a town kept after somebody
+  // said not to look.
+  property bool locate: true
+  property var here: null
   // placeId -> { fetched, forecast }. One entry per place, so switching towns
   // draws the last thing known about the new one rather than a blank screen.
   property var cache: ({})
@@ -87,6 +93,17 @@ Item {
   property real retryAt: 0
   property bool dirty: false
 
+  property bool locating: false
+  property string lost: ""
+  property int lostCount: 0
+  property real locateRetryAt: 0
+  // No lookup until both files are read. The setting that says not to look is
+  // in one and the last answer is in the other, and FileView reads them
+  // asynchronously: a lookup started in between is either one this app was
+  // told not to make or one it already has the answer to.
+  property bool placesRead: false
+  property bool cacheRead: false
+
   readonly property var backoff: [60, 150, 300, 600]
 
   readonly property real nowSec: root.now / 1000
@@ -100,11 +117,22 @@ Item {
   // to draw exactly what was already there.
   readonly property real hourStart: Math.floor(root.nowSec / 3600) * 3600
 
-  readonly property var place: Store.find(root.places, root.currentId)
-  readonly property var entry: root.cache[root.currentId] || null
+  readonly property var place: root.currentId === Store.HERE
+                               ? root.here : Store.find(root.places, root.currentId)
+  // Keyed by the place's coordinates rather than by `currentId`, which for
+  // the phone's own place is "here" wherever here happens to be.
+  readonly property var entry: root.place ? (root.cache[root.place.id] || null) : null
   readonly property var forecast: root.entry ? root.entry.forecast : null
   readonly property real fetched: root.entry ? root.entry.fetched : 0
   readonly property int zoneOffset: root.forecast ? root.forecast.offset : 0
+  // Finding where the phone is, when that is the place on screen, is part of
+  // updating it: the forecast waits on the answer.
+  readonly property bool busy: root.fetching
+                               || (root.locating && root.currentId === Store.HERE)
+  // Whether the weather screen has anything it could show: a town typed, or
+  // a lookup that will name one. Without either, the places page is the only
+  // page there is.
+  readonly property bool somewhere: root.places.length > 0 || root.locate
 
   readonly property var reading: Forecast.readingAt(root.forecast, root.hourStart)
   readonly property var hours: Forecast.nextHours(root.forecast, root.hourStart, Forecast.STRIP_HOURS)
@@ -122,7 +150,6 @@ Item {
   readonly property color background: root.colours.background
   readonly property color ink: root.colours.foreground
   readonly property color dim: root.colours.dim
-  readonly property color line: root.colours.line
   readonly property color accent: root.colours.accent
 
   function hueColor(name) {
@@ -134,33 +161,14 @@ Item {
     return root.hueColor(Forecast.band(celsius))
   }
 
-  // The band behind the hero, mixed from the hue of the temperature it is
-  // behind: a cold morning is a blue screen and a hot afternoon an orange one,
-  // in whatever blue and orange the theme names. Weaker at night, because the
-  // same wash that reads as daylight at 22% reads as a fault at midnight.
-  // Not `readonly`, though nothing but the binding below ever writes it: a
-  // Behavior is an interceptor on writes, and Quickshell refuses to attach one
-  // to a read-only property -- with an error that names the property and not
-  // the reason.
-  property color wash: {
-    if (!root.reading) return Theme.mix(root.colours.foreground, root.colours.background, 0.05)
-    var hue = root.hueColor(Forecast.band(root.reading.temp))
-    return Theme.mix(hue, root.colours.background, root.reading.day ? 0.22 : 0.13)
-  }
-
-  // Switching town, or the sun going down, moves this colour across the top of
-  // the screen. A quarter of a second of it reads as the screen catching up; a
-  // jump reads as a redraw.
-  Behavior on wash { ColorAnimation { duration: 240 } }
-
   readonly property string card: Theme.mix(root.colours.foreground, root.colours.background, 0.06)
   readonly property string pressed: Theme.mix(root.colours.foreground, root.colours.background, 0.11)
 
   // --- what the header says ---------------------------------------------
 
   function freshnessText() {
-    if (!root.places.length) return "Nowhere yet"
-    if (root.fetching) return "Updating…"
+    if (!root.place) return root.locating ? "Finding where you are…" : "Nowhere yet"
+    if (root.busy) return "Updating…"
     if (root.fetched <= 0) return root.trouble ? root.trouble : "No forecast yet"
     var age = Math.max(0, root.nowSec - root.fetched)
     if (root.failures) return "Not updating · " + Forecast.freshness(age)
@@ -268,11 +276,12 @@ Item {
   // linter names it, and this is the one collision here that could quietly
   // resolve to the wrong thing.
   function placesState() {
-    return { places: root.places, current: root.currentId, units: root.units }
+    return { places: root.places, current: root.currentId, units: root.units, locate: root.locate }
   }
 
   function apply(next) {
     root.places = next.places
+    root.locate = next.locate
     root.currentId = next.current
     root.units = next.units
     placesFile.setText(Store.serializePlaces(next))
@@ -308,6 +317,19 @@ Item {
     root.apply(Store.withUnits(root.placesState(), name))
   }
 
+  function setLocate(on) {
+    root.apply(Store.withLocate(root.placesState(), on))
+    root.lost = ""
+    root.lostCount = 0
+    root.locateRetryAt = 0
+    if (!on && root.here) {
+      // Off is forgotten, not hidden: the town leaves memory now and the disk
+      // at the next write, which serializeCache makes without it.
+      root.here = null
+      root.dirty = true
+    }
+  }
+
   // --- the network ------------------------------------------------------
 
   function curl(url) {
@@ -330,13 +352,31 @@ Item {
 
   function due() {
     if (root.offline || root.fetching || !root.place) return false
+    // Showing wherever the phone is, and about to ask where that is: the
+    // forecast waits for the answer rather than fetching the last town's.
+    if (root.currentId === Store.HERE && (root.locating || root.locateDue())) return false
     if (root.retryAt && root.nowSec < root.retryAt) return false
     if (root.fetched <= 0) return true
     return (root.nowSec - root.fetched) >= Forecast.refreshAfter()
   }
 
+  // Only while the window is up. The files are watched, and the cache is
+  // written as the window goes away -- so without this, the write's own
+  // reload would ask the network a question with nothing on screen to show
+  // the answer on.
   function maybeFetch() {
+    if (!skyWindow.visible) return
+    if (root.locateDue()) root.findHere(false)
     if (root.due()) root.fetch(false)
+  }
+
+  // The button and `omarchy-shell weather refresh`. For wherever the phone is,
+  // that is two questions in order -- where, then the weather there -- so a
+  // refresh after walking from one network onto another is of the town the
+  // phone is in now.
+  function refresh() {
+    if (root.currentId === Store.HERE && root.locate && !root.offline) root.findHere(true)
+    else root.fetch(true)
   }
 
   function fetch(manual) {
@@ -391,6 +431,10 @@ Item {
     root.trouble = ""
     root.cache = Store.put(root.cache, want, parsed.forecast, root.clockNow() / 1000)
     root.dirty = true
+    // The town on screen may not be the one this answer is for: a lookup that
+    // named a new one while this request was out found `fetching` true and
+    // left the new town for whoever came next. This is next.
+    Qt.callLater(root.maybeFetch)
   }
 
   function failed(message, retry, manual) {
@@ -405,8 +449,89 @@ Item {
 
   function saveCache() {
     if (!root.dirty) return
-    cacheFile.setText(Store.serializeCache(root.cache, root.places))
+    cacheFile.setText(Store.serializeCache(root.cache, root.places, root.here))
     root.dirty = false
+  }
+
+  // --- where the phone is -----------------------------------------------
+
+  // Asked only when the answer would be on screen: the phone's own place is
+  // the one being shown, or the places page is open with its row at the top.
+  // Somebody reading Kyoto's week has not asked where they are.
+  function locateDue() {
+    if (root.offline || !root.locate || root.locating) return false
+    if (!root.placesRead || !root.cacheRead) return false
+    if (root.currentId !== Store.HERE && !root.showingPlaces) return false
+    if (root.locateRetryAt && root.nowSec < root.locateRetryAt) return false
+    if (!root.here) return true
+    return (root.nowSec - root.here.found) >= Forecast.LOCATE_S
+  }
+
+  function findHere(manual) {
+    if (root.offline || !root.locate) return
+    if (root.locating) {
+      if (manual) locator.manual = true
+      return
+    }
+    root.locating = true
+    locator.manual = !!manual
+    locator.command = root.curl(Forecast.LOCATE)
+    locator.running = true
+  }
+
+  function located(code, payload) {
+    root.locating = false
+    var manual = locator.manual
+    // Switched off while the question was out: the answer is dropped unread.
+    if (!root.locate) return
+
+    if (code !== 0) {
+      root.lostHere("No answer from GeoJS.", 0, manual)
+      return
+    }
+    var answer = root.split(payload)
+    if (answer.status === 429) {
+      root.lostHere("GeoJS is rate-limiting this connection.", Forecast.RATE_LIMIT_S, manual)
+      return
+    }
+    if (answer.status !== 200) {
+      root.lostHere("GeoJS refused the request (" + answer.status + ").", 0, manual)
+      return
+    }
+    var parsed = Forecast.parseLocation(answer.body)
+    if (parsed.error) {
+      root.lostHere(parsed.error, 0, manual)
+      return
+    }
+
+    var found = parsed.place
+    found.found = root.clockNow() / 1000
+    root.lostCount = 0
+    root.locateRetryAt = 0
+    root.lost = ""
+    // A town that moved has a new id, so no forecast in the cache and one
+    // fetch due; one that did not keeps the forecast it had.
+    root.here = found
+    root.dirty = true
+    root.thenTheWeather(manual)
+  }
+
+  function lostHere(message, retry, manual) {
+    root.lostCount += 1
+    var wait = retry || root.backoff[Math.min(root.lostCount - 1, root.backoff.length - 1)]
+    root.locateRetryAt = root.clockNow() / 1000 + wait
+    root.lost = message
+    // The last town found is still the best answer there is, so it stays on
+    // the screen, quietly, and its forecast still refreshes.
+    if (manual && !root.here) root.say(message)
+    root.thenTheWeather(manual)
+  }
+
+  // Where has been answered, or has not. Either way the weather is next, for
+  // the town the last answer named.
+  function thenTheWeather(manual) {
+    if (manual && root.currentId === Store.HERE) root.fetch(true)
+    else Qt.callLater(root.maybeFetch)
   }
 
   // --- searching for a town ---------------------------------------------
@@ -495,6 +620,16 @@ Item {
   }
 
   Process {
+    id: locator
+    property bool manual: false
+    running: false
+    stdout: StdioCollector { id: locateOut; waitForEnd: true }
+    // qmllint disable signal-handler-parameters
+    onExited: function (code, status) { root.located(code, locateOut.text) }
+    // qmllint enable signal-handler-parameters
+  }
+
+  Process {
     id: finder
     running: false
     stdout: StdioCollector { id: findOut; waitForEnd: true }
@@ -510,11 +645,15 @@ Item {
     onParsed: function (data) {
       var state = Store.parsePlaces(data)
       root.places = state.places
+      root.locate = state.locate
+      if (!root.locate) root.here = null
       root.currentId = state.current
       root.units = root.harnessUnits.length ? root.harnessUnits : state.units
+      root.placesRead = true
       // Nowhere to show the weather of is the one state this app cannot draw,
-      // so it opens on the page that fixes it.
-      if (!root.places.length) root.showingPlaces = true
+      // so it opens on the page that fixes it. With the lookup on there is
+      // always somewhere -- or there will be, in about a second.
+      if (!root.places.length && !root.locate) root.showingPlaces = true
       Qt.callLater(root.maybeFetch)
     }
     onQuarantined: function (to) { root.say("The places file was unreadable and was kept aside.") }
@@ -535,15 +674,21 @@ Item {
         merged = Store.put(merged, id, cached[id].forecast, cached[id].fetched)
       }
       root.cache = merged
+      // The same rule for the town: one found while the file was being read
+      // is newer than the one in it.
+      var disk = Store.parseHere(data)
+      if (root.locate && disk && (!root.here || root.here.found < disk.found)) root.here = disk
+      root.cacheRead = true
       Qt.callLater(root.maybeFetch)
     }
     onQuarantined: function (to) { root.say("The cached forecast was unreadable and was kept aside.") }
   }
 
   Chrome.ThemeFile { id: themeFile }
-  Chrome.UiFile { id: uiFile }
 
   onCurrentIdChanged: Qt.callLater(root.maybeFetch)
+  // The places page has the phone's own place at the top of it.
+  onShowingPlacesChanged: Qt.callLater(root.maybeFetch)
 
   IpcHandler {
     target: "weather"
@@ -557,7 +702,7 @@ Item {
       if (root.shell) root.shell.toggle(root.pluginId, "{}")
       return root.opened ? "open" : "closed"
     }
-    function refresh(): string { root.fetch(true); return "ok" }
+    function refresh(): string { root.refresh(); return "ok" }
     function place(): string { return root.place ? root.place.name : "" }
     function temperature(): string {
       return root.reading ? Forecast.temperature(root.reading.temp, root.units) : ""
@@ -590,7 +735,7 @@ Item {
       color: root.background
       focus: true
       Keys.onEscapePressed: {
-        if (root.showingPlaces && root.places.length) { root.showingPlaces = false; return }
+        if (root.showingPlaces && root.somewhere) { root.showingPlaces = false; return }
         root.dismiss()
       }
 
@@ -604,12 +749,14 @@ Item {
           Layout.fillWidth: true
           Layout.preferredHeight: Metrics.TARGET + 12
 
-          // The bar is the top of the band rather than a strip above it. The
-          // hero scrolls away under it and the colour stays, which is what
-          // makes the sky look like one piece.
+          // The window's own background, the same colour as the status bar
+          // above it. This used to be the top of a band washed in the
+          // temperature's hue, and the shell does not draw an app under the
+          // status bar -- so the wash stopped at its bottom edge in a hard
+          // line across the top of the screen.
           Rectangle {
             anchors.fill: parent
-            color: root.showingPlaces ? root.background : root.wash
+            color: root.background
           }
 
           Chrome.AppBar {
@@ -619,7 +766,8 @@ Item {
             bodySize: root.bodySize
 
             leading: Chrome.BackButton {
-              visible: root.showingPlaces && root.places.length > 0
+              colours: root.colours
+              visible: root.showingPlaces && root.somewhere
               color: root.ink
               onClicked: root.showingPlaces = false
             }
@@ -642,9 +790,23 @@ Item {
                 Row {
                   spacing: 3
 
+                  // The pin says the name beside it was looked up rather than
+                  // chosen, which is the difference between "Berlin" and "you
+                  // are in Berlin".
+                  Chrome.Icon {
+                    id: pin
+                    anchors.verticalCenter: nameText.verticalCenter
+                    visible: !root.showingPlaces && root.currentId === Store.HERE && !!root.place
+                    slot: 18
+                    size: 14
+                    color: root.ink
+                    names: ["mark-location-symbolic"]
+                  }
+
                   Chrome.TypedText {
                     id: nameText
-                    width: Math.min(titleBlock.width - 22, implicitWidth)
+                    width: Math.min(titleBlock.width - 22 - (pin.visible ? pin.width + 3 : 0),
+                                    implicitWidth)
                     role: "subtitle"
                     text: root.showingPlaces ? "Places" : (root.place ? root.place.name : "Weather")
                     color: root.ink
@@ -683,12 +845,13 @@ Item {
             }
 
             trailing: Chrome.IconButton {
+              colours: root.colours
               visible: !root.showingPlaces && !!root.place
               color: root.ink
               names: ["view-refresh-symbolic"]
-              tooltip: root.fetching ? "Updating the forecast" : "Refresh the forecast"
-              spinning: root.fetching
-              onClicked: root.fetch(true)
+              tooltip: root.busy ? "Updating the forecast" : "Refresh the forecast"
+              spinning: root.busy
+              onClicked: root.refresh()
             }
           }
         }
@@ -713,17 +876,12 @@ Item {
               id: skyCol
               width: sky.width
 
-              // The band. Its colour is the temperature's, which is the one
-              // piece of this screen somebody reads without looking at it.
-              Rectangle {
+              // The hero. On the window's own background, like the rest of the
+              // screen: the temperature's colour is in the hour strip and the
+              // week's bars, which is where it can be read against something.
+              Item {
                 width: parent.width
                 height: 216
-
-                gradient: Gradient {
-                  GradientStop { position: 0.0; color: root.wash }
-                  GradientStop { position: 0.62; color: root.wash }
-                  GradientStop { position: 1.0; color: root.background }
-                }
 
                 Column {
                   anchors.centerIn: parent
@@ -742,19 +900,18 @@ Item {
                       ink: root.ink
                       accent: root.hueColor("blue")
                       spark: root.hueColor("yellow")
-                      // The crescent is cut with the colour behind it, and
-                      // here that is the band rather than the window.
-                      behind: root.wash
+                      // The crescent is cut with the colour behind it.
+                      behind: root.background
                     }
 
                     Text {
                       anchors.verticalCenter: parent.verticalCenter
                       text: root.reading ? Forecast.temperature(root.reading.temp, root.units) : ""
                       // The theme's ink and not the temperature's colour: the
-                      // hue is already on the screen -- behind this number, in
-                      // the band, and under it in every bar -- and sixty pixels
-                      // of pale yellow on a light theme is the one place it
-                      // would cost a reading.
+                      // hue is already on the screen -- in the hour strip and
+                      // under it in every bar -- and sixty pixels of pale
+                      // yellow on a light theme is the one place it would cost
+                      // a reading.
                       color: root.ink
                       font.family: Metrics.FONT
                       font.pixelSize: Math.round(root.bodySize * 3.6)
@@ -783,35 +940,33 @@ Item {
                 }
 
                 // Nothing known yet: the one sentence that says which of the
-                // several possible reasons it is.
-                Column {
+                // several possible reasons it is. This is the screen a phone
+                // shows on the first run of the app, and it was the last loose
+                // sentence floating on a black rectangle in this repository.
+                Chrome.EmptyState {
                   anchors.centerIn: parent
-                  width: parent.width - 64
-                  spacing: 6
+                  width: parent.width - Metrics.GUTTER * 2
                   visible: !root.reading
-
-                  Chrome.TypedText {
-                    width: parent.width
-                    role: "subtitle"
-                    text: root.places.length ? "No forecast yet" : "Nowhere yet"
-                    color: root.ink
-                    bodySize: root.bodySize
-                    horizontalAlignment: Text.AlignHCenter
+                  colours: root.colours
+                  bodySize: root.bodySize
+                  names: root.place
+                         ? ["view-refresh-symbolic"]
+                         : ["mark-location-symbolic", "view-pin-symbolic"]
+                  title: {
+                    if (root.place) return "No forecast yet"
+                    if (root.locate && !root.lost && !root.offline) return "Finding where you are"
+                    return "Nowhere yet"
                   }
-
-                  Chrome.TypedText {
-                    width: parent.width
-                    role: "caption"
-                    text: {
-                      if (!root.places.length) return "Name a town on the places page and it opens here."
-                      if (root.trouble) return root.trouble
+                  detail: {
+                    if (!root.place) {
                       if (root.offline) return "This run is offline."
-                      return "Asking Open-Meteo…"
+                      if (!root.locate) return "Name a town on the places page and it opens here."
+                      if (root.lost) return root.lost + " Name a town on the places page instead."
+                      return "Asking GeoJS where this connection is."
                     }
-                    color: root.dim
-                    bodySize: root.bodySize
-                    horizontalAlignment: Text.AlignHCenter
-                    wrapMode: Text.WordWrap
+                    if (root.trouble) return root.trouble
+                    if (root.offline) return "This run is offline."
+                    return "Asking Open-Meteo…"
                   }
                 }
               }
@@ -820,92 +975,99 @@ Item {
 
               Item {
                 width: parent.width
-                height: 112
+                height: root.hours.length > 0 ? 124 : 0
                 visible: root.hours.length > 0
 
-                Flickable {
-                  id: strip
+                Rectangle {
                   anchors.fill: parent
-                  clip: true
-                  contentWidth: hourRow.width
-                  contentHeight: height
-                  flickableDirection: Flickable.HorizontalFlick
-                  boundsBehavior: Flickable.StopAtBounds
+                  anchors.leftMargin: Metrics.GUTTER
+                  anchors.rightMargin: Metrics.GUTTER
+                  anchors.bottomMargin: Metrics.GAP
+                  radius: Metrics.radius(root.colours, Metrics.RADIUS_LG)
+                  color: root.card
 
-                  Row {
-                    id: hourRow
-                    height: strip.height
-                    leftPadding: 10
-                    rightPadding: 10
+                  Flickable {
+                    id: strip
+                    anchors.fill: parent
+                    anchors.margins: Metrics.GROUP_PAD
+                    clip: true
+                    contentWidth: hourRow.width
+                    contentHeight: height
+                    flickableDirection: Flickable.HorizontalFlick
+                    boundsBehavior: Flickable.StopAtBounds
 
-                    Repeater {
-                      model: root.hours
+                    Row {
+                      id: hourRow
+                      height: strip.height
 
-                      delegate: Item {
-                        id: hour
-                        required property var modelData
+                      Repeater {
+                        model: root.hours
 
-                        width: 54
-                        height: hourRow.height
+                        delegate: Item {
+                          id: hour
+                          required property var modelData
 
-                        readonly property bool isNow: Forecast.isNow(hour.modelData.time, root.nowSec)
+                          width: 52
+                          height: hourRow.height
 
-                        // The hour it is now is marked with the colour its
-                        // label is drawn in as well as the pill behind it:
-                        // roughly one man in twelve cannot tell this app's
-                        // accent from the ink beside it.
-                        Rectangle {
-                          anchors.fill: parent
-                          anchors.topMargin: 6
-                          anchors.bottomMargin: 6
-                          anchors.leftMargin: 3
-                          anchors.rightMargin: 3
-                          radius: 14
-                          visible: hour.isNow
-                          color: root.card
-                        }
+                          readonly property bool isNow: Forecast.isNow(hour.modelData.time, root.nowSec)
 
-                        Column {
-                          anchors.centerIn: parent
-                          spacing: 3
-
-                          Chrome.TypedText {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            role: "caption"
-                            text: Forecast.hourLabel(hour.modelData.time, root.zoneOffset, root.nowSec)
-                            color: hour.isNow ? root.ink : root.dim
-                            bodySize: root.bodySize
+                          // The hour it is now is marked with the colour its
+                          // label is drawn in as well as the pill behind it:
+                          // roughly one man in twelve cannot tell this app's
+                          // accent from the ink beside it.
+                          Rectangle {
+                            anchors.fill: parent
+                            anchors.leftMargin: 1
+                            anchors.rightMargin: 1
+                            radius: Metrics.inner(Metrics.radius(root.colours, Metrics.RADIUS_LG), Metrics.GROUP_PAD)
+                            visible: hour.isNow
+                            color: Theme.surface(root.colours, "raised")
                           }
 
-                          Sky {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            kind: Forecast.glyph(hour.modelData.code, hour.modelData.day)
-                            size: 26
-                            ink: root.ink
-                            accent: root.hueColor("blue")
-                            spark: root.hueColor("yellow")
-                            behind: root.background
-                          }
+                          Column {
+                            anchors.centerIn: parent
+                            spacing: 3
 
-                          Chrome.TypedText {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            role: "body"
-                            text: Forecast.temperature(hour.modelData.temp, root.units)
-                            color: root.tempColour(hour.modelData.temp)
-                            bodySize: root.bodySize
-                          }
+                            Chrome.TypedText {
+                              anchors.horizontalCenter: parent.horizontalCenter
+                              role: "caption"
+                              text: Forecast.hourLabel(hour.modelData.time, root.zoneOffset, root.nowSec)
+                              color: hour.isNow ? root.ink : root.dim
+                              bodySize: root.bodySize
+                            }
 
-                          // The chance of rain, and only when there is one
-                          // worth printing: a column of "0%" down the strip is
-                          // twenty-four numbers nobody reads.
-                          Chrome.TypedText {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            height: Math.round(root.bodySize * 0.9)
-                            role: "overline"
-                            text: (hour.modelData.pop !== null && hour.modelData.pop >= 10)
-                                  ? Forecast.percent(hour.modelData.pop) : ""
-                            color: root.hueColor("blue")
-                            bodySize: root.bodySize
+                            Sky {
+                              anchors.horizontalCenter: parent.horizontalCenter
+                              kind: Forecast.glyph(hour.modelData.code, hour.modelData.day)
+                              size: 26
+                              ink: root.ink
+                              accent: root.hueColor("blue")
+                              spark: root.hueColor("yellow")
+                              behind: hour.isNow
+                                      ? Theme.surface(root.colours, "raised") : root.card
+                            }
+
+                            Chrome.TypedText {
+                              anchors.horizontalCenter: parent.horizontalCenter
+                              role: "body"
+                              text: Forecast.temperature(hour.modelData.temp, root.units)
+                              color: root.tempColour(hour.modelData.temp)
+                              bodySize: root.bodySize
+                            }
+
+                            // The chance of rain, and only when there is one
+                            // worth printing: a column of "0%" down the strip
+                            // is twenty-four numbers nobody reads.
+                            Chrome.TypedText {
+                              anchors.horizontalCenter: parent.horizontalCenter
+                              height: Math.round(root.bodySize * 0.9)
+                              role: "overline"
+                              text: (hour.modelData.pop !== null && hour.modelData.pop >= 10)
+                                    ? Forecast.percent(hour.modelData.pop) : ""
+                              color: root.hueColor("blue")
+                              bodySize: root.bodySize
+                            }
                           }
                         }
                       }
@@ -916,196 +1078,152 @@ Item {
 
               // --- wind, damp, and the ends of the day ------------------------
 
-              Item {
-                width: parent.width
-                height: root.tiles.length ? 82 : 0
+              GridLayout {
+                x: Metrics.GUTTER
+                width: skyCol.width - Metrics.GUTTER * 2
                 visible: root.tiles.length > 0
+                columns: 2
+                columnSpacing: Metrics.GAP
+                rowSpacing: Metrics.GAP
 
-                Rectangle {
-                  anchors.fill: parent
-                  anchors.leftMargin: 12
-                  anchors.rightMargin: 12
-                  anchors.topMargin: 2
-                  anchors.bottomMargin: 12
-                  radius: root.radiusCard
-                  color: root.card
+                Repeater {
+                  model: root.tiles
 
-                  RowLayout {
-                    anchors.fill: parent
-                    spacing: 0
-
-                    Repeater {
-                      model: root.tiles
-
-                      // An Item around the Column, and not the Column itself.
-                      // Four columns that each size themselves to their own
-                      // children, in a layout that is meanwhile sizing them,
-                      // is a circle -- and the way it fails is that the first
-                      // tile takes the whole card and the other three are
-                      // drawn a pixel wide.
-                      delegate: Item {
-                        id: tile
-                        required property var modelData
-
-                        Layout.fillWidth: true
-                        Layout.preferredWidth: 1
-                        Layout.fillHeight: true
-
-                        Column {
-                          anchors.centerIn: parent
-                          width: parent.width
-                          spacing: 1
-
-                          Chrome.TypedText {
-                            width: parent.width
-                            role: "overline"
-                            text: tile.modelData.label
-                            color: root.dim
-                            bodySize: root.bodySize
-                            horizontalAlignment: Text.AlignHCenter
-                            elide: Text.ElideRight
-                          }
-
-                          Chrome.TypedText {
-                            width: parent.width
-                            role: "body"
-                            text: tile.modelData.value
-                            color: root.ink
-                            bodySize: root.bodySize
-                            horizontalAlignment: Text.AlignHCenter
-                            elide: Text.ElideRight
-                          }
-
-                          Chrome.TypedText {
-                            width: parent.width
-                            visible: text.length > 0
-                            role: "caption"
-                            text: tile.modelData.note
-                            color: root.dim
-                            bodySize: root.bodySize
-                            horizontalAlignment: Text.AlignHCenter
-                            elide: Text.ElideRight
-                          }
-                        }
-                      }
-                    }
+                  // Two across rather than four. Four columns of a label, a
+                  // number and a note in 336px is four columns that all elide,
+                  // and the notes ("NW", "in 4 h") were the first to go.
+                  delegate: Chrome.Tile {
+                    id: tile
+                    required property var modelData
+                    Layout.fillWidth: true
+                    colours: root.colours
+                    bodySize: root.bodySize
+                    label: tile.modelData.label
+                    value: tile.modelData.value
+                    footnote: tile.modelData.note
+                    valueColour: root.ink
                   }
                 }
               }
 
+              Item { width: 1; height: Metrics.GAP }
+
               // --- the week ---------------------------------------------------
 
-              Chrome.TypedText {
-                x: 16
+              Chrome.Section {
+                id: weekSection
+                x: Metrics.GUTTER
+                width: skyCol.width - Metrics.GUTTER * 2
                 visible: root.week.length > 0
-                role: "overline"
-                text: "THE WEEK"
-                color: root.dim
+                colours: root.colours
                 bodySize: root.bodySize
-                bottomPadding: 4
-              }
+                title: "The week"
+                pad: Metrics.GROUP_PAD
+                radius: Metrics.radius(root.colours, Metrics.RADIUS_LG)
+                cardSpacing: 0
 
-              Repeater {
-                model: root.week
+                Repeater {
+                  model: root.week
 
-                delegate: Item {
-                  id: day
-                  required property var modelData
+                  delegate: Item {
+                    id: day
+                    required property var modelData
 
-                  width: skyCol.width
-                  height: 46
+                    Layout.fillWidth: true
+                    implicitHeight: 46
 
-                  readonly property var fraction: Forecast.bar(day.modelData, root.range)
+                    readonly property var fraction: Forecast.bar(day.modelData, root.range)
 
-                  RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 16
-                    anchors.rightMargin: 16
-                    spacing: 8
+                    RowLayout {
+                      anchors.fill: parent
+                      anchors.leftMargin: Metrics.GAP
+                      anchors.rightMargin: Metrics.GAP
+                      spacing: 8
 
-                    Chrome.TypedText {
-                      // Enough for "Today", which is the widest of the eight
-                      // words that can be here and the one that matters.
-                      Layout.preferredWidth: 52
-                      Layout.alignment: Qt.AlignVCenter
-                      role: "body"
-                      text: Forecast.dayLabel(day.modelData.time, root.zoneOffset, root.nowSec)
-                      color: root.ink
-                      bodySize: root.bodySize
-                      elide: Text.ElideRight
-                    }
-
-                    Sky {
-                      Layout.preferredWidth: 26
-                      Layout.preferredHeight: 26
-                      Layout.alignment: Qt.AlignVCenter
-                      kind: Forecast.glyph(day.modelData.code, true)
-                      size: 26
-                      ink: root.ink
-                      accent: root.hueColor("blue")
-                      spark: root.hueColor("yellow")
-                      behind: root.background
-                    }
-
-                    Chrome.TypedText {
-                      Layout.preferredWidth: 30
-                      Layout.alignment: Qt.AlignVCenter
-                      role: "caption"
-                      text: (day.modelData.pop !== null && day.modelData.pop >= 10)
-                            ? Forecast.percent(day.modelData.pop) : ""
-                      color: root.hueColor("blue")
-                      bodySize: root.bodySize
-                    }
-
-                    Chrome.TypedText {
-                      Layout.preferredWidth: 28
-                      Layout.alignment: Qt.AlignVCenter
-                      role: "body"
-                      text: Forecast.temperature(day.modelData.low, root.units)
-                      color: root.dim
-                      bodySize: root.bodySize
-                      horizontalAlignment: Text.AlignRight
-                    }
-
-                    // The week on one scale. A bar further to the right is a
-                    // warmer day than the row above it, which is only true
-                    // because every row is measured against the same coldest
-                    // and warmest -- and it is decoration: both ends of it
-                    // carry their own number.
-                    Item {
-                      id: track
-                      Layout.fillWidth: true
-                      Layout.preferredHeight: 6
-                      Layout.alignment: Qt.AlignVCenter
-
-                      Rectangle {
-                        anchors.fill: parent
-                        radius: height / 2
-                        color: root.line
+                      Chrome.TypedText {
+                        // Enough for "Today", which is the widest of the eight
+                        // words that can be here and the one that matters.
+                        Layout.preferredWidth: 52
+                        Layout.alignment: Qt.AlignVCenter
+                        role: "body"
+                        text: Forecast.dayLabel(day.modelData.time, root.zoneOffset, root.nowSec)
+                        color: root.ink
+                        bodySize: root.bodySize
+                        elide: Text.ElideRight
                       }
 
-                      Rectangle {
-                        x: day.fraction.from * track.width
-                        width: Math.max(6, (day.fraction.to - day.fraction.from) * track.width)
-                        height: parent.height
-                        radius: height / 2
+                      Sky {
+                        Layout.preferredWidth: 26
+                        Layout.preferredHeight: 26
+                        Layout.alignment: Qt.AlignVCenter
+                        kind: Forecast.glyph(day.modelData.code, true)
+                        size: 26
+                        ink: root.ink
+                        accent: root.hueColor("blue")
+                        spark: root.hueColor("yellow")
+                        behind: root.card
+                      }
 
-                        gradient: Gradient {
-                          orientation: Gradient.Horizontal
-                          GradientStop { position: 0.0; color: root.tempColour(day.modelData.low) }
-                          GradientStop { position: 1.0; color: root.tempColour(day.modelData.high) }
+                      Chrome.TypedText {
+                        Layout.preferredWidth: 28
+                        Layout.alignment: Qt.AlignVCenter
+                        role: "caption"
+                        text: (day.modelData.pop !== null && day.modelData.pop >= 10)
+                              ? Forecast.percent(day.modelData.pop) : ""
+                        color: root.hueColor("blue")
+                        bodySize: root.bodySize
+                      }
+
+                      Chrome.TypedText {
+                        Layout.preferredWidth: 28
+                        Layout.alignment: Qt.AlignVCenter
+                        role: "body"
+                        text: Forecast.temperature(day.modelData.low, root.units)
+                        color: root.dim
+                        bodySize: root.bodySize
+                        horizontalAlignment: Text.AlignRight
+                      }
+
+                      // The week on one scale. A bar further to the right is a
+                      // warmer day than the row above it, which is only true
+                      // because every row is measured against the same coldest
+                      // and warmest -- and it is decoration: both ends of it
+                      // carry their own number.
+                      Item {
+                        id: track
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 6
+                        Layout.alignment: Qt.AlignVCenter
+
+                        Rectangle {
+                          anchors.fill: parent
+                          radius: Metrics.round(root.colours, height)
+                          color: Theme.surface(root.colours, "raised")
+                        }
+
+                        Rectangle {
+                          x: day.fraction.from * track.width
+                          width: Math.max(6, (day.fraction.to - day.fraction.from) * track.width)
+                          height: parent.height
+                          radius: Metrics.round(root.colours, height)
+
+                          gradient: Gradient {
+                            orientation: Gradient.Horizontal
+                            GradientStop { position: 0.0; color: root.tempColour(day.modelData.low) }
+                            GradientStop { position: 1.0; color: root.tempColour(day.modelData.high) }
+                          }
                         }
                       }
-                    }
 
-                    Chrome.TypedText {
-                      Layout.preferredWidth: 30
-                      Layout.alignment: Qt.AlignVCenter
-                      role: "body"
-                      text: Forecast.temperature(day.modelData.high, root.units)
-                      color: root.ink
-                      bodySize: root.bodySize
-                      horizontalAlignment: Text.AlignRight
+                      Chrome.TypedText {
+                        Layout.preferredWidth: 30
+                        Layout.alignment: Qt.AlignVCenter
+                        role: "body"
+                        text: Forecast.temperature(day.modelData.high, root.units)
+                        color: root.ink
+                        bodySize: root.bodySize
+                        horizontalAlignment: Text.AlignRight
+                      }
                     }
                   }
                 }
@@ -1126,20 +1244,21 @@ Item {
             visible: root.showingPlaces
             clip: true
             contentWidth: width
-            contentHeight: placesCol.height
+            contentHeight: placesCol.implicitHeight + 32
             flickableDirection: Flickable.VerticalFlick
             boundsBehavior: Flickable.StopAtBounds
 
-            Column {
+            ColumnLayout {
               id: placesCol
-              width: placesView.width
-              topPadding: 8
-              bottomPadding: 24
+              x: Metrics.GUTTER
+              y: Metrics.GAP
+              width: placesView.width - Metrics.GUTTER * 2
+              spacing: Metrics.GAP
 
               Chrome.TextField {
-                x: 12
-                width: parent.width - 24
-                color: root.card
+                Layout.fillWidth: true
+                colours: root.colours
+                level: "card"
                 bodySize: root.bodySize
                 leadingNames: ["system-search-symbolic", "edit-find-symbolic"]
                 trailingNames: root.query.length > 0 ? ["edit-clear-symbolic"] : []
@@ -1162,206 +1281,118 @@ Item {
               // What the geocoder found. Tapping one adds it and shows it,
               // which is the whole of "adding a place" -- there is no second
               // step and nothing to confirm.
-              Repeater {
-                model: root.query.trim().length >= 2 ? root.results : []
+              Chrome.Group {
+                id: hitGroup
+                Layout.fillWidth: true
+                colours: root.colours
+                visible: root.query.trim().length >= 2 && root.results.length > 0
 
-                delegate: Item {
-                  id: hit
-                  required property var modelData
+                Repeater {
+                  model: root.query.trim().length >= 2 ? root.results : []
 
-                  width: placesCol.width
-                  height: 62
-
-                  Rectangle {
-                    anchors.fill: parent
-                    color: hitTap.pressed ? root.pressed : "transparent"
-                  }
-
-                  MouseArea {
-                    id: hitTap
-                    anchors.fill: parent
+                  delegate: Chrome.ListRow {
+                    id: hit
+                    required property var modelData
+                    Layout.fillWidth: true
+                    radius: hitGroup.innerRadius
+                    minHeight: 58
+                    colours: root.colours
+                    bodySize: root.bodySize
+                    title: hit.modelData.name
+                    subtitle: Forecast.where(hit.modelData)
                     onClicked: root.addPlace(hit.modelData)
-                  }
-
-                  Column {
-                    anchors.verticalCenter: parent.verticalCenter
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.leftMargin: 16
-                    anchors.rightMargin: 16
-                    spacing: 1
-
-                    Chrome.TypedText {
-                      width: parent.width
-                      role: "body"
-                      text: hit.modelData.name
-                      color: root.ink
-                      bodySize: root.bodySize
-                      elide: Text.ElideRight
-                      maximumLineCount: 1
-                    }
-
-                    Chrome.TypedText {
-                      width: parent.width
-                      visible: text.length > 0
-                      role: "caption"
-                      text: Forecast.where(hit.modelData)
-                      color: root.dim
-                      bodySize: root.bodySize
-                      elide: Text.ElideRight
-                      maximumLineCount: 1
-                    }
-                  }
-
-                  Rectangle {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
-                    height: 1
-                    color: root.line
                   }
                 }
               }
 
-              Chrome.TypedText {
-                width: parent.width - 48
-                x: 24
-                topPadding: 20
+              Chrome.EmptyState {
+                Layout.fillWidth: true
+                Layout.topMargin: 12
                 visible: root.query.trim().length >= 2 && !root.results.length
-                role: "caption"
-                text: {
-                  if (root.finding) return "Looking…"
-                  if (!root.searched) return ""
-                  return "Nothing is called “" + root.query.trim() + "”."
-                }
-                color: root.dim
+                colours: root.colours
                 bodySize: root.bodySize
-                horizontalAlignment: Text.AlignHCenter
-                wrapMode: Text.WordWrap
+                names: ["system-search-symbolic"]
+                title: root.finding ? "Looking…" : "Nothing found"
+                detail: root.finding
+                        ? "Asking the geocoder for “" + root.query.trim() + "”."
+                        : (root.searched
+                           ? "Nothing is called “" + root.query.trim() + "”."
+                           : "")
               }
 
               // The first run: an empty list is not a state to leave a person
               // looking at without a sentence.
-              Column {
-                width: parent.width - 48
-                x: 24
-                topPadding: 28
-                bottomPadding: 12
-                spacing: 6
-                visible: !root.places.length && root.query.trim().length < 2
-
-                Chrome.TypedText {
-                  width: parent.width
-                  role: "subtitle"
-                  text: "Nowhere yet"
-                  color: root.ink
-                  bodySize: root.bodySize
-                  horizontalAlignment: Text.AlignHCenter
-                }
-
-                Chrome.TypedText {
-                  width: parent.width
-                  role: "caption"
-                  text: "Type a town above — Vienna, Kyoto, Reykjavík — and tap it."
-                  color: root.dim
-                  bodySize: root.bodySize
-                  horizontalAlignment: Text.AlignHCenter
-                  wrapMode: Text.WordWrap
-                }
-              }
-
-              // --- the ones already chosen ------------------------------------
-
-              Chrome.TypedText {
-                x: 16
-                topPadding: 14
-                bottomPadding: 4
-                visible: root.query.trim().length < 2 && root.places.length > 0
-                role: "overline"
-                text: "SAVED"
-                color: root.dim
+              Chrome.EmptyState {
+                Layout.fillWidth: true
+                Layout.topMargin: 12
+                visible: !root.somewhere && root.query.trim().length < 2
+                colours: root.colours
                 bodySize: root.bodySize
+                names: ["mark-location-symbolic"]
+                title: "Nowhere yet"
+                detail: "Type a town above — Vienna, Kyoto, Reykjavík — and tap it."
               }
 
-              Repeater {
-                model: root.query.trim().length < 2 ? root.places : []
+              // One row of either list below. Shared because the two lists
+              // are read as one -- the temperature and the clock line up down
+              // the page -- and differ only in what the button at the end does.
+              Component {
+                id: placeRow
 
-                delegate: Item {
-                  id: saved
+                Chrome.ListRow {
+                  id: row
+                  // A saved place, or `{ here: true }` for the phone's own row,
+                  // whose town is `root.here` and may not be known yet.
                   required property var modelData
+                  readonly property bool isHere: row.modelData.here === true
+                  readonly property var shows: row.isHere ? root.here : row.modelData
+                  readonly property string key: row.isHere ? Store.HERE : row.modelData.id
+                  readonly property string cached: row.shows ? row.shows.id : ""
+                  readonly property bool isCurrent: row.key === root.currentId
 
-                  width: placesCol.width
-                  height: 60
-
-                  readonly property bool isCurrent: saved.modelData.id === root.currentId
-
-                  Rectangle {
-                    anchors.fill: parent
-                    color: savedTap.pressed ? root.pressed
-                         : (saved.isCurrent ? root.card : "transparent")
+                  Layout.fillWidth: true
+                  radius: Metrics.inner(Metrics.radius(root.colours, Metrics.RADIUS_LG),
+                                        Metrics.GROUP_PAD)
+                  minHeight: 58
+                  colours: root.colours
+                  bodySize: root.bodySize
+                  selected: row.isCurrent && !!row.shows
+                  title: row.shows
+                         ? row.shows.name
+                         : (root.locating ? "Finding where you are…" : "Not found yet")
+                  subtitle: {
+                    if (row.shows) return Forecast.where(row.shows)
+                    if (root.offline) return "This run is offline."
+                    return root.lost || "Asking GeoJS where this connection is."
+                  }
+                  onClicked: {
+                    if (row.shows) root.selectPlace(row.key)
+                    else root.findHere(true)
                   }
 
-                  MouseArea {
-                    id: savedTap
-                    anchors.fill: parent
-                    onClicked: root.selectPlace(saved.modelData.id)
-                  }
-
-                  RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 16
-                    anchors.rightMargin: 4
-                    spacing: 8
-
-                    Column {
-                      Layout.fillWidth: true
-                      Layout.alignment: Qt.AlignVCenter
-                      spacing: 1
-
-                      Chrome.TypedText {
-                        width: parent.width
-                        role: "body"
-                        text: saved.modelData.name
-                        color: root.ink
-                        bodySize: root.bodySize
-                        elide: Text.ElideRight
-                        maximumLineCount: 1
-                      }
-
-                      Chrome.TypedText {
-                        width: parent.width
-                        visible: text.length > 0
-                        role: "caption"
-                        text: Forecast.where(saved.modelData)
-                        color: root.dim
-                        bodySize: root.bodySize
-                        elide: Text.ElideRight
-                        maximumLineCount: 1
-                      }
-                    }
-
+                  trailing: [
                     Sky {
-                      Layout.preferredWidth: 24
-                      Layout.preferredHeight: 24
-                      Layout.alignment: Qt.AlignVCenter
-                      visible: root.glyphAt(saved.modelData.id).length > 0
-                      kind: root.glyphAt(saved.modelData.id) || "cloud"
+                      anchors.verticalCenter: parent.verticalCenter
+                      visible: root.glyphAt(row.cached).length > 0
+                      width: 24
+                      height: 24
+                      kind: root.glyphAt(row.cached) || "cloud"
                       size: 24
                       ink: root.ink
                       accent: root.hueColor("blue")
                       spark: root.hueColor("yellow")
-                      behind: saved.isCurrent ? root.card : root.background
-                    }
-
+                      behind: row.selected
+                              ? Theme.surface(root.colours, "raised") : root.card
+                    },
                     Column {
-                      Layout.preferredWidth: 52
-                      Layout.alignment: Qt.AlignVCenter
+                      anchors.verticalCenter: parent.verticalCenter
+                      width: 52
                       spacing: 0
 
                       Chrome.TypedText {
                         width: parent.width
                         role: "body"
-                        text: root.tempAt(saved.modelData.id)
+                        text: root.tempAt(row.cached)
                         color: root.ink
                         bodySize: root.bodySize
                         horizontalAlignment: Text.AlignRight
@@ -1371,43 +1402,82 @@ Item {
                         width: parent.width
                         visible: text.length > 0
                         role: "caption"
-                        text: root.clockAt(saved.modelData.id)
+                        text: root.clockAt(row.cached)
                         color: root.dim
                         bodySize: root.bodySize
                         horizontalAlignment: Text.AlignRight
                       }
-                    }
-
+                    },
+                    // A town somebody typed can be removed. The phone's own
+                    // place cannot -- the switch at the bottom of the page is
+                    // how that goes -- so its button asks again instead.
                     Chrome.IconButton {
-                      Layout.alignment: Qt.AlignVCenter
+                      colours: root.colours
+                      anchors.verticalCenter: parent.verticalCenter
+                      slot: 36
                       color: root.dim
-                      names: ["user-trash-symbolic"]
-                      tooltip: "Remove " + saved.modelData.name
-                      onClicked: root.removePlace(saved.modelData.id)
+                      names: row.isHere ? ["view-refresh-symbolic"] : ["user-trash-symbolic"]
+                      tooltip: row.isHere
+                               ? "Look up where this connection is again"
+                               : "Remove " + row.modelData.name
+                      spinning: row.isHere && root.locating
+                      onClicked: {
+                        if (row.isHere) root.findHere(true)
+                        else root.removePlace(row.modelData.id)
+                      }
                     }
-                  }
+                  ]
+                }
+              }
 
-                  Rectangle {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
-                    height: 1
-                    color: root.line
-                  }
+              // --- where the phone is -----------------------------------------
+
+              Chrome.Section {
+                Layout.fillWidth: true
+                Layout.topMargin: 4
+                visible: root.query.trim().length < 2 && root.locate
+                colours: root.colours
+                bodySize: root.bodySize
+                title: "Where you are"
+                pad: Metrics.GROUP_PAD
+                radius: Metrics.radius(root.colours, Metrics.RADIUS_LG)
+                cardSpacing: 0
+
+                Repeater {
+                  model: root.query.trim().length < 2 && root.locate ? [{ here: true }] : []
+                  delegate: placeRow
+                }
+              }
+
+              // --- the ones already chosen ------------------------------------
+
+              Chrome.Section {
+                Layout.fillWidth: true
+                Layout.topMargin: 4
+                visible: root.query.trim().length < 2 && root.places.length > 0
+                colours: root.colours
+                bodySize: root.bodySize
+                title: "Saved"
+                pad: Metrics.GROUP_PAD
+                radius: Metrics.radius(root.colours, Metrics.RADIUS_LG)
+                cardSpacing: 0
+
+                Repeater {
+                  model: root.query.trim().length < 2 ? root.places : []
+                  delegate: placeRow
                 }
               }
 
               // --- degrees in which scale ------------------------------------
 
-              Item {
-                width: parent.width
-                height: 64
+              Chrome.Card {
+                Layout.fillWidth: true
+                Layout.topMargin: 4
                 visible: root.query.trim().length < 2
+                colours: root.colours
 
                 RowLayout {
-                  anchors.fill: parent
-                  anchors.leftMargin: 16
-                  anchors.rightMargin: 16
+                  Layout.fillWidth: true
                   spacing: 8
 
                   Chrome.TypedText {
@@ -1422,43 +1492,60 @@ Item {
                   Repeater {
                     model: [{ name: "metric", label: "°C" }, { name: "imperial", label: "°F" }]
 
-                    delegate: Chrome.Pill {
-                      id: pill
+                    delegate: Chrome.Chip {
+                      id: unitChip
                       required property var modelData
-
-                      readonly property bool on: root.units === pill.modelData.name
-
                       Layout.preferredWidth: 58
-                      Layout.preferredHeight: Metrics.TARGET - 6
                       Layout.alignment: Qt.AlignVCenter
-                      text: pill.modelData.label
-                      color: pill.on ? Theme.mix(root.colours.accent, root.colours.background, 0.22)
-                                     : root.card
-                      ink: pill.on ? root.accent : root.dim
+                      colours: root.colours
                       bodySize: root.bodySize
-                      onClicked: root.setUnits(pill.modelData.name)
+                      text: unitChip.modelData.label
+                      on: root.units === unitChip.modelData.name
+                      onClicked: root.setUnits(unitChip.modelData.name)
 
-                      Accessible.role: Accessible.RadioButton
-                      Accessible.name: pill.modelData.name === "metric" ? "Celsius" : "Fahrenheit"
-                      Accessible.checked: pill.on
+                      Accessible.name: unitChip.modelData.name === "metric"
+                                       ? "Celsius" : "Fahrenheit"
                     }
                   }
                 }
               }
 
-              // The one thing this app will not do, said once, where somebody
-              // would be looking for it.
-              Chrome.TypedText {
-                x: 16
-                width: parent.width - 32
-                topPadding: 4
+              // The one thing this app asks about the phone, with who is asked
+              // and how close the answer gets, beside the switch that stops it
+              // -- which is where somebody would be looking for both.
+              Chrome.Card {
+                Layout.fillWidth: true
                 visible: root.query.trim().length < 2
-                role: "caption"
-                text: "Nothing here asks where the phone is. A place is on this "
-                      + "list because you typed it."
-                color: root.dim
-                bodySize: root.bodySize
-                wrapMode: Text.WordWrap
+                colours: root.colours
+                spacing: 0
+
+                Chrome.Check {
+                  Layout.fillWidth: true
+                  // The box is centred in a 44px target, so its edge is 11px
+                  // inside the card's padding. Pulled back by that, it lines up
+                  // with the sentence under it rather than starting a column
+                  // of its own.
+                  Layout.leftMargin: -(Metrics.TARGET - Metrics.CHECK) / 2
+                  colours: root.colours
+                  text: "Show where I am"
+                  checked: root.locate
+                  foreground: root.ink
+                  tickColor: Theme.inkOn(root.colours, root.accent)
+                  accent: root.accent
+                  dim: root.dim
+                  bodySize: root.bodySize
+                  onToggled: function (on) { root.setLocate(on) }
+                }
+
+                Chrome.TypedText {
+                  Layout.fillWidth: true
+                  role: "caption"
+                  text: "Looked up from this connection’s address, by GeoJS. It finds a "
+                        + "town, not a street — and on mobile data, not always yours."
+                  color: root.dim
+                  bodySize: root.bodySize
+                  wrapMode: Text.WordWrap
+                }
               }
             }
           }

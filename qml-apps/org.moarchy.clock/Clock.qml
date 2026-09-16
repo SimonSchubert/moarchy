@@ -57,15 +57,7 @@ Item {
   // `colours` and not `palette`: QQuickItem already has a `palette`, and
   // shadowing it makes a binding resolve to whichever the compiler picked.
   readonly property var colours: themeFile.colours
-  readonly property int radiusCard: uiFile.radiusCard
   property int bodySize: Metrics.BODY
-
-  // The kit pill, with this app's defaults. Colour still comes in per call.
-  component Pill: Chrome.Pill {
-    implicitHeight: Metrics.TARGET + 6
-    pad: 18
-    bodySize: root.bodySize
-  }
 
   Component.onCompleted: {
     root.bodySize = Metrics.shellBody(root)
@@ -183,7 +175,6 @@ Item {
   readonly property color background: root.colours.background
   readonly property color ink: root.colours.foreground
   readonly property color dim: root.colours.dim
-  readonly property color line: root.colours.line
   readonly property color accent: root.colours.accent
 
   function hue(name: string): color {
@@ -894,7 +885,6 @@ Item {
   }
 
   Chrome.ThemeFile { id: themeFile }
-  Chrome.UiFile { id: uiFile }
 
   IpcHandler {
     target: "clock"
@@ -933,32 +923,6 @@ Item {
     }
   }
 
-  // --- the band behind the dial ---------------------------------------------
-
-  // The hero's colour is the hour's, mixed from the theme's own hues: a wash of
-  // orange before nine, of cyan through the day, of magenta at dusk and of
-  // blue at night, weaker after dark because the same wash that reads as
-  // daylight at a fifth reads as a fault at midnight.
-  //
-  // Weather does this with the temperature and for the same argument: it is
-  // the one thing on the screen somebody reads without looking at it. Not
-  // `readonly`, though nothing but this binding writes it -- a Behavior is an
-  // interceptor on writes and Quickshell refuses to attach one to a read-only
-  // property, with an error that names the property and not the reason.
-  property color heroWash: {
-    var hour = new Date(root.now).getHours()
-    var name = "blue"
-    if (hour >= 5 && hour < 9) name = "orange"
-    else if (hour >= 9 && hour < 17) name = "cyan"
-    else if (hour >= 17 && hour < 21) name = "magenta"
-    var day = hour >= 6 && hour < 20
-    return Theme.mix(root.hue(name), root.colours.background, day ? 0.2 : 0.12)
-  }
-
-  // Dusk turning into night moves this colour across the top of the screen. A
-  // quarter of a second of it reads as the screen catching up; a jump reads as
-  // a redraw.
-  Behavior on heroWash { ColorAnimation { duration: 260 } }
 
   // The days, in the order this phone's week runs. Qt numbers Sunday 0, which
   // is also how `Date.getDay()` numbers it, so the two agree without a map.
@@ -1037,12 +1001,14 @@ Item {
           Layout.fillWidth: true
           Layout.preferredHeight: Metrics.TARGET + 12
 
-          // The bar is the top of the band rather than a strip above it: the
-          // dial scrolls away under it and the colour stays, which is what
-          // makes the hero look like one piece.
+          // The window's own background, the same colour as the status bar
+          // above it. This used to be the top of a band washed in a hue that
+          // followed the hour, and the shell does not draw an app under the
+          // status bar -- so the wash stopped at its bottom edge in a hard
+          // line across the top of the screen.
           Rectangle {
             anchors.fill: parent
-            color: root.page === 0 && !root.editing ? root.heroWash : root.background
+            color: root.background
           }
 
           Chrome.AppBar {
@@ -1056,6 +1022,7 @@ Item {
             subtitle: root.editing ? "" : root.subtitleText()
 
             leading: Chrome.BackButton {
+              colours: root.colours
               visible: root.editing
               color: root.ink
               onClicked: { root.draft = null; root.armed = false }
@@ -1065,6 +1032,7 @@ Item {
               // The bin is in the editor's own bar rather than on the row,
               // where it would be a 44px target next to a switch.
               Chrome.IconButton {
+                colours: root.colours
                 visible: root.editing && !root.draftIsNew
                 names: ["user-trash-symbolic", "edit-delete-symbolic"]
                 color: root.armed ? root.danger : root.ink
@@ -1072,6 +1040,7 @@ Item {
                 onClicked: root.deleteDraft()
               },
               Chrome.IconButton {
+                colours: root.colours
                 visible: root.editing
                 names: ["object-select-symbolic"]
                 color: root.accent
@@ -1079,6 +1048,7 @@ Item {
                 onClicked: root.saveDraft()
               },
               Chrome.IconButton {
+                colours: root.colours
                 visible: !root.editing
                 names: ["view-more-symbolic", "open-menu-symbolic"]
                 color: root.ink
@@ -1119,15 +1089,21 @@ Item {
                 // whatever that comes to. No loop: `rest` measures its own
                 // children and the Flickable's height is the viewport, which
                 // does not depend on what is in it.
-                height: Math.max(236, alarmPage.height - rest.height)
-
-                gradient: Gradient {
-                  GradientStop { position: 0.0; color: root.heroWash }
-                  GradientStop { position: 0.58; color: root.heroWash }
-                  GradientStop { position: 1.0; color: root.background }
-                }
+                //
+                // `heroBlock.height` is the third term and it is the one that
+                // matters on a short screen. With no alarms `rest` is nothing,
+                // so the band took the viewport exactly -- and the column
+                // centred in it, which is then dial plus clock plus an
+                // EmptyState, was taller than that and hung out of both ends
+                // with nothing to scroll to, because the content was exactly
+                // as tall as the viewport. Found on the phone, where the
+                // keyboard leaves an app 494px rather than 714.
+                height: Math.max(236, heroBlock.height + 24,
+                                 alarmPage.height - rest.height)
+                color: root.background
 
                 Column {
+                  id: heroBlock
                   anchors.centerIn: parent
                   width: parent.width
                   spacing: 6
@@ -1143,7 +1119,7 @@ Item {
                     ink: root.ink
                     dim: root.dim
                     accent: root.accent
-                    behind: root.heroWash
+                    behind: root.background
                     sweeping: !root.pinned && clockWindow.visible
                               && root.page === 0 && !root.editing
                   }
@@ -1181,49 +1157,6 @@ Item {
                     horizontalAlignment: Text.AlignHCenter
                   }
 
-                  // "No alarms" belongs *in* this column rather than in a block
-                  // of its own below it. With nothing on the list the band owns
-                  // the whole page, and a column centred in the page puts the
-                  // dial and the sentence about it either side of the middle --
-                  // which is what "centred" means for this screen. As its own
-                  // block it could only ever be centred in the room left over,
-                  // which put the dial a quarter of the way down.
-                  Item {
-                    width: 1
-                    height: 14
-                    visible: !root.ordered.length
-                  }
-
-                  Chrome.Icon {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    visible: !root.ordered.length
-                    slot: 48
-                    size: 34
-                    color: Theme.alpha(root.dim, 0.7)
-                    names: [Qt.resolvedUrl("glyph-alarm.svg"), "alarm-symbolic"]
-                  }
-
-                  Chrome.TypedText {
-                    width: parent.width
-                    visible: !root.ordered.length
-                    role: "body"
-                    text: "No alarms"
-                    color: root.ink
-                    bodySize: root.bodySize
-                    horizontalAlignment: Text.AlignHCenter
-                  }
-
-                  Chrome.TypedText {
-                    x: 32
-                    width: parent.width - 64
-                    visible: !root.ordered.length
-                    role: "caption"
-                    text: "This one cannot wake a sleeping phone — it rings when "
-                          + "the phone is awake, and says how late it is."
-                    color: root.dim
-                    bodySize: root.bodySize
-                    horizontalAlignment: Text.AlignHCenter
-                  }
                 }
               }
 
@@ -1237,6 +1170,37 @@ Item {
                 id: rest
                 width: alarmCol.width
 
+                // --- nothing on the list ---
+                //
+                // Below the dial rather than inside it. It used to be the last
+                // item in the hero's own centred column, on the argument that
+                // with an empty list the band owns the page and the dial and
+                // the sentence should sit either side of its middle. That is
+                // true at 714px and false at 494 -- which is what an app
+                // actually gets on the phone with the keyboard up, and there
+                // the dial, the clock and a box of text came to more than the
+                // viewport and the box was cut off by the tab bar. Down here it
+                // is measured as part of `rest`, so the band gives up exactly
+                // the room it needs.
+                Item {
+                  width: parent.width
+                  height: blank.height + 20
+                  visible: !root.ordered.length
+
+                  Chrome.EmptyState {
+                    id: blank
+                    x: Metrics.GUTTER
+                    y: 4
+                    width: parent.width - Metrics.GUTTER * 2
+                    colours: root.colours
+                    bodySize: root.bodySize
+                    names: [Qt.resolvedUrl("glyph-alarm.svg"), "alarm-symbolic"]
+                    title: "No alarms"
+                    detail: "This one cannot wake a sleeping phone — it rings when "
+                            + "the phone is awake, and says how late it is."
+                  }
+                }
+
                 // --- an alarm that did not ring ---
                 Item {
                   width: parent.width
@@ -1248,7 +1212,7 @@ Item {
                     x: 12
                     width: parent.width - 24
                     height: Math.max(Metrics.TARGET, noteText.implicitHeight + 20)
-                    radius: root.radiusCard
+                    radius: Metrics.radius(root.colours, Metrics.CARD_RADIUS)
                     color: root.wash(root.hue("orange"), 0.16)
 
                     Chrome.TypedText {
@@ -1265,6 +1229,7 @@ Item {
                     }
 
                     Chrome.IconButton {
+                      colours: root.colours
                       anchors.verticalCenter: parent.verticalCenter
                       anchors.right: parent.right
                       names: ["window-close-symbolic"]
@@ -1294,7 +1259,7 @@ Item {
                       anchors.rightMargin: 12
                       anchors.topMargin: 4
                       anchors.bottomMargin: 4
-                      radius: root.radiusCard
+                      radius: Metrics.radius(root.colours, Metrics.CARD_RADIUS)
                       // An alarm that is off is drawn on a fainter card as well
                       // as with a switch to the left. One signal is a switch
                       // somebody has to look for.
@@ -1377,7 +1342,8 @@ Item {
                           }
                         }
 
-                        Chrome.Switch {
+                        Toggle {
+                          colours: root.colours
                           anchors.verticalCenter: parent.verticalCenter
                           checked: alarmRow.modelData.enabled
                           accent: root.accent
@@ -1412,9 +1378,15 @@ Item {
                 // more. The tab bar and the shell's own strip are outside this
                 // Flickable already, so counting them here would have left a
                 // screenful of nothing under the last alarm.
+                //
+                // Unconditional, though it used to be only when there were
+                // alarms to clear. The empty state is the last thing on the
+                // page too, and without this the plus sat on the middle of the
+                // sentence explaining what the alarm cannot do -- which is the
+                // one sentence on that screen somebody needs to read.
                 Item {
                   width: 1
-                  height: root.ordered.length ? 24 + Metrics.FAB : 0
+                  height: 24 + Metrics.FAB
                 }
               }
             }
@@ -1440,11 +1412,23 @@ Item {
               Item { width: 1; height: 4 }
 
               // --- the time ---
+              //
+              // The wheels and the sentence under them are one box, because
+              // the sentence is what the wheels *mean*. A caption floating on
+              // the window under a control is the loose text this phone does
+              // not have any more.
+              Chrome.Card {
+                x: Metrics.GUTTER
+                width: editorCol.width - Metrics.GUTTER * 2
+                colours: root.colours
+                spacing: 6
+
               Row {
-                anchors.horizontalCenter: parent.horizontalCenter
+                Layout.alignment: Qt.AlignHCenter
                 spacing: 2
 
                 Wheel {
+                  colours: root.colours
                   anchors.verticalCenter: parent.verticalCenter
                   count: root.hour24 ? 24 : 12
                   from: root.hour24 ? 0 : 1
@@ -1473,6 +1457,7 @@ Item {
                 }
 
                 Wheel {
+                  colours: root.colours
                   anchors.verticalCenter: parent.verticalCenter
                   count: 60
                   value: root.draft ? root.draft.minute : 0
@@ -1503,7 +1488,7 @@ Item {
 
                       width: 50
                       height: 40
-                      radius: 8
+                      radius: Metrics.radius(root.colours, Metrics.RADIUS_SM)
                       color: half.on ? root.accent : "transparent"
 
                       Chrome.TypedText {
@@ -1531,7 +1516,7 @@ Item {
               // which is the question somebody setting an alarm at midnight
               // actually has.
               Chrome.TypedText {
-                width: parent.width
+                Layout.fillWidth: true
                 role: "caption"
                 // Always a sentence, never an empty one. An alarm that is on
                 // always has a next time -- Alarms.normalise() is what
@@ -1547,16 +1532,22 @@ Item {
                 bodySize: root.bodySize
                 horizontalAlignment: Text.AlignHCenter
               }
+              }
 
               // --- how often ---
               // A Flow and not a Row: at the default text size the four fit
               // on one line, and on a phone whose Settings have been turned up
-              // they wrap rather than run off the edge. Measured at 360px --
-              // the four come to 314 of the 336 available, which is why the
-              // padding below is 9 and not the 18 every other Pill here uses.
+              // they wrap rather than run off the edge.
+              Chrome.Section {
+                x: Metrics.GUTTER
+                width: editorCol.width - Metrics.GUTTER * 2
+                colours: root.colours
+                bodySize: root.bodySize
+                title: "Repeats"
+                cardSpacing: 10
+
               Flow {
-                width: parent.width - 24
-                x: 12
+                Layout.fillWidth: true
                 spacing: 6
 
                 Repeater {
@@ -1567,19 +1558,16 @@ Item {
                     { text: "Weekends", days: [0, 6] }
                   ]
 
-                  Pill {
+                  Chrome.Chip {
                     id: preset
                     required property var modelData
 
-                    readonly property bool on:
-                      root.draft ? Alarms.sameDays(root.draft.days, preset.modelData.days) : false
-
+                    colours: root.colours
                     text: preset.modelData.text
-                    role: "caption"
-                    pad: 9
+                    pad: 11
                     implicitHeight: 38
-                    color: preset.on ? root.wash(root.accent, 0.22) : root.card
-                    ink: preset.on ? root.accent : root.dim
+                    on: root.draft
+                        ? Alarms.sameDays(root.draft.days, preset.modelData.days) : false
                     bodySize: root.bodySize
                     onClicked: root.setRepeat(preset.modelData.days)
                   }
@@ -1588,7 +1576,7 @@ Item {
 
               // --- which days ---
               Row {
-                anchors.horizontalCenter: parent.horizontalCenter
+                Layout.alignment: Qt.AlignHCenter
                 spacing: 4
 
                 Repeater {
@@ -1603,8 +1591,11 @@ Item {
 
                     width: 38
                     height: 38
-                    radius: width / 2
-                    color: chip.on ? root.accent : root.card
+                    radius: Metrics.round(root.colours, width)
+                    // A step above the card they sit in, not the same colour
+                    // as it: inside the Repeats box, `card` was a circle you
+                    // could not see until it was chosen.
+                    color: chip.on ? root.accent : Theme.surface(root.colours, "raised")
 
                     Accessible.role: Accessible.CheckBox
                     Accessible.name: Alarms.DAY_SHORT[chip.modelData]
@@ -1640,11 +1631,18 @@ Item {
                 }
               }
 
+              }
+
               // --- what it is for ---
+              Chrome.Card {
+                x: Metrics.GUTTER
+                width: editorCol.width - Metrics.GUTTER * 2
+                colours: root.colours
+                spacing: 6
+
               Chrome.TextField {
                 id: labelField
-                width: parent.width - 24
-                x: 12
+                Layout.fillWidth: true
                 // Not bound to the draft. Typing writes `text`, and a write
                 // breaks a binding -- so a field bound to the draft would go
                 // dead the moment somebody used it, and the next alarm opened
@@ -1656,7 +1654,7 @@ Item {
                 iconColor: root.dim
                 placeholderColor: root.dim
                 bodySize: root.bodySize
-                color: root.card
+                colours: root.colours
                 leadingNames: ["document-edit-symbolic", "edit-find-symbolic"]
                 onTextChanged: if (root.draft && labelField.text !== root.draft.label)
                                  root.change("label", labelField.text)
@@ -1664,13 +1662,14 @@ Item {
               }
 
               Chrome.TypedText {
-                width: parent.width - 24
-                x: 12
+                Layout.fillWidth: true
                 visible: root.armed
                 role: "caption"
                 text: "Tap the bin again to delete this alarm."
                 color: root.danger
                 bodySize: root.bodySize
+                wrapMode: Text.WordWrap
+              }
               }
 
               Item { width: 1; height: 16 + root.shellFurniture }
@@ -1744,49 +1743,60 @@ Item {
               Layout.bottomMargin: 10
               spacing: 12
 
-              Pill {
+              Chrome.Button {
                 // Lap while it runs, Reset once it has stopped: the same key,
                 // because the two are never wanted at the same moment and a
                 // third button would be one nobody could find in a hurry.
+                colours: root.colours
+                kind: "tonal"
                 text: root.watch.running ? "Lap" : "Reset"
                 enabled: root.watch.running || root.elapsed > 0
-                color: root.card
-                ink: root.ink
                 bodySize: root.bodySize
                 pad: 24
                 onClicked: root.watch.running ? root.watchLap() : root.watchReset()
               }
 
-              Pill {
+              Chrome.Button {
+                colours: root.colours
+                kind: "filled"
+                destructive: root.watch.running
                 text: root.watch.running ? "Stop" : (root.elapsed > 0 ? "Resume" : "Start")
-                color: root.watch.running ? root.wash(root.danger, 0.9) : root.accent
-                ink: root.watch.running ? root.background : root.accentInk
                 bodySize: root.bodySize
                 pad: 28
                 onClicked: root.watch.running ? root.watchStop() : root.watchStart()
               }
             }
 
-            Rectangle {
+            // A gap, not a rule. The laps below are their own box; the
+            // stopwatch above them does not need a line drawn under it to be
+            // a different thing.
+            Item {
               Layout.fillWidth: true
-              Layout.preferredHeight: root.watch.laps.length ? 1 : 0
-              visible: root.watch.laps.length > 0
-              color: root.line
+              Layout.preferredHeight: root.watch.laps.length ? Metrics.GAP : 0
             }
 
-            ListView {
-              id: lapList
+            Chrome.ListFrame {
+              id: lapFrame
               Layout.fillWidth: true
+              Layout.leftMargin: Metrics.GUTTER
+              Layout.rightMargin: Metrics.GUTTER
+              Layout.bottomMargin: root.watch.laps.length ? Metrics.GAP : 0
               // Only when there is something in it. An empty ListView that
               // fills would take the slack the two spacers are there to share.
               Layout.fillHeight: root.watch.laps.length > 0
               Layout.preferredHeight: 0
+              visible: root.watch.laps.length > 0
+              colours: root.colours
+
+            ListView {
+              id: lapList
+              anchors.fill: parent
               clip: true
               model: root.laps
               boundsBehavior: Flickable.StopAtBounds
               // The newest lap is at the top, which is where the eye already
               // is; nothing scrolls under a thumb that is about to tap Lap.
-              footer: Item { width: 1; height: root.shellFurniture + 8 }
+              footer: Item { width: 1; height: 8 }
 
               delegate: Item {
                 id: lapRow
@@ -1800,8 +1810,8 @@ Item {
 
                 Row {
                   anchors.fill: parent
-                  anchors.leftMargin: 16
-                  anchors.rightMargin: 16
+                  anchors.leftMargin: Metrics.GAP
+                  anchors.rightMargin: Metrics.GAP
 
                   Chrome.TypedText {
                     anchors.verticalCenter: parent.verticalCenter
@@ -1841,6 +1851,7 @@ Item {
                   }
                 }
               }
+            }
             }
 
             Item {
@@ -1914,28 +1925,29 @@ Item {
                   anchors.horizontalCenter: parent.horizontalCenter
                   spacing: 10
 
-                  Pill {
+                  Chrome.Button {
+                    colours: root.colours
+                    kind: "tonal"
                     text: "+1 min"
-                    color: root.card
-                    ink: root.ink
                     bodySize: root.bodySize
                     pad: 16
                     onClicked: root.timerAdd()
                   }
 
-                  Pill {
+                  Chrome.Button {
+                    colours: root.colours
+                    kind: "filled"
                     text: root.timer.running ? "Pause" : "Resume"
-                    color: root.accent
-                    ink: root.accentInk
                     bodySize: root.bodySize
                     pad: 20
                     onClicked: root.timer.running ? root.timerPause() : root.timerResume()
                   }
 
-                  Pill {
+                  Chrome.Button {
+                    colours: root.colours
+                    kind: "tonal"
+                    destructive: true
                     text: "Cancel"
-                    color: root.wash(root.danger, 0.16)
-                    ink: root.danger
                     bodySize: root.bodySize
                     pad: 16
                     onClicked: root.timerCancel()
@@ -1985,16 +1997,13 @@ Item {
                 Repeater {
                   model: Watch.PRESETS
 
-                  Pill {
+                  Chrome.Chip {
                     id: chipPreset
                     required property int modelData
 
+                    colours: root.colours
                     text: Watch.spanLabel(chipPreset.modelData * 1000)
-                    role: "caption"
-                    pad: 11
-                    implicitHeight: 34
-                    color: root.card
-                    ink: root.ink
+                    pad: 13
                     bodySize: root.bodySize
                     onClicked: root.keyPreset(chipPreset.modelData)
                   }
@@ -2027,7 +2036,7 @@ Item {
                       // typed in the same hurry a sum is.
                       width: 100
                       height: 58
-                      radius: 14
+                      radius: Metrics.radius(root.colours, Metrics.RADIUS_MD)
                       color: key.modelData.key < 0
                         ? root.wash(root.dim, 0.1)
                         : Theme.mix(root.colours.foreground, root.colours.background,
@@ -2076,13 +2085,13 @@ Item {
                 }
               }
 
-              Pill {
+              Chrome.Button {
                 Layout.alignment: Qt.AlignHCenter
                 Layout.topMargin: 14
+                colours: root.colours
+                kind: "filled"
                 text: "Start"
                 enabled: root.typed > 0
-                color: root.accent
-                ink: root.accentInk
                 bodySize: root.bodySize
                 pad: 46
                 onClicked: root.timerStart()
@@ -2095,75 +2104,55 @@ Item {
 
         // --- the three screens, along the bottom ---------------------------
 
-        Rectangle {
+        // The tab bar, flush with the bottom of the window as it is in every
+        // other app here with one.
+        //
+        // It used to be the top 56px of a taller bar whose background ran on
+        // for another 60 underneath, kept clear for the gesture bar and
+        // moarchy-keyboard's toggle -- layer surfaces that draw over an app
+        // and take the taps that land on them. On the phone that read as a
+        // band of nothing under the tabs, in two apps out of seven. The toggle
+        // does sit over part of the Timer tab now, as it already did over the
+        // right-hand tab in Files, Coins, Launches and Vitals; that is the
+        // shell's to fix with an exclusive zone, once.
+        Chrome.BottomNav {
+          id: bottomNav
           Layout.fillWidth: true
-          Layout.preferredHeight: root.editing ? 0 : 1
-          visible: !root.editing
-          color: root.line
-        }
-
-        // The tab bar, and the strip the shell keeps underneath it.
-        //
-        // One item and not two. The bar's *background* runs to the bottom edge
-        // of the window; its three tabs sit in the top 56px of it. That is the
-        // only arrangement that satisfies both constraints at once: nothing the
-        // shell draws over this can steal a tap -- the gesture bar and
-        // moarchy-keyboard's toggle are layer surfaces, and Calculator measured
-        // the strip they occupy at 60px -- and there is no band of window
-        // colour below the bar with nothing in it.
-        //
-        // Reserving that strip as its own empty Item was the first arrangement,
-        // and on the phone it read as exactly what it was: a gap.
-        //
-        // Only inside the shell, where `shell` is not null. On a laptop there
-        // is no furniture down there and `shellFurniture` is zero, so the bar
-        // is 56px and still flush with the bottom.
-        Rectangle {
-          Layout.fillWidth: true
-          Layout.preferredHeight: root.editing
-            ? 0 : Metrics.BOTTOM_NAV + root.shellFurniture
+          Layout.preferredHeight: root.editing ? 0 : Metrics.BOTTOM_NAV
           visible: !root.editing
           color: root.background
+          dim: root.dim
+          accent: root.accent
+          bodySize: root.bodySize
+          currentIndex: root.page
+          onActivated: function (i) { root.page = i }
 
-          Chrome.BottomNav {
-            id: bottomNav
-            anchors.top: parent.top
-            anchors.left: parent.left
-            anchors.right: parent.right
-            height: Metrics.BOTTOM_NAV
-            color: root.background
-            dim: root.dim
-            accent: root.accent
-            bodySize: root.bodySize
-            currentIndex: root.page
-            onActivated: function (i) { root.page = i }
+          Chrome.BottomNavItem {
+            text: "Alarm"
+            names: [Qt.resolvedUrl("glyph-alarm.svg"), "alarm-symbolic"]
+            onActivated: bottomNav.selectItem(this)
+          }
 
-            Chrome.BottomNavItem {
-              text: "Alarm"
-              names: [Qt.resolvedUrl("glyph-alarm.svg"), "alarm-symbolic"]
-              onActivated: bottomNav.selectItem(this)
-            }
+          Chrome.BottomNavItem {
+            text: "Stopwatch"
+            names: [Qt.resolvedUrl("glyph-stopwatch.svg"), "preferences-system-time-symbolic"]
+            onActivated: bottomNav.selectItem(this)
+          }
 
-            Chrome.BottomNavItem {
-              text: "Stopwatch"
-              names: [Qt.resolvedUrl("glyph-stopwatch.svg"), "preferences-system-time-symbolic"]
-              onActivated: bottomNav.selectItem(this)
-            }
-
-            Chrome.BottomNavItem {
-              text: "Timer"
-              names: [Qt.resolvedUrl("glyph-hourglass.svg"), "alarm-symbolic"]
-              onActivated: bottomNav.selectItem(this)
-            }
+          Chrome.BottomNavItem {
+            text: "Timer"
+            names: [Qt.resolvedUrl("glyph-hourglass.svg"), "alarm-symbolic"]
+            onActivated: bottomNav.selectItem(this)
           }
         }
       }
 
       Chrome.Fab {
+        colours: root.colours
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.rightMargin: 16
-        anchors.bottomMargin: 16 + Metrics.BOTTOM_NAV + root.shellFurniture
+        anchors.bottomMargin: 16 + Metrics.BOTTOM_NAV
         visible: root.page === 0 && !root.editing && !root.ringing
         accent: root.accent
         foreground: root.accentInk
@@ -2176,23 +2165,25 @@ Item {
         id: toast
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: 12 + (root.editing ? 0 : Metrics.BOTTOM_NAV)
-                              + root.shellFurniture
+        // Above the tab bar where there is one. The editor has none, so there
+        // the toast clears the shell's furniture instead.
+        anchors.bottomMargin: 12 + (root.editing
+                                    ? root.shellFurniture : Metrics.BOTTOM_NAV)
         colours: root.colours
         bodySize: root.bodySize
       }
 
       Chrome.ContextMenu {
         open: root.menuOpen
-        background: root.colours.raised
-        line: root.line
+        colours: root.colours
+        background: root.background
         foreground: root.ink
         danger: root.danger
         bodySize: root.bodySize
-        radiusCard: root.radiusCard
         onDismissed: root.menuOpen = false
 
         Chrome.MenuItem {
+          colours: root.colours
           text: "24-hour clock"
           names: root.hour24 ? ["object-select-symbolic"] : []
           foreground: root.ink
@@ -2201,6 +2192,7 @@ Item {
         }
 
         Chrome.MenuItem {
+          colours: root.colours
           text: "Silent ring"
           names: root.settings.silent ? ["object-select-symbolic"] : []
           foreground: root.ink
@@ -2230,11 +2222,11 @@ Item {
         readonly property color ringHue: root.ringing && root.ringing.kind === "timer"
           ? root.hue("green") : root.accent
 
-        gradient: Gradient {
-          GradientStop { position: 0.0; color: Theme.mix(ringScreen.ringHue, root.background, 0.26) }
-          GradientStop { position: 0.75; color: root.background }
-          GradientStop { position: 1.0; color: root.background }
-        }
+        // The window's background, not a wash of the ring's hue fading down
+        // from the top: the status bar above is that background, and a hue
+        // that starts at the top of the window starts in a hard line under it.
+        // The hue is in the ring and the glyph, which are what is looked at.
+        color: root.background
 
         // Under the content, so that nothing behind this screen can be
         // pressed through it.
@@ -2372,24 +2364,25 @@ Item {
           anchors.bottomMargin: 40 + root.shellFurniture
           spacing: 14
 
-          Pill {
+          Chrome.Button {
             visible: !!root.ringing && root.ringing.kind === "alarm"
+            colours: root.colours
+            kind: "tonal"
             text: "Snooze " + Alarms.SNOOZE_MINUTES + " min"
             implicitHeight: 62
             pad: 20
-            color: root.card
-            ink: root.ink
             bodySize: root.bodySize
             role: "subtitle"
             onClicked: root.snoozeRing()
           }
 
-          Pill {
+          Chrome.Button {
+            colours: root.colours
+            kind: "filled"
+            hue: ringScreen.ringHue
             text: "Stop"
             implicitHeight: 62
             pad: root.ringing && root.ringing.kind === "timer" ? 72 : 30
-            color: ringScreen.ringHue
-            ink: root.accentInk
             bodySize: root.bodySize
             role: "subtitle"
             onClicked: root.stopRing()
@@ -2401,6 +2394,10 @@ Item {
 
   // --- the last few things the screens above ask for ------------------------
 
+  // The strip the shell keeps along the bottom of the screen for the gesture
+  // bar and moarchy-keyboard's toggle. Only the screens with no tab bar under
+  // them still clear it -- the alarm editor and the ringing screen, whose last
+  // controls are otherwise under a layer surface that takes their taps.
   readonly property int shellFurniture: root.shell ? 60 : 0
 
   // What the title bar says under the page name. The alarm page's is the one

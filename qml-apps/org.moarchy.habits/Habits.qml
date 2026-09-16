@@ -33,7 +33,6 @@ Item {
 
   property string returnTo: ""
   readonly property var colours: themeFile.colours
-  readonly property int radiusCard: uiFile.radiusCard
   property int bodySize: Metrics.BODY
   Component.onCompleted: {
     root.bodySize = Metrics.shellBody(root)
@@ -55,11 +54,9 @@ Item {
   // tick is a new object per tick), so nothing else would tell QML to look.
   property int revision: 0
 
-  readonly property color surface: colours.surface
   readonly property color background: colours.background
   readonly property color textOnSurface: colours.foreground
   readonly property color dim: colours.dim
-  readonly property color line: colours.line
   readonly property color accent: colours.accent
 
   readonly property var shownHabits: {
@@ -111,7 +108,10 @@ Item {
   // untouched day reads as absent rather than as a pale version of done.
   function markColour(habit, day) {
     var step = Habits.stepFor(habit, day)
-    if (step === 0) return Theme.mix(root.colours.foreground, root.colours.background, 0.10)
+    // An unkept day is a filled square one step up the ramp, not an outlined
+    // one. The outline was a 1px border that disappeared on a phone in
+    // daylight and left a hole in the grid.
+    if (step === 0) return Theme.surface(root.colours, "raised")
     return Theme.mix(root.hueColor(habit.colour), root.colours.background,
                      Habits.rampAt(root.colours.dark, step))
   }
@@ -220,7 +220,6 @@ Item {
   }
 
   Chrome.ThemeFile { id: themeFile }
-  Chrome.UiFile { id: uiFile }
 
   IpcHandler {
     target: "habits"
@@ -296,6 +295,7 @@ Item {
           bodySize: root.bodySize
 
           leading: Chrome.BackButton {
+            colours: root.colours
             visible: root.page !== "list"
             color: root.textOnSurface
             onClicked: root.close()
@@ -303,6 +303,7 @@ Item {
 
           trailing: Row {
             Chrome.IconButton {
+              colours: root.colours
               visible: root.page === "list"
               color: root.textOnSurface
               names: ["starred-symbolic"]
@@ -319,74 +320,99 @@ Item {
           Layout.fillHeight: true
 
           Flickable {
+            id: listPage
             anchors.fill: parent
             visible: root.page === "list"
             clip: true
             contentWidth: width
-            contentHeight: listCol.height
+            contentHeight: listCol.implicitHeight + Metrics.GUTTER * 2
             boundsBehavior: Flickable.StopAtBounds
 
-            Column {
+            ColumnLayout {
               id: listCol
-              width: parent.width
+              x: Metrics.GUTTER
+              y: Metrics.GUTTER
+              width: listPage.width - Metrics.GUTTER * 2
+              spacing: Metrics.LABEL_GAP
 
               // The five days the strip offers, oldest on the left, today on
-              // the right where a thumb rests.
-              Row {
-                width: parent.width
-                height: 26
-                Item { width: 12; height: 1 }
-                Item {
-                  width: listCol.width - 12 - (Habits.STRIP_DAYS * 44) - 4
-                  height: 1
-                }
-                Repeater {
-                  model: Habits.recentDays(Habits.STRIP_DAYS, root.today)
-                  delegate: Item {
-                    required property var modelData
-                    width: 44
-                    height: 26
-                    Chrome.TypedText {
-                      anchors.centerIn: parent
-                      role: "overline"
-                      // The day of the month: a weekday letter repeats every
-                      // seven and gives no purchase on where you are.
-                      text: modelData.slice(8)
-                      color: modelData === root.today ? root.accent : root.dim
-                      bodySize: root.bodySize
+              // the right where a thumb rests. It is a heading for the columns
+              // under it, so it sits outside the box and lines up with them.
+              Item {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 20
+
+                Row {
+                  anchors.right: parent.right
+                  anchors.rightMargin: Metrics.GROUP_PAD + Metrics.GAP
+                  anchors.verticalCenter: parent.verticalCenter
+
+                  Repeater {
+                    model: Habits.recentDays(Habits.STRIP_DAYS, root.today)
+                    delegate: Item {
+                      required property var modelData
+                      width: Metrics.TARGET
+                      height: 20
+                      Chrome.TypedText {
+                        anchors.centerIn: parent
+                        role: "overline"
+                        // The day of the month: a weekday letter repeats every
+                        // seven and gives no purchase on where you are.
+                        text: modelData.slice(8)
+                        color: modelData === root.today ? root.accent : root.dim
+                        bodySize: root.bodySize
+                      }
                     }
                   }
                 }
               }
 
-              Repeater {
-                model: root.shownHabits
+              // One box, one row per habit. The name gets the whole width and
+              // the five marks the line under it: at 360px a name and five
+              // 44px targets on one line leaves 80px for the name, which is
+              // not a name, it is an ellipsis.
+              Chrome.Group {
+                id: habitGroup
+                Layout.fillWidth: true
+                colours: root.colours
+                visible: root.shownHabits.length > 0
 
-                delegate: Item {
-                  id: habitRow
-                  required property var modelData
-                  readonly property var habit: habitRow.modelData
-                  width: listCol.width
-                  height: 64
+                Repeater {
+                  model: root.shownHabits
 
-                  MouseArea {
-                    anchors.fill: parent
-                    onClicked: { root.openId = habitRow.habit.id; root.page = "detail" }
-                  }
+                  delegate: Item {
+                    id: habitRow
+                    required property var modelData
+                    readonly property var habit: habitRow.modelData
+                    Layout.fillWidth: true
+                    implicitHeight: 86
 
-                  RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 12
-                    anchors.rightMargin: 4
-                    spacing: 6
+                    Rectangle {
+                      anchors.fill: parent
+                      radius: habitGroup.innerRadius
+                      color: Theme.surface(root.colours, "pressed")
+                      visible: openTap.pressed
+                    }
 
-                    Column {
-                      Layout.fillWidth: true
-                      Layout.alignment: Qt.AlignVCenter
+                    // Declared before the content so the five mark targets,
+                    // which are children of it, sit on top and get their taps.
+                    // A row handler declared last would swallow every one.
+                    MouseArea {
+                      id: openTap
+                      anchors.fill: parent
+                      onClicked: { root.openId = habitRow.habit.id; root.page = "detail" }
+                    }
+
+                    ColumnLayout {
+                      anchors.left: parent.left
+                      anchors.right: parent.right
+                      anchors.verticalCenter: parent.verticalCenter
+                      anchors.leftMargin: Metrics.GAP
+                      anchors.rightMargin: Metrics.GAP
                       spacing: 1
 
                       Chrome.TypedText {
-                        width: parent.width
+                        Layout.fillWidth: true
                         role: "body"
                         text: habitRow.habit.name || "Untitled"
                         color: root.textOnSurface
@@ -394,8 +420,10 @@ Item {
                         elide: Text.ElideRight
                         maximumLineCount: 1
                       }
+
                       Chrome.TypedText {
-                        width: parent.width
+                        Layout.fillWidth: true
+                        Layout.bottomMargin: 3
                         role: "caption"
                         text: {
                           var r = root.revision
@@ -408,50 +436,44 @@ Item {
                         elide: Text.ElideRight
                         maximumLineCount: 1
                       }
-                    }
 
-                    // Five 44px targets: the smallest thing a thumb hits
-                    // reliably, and what fits beside a readable name at 360px.
-                    Repeater {
-                      model: Habits.recentDays(Habits.STRIP_DAYS, root.today)
+                      // Five 44px targets: the smallest thing a thumb hits
+                      // reliably, and now on a line of their own they keep it.
+                      Row {
+                        Layout.alignment: Qt.AlignRight
 
-                      delegate: Item {
-                        id: cell
-                        required property var modelData
-                        readonly property string day: cell.modelData
-                        Layout.preferredWidth: 44
-                        Layout.preferredHeight: 44
-                        Layout.alignment: Qt.AlignVCenter
+                        Repeater {
+                          model: Habits.recentDays(Habits.STRIP_DAYS, root.today)
 
-                        Rectangle {
-                          anchors.centerIn: parent
-                          width: 30
-                          height: 30
-                          radius: 9
-                          color: {
-                            var r = root.revision
-                            return root.markColour(habitRow.habit, cell.day)
+                          delegate: Item {
+                            id: cell
+                            required property var modelData
+                            readonly property string day: cell.modelData
+                            width: Metrics.TARGET
+                            height: 34
+
+                            Rectangle {
+                              anchors.centerIn: parent
+                              width: 30
+                              height: 30
+                              radius: Metrics.radius(root.colours, Metrics.RADIUS_SM)
+                              color: {
+                                var r = root.revision
+                                return root.markColour(habitRow.habit, cell.day)
+                              }
+                              scale: markTap.pressed ? 0.88 : 1.0
+                              Behavior on scale { NumberAnimation { duration: 90 } }
+                            }
+
+                            MouseArea {
+                              id: markTap
+                              anchors.fill: parent
+                              onClicked: root.tick(habitRow.habit, cell.day)
+                            }
                           }
-                          border.width: Habits.stepFor(habitRow.habit, cell.day) === 0 ? 1 : 0
-                          border.color: root.line
-                          scale: markTap.pressed ? 0.88 : 1.0
-                          Behavior on scale { NumberAnimation { duration: 90 } }
-                        }
-
-                        MouseArea {
-                          id: markTap
-                          anchors.fill: parent
-                          onClicked: root.tick(habitRow.habit, cell.day)
                         }
                       }
                     }
-                  }
-
-                  Rectangle {
-                    anchors.bottom: parent.bottom
-                    width: parent.width
-                    height: 1
-                    color: root.line
                   }
                 }
               }
@@ -461,34 +483,42 @@ Item {
           // --- one habit -------------------------------------------------
 
           Flickable {
+            id: detailPage
             anchors.fill: parent
             visible: root.page === "detail" && !!root.current
             clip: true
             contentWidth: width
-            contentHeight: detailCol.height
+            contentHeight: detailCol.implicitHeight + Metrics.GUTTER * 2
             boundsBehavior: Flickable.StopAtBounds
 
-            Column {
+            ColumnLayout {
               id: detailCol
-              width: parent.width
-              leftPadding: 16
-              rightPadding: 16
-              topPadding: 8
-              spacing: 10
+              x: Metrics.GUTTER
+              y: Metrics.GUTTER
+              width: detailPage.width - Metrics.GUTTER * 2
+              spacing: Metrics.GAP
 
-              Chrome.TypedText {
-                width: detailCol.width - 32
-                visible: text.length > 0
-                role: "body"
-                text: root.current ? root.current.question : ""
-                color: root.dim
-                bodySize: root.bodySize
-                wrapMode: Text.WordWrap
+              Chrome.Card {
+                Layout.fillWidth: true
+                visible: String(root.current ? root.current.question : "").length > 0
+                colours: root.colours
+
+                Chrome.TypedText {
+                  Layout.fillWidth: true
+                  role: "body"
+                  text: root.current ? root.current.question : ""
+                  color: root.textOnSurface
+                  bodySize: root.bodySize
+                  wrapMode: Text.WordWrap
+                }
               }
 
-              Grid {
+              GridLayout {
+                Layout.fillWidth: true
                 columns: 2
-                spacing: 8
+                columnSpacing: Metrics.GAP
+                rowSpacing: Metrics.GAP
+
                 Repeater {
                   model: {
                     var r = root.revision
@@ -503,62 +533,57 @@ Item {
                       { label: "Points", value: String(Game.habitPoints(h)) }
                     ]
                   }
-                  delegate: Rectangle {
+                  delegate: Chrome.Tile {
+                    id: statTile
                     required property var modelData
-                    width: (detailCol.width - 40) / 2
-                    height: 56
-                    radius: root.radiusCard
-                    color: Theme.mix(root.colours.foreground, root.colours.background, 0.06)
-
-                    Column {
-                      anchors.centerIn: parent
-                      spacing: 2
-                      Chrome.TypedText {
-                        role: "overline"
-                        text: modelData.label
-                        color: root.dim
-                        bodySize: root.bodySize
-                      }
-                      Chrome.TypedText {
-                        role: "body"
-                        text: modelData.value
-                        color: root.textOnSurface
-                        bodySize: root.bodySize
-                      }
-                    }
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 62
+                    colours: root.colours
+                    bodySize: root.bodySize
+                    label: statTile.modelData.label
+                    value: statTile.modelData.value
+                    valueColour: root.textOnSurface
                   }
                 }
               }
 
-              Chrome.TypedText {
-                width: detailCol.width - 32
-                role: "caption"
-                text: {
-                  var r = root.revision
-                  var h = root.current
-                  if (!h) return ""
-                  var next = Habits.nextMilestone(h, root.today)
-                  return next ? next.away + " days to " + next.target
-                              : "Every milestone passed."
+              Chrome.Card {
+                Layout.fillWidth: true
+                colours: root.colours
+                tint: root.current ? root.hueColor(root.current.colour) : "transparent"
+                level: "well"
+
+                Chrome.TypedText {
+                  Layout.fillWidth: true
+                  role: "body"
+                  text: {
+                    var r = root.revision
+                    var h = root.current
+                    if (!h) return ""
+                    var next = Habits.nextMilestone(h, root.today)
+                    return next ? next.away + " days to " + next.target
+                                : "Every milestone passed."
+                  }
+                  color: root.textOnSurface
+                  bodySize: root.bodySize
+                  horizontalAlignment: Text.AlignHCenter
                 }
-                color: root.dim
-                bodySize: root.bodySize
               }
 
               // Sixteen weeks, read rather than tapped.
-              Column {
-                spacing: 3
-                Chrome.TypedText {
-                  role: "overline"
-                  text: "Last sixteen weeks"
-                  color: root.dim
-                  bodySize: root.bodySize
-                }
+              Chrome.Section {
+                Layout.fillWidth: true
+                colours: root.colours
+                bodySize: root.bodySize
+                title: "Last sixteen weeks"
+                cardSpacing: 3
+
                 Repeater {
                   model: 7
                   delegate: Row {
                     id: weekRow
                     required property int index
+                    Layout.alignment: Qt.AlignHCenter
                     spacing: 3
                     Repeater {
                       model: 16
@@ -575,7 +600,7 @@ Item {
                         }
                         width: 15
                         height: 15
-                        radius: 4
+                        radius: Metrics.radius(root.colours, Metrics.RADIUS_XXS)
                         color: {
                           var r = root.revision
                           return root.current ? root.markColour(root.current, weekCell.day) : "transparent"
@@ -585,105 +610,86 @@ Item {
                   }
                 }
               }
-
-              Item { width: 1; height: 12 }
             }
           }
 
           // --- the ten ---------------------------------------------------
 
           Flickable {
+            id: achPage
             anchors.fill: parent
             visible: root.page === "achievements"
             clip: true
             contentWidth: width
-            contentHeight: achCol.height
+            contentHeight: achCol.implicitHeight + Metrics.GUTTER * 2
             boundsBehavior: Flickable.StopAtBounds
 
-            Column {
+            ColumnLayout {
               id: achCol
-              width: parent.width
+              x: Metrics.GUTTER
+              y: Metrics.GUTTER
+              width: achPage.width - Metrics.GUTTER * 2
+              spacing: 0
 
-              Repeater {
-                model: Game.ACHIEVEMENTS
+              Chrome.Group {
+                id: achGroup
+                Layout.fillWidth: true
+                colours: root.colours
 
-                delegate: Item {
-                  required property var modelData
-                  readonly property string key: modelData[0]
-                  readonly property bool earned: root.achievements[key] !== undefined
-                  width: achCol.width
-                  height: 64
+                Repeater {
+                  model: Game.ACHIEVEMENTS
 
-                  RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 12
-                    anchors.rightMargin: 12
-                    spacing: 12
+                  delegate: Chrome.ListRow {
+                    id: ach
+                    required property var modelData
+                    readonly property string key: ach.modelData[0]
+                    readonly property bool earned: root.achievements[ach.key] !== undefined
+                    Layout.fillWidth: true
+                    minHeight: 64
+                    radius: achGroup.innerRadius
+                    colours: root.colours
+                    bodySize: root.bodySize
+                    interactive: false
+                    title: ach.modelData[1]
+                    titleColour: ach.earned ? root.textOnSurface : root.dim
+                    // Earned once and never lost, so the date it was earned is
+                    // worth more than the condition once it is behind you.
+                    subtitle: ach.earned ? "Earned " + root.achievements[ach.key]
+                                         : ach.modelData[2]
 
-                    Rectangle {
-                      Layout.preferredWidth: 36
-                      Layout.preferredHeight: 36
-                      Layout.alignment: Qt.AlignVCenter
-                      radius: 18
-                      color: earned ? Theme.mix(root.hueColor("yellow"), root.colours.background, 0.28)
-                                    : Theme.mix(root.colours.foreground, root.colours.background, 0.10)
+                    leading: Rectangle {
+                      anchors.verticalCenter: parent.verticalCenter
+                      width: 36
+                      height: 36
+                      radius: Metrics.round(root.colours, width)
+                      color: ach.earned
+                             ? Theme.tint(root.colours, root.hueColor("yellow"), "raised")
+                             : Theme.surface(root.colours, "raised")
 
                       Chrome.Icon {
                         anchors.centerIn: parent
-                        names: earned ? ["starred-symbolic"] : ["non-starred-symbolic", "starred-symbolic"]
-                        color: earned ? root.hueColor("yellow") : root.dim
+                        names: ach.earned
+                               ? ["starred-symbolic"]
+                               : ["non-starred-symbolic", "starred-symbolic"]
+                        color: ach.earned ? root.hueColor("yellow") : root.dim
                         size: Metrics.ICON_INK
                       }
                     }
-
-                    Column {
-                      Layout.fillWidth: true
-                      Layout.alignment: Qt.AlignVCenter
-                      spacing: 1
-                      Chrome.TypedText {
-                        width: parent.width
-                        role: "body"
-                        text: modelData[1]
-                        color: earned ? root.textOnSurface : root.dim
-                        bodySize: root.bodySize
-                        elide: Text.ElideRight
-                        maximumLineCount: 1
-                      }
-                      Chrome.TypedText {
-                        width: parent.width
-                        role: "caption"
-                        // Earned once and never lost, so the date it was earned
-                        // is worth more than the condition once it is behind you.
-                        text: earned ? "Earned " + root.achievements[key] : modelData[2]
-                        color: root.dim
-                        bodySize: root.bodySize
-                        elide: Text.ElideRight
-                        maximumLineCount: 1
-                      }
-                    }
-                  }
-
-                  Rectangle {
-                    anchors.bottom: parent.bottom
-                    width: parent.width
-                    height: 1
-                    color: root.line
                   }
                 }
               }
             }
           }
 
-          Chrome.TypedText {
+          Chrome.EmptyState {
             anchors.centerIn: parent
-            width: parent.width - 48
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.WordWrap
+            width: parent.width - Metrics.GUTTER * 2
             visible: root.page === "list" && root.shownHabits.length === 0
-            role: "body"
-            text: "No habits yet. Add one in the GTK app and it appears here."
-            color: root.dim
+            colours: root.colours
             bodySize: root.bodySize
+            names: ["object-select-symbolic"]
+            title: "No habits yet"
+            detail: "Add one in the GTK app and it appears here, with today already on the strip."
           }
 
           Chrome.Toast {

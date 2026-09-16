@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Mail
+GenericName=Email
+Comment=Read and write email
+Exec=omarchy-shell shell toggle org.moarchy.mail
+Icon=org.moarchy.Mail
+Terminal=false
+Categories=Network;Email;
+Keywords=email;mail;imap;smtp;inbox;geary;
+StartupNotify=false
+X-Moarchy-Plugin=org.moarchy.mail

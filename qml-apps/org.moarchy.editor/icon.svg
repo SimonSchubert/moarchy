@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A sheet with lines on it, and a pencil across its corner.
+
+     The drawer paints a .desktop icon bare, with no plate behind it, so the
+     sheet is the object and its outline is what is not a rectangle: a folded
+     corner at the top right, and the pencil breaking the edge at the bottom.
+     The lines are the theme's dim grey rather than a hairline, because a 2px
+     stroke at the 42px the drawer asks for is one grey pixel.
+
+     No clip path: QtSvg ignores clip-path and paints an out-of-defs clipPath
+     as a black rectangle. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <path d="M28 12h50l26 26v70a8 8 0 0 1-8 8H28a8 8 0 0 1-8-8V20a8 8 0 0 1 8-8z" fill="#f6f5f4"/>
+  <path d="M78 12l26 26H86a8 8 0 0 1-8-8z" fill="#c0bfbc"/>
+  <rect x="34" y="44" width="52" height="7" rx="3.5" fill="#9a9996"/>
+  <rect x="34" y="60" width="58" height="7" rx="3.5" fill="#9a9996"/>
+  <rect x="34" y="76" width="36" height="7" rx="3.5" fill="#9a9996"/>
+  <path d="M66 110l4-16 38-38 12 12-38 38z" fill="#3584e4"/>
+  <path d="M108 56l6-6a4 4 0 0 1 5.7 0l6.3 6.3a4 4 0 0 1 0 5.7l-6 6z" fill="#1c71d8"/>
+  <path d="M66 110l4-16 12 12z" fill="#deddda"/>
+</svg>

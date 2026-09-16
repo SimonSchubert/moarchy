@@ -23,7 +23,24 @@ _repo="$startdir/../.."
 
 pkgname=moarchy-qml-apps
 pkgver=$_ver
-pkgrel=1
+# 2: org.moarchy.editor, the text editor that replaces gnome-text-editor, and
+# the two things only it ships -- a second desktop entry (the hidden one
+# xdg-open runs for a text file) and /usr/bin/moarchy-editor, the process that
+# waits when the editor is $EDITOR. package() installed the first .desktop in
+# a plugin and nothing from bin/, so both needed this file to change as well
+# as the snapshot. The snapshot also moved to moarchy-apps' box system in the
+# same sync. pkgver is moarchy's and does not move for any of this.
+# org.moarchy.phone and org.moarchy.messages joined the snapshot before 2 was
+# built, replacing gnome-calls and chatty. They need nothing new from
+# package(), and nothing new in depends: modemmanager and callaudiod are
+# moarchy-meta's, feedbackd is moarchy's, and a system with no modem should
+# still be able to install the calculator.
+# org.moarchy.mail joined before 2 was built too, replacing geary. It is the
+# second plugin with a bin/ -- moarchy-mail, which does every conversation with
+# a mail server, because QML cannot open a TLS socket -- and a second hidden
+# desktop entry, the mailto: handler. package() already installs both kinds.
+# What it does add is python below.
+pkgrel=2
 pkgdesc="Omarchy-apps Quickshell plugins shipped as default phone apps"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
@@ -33,7 +50,10 @@ license=('MIT')
 # shell with it, and so a hand-built system that installs only this still
 # has the runtime. qt6-5compat is what Icon.qml tints through
 # (Qt5Compat.GraphicalEffects); namcap would flag a missing one.
-depends=('quickshell' 'qt6-5compat')
+# python is Mail's: bin/moarchy-mail is Python's standard library and nothing
+# else, and without it Mail signs in to nothing. The image has it already, for
+# python-gobject; a hand-built system installing only this would not.
+depends=('quickshell' 'qt6-5compat' 'python')
 source=()
 
 package() {
@@ -47,7 +67,7 @@ package() {
 
   install -d "$plugdir" "$appdir" "$icondir"
 
-  local dir id dest entry icon
+  local dir id dest entry icon exe
   for dir in "$src"/org.moarchy.*/; do
     [[ -d $dir ]] || continue
     id=$(basename "$dir")
@@ -59,13 +79,24 @@ package() {
     # scan one sitting next to the manifest.
     find "$dir" -maxdepth 1 -type f ! -name '*.desktop' -exec cp -a {} "$dest/" \;
     cp -a "$kit"/. "$dest/ui/"
-    entry=$(find "$dir" -maxdepth 1 -name '*.desktop' -type f | head -1)
-    if [[ -n $entry ]]; then
+    # Every entry, not the first. The editor has two -- the drawer's, and a
+    # hidden one for xdg-open -- and `head -1` shipped whichever find listed
+    # first, which is the directory's order and nobody's decision.
+    for entry in "$dir"/*.desktop; do
+      [[ -f $entry ]] || continue
       install -m644 "$entry" "$appdir/$(basename "$entry")"
       icon=$(awk -F= '/^Icon=/{print $2; exit}' "$entry")
       if [[ -n $icon && -f $dir/icon.svg ]]; then
         install -m644 "$dir/icon.svg" "$icondir/$icon.svg"
       fi
-    fi
+    done
+    # A command a plugin needs outside the shell. There are two: the editor's
+    # moarchy-editor, because $EDITOR has to be a process that waits and a
+    # plugin is not a process, and Mail's moarchy-mail, because a plugin cannot
+    # open a TLS socket.
+    for exe in "$dir"/bin/*; do
+      [[ -f $exe ]] || continue
+      install -Dm755 "$exe" "$pkgdir/usr/bin/$(basename "$exe")"
+    done
   done
 }

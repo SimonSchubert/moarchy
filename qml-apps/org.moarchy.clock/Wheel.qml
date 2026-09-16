@@ -32,6 +32,8 @@ Item {
   // and should not read "01".
   property bool pad: true
 
+  // Only for the corner on the band behind the chosen row.
+  property var colours: null
   property color ink: "#ffffff"
   property color dim: "#9a9996"
   property int bodySize: Metrics.BODY
@@ -121,21 +123,17 @@ Item {
     }
   }
 
-  // The two rules that say which row counts. Over the view rather than in it,
-  // so they do not travel with the numbers.
+  // The band that says which row counts. Under the view rather than in it, so
+  // it does not travel with the numbers -- and a filled band rather than the
+  // two hairlines that used to bracket it, which is the same idea drawn with
+  // something a phone screen can still show at arm's length.
   Rectangle {
     anchors.left: parent.left
     anchors.right: parent.right
     y: Math.round((root.height - root.rowHeight) / 2)
-    height: 1
-    color: Theme.alpha(root.dim, 0.45)
-  }
-
-  Rectangle {
-    anchors.left: parent.left
-    anchors.right: parent.right
-    y: Math.round((root.height + root.rowHeight) / 2)
-    height: 1
-    color: Theme.alpha(root.dim, 0.45)
+    height: root.rowHeight
+    radius: Metrics.radius(root.colours, Metrics.RADIUS_MD)
+    z: -1
+    color: Theme.alpha(root.dim, 0.16)
   }
 }

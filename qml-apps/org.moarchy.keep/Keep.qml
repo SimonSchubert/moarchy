@@ -55,16 +55,17 @@ Item {
   // this file came off qs.Commons: the same answers on the phone, and answers
   // at all everywhere else.
   property int bodySize: Metrics.BODY
-  Component.onCompleted: root.bodySize = Metrics.shellBody(root)
+  Component.onCompleted: {
+    root.bodySize = Metrics.shellBody(root)
+    root.applyHarness()
+  }
 
   // Same numbers the GTK app paints: the palette is parsed out of colors.toml
   // here rather than taken from the shell, so a coral card matches GTK Keep
   // rather than a Settings row.
-  readonly property color surface: colours.surface
   readonly property color background: colours.background
   readonly property color textOnSurface: colours.foreground
   readonly property color dim: colours.dim
-  readonly property color line: colours.line
   readonly property color accent: colours.accent
   readonly property color subdued: colours.dim
   readonly property color danger: (colours.hues && colours.hues.red) ? colours.hues.red : "#e01b24"
@@ -76,12 +77,8 @@ Item {
       if (root.editing.items[i].done) n++
     return n
   }
-  readonly property int radiusCard: uiFile.radiusCard
+  readonly property int radiusCard: 12
   readonly property string noteFont: "Adwaita Sans"
-
-  readonly property color pageColor: root.editing
-                                     ? Notes.fill(root.colours, root.editing.colour)
-                                     : root.background
 
   readonly property string notesDir: Plugin.dataDir(
     "keep", Quickshell.env("HOME"), Quickshell.env("XDG_DATA_HOME"),
@@ -131,6 +128,34 @@ Item {
     root.notes = parsed.notes
     root.view = parsed.view
     root.loaded = true
+    if (!root.harnessed) { root.harnessed = true; Qt.callLater(root.applyLoadedHarness) }
+  }
+
+  // --- the harness ------------------------------------------------------
+
+  // The variables plugins/org.moarchy.keep/shots.sh sets. Everything here is
+  // a screen this app can already reach by tapping; naming them is what lets
+  // a screenshot run reach the same ones without a robot with a thumb.
+  property bool harnessed: false
+  property string wantView: ""
+
+  function applyHarness() {
+    root.query = Quickshell.env("MOARCHY_KEEP_SEARCH") || ""
+    root.wantView = Quickshell.env("MOARCHY_KEEP_VIEW") || ""
+  }
+
+  function applyLoadedHarness() {
+    if (root.wantView === "list" || root.wantView === "grid") root.view = root.wantView
+    var open = Quickshell.env("MOARCHY_KEEP_OPEN") || ""
+    var menu = Quickshell.env("MOARCHY_KEEP_MENU") || ""
+    var want = open || menu
+    if (!want.length) return
+    for (var i = 0; i < root.notes.length; i++) {
+      if (String(root.notes[i].title).toLowerCase().indexOf(want.toLowerCase()) < 0) continue
+      if (menu.length) { root.menuNote = root.notes[i]; root.menuOpen = true }
+      else root.openNote(root.notes[i])
+      return
+    }
   }
 
   function scheduleSave() {
@@ -269,6 +294,14 @@ Item {
     return Notes.fill(root.colours, key)
   }
 
+  // The open note's colour, which is the colour of its boxes and never of the
+  // window. The editor used to wear the note's colour as its whole page, and
+  // the shell does not draw an app under the status bar -- so a coral note was
+  // a coral screen with a black strip across the top of it. The page is the
+  // theme's background, like every other screen here, and the colour is where
+  // it is in the grid: on the note.
+  readonly property color noteColour: root.noteFill(root.editing ? root.editing.colour : "default")
+
   IpcHandler {
     target: "keep"
     function state(): string { return root.opened ? "open" : "closed" }
@@ -305,7 +338,6 @@ Item {
   }
 
   Chrome.ThemeFile { id: themeFile }
-  Chrome.UiFile { id: uiFile }
 
   Chrome.AppWindow {
     id: keepWindow
@@ -313,16 +345,18 @@ Item {
     appName: "Notes"
     pageTitle: root.editing ? (root.editing.title || "Note") : ""
     pluginId: root.pluginId
-    color: root.pageColor
+    color: root.background
 
     onUnmapped: {
       root.leaveEditor()
       root.menuOpen = false
+      // The keyboard is left where it is. moarchy's gestures.md G14: nothing
+      // puts it down but the back swipe, and switching apps leaves it alone.
     }
 
     Rectangle {
       anchors.fill: parent
-      color: root.pageColor
+      color: root.background
       focus: true
       Keys.onEscapePressed: {
         if (root.menuOpen) { root.menuOpen = false; return }
@@ -339,10 +373,12 @@ Item {
         // --- header -------------------------------------------------------
         RowLayout {
           Layout.fillWidth: true
-          Layout.leftMargin: 6
-          Layout.rightMargin: 6
-          Layout.topMargin: 4
-          Layout.bottomMargin: 4
+          // The same gutter the grid under it uses. They were 6 and 12, which
+          // put the search pill four pixels out of line with every card.
+          Layout.leftMargin: Metrics.GUTTER
+          Layout.rightMargin: Metrics.GUTTER
+          Layout.topMargin: Metrics.GAP
+          Layout.bottomMargin: Metrics.GAP
           spacing: 4
 
           Chrome.Icon {
@@ -357,10 +393,10 @@ Item {
 
           Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 40
+            Layout.preferredHeight: Metrics.PILL
             visible: !root.editing
-            radius: 20
-            color: root.surface
+            radius: Metrics.round(root.colours, height)
+            color: Theme.surface(root.colours, "card")
             RowLayout {
               anchors.fill: parent
               anchors.leftMargin: 10
@@ -455,46 +491,52 @@ Item {
             bottomPadding: 80
             spacing: Metrics.space(10, root)
 
-            Text {
+            Chrome.TypedText {
               visible: root.shown.pinned.length && root.shown.others.length && !root.query
-              text: "PINNED"
-              font.family: root.noteFont
-              font.pixelSize: Math.round(root.bodySize * 0.75)
-              font.weight: Font.DemiBold
-              font.letterSpacing: 1.2
+              role: "overline"
+              text: "Pinned"
               color: root.dim
-              leftPadding: 6
+              bodySize: root.bodySize
+              leftPadding: 2
             }
             NoteColumns {
               width: parent.width - parent.leftPadding - parent.rightPadding
               notes: root.shown.pinned
               listView: root.view === "list"
             }
-            Text {
+            Chrome.TypedText {
               visible: root.shown.pinned.length && root.shown.others.length && !root.query
-              text: "OTHERS"
-              font.family: root.noteFont
-              font.pixelSize: Math.round(root.bodySize * 0.75)
-              font.weight: Font.DemiBold
-              font.letterSpacing: 1.2
+              Layout.topMargin: 4
+              role: "overline"
+              text: "Others"
               color: root.dim
-              leftPadding: 6
+              bodySize: root.bodySize
+              leftPadding: 2
             }
             NoteColumns {
               width: parent.width - parent.leftPadding - parent.rightPadding
               notes: root.shown.others
               listView: root.view === "list"
             }
-            Text {
+            Item {
               visible: !root.shown.pinned.length && !root.shown.others.length
               width: parent.width - parent.leftPadding - parent.rightPadding
-              text: root.query ? "Nothing here matches that." : "Take a note."
-              font.family: root.noteFont
-              font.pixelSize: root.bodySize
-              color: root.subdued
-              wrapMode: Text.WordWrap
-              horizontalAlignment: Text.AlignHCenter
-              topPadding: Metrics.space(40, root)
+              height: blank.implicitHeight + Metrics.space(40, root)
+
+              Chrome.EmptyState {
+                id: blank
+                anchors.bottom: parent.bottom
+                width: parent.width
+                colours: root.colours
+                bodySize: root.bodySize
+                names: root.query
+                       ? ["system-search-symbolic"]
+                       : ["document-edit-symbolic", "list-add-symbolic"]
+                title: root.query ? "Nothing matches" : "Take a note"
+                detail: root.query
+                        ? "No note here has those words in its title, its body or its list."
+                        : "Tap + for a note, or hold it for a list with tick boxes."
+              }
             }
           }
         }
@@ -512,19 +554,24 @@ Item {
             Layout.fillHeight: true
             clip: true
             contentWidth: width
-            contentHeight: editorCol.height
+            contentHeight: editorCol.implicitHeight + Metrics.GUTTER * 2
             boundsBehavior: Flickable.StopAtBounds
 
-            Column {
+            ColumnLayout {
               id: editorCol
-              width: editorFlick.width
-              leftPadding: 16
-              rightPadding: 16
-              topPadding: 8
-              spacing: 10
+              x: Metrics.GUTTER
+              y: Metrics.GAP
+              width: editorFlick.width - Metrics.GUTTER * 2
+              spacing: Metrics.GAP
 
+              // The title stays loose. It is the heading of the page it is on,
+              // which is the one thing on this phone that is allowed to be.
               Chrome.TextField {
-                width: parent.width - parent.leftPadding - parent.rightPadding
+                Layout.fillWidth: true
+                // A bare field still insets its text by 12, which is the
+                // padding a Card gives its own contents -- so the title lands
+                // on the same left edge as the body under it.
+                Layout.leftMargin: Metrics.PAD - 12
                 // Bare: the pill belongs to the row around it, not to the
                 // field. The kit's TextField draws its own, so it is asked
                 // for a transparent one rather than handed a null Item --
@@ -533,6 +580,7 @@ Item {
                 placeholderText: "Title"
                 foreground: root.textOnSurface
                 accent: root.accent
+                placeholderColor: root.dim
                 font.pixelSize: Math.round(root.bodySize * 1.4)
                 font.weight: Font.DemiBold
                 text: root.editing ? root.editing.title : ""
@@ -543,172 +591,233 @@ Item {
                 }
               }
 
-              TextEdit {
-                id: bodyEdit
-                width: parent.width - parent.leftPadding - parent.rightPadding
+              // The body is in a box, and the box is the note's colour -- the
+              // same fill its card has in the grid, so opening a note is the
+              // card getting bigger rather than the screen changing colour.
+              Rectangle {
+                Layout.fillWidth: true
                 visible: root.editing && root.editing.kind !== "list"
-                text: root.editing && root.editing.kind !== "list" ? (root.editing.body || "") : ""
-                color: root.textOnSurface
-                font.family: root.noteFont
-                font.pixelSize: Math.round(root.bodySize * 1.05)
-                font.weight: Font.Normal
-                wrapMode: TextEdit.Wrap
-                Chrome.Osk { id: bodyOsk }
-                MouseArea {
-                  anchors.fill: parent
-                  propagateComposedEvents: true
-                  onPressed: mouse => {
-                    bodyOsk.show()
-                    mouse.accepted = false
+                radius: Metrics.radius(root.colours, Metrics.RADIUS_LG)
+                color: root.noteColour
+                implicitHeight: Math.max(120, bodyEdit.implicitHeight + Metrics.PAD * 2)
+
+                TextEdit {
+                  id: bodyEdit
+                  anchors.left: parent.left
+                  anchors.right: parent.right
+                  anchors.top: parent.top
+                  anchors.margins: Metrics.PAD
+                  text: root.editing && root.editing.kind !== "list"
+                        ? (root.editing.body || "") : ""
+                  color: root.textOnSurface
+                  font.family: root.noteFont
+                  font.pixelSize: Math.round(root.bodySize * 1.05)
+                  font.weight: Font.Normal
+                  wrapMode: TextEdit.Wrap
+                  // The body is not a Chrome.TextField, so it asks for the
+                  // keyboard itself: a press that starts here, passed on so the
+                  // caret still lands where the finger did (G14).
+                  Chrome.Osk { id: bodyOsk }
+                  MouseArea {
+                    anchors.fill: parent
+                    propagateComposedEvents: true
+                    onPressed: mouse => {
+                      bodyOsk.show()
+                      mouse.accepted = false
+                    }
                   }
-                }
-                onTextChanged: {
-                  if (!root.editing || root.editing.kind === "list") return
-                  if (text === root.editing.body) return
-                  root.editing.body = text
-                  root.persistEditing()
+                  onTextChanged: {
+                    if (!root.editing || root.editing.kind === "list") return
+                    if (text === root.editing.body) return
+                    root.editing.body = text
+                    root.persistEditing()
+                  }
                 }
               }
 
-              Repeater {
-                model: root.editing && root.editing.kind === "list" ? root.editing.items : []
-                delegate: RowLayout {
-                  width: editorCol.width - editorCol.leftPadding - editorCol.rightPadding
-                  height: 44
-                  spacing: 6
-                  visible: root.editing && (!modelData.done || root.doneOpen)
+              Chrome.Card {
+                id: listCard
+                Layout.fillWidth: true
+                visible: root.editing && root.editing.kind === "list"
+                colours: root.colours
+                color: root.noteColour
+                radius: Metrics.radius(root.colours, Metrics.RADIUS_LG)
+                pad: Metrics.GROUP_PAD
+                spacing: 0
 
-                  Item {
-                    Layout.preferredWidth: 28
-                    Layout.preferredHeight: 44
-                    Rectangle {
-                      width: 22; height: 22
-                      anchors.centerIn: parent
-                      radius: 4
-                      color: modelData.done ? root.accent : "transparent"
-                      border.color: modelData.done ? root.accent : root.dim
-                      border.width: 1.5
-                      Chrome.Icon {
-                        visible: modelData.done
-                        anchors.centerIn: parent
-                        slot: 16; size: 12
-                        color: root.textOnAccent
-                        names: ["object-select-symbolic"]
+                Repeater {
+                  model: root.editing && root.editing.kind === "list" ? root.editing.items : []
+                  delegate: RowLayout {
+                    id: item
+                    required property var modelData
+                    required property int index
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Metrics.TARGET
+                    spacing: 4
+                    visible: root.editing && (!item.modelData.done || root.doneOpen)
+
+                    Chrome.Check {
+                      colours: root.colours
+                      Layout.alignment: Qt.AlignVCenter
+                      checked: !!item.modelData.done
+                      foreground: root.textOnSurface
+                      tickColor: Theme.inkOn(root.colours, root.accent)
+                      accent: root.accent
+                      dim: root.dim
+                      bodySize: root.bodySize
+                      onToggled: root.toggleItemDone(item.index)
+                    }
+
+                    Chrome.TextField {
+                      Layout.fillWidth: true
+                      // Bare: the pill belongs to the row around it, not to
+                      // the field.
+                      color: "transparent"
+                      foreground: root.textOnSurface
+                      accent: root.accent
+                      placeholderColor: root.dim
+                      bodySize: root.bodySize
+                      text: item.modelData.text
+                      onTextChanged: {
+                        var idx = item.index
+                        if (!root.editing || !root.editing.items[idx]) return
+                        if (root.editing.items[idx].text === text) return
+                        root.editing.items[idx].text = text
+                        root.persistEditing()
                       }
                     }
-                    MouseArea {
-                      anchors.fill: parent
-                      onClicked: root.toggleItemDone(index)
-                    }
-                  }
 
-                  Chrome.TextField {
-                    Layout.fillWidth: true
-                    // Bare: the pill belongs to the row around it, not to the
-                // field. The kit's TextField draws its own, so it is asked
-                // for a transparent one rather than handed a null Item --
-                // which is what Ui.TextField wanted and this is not.
-                color: "transparent"
-                    foreground: root.textOnSurface
-                    accent: root.accent
-                    text: modelData.text
-                    onTextChanged: {
-                      var idx = index
-                      if (!root.editing || !root.editing.items[idx]) return
-                      if (root.editing.items[idx].text === text) return
-                      root.editing.items[idx].text = text
-                      root.persistEditing()
-                    }
-                  }
-
-                  Chrome.Icon {
-                    slot: 36; size: 16
-                    color: root.dim
-                    names: ["window-close-symbolic"]
-                    MouseArea {
-                      anchors.fill: parent
-                      onClicked: root.removeItem(index)
+                    Chrome.IconButton {
+                      colours: root.colours
+                      Layout.alignment: Qt.AlignVCenter
+                      slot: 36
+                      size: 16
+                      color: root.dim
+                      names: ["window-close-symbolic"]
+                      tooltip: "Remove this item"
+                      onClicked: root.removeItem(item.index)
                     }
                   }
                 }
-              }
 
-              Item {
-                visible: root.editing && root.editing.kind === "list"
-                width: parent.width - parent.leftPadding - parent.rightPadding
-                height: 44
-                Row {
-                  anchors.verticalCenter: parent.verticalCenter
-                  spacing: 10
-                  Chrome.Icon { slot: 28; size: 16; color: root.dim; names: ["list-add-symbolic"] }
-                  Text {
-                    text: "List item"
-                    font.family: root.noteFont
-                    font.pixelSize: root.bodySize
-                    color: root.dim
-                  }
-                }
-                MouseArea {
-                  anchors.fill: parent
-                  onClicked: root.patchEditing(function (n) {
-                    n.items = (n.items || []).concat([{ text: "", done: false }])
-                  })
-                }
-              }
+                Item {
+                  Layout.fillWidth: true
+                  Layout.preferredHeight: Metrics.TARGET
 
-              Item {
-                visible: root.editing && root.editing.kind === "list" && root.doneCount > 0
-                width: parent.width - parent.leftPadding - parent.rightPadding
-                height: 44
-                Row {
-                  anchors.verticalCenter: parent.verticalCenter
-                  spacing: 10
-                  Chrome.Icon {
-                    slot: 28; size: 16
-                    color: root.dim
-                    names: root.doneOpen ? ["pan-down-symbolic"] : ["pan-end-symbolic"]
+                  Row {
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.left: parent.left
+                    anchors.leftMargin: 10
+                    spacing: 10
+                    Chrome.Icon { slot: 24; size: 16; color: root.dim; names: ["list-add-symbolic"] }
+                    Chrome.TypedText {
+                      anchors.verticalCenter: parent.verticalCenter
+                      role: "body"
+                      text: "List item"
+                      color: root.dim
+                      bodySize: root.bodySize
+                    }
                   }
-                  Text {
-                    text: root.doneCount + " ticked item" + (root.doneCount === 1 ? "" : "s")
-                    font.family: root.noteFont
-                    font.pixelSize: root.bodySize
-                    color: root.dim
+
+                  Chrome.PressVeil {
+                    anchors.fill: parent
+                    radius: listCard.innerRadius
+                    ink: root.textOnSurface
+                    on: addTap.pressed
+                  }
+
+                  MouseArea {
+                    id: addTap
+                    anchors.fill: parent
+                    onClicked: root.patchEditing(function (n) {
+                      n.items = (n.items || []).concat([{ text: "", done: false }])
+                    })
                   }
                 }
-                MouseArea {
-                  anchors.fill: parent
-                  onClicked: root.doneOpen = !root.doneOpen
+
+                Item {
+                  Layout.fillWidth: true
+                  Layout.preferredHeight: Metrics.TARGET
+                  visible: root.editing && root.editing.kind === "list" && root.doneCount > 0
+
+                  Row {
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.left: parent.left
+                    anchors.leftMargin: 10
+                    spacing: 10
+                    Chrome.Icon {
+                      slot: 24; size: 16
+                      color: root.dim
+                      names: root.doneOpen ? ["pan-down-symbolic"] : ["pan-end-symbolic"]
+                    }
+                    Chrome.TypedText {
+                      anchors.verticalCenter: parent.verticalCenter
+                      role: "body"
+                      text: root.doneCount + " ticked item" + (root.doneCount === 1 ? "" : "s")
+                      color: root.dim
+                      bodySize: root.bodySize
+                    }
+                  }
+
+                  Chrome.PressVeil {
+                    anchors.fill: parent
+                    radius: listCard.innerRadius
+                    ink: root.textOnSurface
+                    on: doneTap.pressed
+                  }
+
+                  MouseArea {
+                    id: doneTap
+                    anchors.fill: parent
+                    onClicked: root.doneOpen = !root.doneOpen
+                  }
                 }
               }
             }
           }
 
-          Text {
-            Layout.fillWidth: true
-            Layout.leftMargin: 18
-            Layout.rightMargin: 18
-            Layout.topMargin: 8
-            Layout.bottomMargin: 8
-            text: root.editing ? Store.editedLabel(root.editing.edited) : ""
-            font.family: root.noteFont
-            font.pixelSize: Math.round(root.bodySize * 0.85)
-            color: root.dim
+          // When it was last written, in a box of its own. It is the last
+          // loose caption this app had, and a page whose every other word is
+          // inside something made it look like a line left over.
+          Rectangle {
+            Layout.leftMargin: Metrics.GUTTER
+            Layout.bottomMargin: Metrics.GAP
+            Layout.topMargin: 4
+            implicitWidth: edited.implicitWidth + 24
+            implicitHeight: 28
+            radius: Metrics.round(root.colours, height)
+            visible: edited.text.length > 0
+            color: Theme.surface(root.colours, "card")
+
+            Chrome.TypedText {
+              id: edited
+              anchors.centerIn: parent
+              role: "caption"
+              text: root.editing ? Store.editedLabel(root.editing.edited) : ""
+              color: root.dim
+              bodySize: root.bodySize
+            }
           }
         }
 
       }
 
+      // The kit's, not a sixth hand-drawn circle: every other app on this
+      // phone reaches its new-thing button at the same size, in the same
+      // corner, with the same press.
       Chrome.Fab {
+        colours: root.colours
         visible: !root.editing
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.rightMargin: 16
         anchors.bottomMargin: 16
         accent: root.accent
-        foreground: root.textOnAccent
+        foreground: Theme.inkOn(root.colours, root.accent)
         names: ["list-add-symbolic"]
+        tooltip: "A new note"
         onClicked: root.newNote("text")
-        onPressAndHold: root.newNote("list")
+        onHeld: root.newNote("list")
       }
 
       // --- card menu (GTK popover, not a sheet) ---------------------------
@@ -717,15 +826,21 @@ Item {
         visible: root.menuOpen || root.moreOpen || root.colourOpen
         onClicked: { root.menuOpen = false; root.moreOpen = false; root.colourOpen = false }
 
+        // A scrim, not an outline. The three panels below used to be the page
+        // colour with a hairline round them, which on a coral note was a
+        // rectangle you had to look for.
+        Rectangle {
+          anchors.fill: parent
+          color: Theme.alpha(root.colours.background, 0.55)
+        }
+
         Rectangle {
           visible: root.menuOpen
           width: 220
           height: cardMenuCol.height + 20
           anchors.centerIn: parent
-          radius: 12
-          color: root.background
-          border.color: root.line
-          border.width: 1
+          radius: Metrics.radius(root.colours, Metrics.RADIUS_LG)
+          color: Theme.surface(root.colours, "raised")
 
           Column {
             id: cardMenuCol
@@ -742,11 +857,11 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 10
                 Chrome.Icon { slot: 28; size: 16; color: root.textOnSurface; names: ["view-pin-symbolic"] }
-                Text {
+                Chrome.TypedText {
+                  role: "body"
                   text: root.menuNote && root.menuNote.pinned ? "Unpin" : "Pin"
-                  font.family: root.noteFont
-                  font.pixelSize: root.bodySize
                   color: root.textOnSurface
+                  bodySize: root.bodySize
                 }
               }
               MouseArea {
@@ -762,21 +877,31 @@ Item {
               Repeater {
                 model: Store.COLOURS
                 delegate: Rectangle {
+                  id: swatch
+                  required property var modelData
+                  readonly property bool on: !!root.menuNote
+                                             && root.menuNote.colour === swatch.modelData
                   width: 44; height: 44
-                  radius: 22
-                  color: root.noteFill(modelData)
-                  border.color: root.menuNote && root.menuNote.colour === modelData ? root.accent : root.line
-                  border.width: root.menuNote && root.menuNote.colour === modelData ? 2 : 1
+                  radius: Metrics.round(root.colours, width)
+                  color: root.noteFill(swatch.modelData)
+
+                  // Which one is chosen is a tick on it, not a ring round it:
+                  // a 2px outline on a 44px disc of a colour the theme chose
+                  // is a difference nobody sees at arm's length.
                   Chrome.Icon {
-                    visible: modelData === "default"
                     anchors.centerIn: parent
-                    slot: 22; size: 14
-                    color: root.dim
-                    names: ["action-unavailable-symbolic"]
+                    slot: 22
+                    size: swatch.on ? 16 : 14
+                    color: swatch.on ? root.textOnSurface : root.dim
+                    names: swatch.on
+                           ? ["object-select-symbolic"]
+                           : (swatch.modelData === "default"
+                              ? ["action-unavailable-symbolic"] : [])
                   }
+
                   MouseArea {
                     anchors.fill: parent
-                    onClicked: if (root.menuNote) root.setColour(root.menuNote.id, modelData)
+                    onClicked: if (root.menuNote) root.setColour(root.menuNote.id, swatch.modelData)
                   }
                 }
               }
@@ -789,11 +914,11 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 10
                 Chrome.Icon { slot: 28; size: 16; color: root.textOnSurface; names: ["user-trash-symbolic"] }
-                Text {
+                Chrome.TypedText {
+                  role: "body"
                   text: "Delete"
-                  font.family: root.noteFont
-                  font.pixelSize: root.bodySize
                   color: root.textOnSurface
+                  bodySize: root.bodySize
                 }
               }
               MouseArea {
@@ -812,10 +937,8 @@ Item {
           anchors.top: parent.top
           anchors.rightMargin: 8
           anchors.topMargin: 48
-          radius: 12
-          color: root.background
-          border.color: root.line
-          border.width: 1
+          radius: Metrics.radius(root.colours, Metrics.RADIUS_LG)
+          color: Theme.surface(root.colours, "raised")
           Column {
             id: moreCol
             anchors.left: parent.left
@@ -830,11 +953,11 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 10
                 Chrome.Icon { slot: 28; size: 16; color: root.textOnSurface; names: ["checkbox-checked-symbolic"] }
-                Text {
+                Chrome.TypedText {
+                  role: "body"
                   text: root.editing && root.editing.kind === "list" ? "Hide tick boxes" : "Tick boxes"
-                  font.family: root.noteFont
-                  font.pixelSize: root.bodySize
                   color: root.textOnSurface
+                  bodySize: root.bodySize
                 }
               }
               MouseArea {
@@ -854,11 +977,11 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 10
                 Chrome.Icon { slot: 28; size: 16; color: root.textOnSurface; names: ["user-trash-symbolic"] }
-                Text {
+                Chrome.TypedText {
+                  role: "body"
                   text: "Delete note"
-                  font.family: root.noteFont
-                  font.pixelSize: root.bodySize
                   color: root.textOnSurface
+                  bodySize: root.bodySize
                 }
               }
               MouseArea {
@@ -877,10 +1000,8 @@ Item {
           anchors.top: parent.top
           anchors.rightMargin: 8
           anchors.topMargin: 48
-          radius: 12
-          color: root.background
-          border.color: root.line
-          border.width: 1
+          radius: Metrics.radius(root.colours, Metrics.RADIUS_LG)
+          color: Theme.surface(root.colours, "raised")
           Grid {
             id: colourCol
             anchors.left: parent.left
@@ -892,22 +1013,29 @@ Item {
             Repeater {
               model: Store.COLOURS
               delegate: Rectangle {
+                id: pick
+                required property var modelData
+                readonly property bool on: !!root.editing
+                                           && root.editing.colour === pick.modelData
                 width: 44; height: 44
-                radius: 22
-                color: root.noteFill(modelData)
-                border.color: root.editing && root.editing.colour === modelData ? root.accent : root.line
-                border.width: root.editing && root.editing.colour === modelData ? 2 : 1
+                radius: Metrics.round(root.colours, width)
+                color: root.noteFill(pick.modelData)
+
                 Chrome.Icon {
-                  visible: modelData === "default"
                   anchors.centerIn: parent
-                  slot: 22; size: 14
-                  color: root.dim
-                  names: ["action-unavailable-symbolic"]
+                  slot: 22
+                  size: pick.on ? 16 : 14
+                  color: pick.on ? root.textOnSurface : root.dim
+                  names: pick.on
+                         ? ["object-select-symbolic"]
+                         : (pick.modelData === "default"
+                            ? ["action-unavailable-symbolic"] : [])
                 }
+
                 MouseArea {
                   anchors.fill: parent
                   onClicked: {
-                    if (root.editing) root.setColour(root.editing.id, modelData)
+                    if (root.editing) root.setColour(root.editing.id, pick.modelData)
                     root.colourOpen = false
                   }
                 }
@@ -967,87 +1095,97 @@ Item {
   component NoteCard: Rectangle {
     id: card
     property var note
-    radius: 12
+    radius: Metrics.radius(root.colours, Metrics.CARD_RADIUS)
     color: root.noteFill(note ? note.colour : "default")
-    height: cardCol.height + 24
-    border.color: note && note.colour === "default" ? root.line : "transparent"
-    border.width: 1
+    height: cardCol.height + Metrics.PAD * 2
 
     Column {
       id: cardCol
       anchors.left: parent.left
       anchors.right: parent.right
       anchors.top: parent.top
-      anchors.margins: 12
+      anchors.margins: Metrics.PAD
       spacing: 6
 
-      Text {
-        visible: !!(note && note.title)
+      Chrome.TypedText {
+        visible: !!(card.note && card.note.title)
         width: parent.width
-        text: note ? note.title : ""
-        font.family: root.noteFont
+        role: "body"
         font.pixelSize: Math.round(root.bodySize * 1.05)
         font.weight: Font.DemiBold
+        text: card.note ? card.note.title : ""
         color: root.textOnSurface
+        bodySize: root.bodySize
         wrapMode: Text.Wrap
         maximumLineCount: 3
         elide: Text.ElideRight
       }
-      Text {
-        visible: note && note.kind !== "list"
+      Chrome.TypedText {
+        visible: card.note && card.note.kind !== "list"
         width: parent.width
-        text: note ? (note.body || "") : ""
-        font.family: root.noteFont
+        role: "body"
         font.pixelSize: Math.round(root.bodySize * 0.95)
-        font.weight: Font.Normal
+        text: card.note ? (card.note.body || "") : ""
         color: root.textOnSurface
+        bodySize: root.bodySize
         wrapMode: Text.Wrap
         maximumLineCount: 6
         elide: Text.ElideRight
       }
       Repeater {
-        model: note && note.kind === "list" ? Store.previewItems(note).items : []
+        model: card.note && card.note.kind === "list" ? Store.previewItems(card.note).items : []
         delegate: Row {
+          id: preview
+          required property var modelData
           width: cardCol.width
           spacing: 8
           Item {
             width: 14; height: 16
             anchors.verticalCenter: parent.verticalCenter
+            // A filled square rather than an outlined one. At 12px a 1.5px
+            // border is most of the box, and it is the first thing to vanish
+            // on a phone screen outdoors.
             Rectangle {
-              visible: !modelData.done
+              visible: !preview.modelData.done
               width: 12; height: 12
               anchors.centerIn: parent
-              radius: 3
-              color: "transparent"
-              border.color: root.dim
-              border.width: 1.5
+              radius: Metrics.radius(root.colours, 3)
+              color: Theme.alpha(root.textOnSurface, 0.22)
             }
             Chrome.Icon {
-              visible: modelData.done
+              visible: preview.modelData.done
               anchors.centerIn: parent
               slot: 14; size: 12
               color: root.dim
               names: ["object-select-symbolic"]
             }
           }
-          Text {
+          Chrome.TypedText {
             width: cardCol.width - 22
-            text: modelData.text
-            font.family: root.noteFont
+            role: "body"
             font.pixelSize: Math.round(root.bodySize * 0.95)
-            font.weight: Font.Normal
-            font.strikeout: !!modelData.done
-            color: modelData.done ? root.dim : root.textOnSurface
+            font.strikeout: !!preview.modelData.done
+            text: preview.modelData.text
+            color: preview.modelData.done ? root.dim : root.textOnSurface
+            bodySize: root.bodySize
             elide: Text.ElideRight
           }
         }
       }
     }
 
-    MouseArea {
+    Chrome.PressVeil {
       anchors.fill: parent
-      onClicked: root.openNote(note)
-      onPressAndHold: { root.menuNote = note; root.menuOpen = true }
+      radius: parent.radius
+      ink: root.textOnSurface
+      on: cardTap.pressed
+    }
+
+    MouseArea {
+      id: cardTap
+      anchors.fill: parent
+      onClicked: root.openNote(card.note)
+      onPressAndHold: { root.menuNote = card.note; root.menuOpen = true }
     }
   }
 }

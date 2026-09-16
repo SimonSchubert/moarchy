@@ -4484,8 +4484,11 @@ print(" ".join(out))'; }
   # Alacritty was second here and is not installed any more (docs/apps.md T1).
   # Dropped rather than left as a candidate that can never match: this list is
   # what decides whether L1/L4 run at all, and a name that is never found makes
-  # the skip harder to read, not the check more robust.
-  for cand in foot org.gnome.Console org.gnome.Nautilus org.gnome.TextEditor; do
+  # the skip harder to read, not the check more robust. org.gnome.TextEditor
+  # went the same way on 2026-09-16, and the Text Editor plugin that replaced it
+  # cannot stand in: L1/L4 watch a process's window arrive, and a plugin's
+  # window belongs to the shell.
+  for cand in foot org.gnome.Console org.gnome.Nautilus; do
     grep -qx "$cand" <<<"$entries" && { target=$cand; break; }
   done
 

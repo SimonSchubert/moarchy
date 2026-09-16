@@ -1,8 +1,9 @@
 // The two files: the places somebody chose, and the last answer about them.
 //
 // `places.json` is the only thing in this app a person made -- a handful of
-// towns, which of them is on screen, and whether they want degrees Celsius. It
-// is small, hand-editable and worth keeping. `forecast.json` is disposable by
+// towns, which of them is on screen, whether they want degrees Celsius, and
+// whether the app may ask where the phone is. It is small, hand-editable and
+// worth keeping. `forecast.json` is disposable by
 // definition: it exists so that opening the app in a tunnel shows this
 // morning's forecast rather than a spinner, and every byte of it can be
 // fetched again.
@@ -21,6 +22,12 @@ var SCHEMA = 1
 var MAX_PLACES = 12
 
 var UNITS = ["metric", "imperial"]
+
+// What `current` holds while the screen is showing wherever the phone is. Not
+// that place's coordinate id, because that place moves: the town under it is
+// whatever the last lookup said, and it is kept in the cache file beside its
+// forecast rather than in here, since nobody chose it.
+var HERE = "here"
 
 function str(value) {
   return typeof value === "string" ? value.trim() : ""
@@ -63,9 +70,9 @@ function placeTo(place) {
   }
 }
 
-// Returns { places: [...], current: "<id>", units: "metric" }.
+// Returns { places: [...], current: "<id>", units: "metric", locate: true }.
 function parsePlaces(data) {
-  var empty = { places: [], current: "", units: "metric" }
+  var empty = { places: [], current: HERE, units: "metric", locate: true }
   if (!data || typeof data !== "object") return empty
   var raw = data.places
   if (!raw || raw.length === undefined) raw = []
@@ -79,13 +86,24 @@ function parsePlaces(data) {
     out.push(place)
   }
 
-  // A `current` naming a place that is not in the list is the ordinary result
-  // of removing one in an editor, and the first place is a better answer than
-  // an empty screen.
-  var current = str(data.current)
-  if (!seen[current]) current = out.length ? out[0].id : ""
+  // On unless somebody said no. A file written before there was a lookup has
+  // no opinion about it, and neither does a phone on its first run.
+  var locate = data.locate !== false
 
-  return { places: out, current: current, units: units(data.units) }
+  // A `current` naming a place that is not in the list is the ordinary result
+  // of removing one in an editor, and the top of the list is a better answer
+  // than an empty screen.
+  var current = str(data.current)
+  if (current === HERE ? !locate : !seen[current]) current = top(out, locate)
+
+  return { places: out, current: current, units: units(data.units), locate: locate }
+}
+
+// The first row of the places page: wherever the phone is when that is being
+// looked up, the first town typed when it is not, and nowhere when neither.
+function top(places, locate) {
+  if (locate) return HERE
+  return places.length ? places[0].id : ""
 }
 
 function serializePlaces(state) {
@@ -94,6 +112,7 @@ function serializePlaces(state) {
   return JSON.stringify({
     schema: SCHEMA,
     units: units(state.units),
+    locate: !!state.locate,
     current: str(state.current),
     places: out
   }, null, 1)
@@ -121,7 +140,7 @@ function add(state, place) {
   var places = state.places.slice()
   places.push(place)
   return {
-    state: { places: places, current: place.id, units: state.units },
+    state: { places: places, current: place.id, units: state.units, locate: state.locate },
     added: true,
     full: false
   }
@@ -139,17 +158,29 @@ function remove(state, id) {
   if (index < 0) return state
   var current = state.current
   if (current === id)
-    current = places.length ? places[Math.min(index, places.length - 1)].id : ""
-  return { places: places, current: current, units: state.units }
+    current = places.length ? places[Math.min(index, places.length - 1)].id : top(places, state.locate)
+  return { places: places, current: current, units: state.units, locate: state.locate }
 }
 
 function select(state, id) {
-  if (!has(state.places, id)) return state
-  return { places: state.places, current: id, units: state.units }
+  if (id === HERE ? !state.locate : !has(state.places, id)) return state
+  return { places: state.places, current: id, units: state.units, locate: state.locate }
 }
 
 function withUnits(state, name) {
-  return { places: state.places, current: state.current, units: units(name) }
+  return { places: state.places, current: state.current, units: units(name), locate: state.locate }
+}
+
+// Switching the lookup on shows its answer, because that is what the switch
+// was for. Switching it off while its answer is on screen moves to the first
+// town, rather than leaving the screen on a place the app was just told to
+// stop finding.
+function withLocate(state, on) {
+  var locate = !!on
+  var current = state.current
+  if (locate) current = HERE
+  else if (current === HERE) current = top(state.places, false)
+  return { places: state.places, current: current, units: state.units, locate: locate }
 }
 
 // --- the cache -----------------------------------------------------------
@@ -172,15 +203,36 @@ function parseCache(data) {
 }
 
 // Written for the places that still exist, and only for them: a town removed
-// from the list should not leave its week behind in a file.
-function serializeCache(entries, places) {
+// from the list should not leave its week behind in a file. `here` is the
+// town the last lookup found, or null -- and null when the lookup is switched
+// off, which is what takes it off the disk as well as off the screen.
+function serializeCache(entries, places, here) {
+  var keep = (places || []).slice()
+  if (here) keep.push(here)
   var out = {}
-  for (var i = 0; i < (places || []).length; i++) {
-    var id = places[i].id
+  for (var i = 0; i < keep.length; i++) {
+    var id = keep[i].id
     var entry = entries[id]
     if (entry && entry.forecast) out[id] = { fetched: entry.fetched || 0, forecast: entry.forecast }
   }
-  return JSON.stringify({ schema: SCHEMA, forecasts: out }, null, 1)
+  var body = { schema: SCHEMA }
+  if (here) {
+    body.here = placeTo(here)
+    body.here.found = here.found || 0
+  }
+  body.forecasts = out
+  return JSON.stringify(body, null, 1)
+}
+
+// The town the last lookup found, and when, in epoch seconds. Held to the
+// same rules as a place typed into places.json, because it is the same shape
+// of object one restart later.
+function parseHere(data) {
+  if (!data || typeof data !== "object") return null
+  var place = placeFrom(data.here)
+  if (!place) return null
+  place.found = num(data.here.found) || 0
+  return place
 }
 
 function put(entries, id, forecast, fetched) {

@@ -25,7 +25,10 @@ DEST="$REPO/qml-apps"
   exit 1
 }
 
-rm -rf "$DEST"
+# Everything but the README, which is this repo's and says what the snapshot
+# is. A plain rm -rf of the directory deleted it on every sync.
+mkdir -p "$DEST"
+find "$DEST" -mindepth 1 -maxdepth 1 ! -name README.md -exec rm -rf {} +
 mkdir -p "$DEST/qs_ui"
 
 # The kit every plugin imports as ui/. Tests stay in the source repo.
@@ -44,6 +47,13 @@ for dir in "$SRC"/plugins/org.moarchy.*/; do
       -name '*.qml' -o -name '*.js' -o -name '*.svg' \
       -o -name 'manifest.json' -o -name '*.desktop' \
     \) ! -name 'shell.qml' -exec cp -a {} "$DEST/$id/" \;
+  # bin/ is a command the plugin ships outside the shell -- the editor's
+  # moarchy-editor, which $EDITOR runs -- and the package installs it to
+  # /usr/bin. Without it the snapshot has an editor that cannot be $EDITOR.
+  if [[ -d $dir/bin ]]; then
+    mkdir -p "$DEST/$id/bin"
+    cp -a "$dir"/bin/. "$DEST/$id/bin/"
+  fi
   copied=$((copied + 1))
 done
 

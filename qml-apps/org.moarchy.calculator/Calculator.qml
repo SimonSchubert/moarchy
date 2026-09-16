@@ -47,7 +47,6 @@ Item {
 
   property string returnTo: ""
   readonly property var colours: themeFile.colours
-  readonly property int radiusCard: uiFile.radiusCard
   property int bodySize: Metrics.BODY
   Component.onCompleted: root.bodySize = Metrics.shellBody(root)
 
@@ -293,7 +292,6 @@ Item {
   }
 
   Chrome.ThemeFile { id: themeFile }
-  Chrome.UiFile { id: uiFile }
 
   IpcHandler {
     target: "calculator"
@@ -373,43 +371,63 @@ Item {
         Item {
           Layout.fillWidth: true
           Layout.fillHeight: true
-          Layout.minimumHeight: sum.height + answer.height + 24
+          Layout.minimumHeight: display.height + Metrics.GAP * 2
 
-          Text {
-            id: sum
-            anchors.bottom: answer.top
-            anchors.bottomMargin: 2
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.leftMargin: 16
-            anchors.rightMargin: 16
-            text: root.shownSum
-            color: root.ink
-            font.family: Metrics.FONT
-            font.pixelSize: Math.round(root.bodySize * 2.4)
-            horizontalAlignment: Text.AlignRight
-            // Elided at the *left*, which is the end a long sum is not being
-            // typed at. What stays on screen is the part still being written.
-            elide: Text.ElideLeft
-            maximumLineCount: 1
-          }
-
-          Text {
-            id: answer
+          // The sum is in a box, like everything else on this phone. It is
+          // also the one box that is anchored to the *bottom* of the room it
+          // is given: what is being typed belongs next to what is typing it,
+          // and a number that moved as it grew would be a number nobody could
+          // read while it was changing.
+          Rectangle {
+            id: display
             anchors.bottom: parent.bottom
-            anchors.bottomMargin: 14
+            anchors.bottomMargin: Metrics.GAP
             anchors.left: parent.left
             anchors.right: parent.right
-            anchors.leftMargin: 16
-            anchors.rightMargin: 16
-            text: root.shownAnswer
-            color: root.problem.length ? root.danger : root.accent
-            font.family: Metrics.FONT
-            font.pixelSize: Math.round(root.bodySize * 1.35)
-            font.weight: Font.DemiBold
-            horizontalAlignment: Text.AlignRight
-            elide: Text.ElideLeft
-            maximumLineCount: 1
+            anchors.leftMargin: Metrics.GUTTER
+            anchors.rightMargin: Metrics.GUTTER
+            height: sum.implicitHeight + answer.implicitHeight + Metrics.PAD * 2 + 2
+            radius: Metrics.radius(root.colours, Metrics.RADIUS_LG)
+            color: Theme.surface(root.colours, "card")
+
+            Chrome.TypedText {
+              id: sum
+              anchors.bottom: answer.top
+              anchors.bottomMargin: 2
+              anchors.left: parent.left
+              anchors.right: parent.right
+              anchors.leftMargin: Metrics.PAD
+              anchors.rightMargin: Metrics.PAD
+              role: "title"
+              font.pixelSize: Math.round(root.bodySize * 2.4)
+              font.weight: Font.Normal
+              text: root.shownSum
+              color: root.ink
+              bodySize: root.bodySize
+              horizontalAlignment: Text.AlignRight
+              // Elided at the *left*, which is the end a long sum is not being
+              // typed at. What stays on screen is the part still being written.
+              elide: Text.ElideLeft
+              maximumLineCount: 1
+            }
+
+            Chrome.TypedText {
+              id: answer
+              anchors.bottom: parent.bottom
+              anchors.bottomMargin: Metrics.PAD
+              anchors.left: parent.left
+              anchors.right: parent.right
+              anchors.leftMargin: Metrics.PAD
+              anchors.rightMargin: Metrics.PAD
+              role: "subtitle"
+              font.pixelSize: Math.round(root.bodySize * 1.35)
+              text: root.shownAnswer
+              color: root.problem.length ? root.danger : root.accent
+              bodySize: root.bodySize
+              horizontalAlignment: Text.AlignRight
+              elide: Text.ElideLeft
+              maximumLineCount: 1
+            }
           }
 
           Chrome.Toast {
@@ -426,13 +444,13 @@ Item {
 
         GridLayout {
           Layout.fillWidth: true
-          Layout.leftMargin: 12
-          Layout.rightMargin: 12
+          Layout.leftMargin: Metrics.GUTTER
+          Layout.rightMargin: Metrics.GUTTER
           Layout.topMargin: 4
-          Layout.bottomMargin: 12 + root.shellFurniture
+          Layout.bottomMargin: Metrics.GUTTER + root.shellFurniture
           columns: Calc.COLUMNS
-          columnSpacing: 8
-          rowSpacing: 8
+          columnSpacing: Metrics.GAP
+          rowSpacing: Metrics.GAP
 
           Repeater {
             model: Calc.KEYS
@@ -447,17 +465,18 @@ Item {
               // than a wrong screen, and five rows of 62 still leave a third of
               // the window for the sum above them.
               Layout.preferredHeight: 62
-              radius: 18
+              radius: Metrics.radius(root.colours, Metrics.RADIUS_LG)
               color: root.keyFill(key.modelData.kind, keyTap.pressed)
               Behavior on color { ColorAnimation { duration: Metrics.PRESS_MS } }
 
-              Text {
+              Chrome.TypedText {
                 anchors.centerIn: parent
-                text: key.modelData.label
-                color: root.keyInk(key.modelData.kind)
-                font.family: Metrics.FONT
+                role: "body"
                 font.pixelSize: root.keySize(key.modelData)
                 font.weight: key.modelData.kind === "digit" ? Font.Medium : Font.DemiBold
+                text: key.modelData.label
+                color: root.keyInk(key.modelData.kind)
+                bodySize: root.bodySize
               }
 
               MouseArea {

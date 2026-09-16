@@ -52,7 +52,6 @@ Item {
   // `colours` and not `palette`: QQuickItem already has a `palette`, and
   // shadowing it makes a binding resolve to whichever the compiler picked.
   readonly property var colours: themeFile.colours
-  readonly property int radiusCard: uiFile.radiusCard
   property int bodySize: Metrics.BODY
 
   // Which day a week starts on is the phone's business, not this app's. Qt
@@ -111,6 +110,10 @@ Item {
   // itself, so the second tap is the undo.
   property bool armed: false
 
+  // The strip the shell keeps along the bottom of the screen for the gesture
+  // bar and moarchy-keyboard's toggle. Only the editor still clears it: it has
+  // no tab bar under it, so its last controls would otherwise sit under a
+  // layer surface that takes their taps.
   readonly property int shellFurniture: root.shell ? 60 : 0
 
   readonly property string dataDir: Plugin.dataDir(
@@ -138,7 +141,6 @@ Item {
   readonly property color background: root.colours.background
   readonly property color ink: root.colours.foreground
   readonly property color dim: root.colours.dim
-  readonly property color line: root.colours.line
   readonly property color accent: root.colours.accent
   readonly property string danger: (root.colours.hues && root.colours.hues.red) || "#e01b24"
 
@@ -447,7 +449,6 @@ Item {
   property bool harnessed: false
 
   Chrome.ThemeFile { id: themeFile }
-  Chrome.UiFile { id: uiFile }
 
   IpcHandler {
     target: "calendar"
@@ -557,6 +558,7 @@ Item {
             bodySize: root.bodySize
 
             leading: Chrome.IconButton {
+              colours: root.colours
               names: ["pan-start-symbolic", "go-previous-symbolic"]
               color: root.ink
               tooltip: "The month before"
@@ -585,7 +587,7 @@ Item {
                   visible: root.shownMonth !== Dates.monthOfDay(root.today)
                   width: todayLabel.implicitWidth + 18
                   height: 26
-                  radius: 13
+                  radius: Metrics.round(root.colours, height)
                   color: Theme.alpha(root.accent, 0.16)
 
                   Text {
@@ -607,6 +609,7 @@ Item {
             }
 
             trailing: Chrome.IconButton {
+              colours: root.colours
               names: ["pan-end-symbolic"]
               color: root.ink
               tooltip: "The month after"
@@ -633,12 +636,14 @@ Item {
             bodySize: root.bodySize
 
             leading: Chrome.BackButton {
+              colours: root.colours
               color: root.ink
               onClicked: root.closeEditor()
             }
 
             trailing: [
               Chrome.IconButton {
+                colours: root.colours
                 visible: !root.draftIsNew
                 names: ["user-trash-symbolic", "edit-delete-symbolic"]
                 color: root.armed ? root.danger : root.ink
@@ -646,6 +651,7 @@ Item {
                 onClicked: root.deleteDraft()
               },
               Chrome.IconButton {
+                colours: root.colours
                 names: ["object-select-symbolic"]
                 color: root.accent
                 tooltip: "Save"
@@ -775,13 +781,15 @@ Item {
               }
             }
 
-            Rectangle {
+            // A gap, not a rule. The grid above and the day below are two
+            // things and the space says so; a hairline across 360px said it
+            // louder and said it in 2009.
+            Item {
               id: divider
               anchors.top: pagerFrame.bottom
               anchors.left: parent.left
               anchors.right: parent.right
-              height: 1
-              color: root.line
+              height: Metrics.GAP
             }
 
             // --- the day itself ---
@@ -853,7 +861,6 @@ Item {
                       entry: modelData
                       colours: root.colours
                       bodySize: root.bodySize
-                      radiusCard: root.radiusCard
                       onClicked: root.startEdit(modelData)
                     }
                   }
@@ -861,30 +868,17 @@ Item {
                   // Nothing on. Not a blank half-screen: the empty state is
                   // most of what a new calendar is, and it is the only place
                   // to say where events come from.
-                  Column {
+                  Chrome.EmptyState {
                     width: dayList.width - 24
-                    spacing: 4
                     visible: root.selectedEvents.length === 0
-                    topPadding: 18
-
-                    Chrome.TypedText {
-                      width: parent.width
-                      role: "body"
-                      text: root.selected === root.today ? "Nothing today."
-                                                         : "Nothing on " + Dates.dayLabel(root.selected) + "."
-                      color: root.dim
-                      bodySize: root.bodySize
-                      horizontalAlignment: Text.AlignHCenter
-                    }
-
-                    Chrome.TypedText {
-                      width: parent.width
-                      role: "caption"
-                      text: root.events.length ? "" : "The plus puts something in the day."
-                      color: Theme.mix(root.colours.dim, root.colours.background, 0.6)
-                      bodySize: root.bodySize
-                      horizontalAlignment: Text.AlignHCenter
-                    }
+                    colours: root.colours
+                    bodySize: root.bodySize
+                    pad: 18
+                    names: ["x-office-calendar-symbolic"]
+                    title: root.selected === root.today
+                           ? "Nothing today"
+                           : "Nothing on " + Dates.dayLabel(root.selected)
+                    detail: root.events.length ? "" : "The plus puts something in the day."
                   }
                 }
               }
@@ -937,7 +931,7 @@ Item {
                     anchors.leftMargin: 16
                     visible: group.newMonth
                     role: "overline"
-                    text: Dates.MONTHS[Dates.monthOf(Dates.monthOfDay(group.modelData.iso)) - 1].toUpperCase()
+                    text: Dates.MONTHS[Dates.monthOf(Dates.monthOfDay(group.modelData.iso)) - 1]
                     color: root.dim
                     bodySize: root.bodySize
                   }
@@ -951,22 +945,22 @@ Item {
                     width: 46
                     spacing: -2
 
-                    Text {
+                    Chrome.TypedText {
                       anchors.horizontalCenter: parent.horizontalCenter
+                      role: "caption"
+                      font.weight: Font.DemiBold
                       text: Dates.DAYS_SHORT[Dates.weekday(group.modelData.iso)]
                       color: group.isToday ? root.accent : root.dim
-                      font.family: Metrics.FONT
-                      font.pixelSize: Metrics.typeSize(root.bodySize, "caption")
-                      font.weight: Font.DemiBold
+                      bodySize: root.bodySize
                     }
 
-                    Text {
+                    Chrome.TypedText {
                       anchors.horizontalCenter: parent.horizontalCenter
+                      role: "title"
+                      font.weight: group.isToday ? Font.DemiBold : Font.Normal
                       text: Dates.parts(group.modelData.iso).d
                       color: group.isToday ? root.accent : root.ink
-                      font.family: Metrics.FONT
-                      font.pixelSize: Metrics.typeSize(root.bodySize, "title")
-                      font.weight: group.isToday ? Font.DemiBold : Font.Normal
+                      bodySize: root.bodySize
                     }
                   }
 
@@ -989,7 +983,6 @@ Item {
                         entry: modelData
                         colours: root.colours
                         bodySize: root.bodySize
-                        radiusCard: root.radiusCard
                         onClicked: {
                           root.selected = group.modelData.iso
                           root.startEdit(modelData)
@@ -1000,31 +993,23 @@ Item {
                 }
               }
 
-              Column {
-                width: agendaCol.width - 48
-                anchors.horizontalCenter: parent.horizontalCenter
-                spacing: 6
-                topPadding: 40
+              Item {
+                width: agendaCol.width
+                height: ahead.implicitHeight + 40
                 visible: root.agenda.length === 0
 
-                Chrome.TypedText {
-                  width: parent.width
-                  role: "subtitle"
-                  text: "Nothing ahead"
-                  color: root.ink
+                Chrome.EmptyState {
+                  id: ahead
+                  anchors.bottom: parent.bottom
+                  anchors.horizontalCenter: parent.horizontalCenter
+                  width: parent.width - Metrics.GUTTER * 2
+                  colours: root.colours
                   bodySize: root.bodySize
-                  horizontalAlignment: Text.AlignHCenter
-                }
-
-                Chrome.TypedText {
-                  width: parent.width
-                  role: "caption"
-                  text: root.events.length
-                        ? "Nothing in the next year, anyway."
-                        : "The plus puts something in the day."
-                  color: root.dim
-                  bodySize: root.bodySize
-                  horizontalAlignment: Text.AlignHCenter
+                  names: ["view-list-symbolic"]
+                  title: "Nothing ahead"
+                  detail: root.events.length
+                          ? "Nothing in the next year, anyway."
+                          : "The plus puts something in the day."
                 }
               }
             }
@@ -1033,356 +1018,359 @@ Item {
           // ========== the editor ==========
 
           Flickable {
+            id: editorFlick
             anchors.fill: parent
             visible: root.page === "editor"
             clip: true
             contentWidth: width
-            contentHeight: form.height + 24
+            contentHeight: form.implicitHeight + 32 + root.shellFurniture
             flickableDirection: Flickable.VerticalFlick
             boundsBehavior: Flickable.StopAtBounds
 
-            Column {
+            ColumnLayout {
               id: form
-              width: parent.width
-              spacing: 12
-              topPadding: 10
-              leftPadding: 16
-              rightPadding: 16
+              x: Metrics.GUTTER
+              y: Metrics.GAP
+              width: editorFlick.width - Metrics.GUTTER * 2
+              spacing: Metrics.GAP
 
-              Chrome.TextField {
-                id: titleField
-                width: form.width - 32
-                placeholderText: "What is it?"
-                foreground: root.ink
-                accent: root.accent
-                iconColor: root.dim
-                placeholderColor: root.dim
+              // Four boxes, in the order the question is asked: what it is,
+              // when it is, how often, and what colour. They were sixteen
+              // controls loose on the window with three caps labels between
+              // them, which is a form that reads as a settings page.
+              Chrome.Section {
+                Layout.fillWidth: true
+                colours: root.colours
                 bodySize: root.bodySize
-                color: root.surface(0.09)
-                onTextChanged: root.change("title", text)
-                onAccepted: whereField.focusInput()
-              }
+                title: "What"
+                cardSpacing: 10
 
-              Chrome.TextField {
-                id: whereField
-                width: form.width - 32
-                placeholderText: "Where"
-                leadingNames: ["mark-location-symbolic", "view-pin-symbolic"]
-                foreground: root.ink
-                accent: root.accent
-                iconColor: root.dim
-                placeholderColor: root.dim
-                bodySize: root.bodySize
-                color: root.surface(0.09)
-                onTextChanged: root.change("where", text)
+                Chrome.TextField {
+                  id: titleField
+                  Layout.fillWidth: true
+                  placeholderText: "What is it?"
+                  colours: root.colours
+                  foreground: root.ink
+                  accent: root.accent
+                  iconColor: root.dim
+                  placeholderColor: root.dim
+                  bodySize: root.bodySize
+                  onTextChanged: root.change("title", text)
+                  onAccepted: whereField.focusInput()
+                }
+
+                Chrome.TextField {
+                  id: whereField
+                  Layout.fillWidth: true
+                  placeholderText: "Where"
+                  leadingNames: ["mark-location-symbolic", "view-pin-symbolic"]
+                  colours: root.colours
+                  foreground: root.ink
+                  accent: root.accent
+                  iconColor: root.dim
+                  placeholderColor: root.dim
+                  bodySize: root.bodySize
+                  onTextChanged: root.change("where", text)
+                }
               }
 
               // --- when ---
 
-              Chrome.TypedText {
-                role: "overline"
-                text: "WHEN"
-                color: root.dim
+              Chrome.Section {
+                id: whenSection
+                Layout.fillWidth: true
+                colours: root.colours
                 bodySize: root.bodySize
-                topPadding: 6
-              }
+                title: "When"
+                cardSpacing: 8
 
-              // The date, and the same grid as the first screen behind it.
-              Rectangle {
-                id: dateRow
-                width: form.width - 32
-                height: Metrics.TARGET + 6
-                radius: root.radiusCard
-                color: root.pickingDate ? Theme.alpha(root.accent, 0.14) : root.surface(0.09)
-                Behavior on color { ColorAnimation { duration: Metrics.PRESS_MS } }
+                // The date, and the same grid as the first screen behind it.
+                Rectangle {
+                  id: dateRow
+                  Layout.fillWidth: true
+                  Layout.preferredHeight: Metrics.TARGET + 6
+                  radius: whenSection.innerRadius
+                  color: root.pickingDate
+                         ? Theme.alpha(root.accent, 0.14)
+                         : Theme.surface(root.colours, "raised")
+                  Behavior on color { ColorAnimation { duration: Metrics.PRESS_MS } }
 
-                Chrome.Icon {
-                  id: dateGlyph
-                  anchors.left: parent.left
-                  anchors.leftMargin: 6
-                  anchors.verticalCenter: parent.verticalCenter
-                  slot: 32
-                  size: 16
-                  color: root.pickingDate ? root.accent : root.dim
-                  names: ["x-office-calendar-symbolic", "appointment-new-symbolic"]
-                }
-
-                Chrome.TypedText {
-                  anchors.left: dateGlyph.right
-                  anchors.leftMargin: 4
-                  anchors.right: dateChevron.left
-                  anchors.verticalCenter: parent.verticalCenter
-                  role: "body"
-                  text: root.draft ? Dates.fullDayLabel(root.draft.date) : ""
-                  color: root.ink
-                  bodySize: root.bodySize
-                  elide: Text.ElideRight
-                }
-
-                Chrome.Icon {
-                  id: dateChevron
-                  anchors.right: parent.right
-                  anchors.rightMargin: 4
-                  anchors.verticalCenter: parent.verticalCenter
-                  slot: 28
-                  size: 14
-                  color: root.dim
-                  names: root.pickingDate ? ["pan-up-symbolic", "pan-down-symbolic"] : ["pan-down-symbolic"]
-                }
-
-                MouseArea {
-                  anchors.fill: parent
-                  onClicked: {
-                    if (root.draft) root.editorMonth = Dates.monthOfDay(root.draft.date)
-                    root.pickingDate = !root.pickingDate
-                  }
-                }
-              }
-
-              Rectangle {
-                width: form.width - 32
-                height: root.pickingDate ? pickerCol.height + 12 : 0
-                clip: true
-                radius: root.radiusCard
-                color: root.surface(0.06)
-                visible: height > 0
-                Behavior on height { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
-
-                Column {
-                  id: pickerCol
-                  width: parent.width
-                  spacing: 2
-                  topPadding: 6
-
-                  Item {
-                    width: parent.width
-                    height: Metrics.TARGET
-
-                    Chrome.IconButton {
-                      anchors.left: parent.left
-                      anchors.verticalCenter: parent.verticalCenter
-                      names: ["pan-start-symbolic", "go-previous-symbolic"]
-                      color: root.ink
-                      tooltip: "The month before"
-                      onClicked: root.editorMonth -= 1
-                    }
-
-                    Chrome.TypedText {
-                      anchors.centerIn: parent
-                      role: "body"
-                      text: Dates.monthLabel(Dates.yearOf(root.editorMonth), Dates.monthOf(root.editorMonth))
-                      color: root.ink
-                      bodySize: root.bodySize
-                    }
-
-                    Chrome.IconButton {
-                      anchors.right: parent.right
-                      anchors.verticalCenter: parent.verticalCenter
-                      names: ["pan-end-symbolic"]
-                      color: root.ink
-                      tooltip: "The month after"
-                      onClicked: root.editorMonth += 1
-                    }
+                  Chrome.Icon {
+                    id: dateGlyph
+                    anchors.left: parent.left
+                    anchors.leftMargin: 6
+                    anchors.verticalCenter: parent.verticalCenter
+                    slot: 32
+                    size: 16
+                    color: root.pickingDate ? root.accent : root.dim
+                    names: ["x-office-calendar-symbolic", "appointment-new-symbolic"]
                   }
 
-                  Month {
-                    width: pickerCol.width
-                    height: 20 + Dates.ROWS * Math.round(root.bodySize * 2.3)
-                    compact: true
-                    year: Dates.yearOf(root.editorMonth)
-                    month: Dates.monthOf(root.editorMonth)
-                    weekStart: root.weekStart
-                    today: root.today
-                    selected: root.draft ? root.draft.date : ""
-                    colours: root.colours
-                    accentInk: root.accentInk
+                  Chrome.TypedText {
+                    anchors.left: dateGlyph.right
+                    anchors.leftMargin: 4
+                    anchors.right: dateChevron.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    role: "body"
+                    text: root.draft ? Dates.fullDayLabel(root.draft.date) : ""
+                    color: root.ink
                     bodySize: root.bodySize
-                    onPicked: function (iso) { root.setDate(iso) }
+                    elide: Text.ElideRight
+                  }
+
+                  Chrome.Icon {
+                    id: dateChevron
+                    anchors.right: parent.right
+                    anchors.rightMargin: 4
+                    anchors.verticalCenter: parent.verticalCenter
+                    slot: 28
+                    size: 14
+                    color: root.dim
+                    names: root.pickingDate
+                           ? ["pan-up-symbolic", "pan-down-symbolic"]
+                           : ["pan-down-symbolic"]
+                  }
+
+                  MouseArea {
+                    anchors.fill: parent
+                    onClicked: {
+                      if (root.draft) root.editorMonth = Dates.monthOfDay(root.draft.date)
+                      root.pickingDate = !root.pickingDate
+                    }
                   }
                 }
-              }
 
-              Chrome.Check {
-                text: "All day"
-                checked: root.draft ? root.draft.allDay : false
-                foreground: root.ink
-                tickColor: root.accentInk
-                accent: root.accent
-                dim: root.dim
-                bodySize: root.bodySize
-                onToggled: function (on) { root.change("allDay", on) }
-              }
+                Rectangle {
+                  Layout.fillWidth: true
+                  Layout.preferredHeight: root.pickingDate ? pickerCol.height + 12 : 0
+                  clip: true
+                  radius: whenSection.innerRadius
+                  color: Theme.surface(root.colours, "raised")
+                  // Bound to the state and not to the height it animates to.
+                  // A layout leaves an invisible child out of its sizing, so
+                  // `visible: height > 0` was a picker that could never open:
+                  // it was invisible, so it had no height, so it stayed
+                  // invisible.
+                  visible: root.pickingDate
+                  Behavior on Layout.preferredHeight {
+                    NumberAnimation { duration: 160; easing.type: Easing.OutCubic }
+                  }
 
-              Row {
-                width: form.width - 32
-                spacing: 10
-                visible: !!root.draft && !root.draft.allDay
+                  Column {
+                    id: pickerCol
+                    width: parent.width
+                    spacing: 2
+                    topPadding: 6
 
-                Chrome.TextField {
-                  id: startField
-                  width: (parent.width - 10) / 2
-                  placeholderText: "Start"
-                  leadingNames: ["alarm-symbolic"]
-                  foreground: root.ink
-                  accent: root.accent
-                  iconColor: root.dim
-                  placeholderColor: root.dim
-                  bodySize: root.bodySize
-                  color: root.surface(0.09)
-                  onAccepted: root.commitStart()
+                    Item {
+                      width: parent.width
+                      height: Metrics.TARGET
+
+                      Chrome.IconButton {
+                        colours: root.colours
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                        names: ["pan-start-symbolic", "go-previous-symbolic"]
+                        color: root.ink
+                        tooltip: "The month before"
+                        onClicked: root.editorMonth -= 1
+                      }
+
+                      Chrome.TypedText {
+                        anchors.centerIn: parent
+                        role: "body"
+                        text: Dates.monthLabel(Dates.yearOf(root.editorMonth),
+                                               Dates.monthOf(root.editorMonth))
+                        color: root.ink
+                        bodySize: root.bodySize
+                      }
+
+                      Chrome.IconButton {
+                        colours: root.colours
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        names: ["pan-end-symbolic"]
+                        color: root.ink
+                        tooltip: "The month after"
+                        onClicked: root.editorMonth += 1
+                      }
+                    }
+
+                    Month {
+                      width: pickerCol.width
+                      height: 20 + Dates.ROWS * Math.round(root.bodySize * 2.3)
+                      compact: true
+                      year: Dates.yearOf(root.editorMonth)
+                      month: Dates.monthOf(root.editorMonth)
+                      weekStart: root.weekStart
+                      today: root.today
+                      selected: root.draft ? root.draft.date : ""
+                      colours: root.colours
+                      accentInk: root.accentInk
+                      bodySize: root.bodySize
+                      onPicked: function (iso) { root.setDate(iso) }
+                    }
+                  }
                 }
 
-                Chrome.TextField {
-                  id: endField
-                  width: (parent.width - 10) / 2
-                  placeholderText: "End"
+                Chrome.Check {
+                  colours: root.colours
+                  Layout.leftMargin: -8
+                  text: "All day"
+                  checked: root.draft ? root.draft.allDay : false
                   foreground: root.ink
+                  tickColor: root.accentInk
                   accent: root.accent
-                  iconColor: root.dim
-                  placeholderColor: root.dim
+                  dim: root.dim
                   bodySize: root.bodySize
-                  color: root.surface(0.09)
-                  onAccepted: root.commitEnd()
+                  onToggled: function (on) { root.change("allDay", on) }
                 }
-              }
 
-              // How long it is, worked out rather than asked for. It is also
-              // the only sign that "930" was understood as half past nine.
-              Chrome.TypedText {
-                width: form.width - 32
-                visible: !!root.draft && !root.draft.allDay && text.length > 0
-                role: "caption"
-                text: root.draft ? Dates.formatLength(root.draft.end - root.draft.start) : ""
-                color: root.dim
-                bodySize: root.bodySize
+                RowLayout {
+                  Layout.fillWidth: true
+                  spacing: 8
+                  visible: !!root.draft && !root.draft.allDay
+
+                  Chrome.TextField {
+                    id: startField
+                    Layout.fillWidth: true
+                    placeholderText: "Start"
+                    leadingNames: ["alarm-symbolic"]
+                    colours: root.colours
+                    foreground: root.ink
+                    accent: root.accent
+                    iconColor: root.dim
+                    placeholderColor: root.dim
+                    bodySize: root.bodySize
+                    onAccepted: root.commitStart()
+                  }
+
+                  Chrome.TextField {
+                    id: endField
+                    Layout.fillWidth: true
+                    placeholderText: "End"
+                    colours: root.colours
+                    foreground: root.ink
+                    accent: root.accent
+                    iconColor: root.dim
+                    placeholderColor: root.dim
+                    bodySize: root.bodySize
+                    onAccepted: root.commitEnd()
+                  }
+                }
+
+                // How long it is, worked out rather than asked for. It is also
+                // the only sign that "930" was understood as half past nine.
+                Chrome.TypedText {
+                  Layout.fillWidth: true
+                  visible: !!root.draft && !root.draft.allDay && text.length > 0
+                  role: "caption"
+                  text: root.draft ? Dates.formatLength(root.draft.end - root.draft.start) : ""
+                  color: root.dim
+                  bodySize: root.bodySize
+                }
               }
 
               // --- how often ---
 
-              Chrome.TypedText {
-                role: "overline"
-                text: "REPEATS"
-                color: root.dim
+              Chrome.Section {
+                Layout.fillWidth: true
+                colours: root.colours
                 bodySize: root.bodySize
-                topPadding: 6
-              }
+                title: "Repeats"
+                cardSpacing: 8
 
-              Flow {
-                width: form.width - 32
-                spacing: 8
+                Flow {
+                  Layout.fillWidth: true
+                  spacing: 6
 
-                Repeater {
-                  model: Events.REPEATS
+                  Repeater {
+                    model: Events.REPEATS
 
-                  delegate: Rectangle {
-                    id: chip
-                    required property var modelData
-
-                    readonly property bool on: !!root.draft && root.draft.repeat === chip.modelData.key
-
-                    width: chipLabel.implicitWidth + 26
-                    height: 36
-                    radius: 18
-                    color: chip.on ? Theme.alpha(root.accent, 0.18) : root.surface(0.08)
-                    border.width: chip.on ? 1 : 0
-                    border.color: root.accent
-                    Behavior on color { ColorAnimation { duration: Metrics.PRESS_MS } }
-
-                    Text {
-                      id: chipLabel
-                      anchors.centerIn: parent
+                    delegate: Chrome.Chip {
+                      id: chip
+                      required property var modelData
+                      colours: root.colours
+                      bodySize: root.bodySize
                       text: chip.modelData.label
-                      color: chip.on ? root.accent : root.ink
-                      font.family: Metrics.FONT
-                      font.pixelSize: Metrics.typeSize(root.bodySize, "caption")
-                      font.weight: chip.on ? Font.DemiBold : Font.Normal
-                    }
-
-                    MouseArea {
-                      anchors.fill: parent
+                      on: !!root.draft && root.draft.repeat === chip.modelData.key
                       onClicked: root.change("repeat", chip.modelData.key)
                     }
                   }
                 }
-              }
 
-              Chrome.TypedText {
-                width: form.width - 32
-                visible: text.length > 0
-                role: "caption"
-                text: root.draft ? Events.describeRepeat(root.draft) : ""
-                color: root.dim
-                bodySize: root.bodySize
+                Chrome.TypedText {
+                  Layout.fillWidth: true
+                  visible: text.length > 0
+                  role: "caption"
+                  text: root.draft ? Events.describeRepeat(root.draft) : ""
+                  color: root.dim
+                  bodySize: root.bodySize
+                  wrapMode: Text.WordWrap
+                }
               }
 
               // --- what colour ---
 
-              Chrome.TypedText {
-                role: "overline"
-                text: "COLOUR"
-                color: root.dim
+              Chrome.Section {
+                Layout.fillWidth: true
+                colours: root.colours
                 bodySize: root.bodySize
-                topPadding: 6
-              }
+                title: "Colour"
 
-              Row {
-                width: form.width - 32
-                spacing: (form.width - 32 - Events.COLOURS.length * 30) / (Events.COLOURS.length - 1)
+                Item {
+                  Layout.fillWidth: true
+                  Layout.preferredHeight: 34
 
-                Repeater {
-                  model: Events.COLOURS
+                  Row {
+                    anchors.centerIn: parent
+                    spacing: 10
 
-                  delegate: Rectangle {
-                    id: swatch
-                    required property string modelData
+                    Repeater {
+                      model: Events.COLOURS
 
-                    readonly property bool on: !!root.draft && root.draft.colour === swatch.modelData
+                      delegate: Rectangle {
+                        id: swatch
+                        required property string modelData
 
-                    width: 30
-                    height: 30
-                    radius: 15
-                    color: root.hue(swatch.modelData)
-                    border.width: swatch.on ? 3 : 0
-                    border.color: root.background
+                        readonly property bool on: !!root.draft
+                                                   && root.draft.colour === swatch.modelData
 
-                    // The ring is drawn outside the swatch rather than on it,
-                    // so that a chosen colour is still the whole colour.
-                    Rectangle {
-                      anchors.centerIn: parent
-                      width: parent.width + 8
-                      height: parent.height + 8
-                      radius: width / 2
-                      color: "transparent"
-                      border.width: swatch.on ? 2 : 0
-                      border.color: root.ink
-                      z: -1
-                    }
+                        width: 30
+                        height: 30
+                        radius: Metrics.round(root.colours, width)
+                        color: root.hue(swatch.modelData)
 
-                    Accessible.role: Accessible.RadioButton
-                    Accessible.name: swatch.modelData
-                    Accessible.checked: swatch.on
+                        // Which one is chosen is a tick on it. It was a ring
+                        // drawn outside the disc in two borders, which is
+                        // three hairlines to say one thing.
+                        Chrome.Icon {
+                          visible: swatch.on
+                          anchors.centerIn: parent
+                          slot: 20
+                          size: 15
+                          color: Theme.inkOn(root.colours, swatch.color)
+                          names: ["object-select-symbolic"]
+                        }
 
-                    MouseArea {
-                      anchors.fill: parent
-                      onClicked: root.change("colour", swatch.modelData)
+                        Accessible.role: Accessible.RadioButton
+                        Accessible.name: swatch.modelData
+                        Accessible.checked: swatch.on
+
+                        MouseArea {
+                          anchors.fill: parent
+                          onClicked: root.change("colour", swatch.modelData)
+                        }
+                      }
                     }
                   }
                 }
               }
-
-              Item { width: 1; height: 8 + root.shellFurniture }
             }
           }
         }
 
         // --- the two screens, along the bottom ---------------------------------
-
-        Rectangle {
-          Layout.fillWidth: true
-          Layout.preferredHeight: root.page === "editor" ? 0 : 1
-          visible: root.page !== "editor"
-          color: root.line
-        }
 
         Chrome.BottomNav {
           id: bottomNav
@@ -1409,25 +1397,25 @@ Item {
           }
         }
 
-        // The shell keeps the bottom of the screen for the gesture bar and
-        // moarchy-keyboard's toggle, both of which are layer surfaces that
-        // draw over an app and take the taps that land on them. The tab bar
-        // cannot be under them: the calculator measured the strip at 60px and
-        // reserved it, and a switcher nobody can press is worse than a key.
+        // The tab bar is flush with the bottom of the window, as it is in
+        // every other app here with one. It used to sit on a 60px strip kept
+        // clear for the gesture bar and moarchy-keyboard's toggle, which are
+        // layer surfaces that draw over an app and take the taps that land on
+        // them -- and on the phone the strip read as exactly what it was: a
+        // band of nothing under the tabs, in two apps out of seven.
         //
-        // Only inside the shell, where `shell` is not null. On a laptop there
-        // is no furniture down there and a reserved strip would be a bug.
-        Item {
-          Layout.fillWidth: true
-          Layout.preferredHeight: root.page === "editor" ? 0 : root.shellFurniture
-        }
+        // The toggle does sit over part of the right-hand tab, as it already
+        // did in Files, Coins, Launches and Vitals. That is the shell's to fix
+        // with an exclusive zone, once, rather than every app's to work round
+        // with a strip of its own.
       }
 
       Chrome.Fab {
+        colours: root.colours
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.rightMargin: 16
-        anchors.bottomMargin: 16 + Metrics.BOTTOM_NAV + root.shellFurniture
+        anchors.bottomMargin: 16 + Metrics.BOTTOM_NAV
         visible: root.page !== "editor"
         accent: root.accent
         foreground: root.accentInk
@@ -1440,8 +1428,10 @@ Item {
         id: toast
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: 12 + (root.page === "editor" ? 0 : Metrics.BOTTOM_NAV)
-                              + root.shellFurniture
+        // Above the tab bar where there is one. The editor has none, so there
+        // the toast clears the shell's furniture instead.
+        anchors.bottomMargin: 12 + (root.page === "editor"
+                                    ? root.shellFurniture : Metrics.BOTTOM_NAV)
         colours: root.colours
         bodySize: root.bodySize
       }

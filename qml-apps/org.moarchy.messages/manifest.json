@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "org.moarchy.messages",
+  "name": "Messages",
+  "version": "0.1.0",
+  "author": "Simon Schubert",
+  "license": "MIT",
+  "description": "Text messages, by person -- sent and received through ModemManager, kept in one file.",
+  "kinds": ["overlay"],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "Messages.qml"
+  }
+}

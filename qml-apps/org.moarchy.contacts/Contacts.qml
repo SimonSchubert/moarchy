@@ -37,7 +37,6 @@ Item {
 
   property string returnTo: ""
   readonly property var colours: themeFile.colours
-  readonly property int radiusCard: uiFile.radiusCard
   property int bodySize: Metrics.BODY
 
   Component.onCompleted: {
@@ -77,7 +76,6 @@ Item {
   readonly property color background: root.colours.background
   readonly property color ink: root.colours.foreground
   readonly property color dim: root.colours.dim
-  readonly property color line: root.colours.line
   readonly property color accent: root.colours.accent
   readonly property string danger: (root.colours.hues && root.colours.hues.red) || "#e01b24"
 
@@ -251,7 +249,6 @@ Item {
   }
 
   Chrome.ThemeFile { id: themeFile }
-  Chrome.UiFile { id: uiFile }
 
   IpcHandler {
     target: "contacts"
@@ -340,12 +337,14 @@ Item {
             bodySize: root.bodySize
 
             leading: Chrome.BackButton {
+              colours: root.colours
               color: root.ink
               onClicked: root.closeEditor()
             }
 
             trailing: [
               Chrome.IconButton {
+                colours: root.colours
                 visible: !root.draftIsNew
                 names: ["user-trash-symbolic", "edit-delete-symbolic"]
                 color: root.armed ? root.danger : root.ink
@@ -353,6 +352,7 @@ Item {
                 onClicked: root.deleteDraft()
               },
               Chrome.IconButton {
+                colours: root.colours
                 names: ["object-select-symbolic"]
                 color: root.accent
                 tooltip: "Save"
@@ -376,12 +376,14 @@ Item {
             Chrome.TextField {
               id: searchField
               Layout.fillWidth: true
-              Layout.leftMargin: 12
-              Layout.rightMargin: 12
+              Layout.leftMargin: Metrics.GUTTER
+              Layout.rightMargin: Metrics.GUTTER
               Layout.topMargin: 4
-              Layout.bottomMargin: 8
+              Layout.bottomMargin: Metrics.GAP
               placeholderText: "Search"
               leadingNames: ["edit-find-symbolic", "system-search-symbolic"]
+              colours: root.colours
+              level: "card"
               foreground: root.ink
               accent: root.accent
               iconColor: root.dim
@@ -391,152 +393,74 @@ Item {
             }
 
             Flickable {
+              id: listFlick
               Layout.fillWidth: true
               Layout.fillHeight: true
               contentWidth: width
-              contentHeight: listColumn.height
+              contentHeight: listColumn.implicitHeight + 88 + root.shellFurniture
               clip: true
               boundsBehavior: Flickable.StopAtBounds
 
-              Column {
+              ColumnLayout {
                 id: listColumn
-                width: parent.width
-                spacing: 0
+                x: Metrics.GUTTER
+                width: listFlick.width - Metrics.GUTTER * 2
+                spacing: Metrics.GAP
 
-                Item {
-                  width: parent.width
-                  height: emptyColumn.height + 48
+                Chrome.EmptyState {
+                  Layout.fillWidth: true
+                  Layout.topMargin: 40
                   visible: root.loaded && root.shown.length === 0
-
-                  Column {
-                    id: emptyColumn
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    anchors.top: parent.top
-                    anchors.topMargin: 48
-                    spacing: 8
-                    width: parent.width - 48
-
-                    Chrome.TypedText {
-                      width: parent.width
-                      horizontalAlignment: Text.AlignHCenter
-                      role: "subtitle"
-                      text: root.query.length ? "Nothing matches" : "No contacts yet"
-                      color: root.ink
-                      bodySize: root.bodySize
-                    }
-
-                    Chrome.TypedText {
-                      width: parent.width
-                      horizontalAlignment: Text.AlignHCenter
-                      role: "caption"
-                      text: root.query.length
-                            ? "Try a different name or number."
-                            : "Tap + for someone to call."
-                      color: root.dim
-                      bodySize: root.bodySize
-                      wrapMode: Text.WordWrap
-                    }
-                  }
+                  colours: root.colours
+                  bodySize: root.bodySize
+                  names: root.query.length
+                         ? ["system-search-symbolic"]
+                         : ["contact-new-symbolic", "list-add-symbolic"]
+                  title: root.query.length ? "Nothing matches" : "No contacts yet"
+                  detail: root.query.length
+                          ? "Try a different name or number."
+                          : "Tap + for someone to call."
                 }
 
+                // One box per letter, the people in it flush inside. The
+                // letter is the only loose text on this screen, which is what
+                // a heading is for -- and an index that is itself a row of
+                // boxes is an index that reads as part of the list.
                 Repeater {
                   model: root.groups
 
-                  delegate: Column {
+                  delegate: Chrome.Section {
                     id: section
                     required property var modelData
-                    width: listColumn.width
-                    spacing: 0
-
-                    Chrome.TypedText {
-                      width: parent.width
-                      leftPadding: 20
-                      rightPadding: 20
-                      topPadding: 14
-                      bottomPadding: 6
-                      role: "caption"
-                      text: section.modelData.letter
-                      color: root.accent
-                      bodySize: root.bodySize
-                      font.weight: Font.DemiBold
-                    }
+                    Layout.fillWidth: true
+                    colours: root.colours
+                    bodySize: root.bodySize
+                    title: section.modelData.letter
+                    pad: Metrics.GROUP_PAD
+                    radius: Metrics.radius(root.colours, Metrics.RADIUS_LG)
+                    cardSpacing: 0
 
                     Repeater {
                       model: section.modelData.contacts
 
-                      delegate: Rectangle {
+                      delegate: Chrome.ListRow {
                         id: row
                         required property var modelData
-                        width: section.width
-                        height: Math.max(Metrics.TARGET + 8, rowText.height + 18)
-                        color: "transparent"
-
-                        Rectangle {
-                          anchors.left: parent.left
-                          anchors.right: parent.right
-                          anchors.leftMargin: 12
-                          anchors.rightMargin: 12
-                          anchors.verticalCenter: parent.verticalCenter
-                          height: parent.height - 4
-                          radius: root.radiusCard
-                          color: root.surface(0.06)
-
-                          Column {
-                            id: rowText
-                            anchors.left: parent.left
-                            anchors.leftMargin: 14
-                            anchors.right: parent.right
-                            anchors.rightMargin: 14
-                            anchors.verticalCenter: parent.verticalCenter
-                            spacing: 1
-
-                            Chrome.TypedText {
-                              width: parent.width
-                              role: "body"
-                              text: row.modelData.name
-                                    || row.modelData.phone
-                                    || row.modelData.email
-                                    || "Untitled"
-                              color: root.ink
-                              bodySize: root.bodySize
-                              elide: Text.ElideRight
-                              maximumLineCount: 1
-                            }
-
-                            Chrome.TypedText {
-                              width: parent.width
-                              visible: Contacts.line(row.modelData).length > 0
-                                       && row.modelData.name.length > 0
-                              role: "caption"
-                              text: Contacts.line(row.modelData)
-                              color: root.dim
-                              bodySize: root.bodySize
-                              elide: Text.ElideRight
-                              maximumLineCount: 1
-                            }
-                          }
-
-                          Chrome.PressVeil {
-                            anchors.fill: parent
-                            radius: parent.radius
-                            ink: root.ink
-                            on: rowTap.pressed
-                          }
-
-                          MouseArea {
-                            id: rowTap
-                            anchors.fill: parent
-                            onClicked: root.startEdit(row.modelData)
-                          }
-                        }
+                        Layout.fillWidth: true
+                        radius: section.innerRadius
+                        minHeight: Metrics.TARGET + 10
+                        colours: root.colours
+                        bodySize: root.bodySize
+                        title: row.modelData.name
+                               || row.modelData.phone
+                               || row.modelData.email
+                               || "Untitled"
+                        subtitle: row.modelData.name.length > 0
+                                  ? Contacts.line(row.modelData) : ""
+                        onClicked: root.startEdit(row.modelData)
                       }
                     }
                   }
-                }
-
-                Item {
-                  width: parent.width
-                  height: 80 + root.shellFurniture
                 }
               }
             }
@@ -545,96 +469,113 @@ Item {
           // ========== the editor ==========
 
           Flickable {
+            id: editorFlick
             anchors.fill: parent
             visible: root.page === "editor"
             contentWidth: width
-            contentHeight: editorColumn.height + 24
+            contentHeight: editorColumn.implicitHeight + 40 + root.shellFurniture
             clip: true
             boundsBehavior: Flickable.StopAtBounds
 
-            Column {
+            ColumnLayout {
               id: editorColumn
-              width: parent.width
-              topPadding: 8
-              leftPadding: 16
-              rightPadding: 16
-              spacing: 14
+              x: Metrics.GUTTER
+              y: Metrics.GAP
+              width: editorFlick.width - Metrics.GUTTER * 2
+              spacing: Metrics.GAP
 
-              Chrome.TypedText {
-                text: "Name"
-                role: "caption"
-                color: root.dim
+              // One box, four fields. They were four loose captions over four
+              // pills on the window's own background, which is a form drawn as
+              // a list of unrelated things -- and a contact is one thing.
+              Chrome.Section {
+                Layout.fillWidth: true
+                colours: root.colours
                 bodySize: root.bodySize
-              }
+                title: "Contact"
+                cardSpacing: 10
 
-              Chrome.TextField {
-                id: nameField
-                width: parent.width - parent.leftPadding - parent.rightPadding
-                placeholderText: "Name"
-                foreground: root.ink
-                accent: root.accent
-                iconColor: root.dim
-                bodySize: root.bodySize
-                onTextChanged: root.change("name", text)
-              }
+                Chrome.TypedText {
+                  Layout.fillWidth: true
+                  role: "caption"
+                  text: "Name"
+                  color: root.dim
+                  bodySize: root.bodySize
+                }
 
-              Chrome.TypedText {
-                text: "Phone"
-                role: "caption"
-                color: root.dim
-                bodySize: root.bodySize
-              }
+                Chrome.TextField {
+                  id: nameField
+                  Layout.fillWidth: true
+                  placeholderText: "Name"
+                  colours: root.colours
+                  foreground: root.ink
+                  accent: root.accent
+                  iconColor: root.dim
+                  bodySize: root.bodySize
+                  onTextChanged: root.change("name", text)
+                }
 
-              Chrome.TextField {
-                id: phoneField
-                width: parent.width - parent.leftPadding - parent.rightPadding
-                placeholderText: "Phone"
-                foreground: root.ink
-                accent: root.accent
-                iconColor: root.dim
-                bodySize: root.bodySize
-                onTextChanged: root.change("phone", text)
-              }
+                Chrome.TypedText {
+                  Layout.fillWidth: true
+                  Layout.topMargin: 2
+                  role: "caption"
+                  text: "Phone"
+                  color: root.dim
+                  bodySize: root.bodySize
+                }
 
-              Chrome.TypedText {
-                text: "Email"
-                role: "caption"
-                color: root.dim
-                bodySize: root.bodySize
-              }
+                Chrome.TextField {
+                  id: phoneField
+                  Layout.fillWidth: true
+                  placeholderText: "Phone"
+                  colours: root.colours
+                  foreground: root.ink
+                  accent: root.accent
+                  iconColor: root.dim
+                  bodySize: root.bodySize
+                  onTextChanged: root.change("phone", text)
+                }
 
-              Chrome.TextField {
-                id: emailField
-                width: parent.width - parent.leftPadding - parent.rightPadding
-                placeholderText: "Email"
-                foreground: root.ink
-                accent: root.accent
-                iconColor: root.dim
-                bodySize: root.bodySize
-                onTextChanged: root.change("email", text)
-              }
+                Chrome.TypedText {
+                  Layout.fillWidth: true
+                  Layout.topMargin: 2
+                  role: "caption"
+                  text: "Email"
+                  color: root.dim
+                  bodySize: root.bodySize
+                }
 
-              Chrome.TypedText {
-                text: "Note"
-                role: "caption"
-                color: root.dim
-                bodySize: root.bodySize
-              }
+                Chrome.TextField {
+                  id: emailField
+                  Layout.fillWidth: true
+                  placeholderText: "Email"
+                  colours: root.colours
+                  foreground: root.ink
+                  accent: root.accent
+                  iconColor: root.dim
+                  bodySize: root.bodySize
+                  onTextChanged: root.change("email", text)
+                }
 
-              Chrome.TextField {
-                id: noteField
-                width: parent.width - parent.leftPadding - parent.rightPadding
-                placeholderText: "Note"
-                foreground: root.ink
-                accent: root.accent
-                iconColor: root.dim
-                bodySize: root.bodySize
-                onTextChanged: root.change("note", text)
-              }
+                Chrome.TypedText {
+                  Layout.fillWidth: true
+                  Layout.topMargin: 2
+                  role: "caption"
+                  text: "Note"
+                  color: root.dim
+                  bodySize: root.bodySize
+                }
 
-              Item {
-                width: 1
-                height: 24 + root.shellFurniture
+                Chrome.TextField {
+                  id: noteField
+                  Layout.fillWidth: true
+                  placeholderText: "Note"
+                  colours: root.colours
+                  foreground: root.ink
+                  accent: root.accent
+                  iconColor: root.dim
+                  bodySize: root.bodySize
+                  onTextChanged: root.change("note", text)
+                }
               }
             }
           }
@@ -647,6 +588,7 @@ Item {
       }
 
       Chrome.Fab {
+        colours: root.colours
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.rightMargin: 16

@@ -32,7 +32,11 @@ var MIX_LIGHT = 0.30
 
 function fill(palette, key) {
   var p = palette || Theme.fallback(true)
-  if (!key || key === "default") return p.surface
+  // A note with no colour is the kit's ordinary box, which is what lets the
+  // border come off it: it used to be `p.surface` -- a colour from the theme
+  // that is near the window's own on half of them -- outlined in a hairline so
+  // you could tell where the card was.
+  if (!key || key === "default") return Theme.surface(p, "card")
   var role = ROLES[key] || ""
   var hue = (p.hues && p.hues[role]) || p.accent
   return Theme.mix(hue, p.background, p.dark ? MIX_DARK : MIX_LIGHT)

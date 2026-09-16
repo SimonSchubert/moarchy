@@ -212,7 +212,7 @@ fi
 # touched yet.
 #
 # Written by hand rather than by calling `omarchy-default-editor
-# gnome-text-editor`, for the same reason as the terminal above: that command
+# moarchy-editor`, for the same reason as the terminal above: that command
 # ends in omarchy-notification-send, and this runs from a systemd user unit
 # before there is anything to notify. The format is the same one its reader
 # parses.
@@ -220,10 +220,10 @@ fi
 # Only when absent, like everything else here: a user who chose another editor
 # in Settings keeps it.
 EDITOR_STATE="$HOME/.local/state/omarchy/defaults/editor"
-if [[ ! -e $EDITOR_STATE ]] && command -v gnome-text-editor >/dev/null; then
+if [[ ! -e $EDITOR_STATE ]] && command -v moarchy-editor >/dev/null; then
   mkdir -p "$(dirname "$EDITOR_STATE")"
-  printf '%s\n' "gnome-text-editor" >"$EDITOR_STATE"
-  say "default editor gnome-text-editor"
+  printf '%s\n' "moarchy-editor" >"$EDITOR_STATE"
+  say "default editor moarchy-editor"
 fi
 
 # The other half: what opens when a text file is TAPPED rather than when
@@ -234,11 +234,16 @@ fi
 # back by name; `xdg-mime default` with several types at once is a GNOME
 # extension that other implementations do not honour, so it is a loop.
 #
+# The entry is org.moarchy.Editor.open.desktop, the hidden one, and not the
+# drawer's org.moarchy.Editor.plugin.desktop: the drawer's toggles the window,
+# and a toggle handed a path hides an editor that is already open instead of
+# opening the file in it.
+#
 # Unconditional, unlike the state file above: mimeapps.list is a machine's
 # record of choices and nvim.desktop's claim is the package's, not the user's,
 # so there is no user decision to preserve here -- and a phone that installs
 # neovim later would silently hand the types back otherwise.
-if command -v xdg-mime >/dev/null && [[ -r /usr/share/applications/org.gnome.TextEditor.desktop ]]; then
+if command -v xdg-mime >/dev/null && [[ -r /usr/share/applications/org.moarchy.Editor.open.desktop ]]; then
   # xdg-mime touches $XDG_CONFIG_HOME/mimeapps.list and does NOT create its
   # parent, and it exits 0 when that touch fails. So on a home directory whose
   # .config does not exist yet it writes nothing, says nothing, and returns
@@ -250,12 +255,12 @@ if command -v xdg-mime >/dev/null && [[ -r /usr/share/applications/org.gnome.Tex
   for t in text/plain text/markdown text/x-csrc text/x-chdr text/x-c++src \
            text/x-c++hdr text/x-shellscript application/x-shellscript \
            application/json text/x-python; do
-    xdg-mime default org.gnome.TextEditor.desktop "$t" 2>/dev/null || true
+    xdg-mime default org.moarchy.Editor.open.desktop "$t" 2>/dev/null || true
   done
   # Read it back rather than trust the exit code, for the reason above: this
   # said "text files open in Text Editor" over an empty mimeapps.list once
   # already, which is a log line that is worse than no log line.
-  if [[ $(xdg-mime query default text/plain 2>/dev/null) == org.gnome.TextEditor.desktop ]]; then
+  if [[ $(xdg-mime query default text/plain 2>/dev/null) == org.moarchy.Editor.open.desktop ]]; then
     say "text files open in Text Editor"
   else
     echo "!! could not set the text/plain handler -- tapped text files will open in whatever claims them" >&2

@@ -33,7 +33,6 @@ Item {
 
   property string returnTo: ""
   readonly property var colours: themeFile.colours
-  readonly property int radiusCard: uiFile.radiusCard
   property int bodySize: Metrics.BODY
   Component.onCompleted: {
     root.bodySize = Metrics.shellBody(root)
@@ -54,11 +53,9 @@ Item {
   property var memHistory: []
   readonly property int historyLength: 30
 
-  readonly property color surface: colours.surface
   readonly property color background: colours.background
   readonly property color textOnSurface: colours.foreground
   readonly property color dim: colours.dim
-  readonly property color line: colours.line
   readonly property color accent: colours.accent
 
   // MOARCHY_VITALS_ROOT is the harness's: a directory shaped like /proc, which
@@ -167,7 +164,6 @@ Item {
   Process { id: killer; running: false }
 
   Chrome.ThemeFile { id: themeFile }
-  Chrome.UiFile { id: uiFile }
 
   IpcHandler {
     target: "vitals"
@@ -231,93 +227,128 @@ Item {
           // --- processor -------------------------------------------------
 
           Flickable {
+            id: cpuPage
             anchors.fill: parent
             visible: root.tab === 0
             clip: true
             contentWidth: width
-            contentHeight: cpuCol.height
+            contentHeight: cpuCol.implicitHeight + Metrics.GUTTER * 2
             boundsBehavior: Flickable.StopAtBounds
 
-            Column {
+            ColumnLayout {
               id: cpuCol
-              width: parent.width
-              leftPadding: 12
-              rightPadding: 12
-              topPadding: 10
-              spacing: 12
+              x: Metrics.GUTTER
+              y: Metrics.GUTTER
+              width: cpuPage.width - Metrics.GUTTER * 2
+              spacing: Metrics.GAP
 
-              Chrome.TypedText {
-                role: "title"
-                text: root.sample ? Sysinfo.humanPercent(root.sample.cpu.total) : "—"
-                color: root.sample ? root.loadColour(root.sample.cpu.total) : root.dim
-                bodySize: root.bodySize
-              }
+              // The headline and the minute behind it, in one box. They are
+              // one fact read two ways -- what the machine is doing now and
+              // whether that is new -- and splitting them across two cards
+              // would be two boxes saying the same thing at two sizes.
+              Chrome.Card {
+                Layout.fillWidth: true
+                colours: root.colours
 
-              // Sixty seconds of it, as bars. A Repeater and not a Canvas: the
-              // scene graph batches thirty solid rectangles into one draw and
-              // repaints nothing when nothing changed, where a Canvas would
-              // re-upload a texture every tick.
-              Row {
-                width: cpuCol.width - 24
-                height: 56
-                spacing: 2
-                Repeater {
-                  model: root.historyLength
-                  delegate: Item {
-                    required property int index
-                    width: (cpuCol.width - 24 - (root.historyLength - 1) * 2) / root.historyLength
-                    height: 56
-                    readonly property real value: {
-                      var at = index - (root.historyLength - root.cpuHistory.length)
-                      return at >= 0 && at < root.cpuHistory.length ? root.cpuHistory[at] : 0
-                    }
-                    Rectangle {
-                      anchors.bottom: parent.bottom
-                      width: parent.width
-                      height: Math.max(1, parent.height * parent.value)
-                      radius: 2
-                      color: root.loadColour(parent.value)
-                      opacity: parent.value > 0 ? 1 : 0.25
-                    }
-                  }
+                Chrome.TypedText {
+                  Layout.fillWidth: true
+                  role: "title"
+                  text: root.sample ? Sysinfo.humanPercent(root.sample.cpu.total) : "—"
+                  color: root.sample ? root.loadColour(root.sample.cpu.total) : root.dim
+                  bodySize: root.bodySize
                 }
-              }
 
-              Column {
-                width: cpuCol.width - 24
-                spacing: 5
-                Repeater {
-                  model: root.sample ? root.sample.cpu.cores : []
-                  delegate: Row {
-                    required property var modelData
-                    required property int index
-                    width: parent.width
-                    spacing: 8
-                    Chrome.TypedText {
-                      width: 26
-                      role: "caption"
-                      text: "c" + index
-                      color: root.dim
-                      bodySize: root.bodySize
-                    }
-                    Rectangle {
-                      width: parent.width - 26 - 8 - 44
-                      height: 12
-                      anchors.verticalCenter: parent.verticalCenter
-                      radius: 6
-                      color: Theme.mix(root.colours.foreground, root.colours.background, 0.10)
-                      Rectangle {
-                        width: Math.max(2, parent.width * modelData)
-                        height: parent.height
-                        radius: 6
-                        color: root.loadColour(modelData)
+                // Sixty seconds of it, as bars. A Repeater and not a Canvas:
+                // the scene graph batches thirty solid rectangles into one
+                // draw and repaints nothing when nothing changed, where a
+                // Canvas would re-upload a texture every tick.
+                Item {
+                  id: cpuGraph
+                  Layout.fillWidth: true
+                  Layout.preferredHeight: 56
+
+                  // The chart area is drawn even when the chart is not. A
+                  // minute of history takes a minute to collect, and an app
+                  // that opens on 56px of nothing looks like one that failed
+                  // rather than one that has not finished counting.
+                  Rectangle {
+                    anchors.fill: parent
+                    radius: Metrics.radius(root.colours, Metrics.RADIUS_SM)
+                    color: Theme.surface(root.colours, "raised")
+                  }
+
+                  Row {
+                    anchors.fill: parent
+                    spacing: 2
+
+                    Repeater {
+                      model: root.historyLength
+                      delegate: Item {
+                        required property int index
+                        width: (cpuGraph.width - (root.historyLength - 1) * 2) / root.historyLength
+                        height: cpuGraph.height
+                        readonly property real value: {
+                          var at = index - (root.historyLength - root.cpuHistory.length)
+                          return at >= 0 && at < root.cpuHistory.length ? root.cpuHistory[at] : 0
+                        }
+                        Rectangle {
+                          anchors.bottom: parent.bottom
+                          width: parent.width
+                          height: Math.max(2, parent.height * parent.value)
+                          radius: Metrics.radius(root.colours, Metrics.RADIUS_XS)
+                          color: root.loadColour(parent.value)
+                          opacity: parent.value > 0 ? 1 : 0.25
+                        }
                       }
                     }
+                  }
+                }
+              }
+
+              Chrome.Section {
+                Layout.fillWidth: true
+                colours: root.colours
+                bodySize: root.bodySize
+                title: "Cores"
+                cardSpacing: 6
+                visible: !!root.sample
+
+                Repeater {
+                  model: root.sample ? root.sample.cpu.cores : []
+                  delegate: RowLayout {
+                    id: coreRow
+                    required property var modelData
+                    required property int index
+                    Layout.fillWidth: true
+                    spacing: 8
+
                     Chrome.TypedText {
-                      width: 44
+                      Layout.preferredWidth: 26
+                      role: "caption"
+                      text: "c" + coreRow.index
+                      color: root.dim
+                      bodySize: root.bodySize
+                    }
+
+                    Rectangle {
+                      Layout.fillWidth: true
+                      Layout.preferredHeight: 12
+                      radius: Metrics.round(root.colours, height)
+                      color: Theme.surface(root.colours, "raised")
+
+                      Rectangle {
+                        width: Math.max(parent.height, parent.width * coreRow.modelData)
+                        height: parent.height
+                        radius: Metrics.round(root.colours, height)
+                        color: root.loadColour(coreRow.modelData)
+                      }
+                    }
+
+                    Chrome.TypedText {
+                      Layout.preferredWidth: 44
                       horizontalAlignment: Text.AlignRight
                       role: "caption"
-                      text: Sysinfo.humanPercent(modelData)
+                      text: Sysinfo.humanPercent(coreRow.modelData)
                       color: root.dim
                       bodySize: root.bodySize
                     }
@@ -325,9 +356,14 @@ Item {
                 }
               }
 
-              Grid {
+              // Two across, because that is what fits a number and its name on
+              // 360px without either being abbreviated.
+              GridLayout {
+                Layout.fillWidth: true
                 columns: 2
-                spacing: 8
+                columnSpacing: Metrics.GAP
+                rowSpacing: Metrics.GAP
+
                 Repeater {
                   model: {
                     if (!root.sample) return []
@@ -340,75 +376,80 @@ Item {
                     if (c.frequency !== null) rows.push({ label: "Clock", value: Math.round(c.frequency) + " MHz" })
                     return rows
                   }
-                  delegate: Rectangle {
+                  delegate: Chrome.Tile {
+                    id: cpuTile
                     required property var modelData
-                    width: (cpuCol.width - 32) / 2
-                    height: 52
-                    radius: root.radiusCard
-                    color: Theme.mix(root.colours.foreground, root.colours.background, 0.06)
-                    Column {
-                      anchors.centerIn: parent
-                      spacing: 2
-                      Chrome.TypedText {
-                        role: "overline"; text: modelData.label
-                        color: root.dim; bodySize: root.bodySize
-                      }
-                      Chrome.TypedText {
-                        role: "body"; text: modelData.value
-                        color: root.textOnSurface; bodySize: root.bodySize
-                      }
-                    }
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 62
+                    colours: root.colours
+                    bodySize: root.bodySize
+                    label: cpuTile.modelData.label
+                    value: cpuTile.modelData.value
+                    valueColour: root.textOnSurface
                   }
                 }
               }
-              Item { width: 1; height: 10 }
             }
           }
 
           // --- memory ----------------------------------------------------
 
           Flickable {
+            id: memPage
             anchors.fill: parent
             visible: root.tab === 1
             clip: true
             contentWidth: width
-            contentHeight: memCol.height
+            contentHeight: memCol.implicitHeight + Metrics.GUTTER * 2
             boundsBehavior: Flickable.StopAtBounds
 
-            Column {
+            ColumnLayout {
               id: memCol
-              width: parent.width
-              leftPadding: 12
-              rightPadding: 12
-              topPadding: 10
-              spacing: 12
+              x: Metrics.GUTTER
+              y: Metrics.GUTTER
+              width: memPage.width - Metrics.GUTTER * 2
+              spacing: Metrics.GAP
 
-              Chrome.TypedText {
-                role: "title"
-                text: root.sample
-                      ? Sysinfo.humanBytes(root.sample.memory.used) + " of " +
-                        Sysinfo.humanBytes(root.sample.memory.total)
-                      : "—"
-                color: root.textOnSurface
-                bodySize: root.bodySize
-              }
+              Chrome.Card {
+                Layout.fillWidth: true
+                colours: root.colours
 
-              Rectangle {
-                width: memCol.width - 24
-                height: 20
-                radius: 10
-                color: Theme.mix(root.colours.foreground, root.colours.background, 0.10)
+                Chrome.TypedText {
+                  Layout.fillWidth: true
+                  role: "title"
+                  text: root.sample
+                        ? Sysinfo.humanBytes(root.sample.memory.used) + " of " +
+                          Sysinfo.humanBytes(root.sample.memory.total)
+                        : "—"
+                  color: root.textOnSurface
+                  bodySize: root.bodySize
+                  elide: Text.ElideRight
+                }
+
                 Rectangle {
-                  width: root.sample ? Math.max(2, parent.width * root.sample.memory.fraction) : 0
-                  height: parent.height
-                  radius: 10
-                  color: root.sample ? root.loadColour(root.sample.memory.fraction) : root.dim
+                  Layout.fillWidth: true
+                  Layout.preferredHeight: 18
+                  radius: Metrics.round(root.colours, height)
+                  color: Theme.surface(root.colours, "raised")
+
+                  Rectangle {
+                    width: root.sample
+                           ? Math.max(parent.height, parent.width * root.sample.memory.fraction) : 0
+                    height: parent.height
+                    radius: Metrics.round(root.colours, height)
+                    color: root.sample ? root.loadColour(root.sample.memory.fraction) : root.dim
+                  }
                 }
               }
 
-              Column {
-                width: memCol.width - 24
-                spacing: 6
+              Chrome.Section {
+                Layout.fillWidth: true
+                colours: root.colours
+                bodySize: root.bodySize
+                title: "Detail"
+                cardSpacing: 7
+                visible: !!root.sample
+
                 Repeater {
                   model: {
                     if (!root.sample) return []
@@ -429,122 +470,93 @@ Item {
                                    ? "  " + root.sample.battery.watts.toFixed(1) + " W" : "") })
                     return rows
                   }
-                  delegate: Row {
+                  delegate: RowLayout {
+                    id: memRow
                     required property var modelData
-                    width: parent.width
+                    Layout.fillWidth: true
+                    spacing: 8
+
                     Chrome.TypedText {
-                      width: parent.width / 2
-                      role: "body"; text: modelData.label
-                      color: root.dim; bodySize: root.bodySize
+                      Layout.fillWidth: true
+                      role: "body"
+                      text: memRow.modelData.label
+                      color: root.dim
+                      bodySize: root.bodySize
+                      elide: Text.ElideRight
                     }
+
                     Chrome.TypedText {
-                      width: parent.width / 2
                       horizontalAlignment: Text.AlignRight
-                      role: "body"; text: modelData.value
-                      color: root.textOnSurface; bodySize: root.bodySize
+                      role: "body"
+                      text: memRow.modelData.value
+                      color: root.textOnSurface
+                      bodySize: root.bodySize
                     }
                   }
                 }
               }
-              Item { width: 1; height: 10 }
             }
           }
 
           // --- tasks -----------------------------------------------------
 
-          Flickable {
-            anchors.fill: parent
+          Chrome.ListFrame {
+            id: taskFrame
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.margins: Metrics.GUTTER
+            // Sixty processes fill the screen and five do not, and a frame
+            // that reached the bottom either way would be four hundred pixels
+            // of empty box on a machine that is doing nothing.
+            height: Math.min(parent.height - Metrics.GUTTER * 2,
+                             taskList.contentHeight + taskFrame.pad * 2)
             visible: root.tab === 2
-            clip: true
-            contentWidth: width
-            contentHeight: taskCol.height
-            boundsBehavior: Flickable.StopAtBounds
+            colours: root.colours
 
-            Column {
-              id: taskCol
-              width: parent.width
+            ListView {
+              id: taskList
+              anchors.fill: parent
+              spacing: 0
+              boundsBehavior: Flickable.StopAtBounds
+              model: root.sample ? root.sample.processes.slice(0, 60) : []
 
-              Repeater {
-                model: root.sample ? root.sample.processes.slice(0, 60) : []
+              delegate: Chrome.ListRow {
+                id: taskRow
+                required property var modelData
+                readonly property var proc: taskRow.modelData
+                width: ListView.view.width
+                radius: taskFrame.innerRadius
+                colours: root.colours
+                bodySize: root.bodySize
+                title: taskRow.proc.name
+                // A kernel thread has no address space and so no command
+                // line; it is still a row, just a quieter one.
+                titleColour: taskRow.proc.kernel ? root.dim : root.textOnSurface
+                subtitle: taskRow.proc.pid + " · " + taskRow.proc.state +
+                          " · " + Sysinfo.humanBytes(taskRow.proc.rss)
+                selected: String(taskRow.proc.pid) === root.openPid
+                onClicked: root.openPid = taskRow.selected ? "" : String(taskRow.proc.pid)
 
-                delegate: Item {
-                  id: taskRow
-                  required property var modelData
-                  readonly property var proc: taskRow.modelData
-                  width: taskCol.width
-                  height: 56
-
-                  Rectangle {
-                    anchors.fill: parent
-                    color: String(taskRow.proc.pid) === root.openPid
-                           ? Theme.mix(root.colours.foreground, root.colours.background, 0.08)
-                           : "transparent"
+                trailing: [
+                  Chrome.TypedText {
+                    anchors.verticalCenter: parent.verticalCenter
+                    role: "body"
+                    text: Sysinfo.taskPercent(taskRow.proc.cpu)
+                    color: root.loadColour(taskRow.proc.cpu)
+                    bodySize: root.bodySize
+                  },
+                  Chrome.IconButton {
+                    colours: root.colours
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: taskRow.selected
+                    width: visible ? Metrics.TARGET : 0
+                    color: root.hueColor("red")
+                    names: ["window-close-symbolic", "edit-clear-symbolic"]
+                    tooltip: "End " + taskRow.proc.name
+                    onClicked: root.end(taskRow.proc.pid, false)
                   }
-
-                  MouseArea {
-                    anchors.fill: parent
-                    onClicked: root.openPid = (String(taskRow.proc.pid) === root.openPid)
-                               ? "" : String(taskRow.proc.pid)
-                  }
-
-                  RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 12
-                    anchors.rightMargin: 8
-                    spacing: 8
-
-                    Column {
-                      Layout.fillWidth: true
-                      Layout.alignment: Qt.AlignVCenter
-                      spacing: 1
-                      Chrome.TypedText {
-                        width: parent.width
-                        role: "body"
-                        text: taskRow.proc.name
-                        // A kernel thread has no address space and so no
-                        // command line; it is still a row, just a quieter one.
-                        color: taskRow.proc.kernel ? root.dim : root.textOnSurface
-                        bodySize: root.bodySize
-                        elide: Text.ElideRight
-                        maximumLineCount: 1
-                      }
-                      Chrome.TypedText {
-                        width: parent.width
-                        role: "caption"
-                        text: taskRow.proc.pid + " · " + taskRow.proc.state +
-                              " · " + Sysinfo.humanBytes(taskRow.proc.rss)
-                        color: root.dim
-                        bodySize: root.bodySize
-                        elide: Text.ElideRight
-                        maximumLineCount: 1
-                      }
-                    }
-
-                    Chrome.TypedText {
-                      Layout.alignment: Qt.AlignVCenter
-                      role: "body"
-                      text: Sysinfo.taskPercent(taskRow.proc.cpu)
-                      color: root.loadColour(taskRow.proc.cpu)
-                      bodySize: root.bodySize
-                    }
-
-                    Chrome.IconButton {
-                      Layout.alignment: Qt.AlignVCenter
-                      visible: String(taskRow.proc.pid) === root.openPid
-                      color: root.hueColor("red")
-                      names: ["window-close-symbolic", "edit-clear-symbolic"]
-                      tooltip: "End " + taskRow.proc.name
-                      onClicked: root.end(taskRow.proc.pid, false)
-                    }
-                  }
-
-                  Rectangle {
-                    anchors.bottom: parent.bottom
-                    width: parent.width
-                    height: 1
-                    color: root.line
-                  }
-                }
+                ]
               }
             }
           }
@@ -552,116 +564,152 @@ Item {
           // --- network ---------------------------------------------------
 
           Flickable {
+            id: netPage
             anchors.fill: parent
             visible: root.tab === 3
             clip: true
             contentWidth: width
-            contentHeight: netCol.height
+            contentHeight: netCol.implicitHeight + Metrics.GUTTER * 2
             boundsBehavior: Flickable.StopAtBounds
 
-            Column {
+            ColumnLayout {
               id: netCol
-              width: parent.width
+              x: Metrics.GUTTER
+              y: Metrics.GUTTER
+              width: netPage.width - Metrics.GUTTER * 2
+              spacing: Metrics.GAP
 
               Repeater {
                 model: root.sample ? root.sample.interfaces : []
 
-                delegate: Item {
+                // One interface, one box. They were rows with a rule between
+                // them, which made four unrelated machines look like one list.
+                delegate: Chrome.Card {
+                  id: ifaceCard
                   required property var modelData
-                  readonly property var iface: modelData
-                  width: netCol.width
-                  height: iface.wireless ? 84 : 66
+                  readonly property var iface: ifaceCard.modelData
+                  Layout.fillWidth: true
+                  colours: root.colours
+                  spacing: 7
 
-                  Column {
-                    anchors.fill: parent
-                    anchors.leftMargin: 12
-                    anchors.rightMargin: 12
-                    anchors.topMargin: 10
-                    spacing: 3
+                  RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
 
-                    Row {
-                      width: parent.width
-                      Chrome.TypedText {
-                        width: parent.width / 2
-                        role: "body"; text: iface.name
-                        color: iface.up ? root.textOnSurface : root.dim
-                        bodySize: root.bodySize
-                      }
-                      Chrome.TypedText {
-                        width: parent.width / 2
-                        horizontalAlignment: Text.AlignRight
-                        role: "caption"; text: iface.state
-                        color: iface.up ? root.hueColor("green") : root.dim
-                        bodySize: root.bodySize
-                      }
+                    Chrome.Icon {
+                      Layout.preferredWidth: 18
+                      Layout.preferredHeight: 18
+                      slot: 18
+                      size: 16
+                      color: ifaceCard.iface.up ? root.hueColor("green") : root.dim
+                      names: ifaceCard.iface.wireless
+                             ? ["network-wireless-symbolic"]
+                             : ["computer-symbolic", "network-wireless-symbolic"]
                     }
 
-                    Row {
-                      width: parent.width
-                      Chrome.TypedText {
-                        width: parent.width / 2
-                        role: "caption"
-                        text: "↓ " + Sysinfo.humanRate(iface.rx_rate)
-                        color: root.dim; bodySize: root.bodySize
-                      }
-                      Chrome.TypedText {
-                        width: parent.width / 2
-                        horizontalAlignment: Text.AlignRight
-                        role: "caption"
-                        text: "↑ " + Sysinfo.humanRate(iface.tx_rate)
-                        color: root.dim; bodySize: root.bodySize
-                      }
+                    Chrome.TypedText {
+                      Layout.fillWidth: true
+                      role: "subtitle"
+                      text: ifaceCard.iface.name
+                      color: ifaceCard.iface.up ? root.textOnSurface : root.dim
+                      bodySize: root.bodySize
+                      elide: Text.ElideRight
                     }
 
-                    Row {
-                      width: parent.width
-                      visible: iface.wireless
-                      spacing: 8
-                      Rectangle {
-                        width: parent.width - 60
-                        height: 8
-                        anchors.verticalCenter: parent.verticalCenter
-                        radius: 4
-                        color: Theme.mix(root.colours.foreground, root.colours.background, 0.10)
-                        Rectangle {
-                          width: Math.max(2, parent.width * (iface.quality === null ? 0 : iface.quality))
-                          height: parent.height
-                          radius: 4
-                          color: root.accent
-                        }
-                      }
-                      Chrome.TypedText {
-                        width: 52
-                        horizontalAlignment: Text.AlignRight
-                        role: "caption"
-                        // dBm where the driver reports it, because a percentage
-                        // whose denominator is a guess is worse than a number
-                        // that means something.
-                        text: iface.signal !== null ? iface.signal + " dBm"
-                              : (iface.quality !== null ? Sysinfo.humanPercent(iface.quality) : "")
-                        color: root.dim; bodySize: root.bodySize
-                      }
+                    Chrome.TypedText {
+                      role: "caption"
+                      text: ifaceCard.iface.state
+                      color: ifaceCard.iface.up ? root.hueColor("green") : root.dim
+                      bodySize: root.bodySize
                     }
                   }
 
-                  Rectangle {
-                    anchors.bottom: parent.bottom
-                    width: parent.width
-                    height: 1
-                    color: root.line
+                  // Only for an interface that is up. A down one has no rates
+                  // and never will; two boxes of "0 B/s" under it are a claim
+                  // that something is being measured.
+                  GridLayout {
+                    Layout.fillWidth: true
+                    visible: ifaceCard.iface.up
+                    columns: 2
+                    columnSpacing: 6
+                    rowSpacing: 6
+
+                    Chrome.Tile {
+                      Layout.fillWidth: true
+                      colours: root.colours
+                      bodySize: root.bodySize
+                      level: "raised"
+                      radius: ifaceCard.innerRadius
+                      pad: 10
+                      label: "Down"
+                      value: Sysinfo.humanRate(ifaceCard.iface.rx_rate)
+                      valueColour: root.textOnSurface
+                      valueRole: "body"
+                    }
+
+                    Chrome.Tile {
+                      Layout.fillWidth: true
+                      colours: root.colours
+                      bodySize: root.bodySize
+                      level: "raised"
+                      radius: ifaceCard.innerRadius
+                      pad: 10
+                      label: "Up"
+                      value: Sysinfo.humanRate(ifaceCard.iface.tx_rate)
+                      valueColour: root.textOnSurface
+                      valueRole: "body"
+                    }
+                  }
+
+                  RowLayout {
+                    Layout.fillWidth: true
+                    visible: ifaceCard.iface.wireless
+                    spacing: 8
+
+                    Rectangle {
+                      Layout.fillWidth: true
+                      Layout.preferredHeight: 8
+                      radius: Metrics.round(root.colours, height)
+                      color: Theme.surface(root.colours, "raised")
+
+                      Rectangle {
+                        width: Math.max(parent.height, parent.width *
+                               (ifaceCard.iface.quality === null ? 0 : ifaceCard.iface.quality))
+                        height: parent.height
+                        radius: Metrics.round(root.colours, height)
+                        color: root.accent
+                      }
+                    }
+
+                    Chrome.TypedText {
+                      Layout.preferredWidth: 56
+                      horizontalAlignment: Text.AlignRight
+                      role: "caption"
+                      // dBm where the driver reports it, because a percentage
+                      // whose denominator is a guess is worse than a number
+                      // that means something.
+                      text: ifaceCard.iface.signal !== null
+                            ? ifaceCard.iface.signal + " dBm"
+                            : (ifaceCard.iface.quality !== null
+                               ? Sysinfo.humanPercent(ifaceCard.iface.quality) : "")
+                      color: root.dim
+                      bodySize: root.bodySize
+                    }
                   }
                 }
               }
             }
           }
 
-          Chrome.TypedText {
+          Chrome.EmptyState {
             anchors.centerIn: parent
+            width: parent.width - Metrics.GUTTER * 2
             visible: !root.sample
-            role: "body"
-            text: "Reading /proc…"
-            color: root.dim
+            colours: root.colours
             bodySize: root.bodySize
+            names: ["system-run-symbolic"]
+            title: "Reading /proc"
+            detail: "The first sample is two seconds away; every rate on these screens is measured against it."
           }
 
           Chrome.Toast {

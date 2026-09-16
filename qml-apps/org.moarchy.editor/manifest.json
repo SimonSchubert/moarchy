@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "org.moarchy.editor",
+  "name": "Text Editor",
+  "version": "0.1.0",
+  "author": "Simon Schubert",
+  "license": "MIT",
+  "description": "One text file at a time, with undo and save where a thumb can reach them.",
+  "kinds": ["overlay"],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "Editor.qml"
+  }
+}

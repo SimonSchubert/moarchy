@@ -47,6 +47,79 @@ function mix(colour, into, amount) {
   return "#" + ch(0) + ch(1) + ch(2)
 }
 
+// How bright a colour is, on the crude weighting that has been good enough for
+// choosing black-or-white text since the nineteen-fifties. Three plugins had
+// their own copy, all three identical.
+function shade(colour) {
+  var c = rgb(String(colour))
+  return (c[0] * 299 + c[1] * 587 + c[2] * 114) / 255000.0
+}
+
+// What can be read on a solid fill. Not always the background: on a light
+// theme that is white, and white on a pale yellow accent is a Start button
+// nobody can find. Calculator's rule, and its reason.
+function inkOn(colours, fill) {
+  if (!colours) return "#ffffff"
+  var level = shade(fill)
+  return Math.abs(level - shade(colours.background))
+       > Math.abs(level - shade(colours.foreground))
+    ? colours.background : colours.foreground
+}
+
+// --- elevation ---------------------------------------------------------
+//
+// A box on this phone is not a border, it is a lighter fill. Which lighter
+// fill was a decision every plugin made for itself -- 0.06 in Weather, 0.07 in
+// Clock, 0.08 and 0.06 in Files, 0.10 and 0.12 elsewhere -- and the result was
+// that the same object read as a different depth depending on which app it was
+// in. These five are the whole ramp, and nothing outside this file names a
+// mixing amount for a surface again.
+//
+// They are mixes of the theme's own ink into its own background rather than
+// white at an alpha, so a light theme gets a *darker* box and the ramp still
+// reads as depth rather than as fog.
+//
+// Every step is a distance from the *page background*, not from whatever is
+// behind the thing being drawn -- so a box inside a box takes the next step
+// up, and a track drawn inside a card takes `raised` rather than `well`. On a
+// dark theme the two are hard to tell apart either way round; on a light one,
+// a `well` inside a `card` is the only combination that comes out lighter than
+// its own parent, which reads as a hole rather than as a track.
+var LEVEL = {
+  // A track something fills, drawn straight onto the page background.
+  well: 0.035,
+  // The ordinary box. A card on the page, a row in a list.
+  card: 0.07,
+  // A box inside a box, a track inside a card, and anything that has to read
+  // as liftable off one.
+  raised: 0.12,
+  // Any of the above under a thumb.
+  pressed: 0.17,
+  // The last resort, for the rare edge that has to be drawn rather than
+  // implied. Not a divider: a divider is a gap here.
+  edge: 0.22
+}
+
+function surface(colours, level) {
+  var amount = LEVEL[level]
+  if (amount === undefined) amount = LEVEL.card
+  if (!colours) return mix("#ffffff", "#1d1d20", amount)
+  return mix(colours.foreground, colours.background, amount)
+}
+
+// The same ramp in a hue rather than in the ink: a tinted card, for the one
+// row in a list that is a warning, a streak or an event with a colour on it.
+// Stronger than `surface` at every step because a hue mixed at 0.07 into the
+// background is a grey with a rumour of colour in it.
+var TINT = { well: 0.10, card: 0.20, raised: 0.28, pressed: 0.36, edge: 0.44 }
+
+function tint(colours, hue, level) {
+  var amount = TINT[level]
+  if (amount === undefined) amount = TINT.card
+  if (!colours) return hue
+  return mix(hue, colours.background, amount)
+}
+
 // `Util.alpha` in qs.Commons is this function. Ours is a copy rather than an
 // import so that fading a press does not drag the whole kit onto a shell that
 // only exists on our image.

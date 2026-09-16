@@ -1,0 +1,2257 @@
+#!/usr/bin/env python3
+"""The half of Mail that talks to a mail server.
+
+Mail is QML the shell keeps loaded, and QML cannot open a TLS socket. So every
+conversation with a server is one run of this command: a verb, a JSON request
+on stdin, and one JSON object on stdout. It is how Phone and Messages reach the
+modem through mmcli, and nothing here stays running -- a run logs in, does one
+thing, and logs out.
+
+    moarchy-mail autoconfig   {"email"}
+    moarchy-mail setup        {"name", "email", "password", "username", "imap", "smtp"}
+    moarchy-mail forget
+    moarchy-mail folders
+    moarchy-mail sync         {"folder", "uidvalidity", "uids", "limit", "older"}
+    moarchy-mail peek         {"uidvalidity", "since"}
+    moarchy-mail body         {"folder", "uidvalidity", "uid"}
+    moarchy-mail attachment   {"folder", "uidvalidity", "uid", "index", "dir"}
+    moarchy-mail flag         {"folder", "uids", "add", "remove"}
+    moarchy-mail move         {"folder", "uids", "to"}
+    moarchy-mail delete       {"folder", "uids"}
+    moarchy-mail send         {"to", "cc", "bcc", "subject", "text", ...}
+
+The answer always has "ok". When it is false, "error" is a sentence a person
+can act on and "kind" says what sort of failure it was -- auth, network, tls,
+server, gone, config, request -- so the app can tell a wrong password from a
+dead connection without reading English.
+
+What is on disk, all under ~/.local/share/moarchy-mail (or $MOARCHY_MAIL_DIR):
+
+    account.json   the servers and the address. Written here, read by the app.
+    password       the password, and nothing else. Written and read only here:
+                   the app never holds it after the setup form is sent.
+    bodies/        each message fetched whole, as .eml, with the .json the app
+                   reads to show it. Keyed by folder, UIDVALIDITY and UID, which
+                   IMAP promises never name different content, so a file here
+                   is never stale -- only unreferenced.
+
+Every other file in that directory is the app's, and this never writes it.
+
+Both files are 0600 in a 0700 directory. The password is not in a keyring
+because a keyring on this phone is locked until something prompts for it, and
+the prompt maps behind the window that wanted it -- moarchy-store's
+catalogue.toml records Fractal doing that, and Geary with it. aerc,
+neomutt and msmtp all keep it this way, and the README says so.
+
+HTML is never handed to the app. A message is turned into text and links here,
+and what the app gets is StyledText with no tag in it that this file did not
+write: no <img>, so nothing in a message can make the phone fetch a tracking
+pixel, and no href but an index into a list of links the app asks about before
+it opens one.
+"""
+
+from __future__ import annotations
+
+import base64
+import binascii
+import contextlib
+import hashlib
+import html
+import imaplib
+import json
+import os
+import re
+import shutil
+import smtplib
+import socket
+import ssl
+import sys
+import tempfile
+import time
+import traceback
+import unicodedata
+import urllib.parse
+import urllib.request
+import xml.etree.ElementTree as ElementTree
+from datetime import datetime, timezone
+from email import policy
+from email.headerregistry import Address
+from email.message import EmailMessage
+from email.parser import BytesParser
+from email.utils import (
+    collapse_rfc2231_value,
+    format_datetime,
+    getaddresses,
+    make_msgid,
+)
+from html.parser import HTMLParser
+from pathlib import Path
+
+SCHEMA = 1
+# One run is one thing a person is waiting on. Thirty seconds is long enough for
+# a login over a bad mobile connection and short enough that a server which is
+# not coming back says so while they are still looking.
+TIMEOUT = 30
+# How many messages a folder shows before "older" is asked for.
+LIMIT = 50
+# The start of each message's body that comes with its headers, for the line of
+# preview under the subject. Enough to get past a multipart preamble and the
+# first part's headers into its text; 50 of them is 150 KB.
+PREVIEW_BYTES = 3072
+PREVIEW_CHARS = 200
+# Where a message stops being drawn. One Text lays the whole of it out on a
+# Cortex-A53, and a newsletter can be a megabyte of table cells.
+MARKUP_CHARS = 150_000
+# The quoted half of a reply is drawn in this, and the app replaces it with the
+# theme's own dim ink: this file cannot know the theme, and a colour the app
+# searches for is the one thing it can.
+QUOTE_INK = "#8a8a8f"
+SECURITY = ("tls", "starttls", "none")
+HEADER_FIELDS = (
+    "DATE FROM TO CC REPLY-TO SUBJECT MESSAGE-ID CONTENT-TYPE CONTENT-TRANSFER-ENCODING"
+)
+
+# Providers that file a copy of every message they send into Sent themselves.
+# Appending one here as well would put each sent message there twice.
+SAVES_SENT = ("gmail.com", "googlemail.com", "office365.com", "outlook.com")
+
+
+# --- failure ------------------------------------------------------------------
+
+
+class MailError(Exception):
+    """A failure with a sentence for the person holding the phone."""
+
+    def __init__(self, kind: str, sentence: str) -> None:
+        super().__init__(sentence)
+        self.kind = kind
+        self.sentence = sentence
+
+
+def said(data) -> str:
+    """What a server put after NO or BAD, as text."""
+    parts = []
+    for item in data or []:
+        if isinstance(item, tuple):
+            item = item[0]
+        if isinstance(item, (bytes, bytearray)):
+            parts.append(bytes(item).decode("utf-8", "replace"))
+        elif item is not None:
+            parts.append(str(item))
+    text = " ".join(" ".join(parts).split())
+    return re.sub(r"^\[[A-Z-]+\]\s*", "", text)[:200]
+
+
+def reach_error(exc: BaseException, host: str, port: int) -> MailError:
+    if isinstance(exc, ssl.SSLCertVerificationError):
+        reason = exc.verify_message or "its certificate did not verify"
+        return MailError("tls", f"{host} could not prove it is {host}: {reason}.")
+    if isinstance(exc, ssl.SSLError):
+        return MailError(
+            "tls",
+            f"The secure connection to {host} on port {port} failed. "
+            "The port or the security setting may be wrong.",
+        )
+    if isinstance(exc, socket.gaierror):
+        return MailError(
+            "network",
+            f"{host} could not be found. Check the server name, and that the phone is online.",
+        )
+    if isinstance(exc, TimeoutError):
+        return MailError("network", f"{host} did not answer on port {port}.")
+    if isinstance(exc, ConnectionRefusedError):
+        return MailError("network", f"{host} refused a connection on port {port}.")
+    if isinstance(exc, imaplib.IMAP4.abort):
+        return MailError("network", f"The connection to {host} dropped.")
+    if isinstance(exc, smtplib.SMTPServerDisconnected):
+        return MailError("network", f"{host} closed the connection.")
+    reason = getattr(exc, "strerror", None) or str(exc) or type(exc).__name__
+    return MailError("network", f"Could not reach {host}: {reason}.")
+
+
+# --- text -----------------------------------------------------------------------
+
+# Invisible characters that newsletters pad their hidden preheader with, a
+# hundred at a time, so that a client's preview shows nothing after the first
+# line. Format characters, and the combining grapheme joiner, which is not one.
+_INVISIBLE = {chr(0x034F), chr(0xFEFF)}
+
+
+def tidy(text: str) -> str:
+    """Text that can go into JSON, and onto a screen.
+
+    Headers and bodies arrive with bytes that were not what they said they
+    were, and Python carries those as lone surrogates, which json.dumps
+    refuses. Re-encoding recovers them when they were UTF-8 after all, which
+    they usually were.
+    """
+    if not text:
+        return ""
+    try:
+        text.encode("utf-8")
+    except UnicodeEncodeError:
+        text = text.encode("utf-8", "surrogateescape").decode("utf-8", "replace")
+    out = []
+    for ch in text:
+        if ch in "\n\t":
+            out.append(ch)
+            continue
+        if ch in _INVISIBLE:
+            continue
+        category = unicodedata.category(ch)
+        if category == "Cf" or (category == "Cc" and ch != "\r"):
+            continue
+        out.append(ch)
+    return "".join(out).replace("\r\n", "\n").replace("\r", "\n")
+
+
+def one_line(text: str) -> str:
+    return " ".join(tidy(text).split())
+
+
+def param(part, name: str) -> str:
+    """A Content-Type parameter as text, whichever way RFC 2231 wrote it."""
+    try:
+        value = part.get_param(name)
+    except Exception:  # noqa: BLE001
+        return ""
+    if value is None:
+        return ""
+    if isinstance(value, tuple):
+        value = collapse_rfc2231_value(value)
+    return str(value)
+
+
+def decode_bytes(data: bytes, charset: str | None) -> str:
+    name = (charset or "").strip().strip('"').lower()
+    # us-ascii is what a message says when it said nothing, and the bytes in it
+    # are UTF-8 more often than not. ISO-8859-1 is Windows-1252 by the same rule
+    # every browser follows: the labels are used interchangeably, and the one
+    # that is a superset is the one that shows the curly quotes.
+    if name in (
+        "",
+        "us-ascii",
+        "ascii",
+        "utf8",
+        "unknown-8bit",
+        "x-unknown",
+        "default",
+    ):
+        name = "utf-8"
+    elif name in ("iso-8859-1", "iso8859-1", "latin1", "latin-1", "l1"):
+        name = "cp1252"
+    elif name in ("gb2312", "gbk", "x-gbk"):
+        name = "gb18030"
+    try:
+        return data.decode(name, "replace")
+    except LookupError:
+        return data.decode("utf-8", "replace")
+
+
+def part_bytes(part) -> bytes:
+    """A leaf part's content, decoded from its transfer encoding.
+
+    Base64 by hand, because the preview is cut at a byte count and base64 cut
+    mid-quantum is ordinary there: everything up to the cut is still good.
+    Everything else through get_payload(decode=True), which is the one way to
+    get the bytes of an 8bit part back -- without `decode` the email package
+    hands over text it has already decoded in the charset the part claimed.
+    """
+    cte = str(part.get("content-transfer-encoding") or "").strip().lower()
+    if cte == "base64":
+        payload = part.get_payload(decode=False)
+        if not isinstance(payload, str):
+            return b""
+        clean = re.sub(r"[^A-Za-z0-9+/]", "", payload).encode("ascii")
+        clean = clean[: len(clean) // 4 * 4]
+        try:
+            return base64.b64decode(clean)
+        except binascii.Error:
+            return b""
+    try:
+        data = part.get_payload(decode=True)
+    except Exception:  # noqa: BLE001
+        data = None
+    return data if isinstance(data, bytes) else b""
+
+
+def part_text(part) -> str:
+    return tidy(decode_bytes(part_bytes(part), param(part, "charset")))
+
+
+def unflow(text: str, delsp: bool) -> str:
+    """format=flowed (RFC 3676) put back into paragraphs.
+
+    Thunderbird and most phones send it: a line ending in a space continues on
+    the next one. Drawn as sent, a paragraph is a column of 72-character lines
+    on a screen that holds 40.
+    """
+    out: list[str] = []
+    depth_now = -1
+    current = ""
+    open_line = False
+    for line in text.split("\n"):
+        depth = len(line) - len(line.lstrip(">"))
+        body = line[depth:]
+        if body.startswith(" "):
+            body = body[1:]
+        if open_line and depth == depth_now:
+            current += body
+        else:
+            if open_line:
+                out.append(">" * depth_now + (" " if depth_now else "") + current)
+            current = body
+            depth_now = depth
+        soft = body.endswith(" ") and body != "-- "
+        if soft:
+            if delsp:
+                current = current[:-1]
+            open_line = True
+        else:
+            out.append(">" * depth + (" " if depth else "") + current)
+            open_line = False
+            current = ""
+    if open_line:
+        out.append(">" * depth_now + (" " if depth_now else "") + current)
+    return "\n".join(out)
+
+
+# --- a message, drawn -----------------------------------------------------------
+
+
+class Runs:
+    """Styled text as a list of runs, for StyledText and for plain text.
+
+    Each run is text with at most three things about it: the link it is part
+    of, whether it is bold, and whether it is quoted. That is the whole of what
+    a message looks like here, and it is small enough that the markup can be
+    written by this class and nothing else.
+    """
+
+    def __init__(self, budget: int = MARKUP_CHARS) -> None:
+        self.parts: list[list] = []
+        self.links: list[str] = []
+        self.budget = budget
+        self.used = 0
+        self.truncated = False
+
+    def _tail(self) -> str:
+        for part in reversed(self.parts):
+            if part[0]:
+                return part[0][-1]
+        return ""
+
+    def text(
+        self,
+        text: str,
+        link: str | None = None,
+        bold: bool = False,
+        quote: bool = False,
+        pre: bool = False,
+    ) -> None:
+        if self.truncated:
+            return
+        text = tidy(text)
+        if not pre:
+            text = re.sub(r"\s+", " ", text)
+            if self._tail() in ("", " ", "\n"):
+                text = text.lstrip(" ")
+        if not text:
+            return
+        if self.used + len(text) > self.budget:
+            text = text[: max(0, self.budget - self.used)]
+            self.truncated = True
+        self.used += len(text)
+        index = self.link(link) if link else None
+        if self.parts and self.parts[-1][1:] == [index, bold, quote]:
+            self.parts[-1][0] += text
+        else:
+            self.parts.append([text, index, bold, quote])
+
+    def link(self, href: str) -> int:
+        if href not in self.links:
+            self.links.append(href)
+        return self.links.index(href)
+
+    def newline(self, count: int = 1, force: bool = False) -> None:
+        """End the line. `count` 2 leaves a blank line; `force` is a <br>."""
+        if self.truncated or not self.parts:
+            return
+        last = self.parts[-1]
+        last[0] = last[0].rstrip(" ")
+        existing = 0
+        for part in reversed(self.parts):
+            stripped = part[0].rstrip("\n")
+            existing += len(part[0]) - len(stripped)
+            if stripped:
+                break
+        want = min(2, existing + 1) if force else count
+        if want > existing:
+            self.parts.append(["\n" * (want - existing), None, False, False])
+
+    def _trimmed(self) -> list[list]:
+        parts = [p[:] for p in self.parts]
+        while parts and not parts[-1][0].strip():
+            parts.pop()
+        if parts:
+            parts[-1][0] = parts[-1][0].rstrip()
+        return parts
+
+    def plain(self) -> str:
+        return "".join(p[0] for p in self._trimmed())
+
+    def markup(self) -> str:
+        out = []
+        for text, index, bold, quote in self._trimmed():
+            piece = html.escape(text, quote=False).replace("\n", "<br>")
+            if index is not None and text.strip():
+                piece = f'<a href="#{index}">{piece}</a>'
+            if bold and text.strip():
+                piece = f"<b>{piece}</b>"
+            if quote and text.strip():
+                piece = f'<font color="{QUOTE_INK}">{piece}</font>'
+            out.append(piece)
+        return "".join(out)
+
+
+def safe_href(href: str | None) -> str | None:
+    """Only the three kinds of link a phone can do something sensible with."""
+    href = (href or "").strip()
+    if href.startswith("//"):
+        href = "https:" + href
+    scheme = href.split(":", 1)[0].lower() if ":" in href else ""
+    if scheme in ("http", "https") and len(href) > len(scheme) + 3:
+        return href
+    if scheme == "mailto" and len(href) > 7:
+        return href
+    return None
+
+
+_URL = re.compile(
+    r"(?i)(?:https?://|www\.)[^\s<>\"']+"
+    r"|mailto:[^\s<>\"']+"
+    r"|(?<![\w.+-])[a-z0-9._%+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)+"
+)
+
+
+def _trim_url(url: str) -> str:
+    while url and url[-1] in ".,;:!?'\"]}>":
+        url = url[:-1]
+    while url.endswith(")") and url.count(")") > url.count("("):
+        url = url[:-1]
+    return url
+
+
+def plain_runs(text: str, runs: Runs) -> None:
+    for number, line in enumerate(text.split("\n")):
+        if number:
+            runs.newline(1, force=True)
+        quote = line.startswith(">")
+        position = 0
+        for match in _URL.finditer(line):
+            url = _trim_url(match.group(0))
+            if not url:
+                continue
+            start = match.start()
+            if start > position:
+                runs.text(line[position:start], quote=quote, pre=True)
+            if (
+                "@" in url
+                and "://" not in url
+                and not url.lower().startswith("mailto:")
+            ):
+                href = "mailto:" + url
+            elif url.lower().startswith("www."):
+                href = "https://" + url
+            else:
+                href = url
+            runs.text(url, link=safe_href(href), quote=quote, pre=True)
+            position = start + len(url)
+        if position < len(line):
+            runs.text(line[position:], quote=quote, pre=True)
+
+
+def _hidden(attrs: dict) -> bool:
+    if "hidden" in attrs:
+        return True
+    style = re.sub(r"\s+", "", str(attrs.get("style") or "")).lower()
+    return (
+        "display:none" in style
+        or "visibility:hidden" in style
+        or "mso-hide:all" in style
+        or bool(re.search(r"(?:^|;)max-height:0(?:px)?(?:;|$|!)", style))
+        or bool(re.search(r"(?:^|;)font-size:0(?:px)?(?:;|$|!)", style))
+    )
+
+
+class _Html(HTMLParser):
+    """An HTML message, as Runs.
+
+    Tables, divs and paragraphs become lines; a link keeps its words and loses
+    its URL, which the app shows before opening it; bold stays bold; and
+    everything a newsletter hides from a person -- scripts, styles, preheaders
+    at display:none -- stays hidden. Pictures are counted, not drawn.
+    """
+
+    VOID = {
+        "area",
+        "base",
+        "br",
+        "col",
+        "embed",
+        "hr",
+        "img",
+        "input",
+        "link",
+        "meta",
+        "param",
+        "source",
+        "track",
+        "wbr",
+    }
+    SKIP = {
+        "script",
+        "style",
+        "head",
+        "title",
+        "template",
+        "noscript",
+        "svg",
+        "object",
+        "iframe",
+        "button",
+        "select",
+        "textarea",
+    }
+    BLOCK = {
+        "div",
+        "tr",
+        "li",
+        "dt",
+        "dd",
+        "section",
+        "article",
+        "header",
+        "footer",
+        "nav",
+        "aside",
+        "main",
+        "figure",
+        "figcaption",
+        "address",
+        "center",
+        "form",
+        "fieldset",
+        "details",
+        "summary",
+        "caption",
+    }
+    PARAGRAPH = {
+        "p",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "ul",
+        "ol",
+        "dl",
+        "table",
+        "blockquote",
+        "pre",
+        "hr",
+    }
+    BOLD = {"b", "strong", "h1", "h2", "h3", "h4", "h5", "h6", "th"}
+
+    def __init__(self, runs: Runs) -> None:
+        super().__init__(convert_charrefs=True)
+        self.runs = runs
+        # (tag, skip, link, bold, quote, pre)
+        self.stack: list[tuple] = []
+        self.pictures = 0
+
+    def _now(self) -> tuple:
+        return self.stack[-1] if self.stack else ("", False, None, False, False, False)
+
+    def handle_starttag(self, tag, attrs):
+        _, skip, link, bold, quote, pre = self._now()
+        if tag == "br":
+            if not skip:
+                self.runs.newline(1, force=True)
+            return
+        if tag == "img":
+            if not skip:
+                self.pictures += 1
+            return
+        if tag == "hr":
+            if not skip:
+                self.runs.newline(2)
+            return
+        if tag in self.VOID:
+            return
+        found = dict(attrs)
+        skip = skip or tag in self.SKIP or _hidden(found)
+        if tag == "a":
+            link = safe_href(found.get("href"))
+        bold = bold or tag in self.BOLD
+        quote = quote or tag == "blockquote"
+        pre = pre or tag == "pre"
+        if not skip:
+            if tag in self.PARAGRAPH:
+                self.runs.newline(2)
+            elif tag in self.BLOCK:
+                self.runs.newline(1)
+            if tag == "li":
+                self.runs.text("• ")
+            elif tag in ("td", "th"):
+                self.runs.text(" ")
+        self.stack.append((tag, skip, link, bold, quote, pre))
+
+    def handle_startendtag(self, tag, attrs):
+        self.handle_starttag(tag, attrs)
+        if tag not in self.VOID:
+            self.handle_endtag(tag)
+
+    def handle_endtag(self, tag):
+        if tag in self.VOID:
+            return
+        for i in range(len(self.stack) - 1, -1, -1):
+            if self.stack[i][0] == tag:
+                closed = self.stack[i]
+                del self.stack[i:]
+                if not closed[1]:
+                    if tag in self.PARAGRAPH:
+                        self.runs.newline(2)
+                    elif tag in self.BLOCK:
+                        self.runs.newline(1)
+                return
+
+    def handle_data(self, data):
+        _, skip, link, bold, quote, pre = self._now()
+        if not skip:
+            self.runs.text(data, link=link, bold=bold, quote=quote, pre=pre)
+
+
+def html_runs(source: str, runs: Runs) -> int:
+    parser = _Html(runs)
+    try:
+        parser.feed(source)
+        parser.close()
+    except Exception:  # noqa: BLE001 -- a broken message is still shown up to the break
+        pass
+    return parser.pictures
+
+
+def html_text(source: str) -> str:
+    runs = Runs(budget=10 * MARKUP_CHARS)
+    html_runs(source, runs)
+    return runs.plain()
+
+
+# --- a message, read ------------------------------------------------------------
+
+
+def header_text(msg, name: str) -> str:
+    try:
+        value = msg[name]
+    except Exception:  # noqa: BLE001 -- a malformed header is an absent one
+        return ""
+    return one_line(str(value)) if value is not None else ""
+
+
+def header_addresses(msg, name: str) -> list[dict]:
+    try:
+        value = msg[name]
+    except Exception:  # noqa: BLE001
+        value = None
+    if value is None:
+        return []
+    found = []
+    try:
+        for a in value.addresses:
+            found.append(
+                {
+                    "name": one_line(a.display_name or ""),
+                    "email": one_line(a.addr_spec or ""),
+                }
+            )
+    except Exception:  # noqa: BLE001 -- fall back to the lenient parser
+        for name_, addr in getaddresses([str(value)]):
+            found.append({"name": one_line(name_), "email": one_line(addr)})
+    return [a for a in found if a["email"] or a["name"]]
+
+
+def header_date(msg) -> int:
+    try:
+        value = msg["date"]
+        stamp = value.datetime if value is not None else None
+    except Exception:  # noqa: BLE001
+        stamp = None
+    if stamp is None:
+        return 0
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=timezone.utc)
+    return int(stamp.timestamp() * 1000)
+
+
+def body_parts(msg):
+    """The text/plain and text/html parts that are the message itself."""
+    try:
+        plain = msg.get_body(preferencelist=("plain",))
+    except Exception:  # noqa: BLE001
+        plain = None
+    try:
+        rich = msg.get_body(preferencelist=("html",))
+    except Exception:  # noqa: BLE001
+        rich = None
+    if plain is None and rich is None:
+        for part in msg.walk():
+            if part.get_content_maintype() == "text" and not part.is_multipart():
+                if part.get_content_subtype() == "html":
+                    rich = part
+                else:
+                    plain = part
+                break
+    return plain, rich
+
+
+def preview_of(msg) -> str:
+    plain, rich = body_parts(msg)
+    text = part_text(plain) if plain is not None else ""
+    if not text.strip() and rich is not None:
+        text = html_text(part_text(rich))
+    lines = [line for line in text.split("\n") if not line.lstrip().startswith(">")]
+    return " ".join(" ".join(lines).split())[:PREVIEW_CHARS]
+
+
+def walk_parts(msg) -> list[tuple]:
+    """Every part with its parent's type, in a stable order.
+
+    The order is the address of an attachment -- `attachment` is asked for by
+    index -- so it must not depend on anything but the bytes. A forwarded
+    message is one part: what is inside it belongs to that message.
+    """
+    out: list[tuple] = []
+
+    def visit(part, parent: str) -> None:
+        out.append((part, parent))
+        ctype = part.get_content_type()
+        if part.is_multipart() and ctype != "message/rfc822":
+            for child in part.get_payload():
+                visit(child, ctype)
+
+    visit(msg, "")
+    return out
+
+
+def attachment_payload(part) -> bytes:
+    if part.get_content_type() == "message/rfc822":
+        try:
+            inner = part.get_payload(0)
+            return inner.as_bytes(policy=policy.SMTP)
+        except Exception:  # noqa: BLE001
+            return b""
+    try:
+        data = part.get_payload(decode=True)
+    except Exception:  # noqa: BLE001
+        data = None
+    return data if isinstance(data, bytes) else part_bytes(part)
+
+
+def attachment_name(part, index: int) -> str:
+    try:
+        name = part.get_filename()
+    except Exception:  # noqa: BLE001
+        name = None
+    name = one_line(name or "")
+    if not name and part.get_content_type() == "message/rfc822":
+        try:
+            name = header_text(part.get_payload(0), "subject") + ".eml"
+        except Exception:  # noqa: BLE001
+            name = ""
+    if not name:
+        ext = {
+            "text/calendar": ".ics",
+            "image/jpeg": ".jpg",
+            "image/png": ".png",
+            "application/pdf": ".pdf",
+        }.get(part.get_content_type(), "")
+        name = f"attachment-{index}{ext}"
+    return name
+
+
+def attachments_of(msg, bodies: tuple, html_source: str) -> list[dict]:
+    found = []
+    for index, (part, parent) in enumerate(walk_parts(msg)):
+        ctype = part.get_content_type()
+        if part.is_multipart() and ctype != "message/rfc822":
+            continue
+        if any(part is b for b in bodies if b is not None):
+            continue
+        disposition = part.get_content_disposition()
+        try:
+            name = part.get_filename()
+        except Exception:  # noqa: BLE001
+            name = None
+        cid = str(part.get("content-id") or "").strip().strip("<>")
+        referenced = bool(cid) and ("cid:" + cid) in html_source
+        if disposition != "attachment":
+            if ctype in ("text/plain", "text/html") and not name:
+                continue
+            if referenced:
+                continue
+            if parent == "multipart/related" and not name:
+                continue
+            if parent == "multipart/alternative" and ctype != "text/calendar":
+                continue
+        found.append(
+            {
+                "index": index,
+                "name": attachment_name(part, index),
+                "type": ctype,
+                "size": len(attachment_payload(part)),
+            }
+        )
+    return found
+
+
+def parse_message(raw: bytes) -> dict:
+    msg = BytesParser(policy=policy.default).parsebytes(raw)
+    plain, rich = body_parts(msg)
+    plain_text = part_text(plain) if plain is not None else ""
+    if plain is not None and param(plain, "format").lower() == "flowed":
+        plain_text = unflow(plain_text, param(plain, "delsp").lower() == "yes")
+    rich_source = part_text(rich) if rich is not None else ""
+
+    runs = Runs()
+    pictures = 0
+    if plain_text.strip():
+        plain_runs(plain_text.strip("\n"), runs)
+        text = plain_text
+    elif rich_source:
+        pictures = html_runs(rich_source, runs)
+        text = runs.plain()
+    else:
+        text = ""
+
+    return {
+        "schema": SCHEMA,
+        "subject": header_text(msg, "subject"),
+        "from": header_addresses(msg, "from"),
+        "to": header_addresses(msg, "to"),
+        "cc": header_addresses(msg, "cc"),
+        "replyTo": header_addresses(msg, "reply-to"),
+        "date": header_date(msg),
+        "messageId": header_text(msg, "message-id"),
+        "inReplyTo": header_text(msg, "in-reply-to"),
+        "references": header_text(msg, "references"),
+        "text": text.strip("\n")[: 4 * MARKUP_CHARS],
+        "markup": runs.markup(),
+        "links": runs.links,
+        "truncated": runs.truncated,
+        "pictures": pictures,
+        "attachments": attachments_of(msg, (plain, rich), rich_source),
+    }
+
+
+def has_attachment(msg, flags: list[str]) -> bool:
+    """Whether to draw a paperclip, before the message is fetched.
+
+    Dovecot and Fastmail say so outright with a keyword (RFC 9051 has
+    $HasAttachment and $HasNoAttachment). Without one, multipart/mixed is the
+    guess: it is what a message with a file in it almost always is, and a
+    newsletter with pictures almost never.
+    """
+    if "$HasAttachment" in flags:
+        return True
+    if "$HasNoAttachment" in flags:
+        return False
+    return msg.get_content_type() == "multipart/mixed"
+
+
+def header_row(item: dict) -> dict:
+    """One FETCH response as the row a folder list draws."""
+    head = pick(item, "BODY[HEADER")
+    start = pick(item, "BODY[TEXT]")
+    head = head if isinstance(head, bytes) else b""
+    start = start if isinstance(start, bytes) else b""
+    msg = BytesParser(policy=policy.default).parsebytes(head + start)
+    at = internal_date(item.get("INTERNALDATE"))
+    try:
+        preview = preview_of(msg)
+    except Exception:  # noqa: BLE001 -- a row without a preview is still a row
+        preview = ""
+    sender = header_addresses(msg, "from")
+    return {
+        "uid": int(item.get("UID") or 0),
+        "flags": flag_list(item.get("FLAGS")),
+        "at": at or header_date(msg),
+        "date": header_date(msg) or at,
+        "from": sender[0] if sender else {"name": "", "email": ""},
+        "to": header_addresses(msg, "to")[:3],
+        "subject": header_text(msg, "subject"),
+        "preview": preview,
+        "attachment": has_attachment(msg, flag_list(item.get("FLAGS"))),
+        "size": int(item.get("RFC822.SIZE") or 0),
+    }
+
+
+# --- IMAP responses ---------------------------------------------------------------
+
+OPEN = object()
+CLOSE = object()
+_LITERAL = re.compile(rb"\{\d+\}\s*$")
+
+
+def _scan(line: bytes, out: list) -> None:
+    i, n = 0, len(line)
+    while i < n:
+        c = line[i]
+        if c in (32, 9, 13, 10):
+            i += 1
+        elif c == 40:  # (
+            out.append(OPEN)
+            i += 1
+        elif c == 41:  # )
+            out.append(CLOSE)
+            i += 1
+        elif c == 34:  # "
+            j = i + 1
+            buf = bytearray()
+            while j < n and line[j] != 34:
+                if line[j] == 92 and j + 1 < n:  # backslash
+                    j += 1
+                buf.append(line[j])
+                j += 1
+            out.append(bytes(buf))
+            i = j + 1
+        else:
+            # An atom, which may carry a section in brackets with spaces and
+            # parentheses of its own: BODY[HEADER.FIELDS (FROM TO)].
+            j = i
+            depth = 0
+            while j < n:
+                ch = line[j]
+                if ch == 91:
+                    depth += 1
+                elif ch == 93:
+                    depth = max(0, depth - 1)
+                elif depth == 0 and ch in (32, 40, 41, 13, 10, 9):
+                    break
+                j += 1
+            atom = line[i:j].decode("ascii", "replace")
+            out.append(None if atom.upper() == "NIL" else atom)
+            i = max(j, i + 1)
+
+
+def tokens(data) -> list:
+    """imaplib's response data as one stream of tokens.
+
+    imaplib hands a response back split at its literals: a tuple of the line up
+    to `{n}` and the n bytes, then whatever followed on the next line. Atoms
+    come out as str, strings and literals as bytes, NIL as None.
+    """
+    out: list = []
+    for item in data or []:
+        if isinstance(item, tuple):
+            _scan(_LITERAL.sub(b"", bytes(item[0])), out)
+            out.append(bytes(item[1]))
+        elif isinstance(item, (bytes, bytearray)):
+            _scan(bytes(item), out)
+    return out
+
+
+def tree(toks: list) -> list:
+    stack: list[list] = [[]]
+    for t in toks:
+        if t is OPEN:
+            nested: list = []
+            stack[-1].append(nested)
+            stack.append(nested)
+        elif t is CLOSE:
+            if len(stack) > 1:
+                stack.pop()
+        else:
+            stack[-1].append(t)
+    return stack[0]
+
+
+def fetched(data) -> list[dict]:
+    """FETCH responses as dicts of item name to value."""
+    out = []
+    for node in tree(tokens(data)):
+        if isinstance(node, list):
+            item = {}
+            for k in range(0, len(node) - 1, 2):
+                if isinstance(node[k], str):
+                    item[node[k].upper()] = node[k + 1]
+            if item:
+                out.append(item)
+    return out
+
+
+def pick(item: dict, prefix: str):
+    for key, value in item.items():
+        if key.startswith(prefix):
+            return value
+    return None
+
+
+def flag_list(value) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [v for v in value if isinstance(v, str)]
+
+
+def internal_date(value) -> int:
+    if isinstance(value, bytes):
+        value = value.decode("ascii", "replace")
+    if not isinstance(value, str):
+        return 0
+    try:
+        stamp = datetime.strptime(value.strip(), "%d-%b-%Y %H:%M:%S %z")
+    except ValueError:
+        return 0
+    return int(stamp.timestamp() * 1000)
+
+
+def text_of(value) -> str:
+    if isinstance(value, bytes):
+        return value.decode("utf-8", "replace")
+    return "" if value is None else str(value)
+
+
+# Folder names on the wire are "modified UTF-7" (RFC 3501 5.1.3): printable
+# ASCII as itself, & as &-, and everything else as base64 of UTF-16 between &
+# and -, with , for /.
+def utf7_encode(name: str) -> str:
+    out: list[str] = []
+    pending: list[str] = []
+
+    def flush() -> None:
+        if pending:
+            chunk = base64.b64encode("".join(pending).encode("utf-16-be")).decode(
+                "ascii"
+            )
+            out.append("&" + chunk.rstrip("=").replace("/", ",") + "-")
+            pending.clear()
+
+    for ch in name:
+        if 0x20 <= ord(ch) <= 0x7E:
+            flush()
+            out.append("&-" if ch == "&" else ch)
+        else:
+            pending.append(ch)
+    flush()
+    return "".join(out)
+
+
+def utf7_decode(name: str) -> str:
+    out: list[str] = []
+    i = 0
+    while i < len(name):
+        if name[i] != "&":
+            out.append(name[i])
+            i += 1
+            continue
+        end = name.find("-", i + 1)
+        if end < 0:
+            out.append(name[i:])
+            break
+        if end == i + 1:
+            out.append("&")
+        else:
+            chunk = name[i + 1 : end].replace(",", "/")
+            chunk += "=" * (-len(chunk) % 4)
+            try:
+                out.append(base64.b64decode(chunk).decode("utf-16-be"))
+            except (binascii.Error, UnicodeDecodeError):
+                out.append(name[i : end + 1])
+        i = end + 1
+    return "".join(out)
+
+
+def mailbox(name: str) -> str:
+    """A folder name as a quoted IMAP argument."""
+    wire = utf7_encode(name).replace("\\", "\\\\").replace('"', '\\"')
+    return '"' + wire + '"'
+
+
+def uid_set(uids) -> str:
+    ordered = sorted({int(u) for u in uids})
+    ranges: list[tuple[int, int]] = []
+    for u in ordered:
+        if ranges and u == ranges[-1][1] + 1:
+            ranges[-1] = (ranges[-1][0], u)
+        else:
+            ranges.append((u, u))
+    return ",".join(str(a) if a == b else f"{a}:{b}" for a, b in ranges)
+
+
+# --- account ----------------------------------------------------------------------
+
+
+def data_dir() -> Path:
+    override = os.environ.get("MOARCHY_MAIL_DIR")
+    if override:
+        return Path(override)
+    base = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
+    return Path(base) / "moarchy-mail"
+
+
+def write_private(path: Path, data: bytes) -> None:
+    """Atomically, 0600, in a 0700 directory."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with contextlib.suppress(OSError):
+        os.chmod(data_dir(), 0o700)
+    fd, temp = tempfile.mkstemp(dir=path.parent, prefix="." + path.name + ".")
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(temp)
+        raise
+
+
+def server_config(value, what: str) -> dict:
+    if not isinstance(value, dict):
+        raise MailError("request", f"The {what} server is missing.")
+    host = str(value.get("host") or "").strip()
+    if not host or any(c.isspace() for c in host) or "/" in host:
+        raise MailError("request", f"The {what} server name is not a host name.")
+    try:
+        port = int(value.get("port"))
+    except (TypeError, ValueError):
+        port = 0
+    if not 0 < port < 65536:
+        raise MailError(
+            "request", f"The {what} port has to be a number from 1 to 65535."
+        )
+    security = str(value.get("security") or "tls")
+    if security not in SECURITY:
+        raise MailError(
+            "request",
+            f"The {what} security setting is not one of {', '.join(SECURITY)}.",
+        )
+    return {"host": host, "port": port, "security": security}
+
+
+def account_config(value) -> dict:
+    if not isinstance(value, dict):
+        raise MailError("request", "There is no account in that request.")
+    address = one_line(str(value.get("email") or ""))
+    if "@" not in address or address.startswith("@") or address.endswith("@"):
+        raise MailError("request", "That is not an email address.")
+    return {
+        "schema": SCHEMA,
+        "name": one_line(str(value.get("name") or "")),
+        "email": address,
+        "username": one_line(str(value.get("username") or "")) or address,
+        "imap": server_config(value.get("imap"), "incoming"),
+        "smtp": server_config(value.get("smtp"), "outgoing"),
+    }
+
+
+def load_account() -> tuple[dict, str]:
+    try:
+        raw = (data_dir() / "account.json").read_text(encoding="utf-8")
+    except FileNotFoundError:
+        raise MailError("config", "There is no account set up yet.") from None
+    except OSError as exc:
+        raise MailError(
+            "config", f"The account file could not be read: {exc.strerror}."
+        ) from None
+    try:
+        account = account_config(json.loads(raw))
+    except ValueError:
+        raise MailError("config", "The account file is not valid JSON.") from None
+    try:
+        password = (data_dir() / "password").read_text(encoding="utf-8")
+    except FileNotFoundError:
+        password = ""
+    return account, password
+
+
+# --- IMAP -----------------------------------------------------------------------
+
+
+def _context() -> ssl.SSLContext:
+    return ssl.create_default_context()
+
+
+def login_error(text: str, default: str) -> MailError:
+    lowered = text.lower()
+    if (
+        "application-specific" in lowered
+        or "app password" in lowered
+        or "app-specific" in lowered
+    ):
+        return MailError(
+            "auth",
+            "This account wants an app password, which is made in the provider's "
+            "security settings, rather than the account's own password.",
+        )
+    if text and "fail" not in lowered and "invalid" not in lowered:
+        return MailError("auth", f"{default} The server said: {text}")
+    return MailError("auth", default)
+
+
+@contextlib.contextmanager
+def imap_session(account: dict, password: str):
+    server = account["imap"]
+    host, port = server["host"], server["port"]
+    conn = None
+    try:
+        if server["security"] == "tls":
+            conn = imaplib.IMAP4_SSL(
+                host, port, ssl_context=_context(), timeout=TIMEOUT
+            )
+        else:
+            conn = imaplib.IMAP4(host, port, timeout=TIMEOUT)
+            if server["security"] == "starttls":
+                try:
+                    conn.starttls(ssl_context=_context())
+                except imaplib.IMAP4.abort:
+                    raise
+                except imaplib.IMAP4.error:
+                    raise MailError(
+                        "tls",
+                        f"{host} would not start a secure connection. Try TLS on port 993.",
+                    ) from None
+        username = account["username"]
+        try:
+            if username.isascii() and password.isascii():
+                conn.login(username, password)
+            else:
+                blob = (chr(0) + username + chr(0) + password).encode("utf-8")
+                conn.authenticate("PLAIN", lambda _challenge: blob)
+        except imaplib.IMAP4.abort:
+            raise
+        except imaplib.IMAP4.error as exc:
+            raise login_error(
+                said([str(exc)]), "The mail server refused that user name and password."
+            ) from None
+        yield conn
+    except (OSError, imaplib.IMAP4.abort) as exc:
+        raise reach_error(exc, host, port) from None
+    except imaplib.IMAP4.error as exc:
+        raise MailError(
+            "server",
+            f"{host} answered something this could not follow: {said([str(exc)])}",
+        ) from None
+    finally:
+        if conn is not None:
+            with contextlib.suppress(Exception):
+                if conn.state == "SELECTED":
+                    conn.close()
+            with contextlib.suppress(Exception):
+                conn.logout()
+
+
+def ok(typ: str, data, doing: str) -> None:
+    if typ != "OK":
+        raise MailError("server", f"The server would not {doing}: {said(data) or typ}.")
+
+
+def open_folder(conn, folder: str, readonly: bool = True) -> dict:
+    typ, data = conn.select(mailbox(folder), readonly=readonly)
+    ok(typ, data, f"open {folder}")
+
+    def last(key: str) -> int:
+        values = conn.untagged_responses.get(key) or []
+        try:
+            return int(text_of(values[-1]).split()[0]) if values else 0
+        except (ValueError, IndexError):
+            return 0
+
+    return {
+        "uidvalidity": last("UIDVALIDITY"),
+        "uidnext": last("UIDNEXT"),
+        "exists": last("EXISTS"),
+    }
+
+
+def folder_status(conn, folder: str) -> dict:
+    typ, data = conn.status(mailbox(folder), "(MESSAGES UNSEEN UIDNEXT UIDVALIDITY)")
+    if typ != "OK":
+        return {}
+    for node in tree(tokens(data)):
+        if isinstance(node, list):
+            found = {}
+            for k in range(0, len(node) - 1, 2):
+                with contextlib.suppress(TypeError, ValueError):
+                    found[str(node[k]).upper()] = int(text_of(node[k + 1]))
+            return found
+    return {}
+
+
+def flags_by_uid(data) -> dict[int, list[str]]:
+    found = {}
+    for item in fetched(data):
+        with contextlib.suppress(TypeError, ValueError):
+            uid = int(item.get("UID"))
+            found[uid] = flag_list(item.get("FLAGS"))
+    return found
+
+
+def fetch_rows(conn, uids) -> list[dict]:
+    rows = []
+    wanted = sorted({int(u) for u in uids})
+    items = (
+        f"(UID FLAGS INTERNALDATE RFC822.SIZE BODY.PEEK[HEADER.FIELDS ({HEADER_FIELDS})] "
+        f"BODY.PEEK[TEXT]<0.{PREVIEW_BYTES}>)"
+    )
+    for start in range(0, len(wanted), 100):
+        chunk = wanted[start : start + 100]
+        typ, data = conn.uid("FETCH", uid_set(chunk), items)
+        ok(typ, data, "send the message list")
+        for item in fetched(data):
+            if int(item.get("UID") or 0) in chunk:
+                rows.append(header_row(item))
+    return rows
+
+
+def search_uids(data) -> list[int]:
+    found = []
+    for line in data or []:
+        for word in text_of(line if not isinstance(line, tuple) else line[0]).split():
+            if word.isdigit():
+                found.append(int(word))
+    return found
+
+
+# --- folders ------------------------------------------------------------------------
+
+ROLES = {
+    "\\sent": "sent",
+    "\\drafts": "drafts",
+    "\\trash": "trash",
+    "\\junk": "junk",
+    "\\archive": "archive",
+    "\\all": "all",
+    "\\flagged": "flagged",
+}
+NAMED = {
+    "sent": "sent",
+    "sent items": "sent",
+    "sent messages": "sent",
+    "sent mail": "sent",
+    "gesendet": "sent",
+    "gesendete objekte": "sent",
+    "gesendete elemente": "sent",
+    "drafts": "drafts",
+    "draft": "drafts",
+    "entwürfe": "drafts",
+    "trash": "trash",
+    "deleted items": "trash",
+    "deleted messages": "trash",
+    "bin": "trash",
+    "papierkorb": "trash",
+    "gelöschte elemente": "trash",
+    "junk": "junk",
+    "spam": "junk",
+    "junk e-mail": "junk",
+    "junk email": "junk",
+    "archive": "archive",
+    "archiv": "archive",
+    "all mail": "all",
+    "starred": "flagged",
+}
+ROLE_ORDER = ["inbox", "drafts", "sent", "archive", "flagged", "all", "junk", "trash"]
+
+
+def list_folders(conn) -> list[dict]:
+    typ, data = conn.list('""', '"*"')
+    ok(typ, data, "list its folders")
+    folders = []
+    taken: set[str] = set()
+    for item in data or []:
+        node = tree(tokens([item]))
+        if len(node) < 3 or not isinstance(node[0], list):
+            continue
+        attrs = [str(a).lower() for a in node[0] if isinstance(a, str)]
+        delimiter = text_of(node[1])
+        name = utf7_decode(text_of(node[2]))
+        if name.upper() == "INBOX":
+            name = "INBOX"
+        if "\\noselect" in attrs or "\\nonexistent" in attrs:
+            continue
+        path = name.split(delimiter) if delimiter else [name]
+        leaf = path[-1]
+        parents = [p for p in path[:-1] if p not in ("[Gmail]", "[Google Mail]")]
+        role = "inbox" if name == "INBOX" else ""
+        for attr in attrs:
+            role = role or ROLES.get(attr, "")
+        # By name only at the top, or directly under INBOX: servers that keep
+        # every folder inside the Inbox (INBOX.Sent) and say nothing about
+        # special use are still common, and a Sent three levels down is a
+        # folder somebody made and named, not the one mail is filed in.
+        if not role and (not parents or parents == ["INBOX"]):
+            role = NAMED.get(leaf.lower(), "")
+        if role in taken and role != "":
+            role = ""
+        if role:
+            taken.add(role)
+        folders.append(
+            {
+                "name": name,
+                "label": "Inbox" if name == "INBOX" else leaf,
+                "parent": " / ".join(parents),
+                "role": role,
+            }
+        )
+
+    def order(f: dict):
+        rank = (
+            ROLE_ORDER.index(f["role"]) if f["role"] in ROLE_ORDER else len(ROLE_ORDER)
+        )
+        return (rank, (f["parent"] + " / " + f["label"]).casefold())
+
+    return sorted(folders, key=order)
+
+
+# --- verbs ----------------------------------------------------------------------
+
+
+def need_folder(request: dict) -> str:
+    folder = str(request.get("folder") or "")
+    if not folder or "\n" in folder or "\r" in folder:
+        raise MailError("request", "No folder was named.")
+    return folder
+
+
+def need_uids(request: dict) -> list[int]:
+    try:
+        uids = sorted({int(u) for u in request.get("uids") or []})
+    except (TypeError, ValueError):
+        uids = []
+    uids = [u for u in uids if u > 0]
+    if not uids:
+        raise MailError("request", "No messages were named.")
+    return uids
+
+
+def number(request: dict, key: str, default: int = 0) -> int:
+    try:
+        return int(request.get(key) or default)
+    except (TypeError, ValueError):
+        return default
+
+
+def verb_folders(_request: dict) -> dict:
+    account, password = load_account()
+    with imap_session(account, password) as conn:
+        folders = list_folders(conn)
+        for folder in folders:
+            status = folder_status(conn, folder["name"])
+            folder["unseen"] = status.get("UNSEEN", 0)
+            folder["total"] = status.get("MESSAGES", 0)
+    return {"folders": folders}
+
+
+def verb_sync(request: dict) -> dict:
+    """What a folder holds now, against what the app already has.
+
+    The app sends the UIDs it has rows for, and gets back every UID the server
+    still has from the oldest of those up (with its flags), and rows only for
+    the ones it did not have. So a refresh of a folder nothing happened to is
+    one line per message, not one set of headers per message.
+    """
+    folder = need_folder(request)
+    known_validity = number(request, "uidvalidity")
+    limit = max(1, min(500, number(request, "limit", LIMIT)))
+    older = bool(request.get("older"))
+    try:
+        known = sorted({int(u) for u in request.get("uids") or [] if int(u) > 0})
+    except (TypeError, ValueError):
+        known = []
+
+    account, password = load_account()
+    with imap_session(account, password) as conn:
+        status = folder_status(conn, folder)
+        opened = open_folder(conn, folder)
+        uidvalidity = opened["uidvalidity"] or status.get("UIDVALIDITY", 0)
+        reset = known_validity != uidvalidity
+        if reset:
+            known = []
+        exists = opened["exists"]
+        result = {
+            "folder": folder,
+            "uidvalidity": uidvalidity,
+            "uidnext": opened["uidnext"] or status.get("UIDNEXT", 0),
+            "exists": exists,
+            "unseen": status.get("UNSEEN", 0),
+            "reset": reset,
+            "present": [],
+            "rows": [],
+            "more": False,
+        }
+        if exists == 0:
+            return result
+
+        typ, data = conn.fetch(f"{max(1, exists - limit + 1)}:*", "(UID FLAGS)")
+        ok(typ, data, "list what is in the folder")
+        present = flags_by_uid(data)
+        if not present:
+            return result
+        top = min(present)
+        low = min([top] + known[:1])
+
+        if older:
+            floor = low
+            if floor > 1:
+                typ, data = conn.uid("SEARCH", f"UID 1:{floor - 1}")
+                ok(typ, data, "look for older messages")
+                earlier = sorted(u for u in search_uids(data) if u < floor)[-limit:]
+                if earlier:
+                    low = earlier[0]
+
+        if low < top:
+            typ, data = conn.uid("FETCH", f"{low}:{top - 1}", "(UID FLAGS)")
+            ok(typ, data, "list what is in the folder")
+            present.update(flags_by_uid(data))
+
+        have = set(known)
+        result["present"] = [[uid, present[uid]] for uid in sorted(present)]
+        result["rows"] = fetch_rows(conn, [uid for uid in present if uid not in have])
+        result["more"] = exists > len(present)
+    return result
+
+
+def verb_peek(request: dict) -> dict:
+    """New mail in the Inbox since `since`, for a notification.
+
+    The first answer for a UIDVALIDITY carries no rows: it is the line from
+    which new is measured, and a phone that has just been set up has not just
+    received three thousand messages.
+    """
+    known_validity = number(request, "uidvalidity")
+    since = number(request, "since")
+    account, password = load_account()
+    with imap_session(account, password) as conn:
+        status = folder_status(conn, "INBOX")
+        result = {
+            "uidvalidity": status.get("UIDVALIDITY", 0),
+            "uidnext": status.get("UIDNEXT", 0),
+            "unseen": status.get("UNSEEN", 0),
+            "rows": [],
+        }
+        if since <= 0 or known_validity != result["uidvalidity"]:
+            return result
+        if result["uidnext"] and result["uidnext"] <= since:
+            return result
+        open_folder(conn, "INBOX")
+        typ, data = conn.uid("SEARCH", f"UNSEEN UID {since}:*")
+        ok(typ, data, "look for new messages")
+        # `n:*` always includes the newest message, even when it is older than n.
+        fresh = sorted(u for u in search_uids(data) if u >= since)[-10:]
+        if fresh:
+            result["rows"] = sorted(fetch_rows(conn, fresh), key=lambda r: r["uid"])
+        if not result["uidnext"]:
+            result["uidnext"] = max(fresh + [since - 1]) + 1
+    return result
+
+
+def body_path(folder: str, uidvalidity: int, uid: int, suffix: str) -> Path:
+    key = hashlib.md5(folder.encode("utf-8"), usedforsecurity=False).hexdigest()
+    return data_dir() / "bodies" / key / f"{uidvalidity}-{uid}{suffix}"
+
+
+def message_source(request: dict) -> tuple[str, int, int, bytes]:
+    folder = need_folder(request)
+    uidvalidity = number(request, "uidvalidity")
+    uid = number(request, "uid")
+    if uid <= 0 or uidvalidity <= 0:
+        raise MailError("request", "No message was named.")
+    eml = body_path(folder, uidvalidity, uid, ".eml")
+    with contextlib.suppress(OSError):
+        return folder, uidvalidity, uid, eml.read_bytes()
+
+    account, password = load_account()
+    with imap_session(account, password) as conn:
+        opened = open_folder(conn, folder)
+        if opened["uidvalidity"] != uidvalidity:
+            raise MailError(
+                "gone",
+                f"{folder} changed on the server. Refresh it and open the message again.",
+            )
+        typ, data = conn.uid("FETCH", str(uid), "(UID BODY.PEEK[])")
+        ok(typ, data, "send the message")
+        raw = None
+        for item in fetched(data):
+            if int(item.get("UID") or 0) == uid:
+                raw = pick(item, "BODY[]")
+        if not isinstance(raw, bytes):
+            raise MailError("gone", "This message is no longer on the server.")
+    write_private(eml, raw)
+    return folder, uidvalidity, uid, raw
+
+
+def verb_body(request: dict) -> dict:
+    folder, uidvalidity, uid, raw = message_source(request)
+    parsed = parse_message(raw)
+    parsed.update({"folder": folder, "uidvalidity": uidvalidity, "uid": uid})
+    write_private(
+        body_path(folder, uidvalidity, uid, ".json"),
+        json.dumps({"ok": True, **parsed}, ensure_ascii=False).encode("utf-8"),
+    )
+    return parsed
+
+
+def downloads_dir() -> Path:
+    home = Path.home()
+    dirs = (
+        Path(os.environ.get("XDG_CONFIG_HOME") or home / ".config") / "user-dirs.dirs"
+    )
+    with contextlib.suppress(OSError):
+        for line in dirs.read_text(encoding="utf-8").splitlines():
+            if line.startswith("XDG_DOWNLOAD_DIR="):
+                value = (
+                    line.split("=", 1)[1].strip().strip('"').replace("$HOME", str(home))
+                )
+                if value.startswith("/"):
+                    return Path(value)
+    return home / "Downloads"
+
+
+def safe_name(name: str) -> str:
+    """A file name that stays in the folder it is written to."""
+    name = one_line(name).replace("/", "_").replace("\\", "_")
+    name = name.lstrip(".").strip() or "attachment"
+    while len(name.encode("utf-8")) > 200:
+        stem, dot, ext = name.rpartition(".")
+        name = (stem[:-1] + dot + ext) if stem and len(ext) < 12 else name[:-1]
+    return name
+
+
+def free_path(folder: Path, name: str) -> Path:
+    candidate = folder / name
+    stem, dot, ext = name.rpartition(".")
+    if not dot or not stem:
+        stem, dot, ext = name, "", ""
+    n = 2
+    while candidate.exists():
+        candidate = folder / f"{stem} ({n}){dot}{ext}"
+        n += 1
+    return candidate
+
+
+def verb_attachment(request: dict) -> dict:
+    _folder, _validity, _uid, raw = message_source(request)
+    index = number(request, "index", -1)
+    msg = BytesParser(policy=policy.default).parsebytes(raw)
+    parts = walk_parts(msg)
+    if not 0 <= index < len(parts):
+        raise MailError("request", "That attachment is not in this message.")
+    part = parts[index][0]
+    target = (
+        Path(str(request.get("dir") or "")) if request.get("dir") else downloads_dir()
+    )
+    target.mkdir(parents=True, exist_ok=True)
+    path = free_path(target, safe_name(attachment_name(part, index)))
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    # Readable like anything else in Downloads, and not like the account.
+    os.fchmod(fd, 0o644)
+    with os.fdopen(fd, "wb") as handle:
+        handle.write(attachment_payload(part))
+    return {"path": str(path), "name": path.name}
+
+
+_FLAG = re.compile(r"^\\?[A-Za-z$][A-Za-z0-9$_.-]*$")
+
+
+def verb_flag(request: dict) -> dict:
+    folder = need_folder(request)
+    uids = need_uids(request)
+    add = [str(f) for f in request.get("add") or []]
+    remove = [str(f) for f in request.get("remove") or []]
+    for flag in add + remove:
+        if not _FLAG.match(flag):
+            raise MailError("request", f"{flag} is not a flag.")
+    account, password = load_account()
+    with imap_session(account, password) as conn:
+        open_folder(conn, folder, readonly=False)
+        if add:
+            typ, data = conn.uid(
+                "STORE", uid_set(uids), "+FLAGS.SILENT", "(" + " ".join(add) + ")"
+            )
+            ok(typ, data, "mark the message")
+        if remove:
+            typ, data = conn.uid(
+                "STORE", uid_set(uids), "-FLAGS.SILENT", "(" + " ".join(remove) + ")"
+            )
+            ok(typ, data, "mark the message")
+    return {"folder": folder, "uids": uids}
+
+
+def expunge(conn, uids: list[int]) -> None:
+    if "UIDPLUS" in conn.capabilities:
+        typ, data = conn.uid("EXPUNGE", uid_set(uids))
+    else:
+        typ, data = conn.expunge()
+    ok(typ, data, "remove the message")
+
+
+def verb_move(request: dict) -> dict:
+    folder = need_folder(request)
+    uids = need_uids(request)
+    target = str(request.get("to") or "")
+    if not target or target == folder:
+        raise MailError("request", "No folder to move to was named.")
+    account, password = load_account()
+    with imap_session(account, password) as conn:
+        open_folder(conn, folder, readonly=False)
+        if "MOVE" in conn.capabilities:
+            typ, data = conn.uid("MOVE", uid_set(uids), mailbox(target))
+            ok(typ, data, f"move the message to {target}")
+        else:
+            typ, data = conn.uid("COPY", uid_set(uids), mailbox(target))
+            ok(typ, data, f"copy the message to {target}")
+            typ, data = conn.uid("STORE", uid_set(uids), "+FLAGS.SILENT", "(\\Deleted)")
+            ok(typ, data, "remove the message")
+            expunge(conn, uids)
+    return {"folder": folder, "uids": uids, "to": target}
+
+
+def verb_delete(request: dict) -> dict:
+    folder = need_folder(request)
+    uids = need_uids(request)
+    account, password = load_account()
+    with imap_session(account, password) as conn:
+        open_folder(conn, folder, readonly=False)
+        typ, data = conn.uid("STORE", uid_set(uids), "+FLAGS.SILENT", "(\\Deleted)")
+        ok(typ, data, "delete the message")
+        expunge(conn, uids)
+    return {"folder": folder, "uids": uids}
+
+
+# --- sending ------------------------------------------------------------------------
+
+
+def recipients(typed: str, what: str) -> list[Address]:
+    found = []
+    typed = one_line(typed or "").strip().strip(",;").replace(";", ",")
+    if not typed:
+        return found
+    pairs = getaddresses([typed])
+    # Since 3.13 the parser answers a list it cannot read with one empty pair
+    # rather than guessing, and a guess is the wrong thing to send mail to.
+    if pairs == [("", "")]:
+        raise MailError("request", f"{what} could not be read as a list of addresses.")
+    for name, addr in pairs:
+        addr = addr.strip()
+        if not addr and not name:
+            continue
+        if "@" not in addr or addr.startswith("@") or addr.endswith("@") or " " in addr:
+            shown = addr or name
+            raise MailError("request", f"{shown} in {what} is not an email address.")
+        try:
+            found.append(Address(display_name=name, addr_spec=addr))
+        except (ValueError, IndexError):
+            raise MailError(
+                "request", f"{addr} in {what} is not an email address."
+            ) from None
+    return found
+
+
+def build_message(account: dict, request: dict) -> EmailMessage:
+    to = recipients(str(request.get("to") or ""), "To")
+    cc = recipients(str(request.get("cc") or ""), "Cc")
+    bcc = recipients(str(request.get("bcc") or ""), "Bcc")
+    if not (to or cc or bcc):
+        raise MailError("request", "There is nobody to send this to.")
+
+    msg = EmailMessage(policy=policy.SMTP)
+    msg["From"] = Address(display_name=account["name"], addr_spec=account["email"])
+    if to:
+        msg["To"] = to
+    if cc:
+        msg["Cc"] = cc
+    if bcc:
+        msg["Bcc"] = bcc
+    msg["Subject"] = one_line(str(request.get("subject") or ""))
+    msg["Date"] = format_datetime(datetime.now(timezone.utc).astimezone())
+    domain = account["email"].rsplit("@", 1)[1]
+    msg["Message-ID"] = make_msgid(domain=domain)
+    in_reply_to = one_line(str(request.get("inReplyTo") or ""))
+    references = one_line(str(request.get("references") or ""))
+    if in_reply_to:
+        msg["In-Reply-To"] = in_reply_to
+    if references:
+        msg["References"] = references
+
+    text = tidy(str(request.get("text") or ""))
+    if not text.endswith("\n"):
+        text += "\n"
+    simple = text.isascii() and all(len(line) <= 78 for line in text.split("\n"))
+    msg.set_content(text, cte="7bit" if simple else "quoted-printable")
+
+    forward = request.get("forward")
+    if isinstance(forward, dict) and forward.get("uid"):
+        _folder, _validity, _uid, raw = message_source(forward)
+        original = BytesParser(policy=policy.default).parsebytes(raw)
+        parts = walk_parts(original)
+        wanted = {
+            int(i) for i in forward.get("indexes") or [] if str(i).lstrip("-").isdigit()
+        }
+        for index, (part, _parent) in enumerate(parts):
+            if index not in wanted:
+                continue
+            name = attachment_name(part, index)
+            if part.get_content_type() == "message/rfc822":
+                try:
+                    msg.add_attachment(part.get_payload(0))
+                except Exception:  # noqa: BLE001 -- then as the bytes it is
+                    msg.add_attachment(
+                        attachment_payload(part),
+                        maintype="application",
+                        subtype="octet-stream",
+                        filename=name,
+                    )
+            else:
+                maintype, _, subtype = part.get_content_type().partition("/")
+                msg.add_attachment(
+                    attachment_payload(part),
+                    maintype=maintype,
+                    subtype=subtype or "octet-stream",
+                    filename=name,
+                )
+    return msg
+
+
+def smtp_send(account: dict, password: str, msg: EmailMessage) -> None:
+    server = account["smtp"]
+    host, port = server["host"], server["port"]
+    conn = None
+    try:
+        if server["security"] == "tls":
+            conn = smtplib.SMTP_SSL(host, port, timeout=TIMEOUT, context=_context())
+        else:
+            conn = smtplib.SMTP(host, port, timeout=TIMEOUT)
+            conn.ehlo()
+            if server["security"] == "starttls":
+                if not conn.has_extn("starttls"):
+                    raise MailError(
+                        "tls",
+                        f"{host} does not offer a secure connection on port {port}.",
+                    )
+                conn.starttls(context=_context())
+                conn.ehlo()
+        conn.ehlo_or_helo_if_needed()
+        if conn.has_extn("auth") and password:
+            username = account["username"]
+            try:
+                if username.isascii() and password.isascii():
+                    conn.login(username, password)
+                else:
+                    blob = (chr(0) + username + chr(0) + password).encode("utf-8")
+                    code, reply = conn.docmd(
+                        "AUTH", "PLAIN " + base64.b64encode(blob).decode("ascii")
+                    )
+                    if code not in (235, 503):
+                        raise smtplib.SMTPAuthenticationError(code, reply)
+            except smtplib.SMTPAuthenticationError as exc:
+                raise login_error(
+                    text_of(exc.smtp_error),
+                    "The outgoing server refused that user name and password.",
+                ) from None
+            except smtplib.SMTPNotSupportedError:
+                raise MailError(
+                    "auth", f"{host} offers no way to sign in that this knows."
+                ) from None
+        try:
+            conn.send_message(msg)
+        except smtplib.SMTPRecipientsRefused as exc:
+            who = ", ".join(sorted(exc.recipients))
+            raise MailError("refused", f"The server would not send to {who}.") from None
+        except smtplib.SMTPSenderRefused as exc:
+            raise MailError(
+                "refused",
+                f"The server would not send from {account['email']}: "
+                f"{text_of(exc.smtp_error)}",
+            ) from None
+        except smtplib.SMTPDataError as exc:
+            raise MailError(
+                "refused",
+                f"The server would not take the message: {text_of(exc.smtp_error)}",
+            ) from None
+    except MailError:
+        raise
+    except (OSError, smtplib.SMTPException) as exc:
+        if isinstance(exc, smtplib.SMTPResponseException):
+            raise MailError(
+                "server", f"{host} said: {text_of(exc.smtp_error)}"
+            ) from None
+        raise reach_error(exc, host, port) from None
+    finally:
+        if conn is not None:
+            with contextlib.suppress(Exception):
+                conn.quit()
+
+
+def saves_its_own_sent(account: dict) -> bool:
+    host = account["smtp"]["host"].lower()
+    return any(host == d or host.endswith("." + d) for d in SAVES_SENT)
+
+
+def verb_send(request: dict) -> dict:
+    account, password = load_account()
+    msg = build_message(account, request)
+    smtp_send(account, password, msg)
+    result = {"messageId": str(msg["Message-ID"]), "savedTo": "", "warning": ""}
+
+    # The message has gone. Everything after this is bookkeeping, and a failure
+    # in it is said, not raised: "not sent" would be a lie that gets a message
+    # sent twice.
+    sent = str(request.get("sent") or "")
+    answered = (
+        request.get("answered") if isinstance(request.get("answered"), dict) else None
+    )
+    forwarded = (
+        request.get("forward") if isinstance(request.get("forward"), dict) else None
+    )
+    saving = sent and not saves_its_own_sent(account)
+    if not (saving or answered or forwarded):
+        return result
+    try:
+        with imap_session(account, password) as conn:
+            if saving:
+                typ, data = conn.append(
+                    mailbox(sent),
+                    "(\\Seen)",
+                    time.time(),
+                    msg.as_bytes(policy=policy.SMTP),
+                )
+                ok(typ, data, f"keep a copy in {sent}")
+                result["savedTo"] = sent
+            for marked, flag in ((answered, "\\Answered"), (forwarded, "$Forwarded")):
+                if marked and marked.get("folder") and number(marked, "uid") > 0:
+                    open_folder(conn, str(marked["folder"]), readonly=False)
+                    conn.uid(
+                        "STORE",
+                        str(number(marked, "uid")),
+                        "+FLAGS.SILENT",
+                        f"({flag})",
+                    )
+                    with contextlib.suppress(Exception):
+                        conn.close()
+    except MailError as failure:
+        result["warning"] = (
+            f"Sent, but {failure.sentence[0].lower()}{failure.sentence[1:]}"
+        )
+    return result
+
+
+# --- setting up ------------------------------------------------------------------
+
+# The four whose settings are worth knowing without asking anybody, because
+# each needs a sentence said before the password is typed rather than after it
+# is refused.
+KNOWN = {
+    "gmail.com": (
+        "imap.gmail.com",
+        993,
+        "tls",
+        "smtp.gmail.com",
+        465,
+        "tls",
+        "Gmail needs an app password, made at myaccount.google.com/apppasswords.",
+    ),
+    "outlook.com": (
+        "outlook.office365.com",
+        993,
+        "tls",
+        "smtp-mail.outlook.com",
+        587,
+        "starttls",
+        "Microsoft accounts no longer accept a password over IMAP, so this will "
+        "probably be refused.",
+    ),
+    "yahoo.com": (
+        "imap.mail.yahoo.com",
+        993,
+        "tls",
+        "smtp.mail.yahoo.com",
+        465,
+        "tls",
+        "Yahoo needs an app password, made in the account's security settings.",
+    ),
+    "icloud.com": (
+        "imap.mail.me.com",
+        993,
+        "tls",
+        "smtp.mail.me.com",
+        587,
+        "starttls",
+        "iCloud needs an app-specific password, made at account.apple.com.",
+    ),
+}
+ALIASES = {
+    "googlemail.com": "gmail.com",
+    "hotmail.com": "outlook.com",
+    "live.com": "outlook.com",
+    "msn.com": "outlook.com",
+    "me.com": "icloud.com",
+    "mac.com": "icloud.com",
+    "ymail.com": "yahoo.com",
+}
+
+
+def _fetch_xml(url: str) -> bytes | None:
+    request = urllib.request.Request(url, headers={"User-Agent": "moarchy-mail"})
+    try:
+        with urllib.request.urlopen(request, timeout=6, context=_context()) as response:
+            if response.status != 200:
+                return None
+            return response.read(200_000)
+    except (OSError, ValueError):
+        return None
+
+
+def autoconfig_servers(document: bytes, address: str) -> dict | None:
+    """Thunderbird's autoconfig format, the one most providers publish."""
+    try:
+        root = ElementTree.fromstring(document)
+    except ElementTree.ParseError:
+        return None
+    local = address.split("@", 1)[0]
+    rank = {"SSL": 0, "STARTTLS": 1, "plain": 2}
+    security = {"SSL": "tls", "STARTTLS": "starttls", "plain": "none"}
+
+    def best(tag: str, kind: str):
+        found = []
+        for server in root.iter(tag):
+            if server.get("type") != kind:
+                continue
+            socket_type = (server.findtext("socketType") or "").strip()
+            host = (server.findtext("hostname") or "").strip()
+            port = (server.findtext("port") or "").strip()
+            if socket_type not in rank or not host or not port.isdigit():
+                continue
+            user = (server.findtext("username") or "%EMAILADDRESS%").strip()
+            user = user.replace("%EMAILADDRESS%", address).replace(
+                "%EMAILLOCALPART%", local
+            )
+            found.append(
+                (
+                    rank[socket_type],
+                    {
+                        "host": host.replace("%EMAILDOMAIN%", address.split("@", 1)[1]),
+                        "port": int(port),
+                        "security": security[socket_type],
+                    },
+                    user,
+                )
+            )
+        return min(found, key=lambda f: f[0]) if found else None
+
+    incoming = best("incomingServer", "imap")
+    outgoing = best("outgoingServer", "smtp")
+    if not incoming or not outgoing:
+        return None
+    return {"imap": incoming[1], "smtp": outgoing[1], "username": incoming[2]}
+
+
+def verb_autoconfig(request: dict) -> dict:
+    address = one_line(str(request.get("email") or ""))
+    if "@" not in address:
+        raise MailError("request", "That is not an email address.")
+    domain = address.rsplit("@", 1)[1].lower().strip(".")
+    key = ALIASES.get(domain, domain)
+    if key in KNOWN:
+        ih, ip, isec, sh, sp, ssec, note = KNOWN[key]
+        return {
+            "imap": {"host": ih, "port": ip, "security": isec},
+            "smtp": {"host": sh, "port": sp, "security": ssec},
+            "username": address,
+            "source": "known",
+            "note": note,
+        }
+
+    # The domain's own answer first, then Thunderbird's database, which knows
+    # the domain name and nothing else about who asked.
+    quoted = urllib.parse.quote(address)
+    for source, url in (
+        (
+            "domain",
+            f"https://autoconfig.{domain}/mail/config-v1.1.xml?emailaddress={quoted}",
+        ),
+        ("domain", f"https://{domain}/.well-known/autoconfig/mail/config-v1.1.xml"),
+        ("thunderbird", f"https://autoconfig.thunderbird.net/v1.1/{domain}"),
+    ):
+        document = _fetch_xml(url)
+        found = autoconfig_servers(document, address) if document else None
+        if found:
+            return {**found, "source": source, "note": ""}
+
+    return {
+        "imap": {"host": f"imap.{domain}", "port": 993, "security": "tls"},
+        "smtp": {"host": f"smtp.{domain}", "port": 465, "security": "tls"},
+        "username": address,
+        "source": "guess",
+        "note": "These are a guess. If signing in fails, your provider's help pages have the right ones.",
+    }
+
+
+def verb_setup(request: dict) -> dict:
+    account = account_config(request)
+    password = str(request.get("password") or "")
+    if not password:
+        # Changing a server, not the password: keep the one there is, but only
+        # for the address it was typed for.
+        with contextlib.suppress(MailError):
+            previous, kept = load_account()
+            if previous["email"] == account["email"]:
+                password = kept
+    if not password:
+        raise MailError("request", "The password is empty.")
+
+    with imap_session(account, password) as conn:
+        folders = list_folders(conn)
+    probe = smtp_probe(account, password)
+    if probe:
+        raise probe
+
+    directory = data_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    os.chmod(directory, 0o700)
+    write_private(directory / "password", password.encode("utf-8"))
+    write_private(
+        directory / "account.json",
+        json.dumps(account, indent=1, ensure_ascii=False).encode("utf-8"),
+    )
+    return {"account": account, "folders": folders}
+
+
+def smtp_probe(account: dict, password: str) -> MailError | None:
+    """Sign in to the outgoing server and leave, so a wrong port is found now."""
+    server = account["smtp"]
+    host, port = server["host"], server["port"]
+    conn = None
+    try:
+        if server["security"] == "tls":
+            conn = smtplib.SMTP_SSL(host, port, timeout=TIMEOUT, context=_context())
+        else:
+            conn = smtplib.SMTP(host, port, timeout=TIMEOUT)
+            conn.ehlo()
+            if server["security"] == "starttls":
+                if not conn.has_extn("starttls"):
+                    return MailError(
+                        "tls",
+                        f"{host} does not offer a secure connection on port {port}.",
+                    )
+                conn.starttls(context=_context())
+                conn.ehlo()
+        conn.ehlo_or_helo_if_needed()
+        if conn.has_extn("auth"):
+            username = account["username"]
+            if username.isascii() and password.isascii():
+                conn.login(username, password)
+            else:
+                blob = (chr(0) + username + chr(0) + password).encode("utf-8")
+                code, reply = conn.docmd(
+                    "AUTH", "PLAIN " + base64.b64encode(blob).decode("ascii")
+                )
+                if code not in (235, 503):
+                    raise smtplib.SMTPAuthenticationError(code, reply)
+        return None
+    except smtplib.SMTPAuthenticationError as exc:
+        return login_error(
+            text_of(exc.smtp_error),
+            "The outgoing server refused that user name and password.",
+        )
+    except smtplib.SMTPNotSupportedError:
+        return MailError("auth", f"{host} offers no way to sign in that this knows.")
+    except smtplib.SMTPResponseException as exc:
+        return MailError("server", f"{host} said: {text_of(exc.smtp_error)}")
+    except (OSError, smtplib.SMTPException) as exc:
+        return reach_error(exc, host, port)
+    finally:
+        if conn is not None:
+            with contextlib.suppress(Exception):
+                conn.quit()
+
+
+def verb_forget(_request: dict) -> dict:
+    directory = data_dir()
+    removed = 0
+    if directory.is_dir():
+        for entry in directory.iterdir():
+            if entry.is_dir() and not entry.is_symlink():
+                shutil.rmtree(entry, ignore_errors=True)
+            else:
+                with contextlib.suppress(OSError):
+                    entry.unlink()
+            removed += 1
+    return {"removed": removed}
+
+
+VERBS = {
+    "autoconfig": verb_autoconfig,
+    "setup": verb_setup,
+    "forget": verb_forget,
+    "folders": verb_folders,
+    "sync": verb_sync,
+    "peek": verb_peek,
+    "body": verb_body,
+    "attachment": verb_attachment,
+    "flag": verb_flag,
+    "move": verb_move,
+    "delete": verb_delete,
+    "send": verb_send,
+}
+
+
+def emit(answer: dict) -> None:
+    data = json.dumps(answer, ensure_ascii=False)
+    sys.stdout.buffer.write(data.encode("utf-8", "replace") + b"\n")
+    sys.stdout.flush()
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) != 2 or argv[1] not in VERBS:
+        sys.stderr.write(
+            "usage: moarchy-mail {" + ",".join(VERBS) + "} < request.json\n"
+        )
+        return 2
+    os.umask(0o077)
+    raw = b"" if sys.stdin is None or sys.stdin.isatty() else sys.stdin.buffer.read()
+    try:
+        request = json.loads(raw.decode("utf-8")) if raw.strip() else {}
+        if not isinstance(request, dict):
+            raise ValueError
+    except ValueError:
+        emit(
+            {
+                "ok": False,
+                "kind": "request",
+                "error": "The request was not a JSON object.",
+            }
+        )
+        return 1
+    try:
+        answer = VERBS[argv[1]](request)
+    except MailError as failure:
+        emit({"ok": False, "kind": failure.kind, "error": failure.sentence})
+        return 1
+    except Exception as exc:  # noqa: BLE001 -- the app must get an answer it can show
+        traceback.print_exc()
+        emit(
+            {
+                "ok": False,
+                "kind": "bug",
+                "error": f"moarchy-mail {argv[1]} failed: {type(exc).__name__}: {exc}",
+            }
+        )
+        return 1
+    emit({"ok": True, **answer})
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

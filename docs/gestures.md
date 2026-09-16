@@ -939,10 +939,10 @@ without anyone remembering to come back here.
 exception, and the exception is the whole reason this section needs stating.
 `moarchy-meta` is a package with no files whose entire content is a `depends`
 line (`structure.md` P5), so *every* app on this phone has it as a dependent and
-a plain `pacman -Rs gnome-text-editor` fails with
+a plain `pacman -Rs gnome-maps` fails with
 
 ```
-:: removing gnome-text-editor breaks dependency 'gnome-text-editor' required by moarchy-meta
+:: removing gnome-maps breaks dependency 'gnome-maps' required by moarchy-meta
 ```
 
 That is the record of the set objecting, not a package that needs the app. So

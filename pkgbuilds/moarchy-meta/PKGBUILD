@@ -94,22 +94,38 @@ pkgver=$_ver
 # 5: kweather leaves too. The Weather plugin is already in moarchy-qml-apps,
 # and two weather tiles is the clocks cut again. The phone holds 0.2.2-4, so
 # a removal under that number would never be offered.
-pkgrel=5
+#
+# 6: gnome-text-editor leaves. The org.moarchy.editor plugin in
+# moarchy-qml-apps is the editor now -- both what opens a tapped text file and
+# $EDITOR, through moarchy-editor --wait -- and a phone holding 0.2.2-5 would
+# keep GNOME Text Editor as a second tile for the same job, for ever.
+# gnome-calls, chatty and mmsd-tng leave in the same unbuilt release, for
+# org.moarchy.phone and org.moarchy.messages. A phone left holding Calls beside
+# Phone has two things answering one modem, which is not a spare tile but a
+# call picked up in whichever window was quicker.
+# loupe, papers, foliate and secrets leave in it too, so the default set is the
+# shell's plugins plus what a phone cannot do without, and chipass stops
+# arriving behind geary (the note at gnome-keyring says how it got in).
+# geary leaves in the same release, for org.moarchy.mail. A phone holding
+# 0.2.2-5 would keep Geary beside Mail: two tiles, two things holding the same
+# password, and the one of them that waits on a keyring prompt it cannot show.
+pkgrel=6
 pkgdesc="The moarchy package set -- install this and you have the phone"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
 license=('MIT')
 
 depends=(
-  # The aarch64 package set. Most of it is Arch Linux ARM; mmsd-tng and
-  # megapixels come from [danctnix]
+  # The aarch64 package set. Most of it is Arch Linux ARM; megapixels comes
+  # from [danctnix]
   # (archmobile.mirror.danctnix.org), which the DanctNIX image's pacman.conf
   # carries and a bare ALARM install does not. The list this replaced claimed
   # at the top that every entry was on archlinuxarm.org, which was not true of
-  # those two -- `pacman -U --print` in a bare container is what found it.
-  # It was three until lisgd left with bin/moarchy-gestures, and two until
-  # portfolio-file-manager left with the Files plugin; the repo stays,
-  # because mmsd-tng and megapixels still need it.
+  # megapixels or mmsd-tng -- `pacman -U --print` in a bare container is what
+  # found it. It was three until lisgd left with bin/moarchy-gestures, two
+  # until portfolio-file-manager left with the Files plugin, and one since
+  # mmsd-tng left with chatty; the repo stays, because megapixels still needs
+  # it.
   #
   # Packages Omarchy installs that are x86_64-only are listed at the bottom as
   # comments, with the reason.
@@ -141,6 +157,17 @@ depends=(
   'xdg-desktop-portal-wlr'
   'xdg-desktop-portal-gtk'
   'polkit-gnome'
+  # The secret service. It had to sit ABOVE geary in this list, and geary has
+  # gone (see Email, below), but the rule outlives it: anything that depends
+  # on the virtual org.freedesktop.secrets has to come after this line.
+  # pacman resolves this array top to bottom, and when geary came first
+  # nothing in the transaction provided the name yet, so pacman picked the
+  # alphabetically first provider in the sync dbs -- chipass, a Qt password
+  # manager with a drawer tile of its own -- and installed it beside
+  # gnome-keyring. Measured 2026-09-16 in the builder container, resolving this
+  # array with geary before gnome-keyring and after: chipass in the plan, then
+  # not. image/verify.sh checks for it.
+  'gnome-keyring'
   'wlsunset'
 
   # --- GTK theming ------------------------------------------------------------
@@ -289,9 +316,10 @@ depends=(
   'man-db'
   # No neovim, and this one is not just a name leaving a list -- it was the
   # default editor, so removing it is a change of behaviour that took four files
-  # with it. gnome-text-editor (already in this set, further down) is the editor
-  # now: it is the GUI answer to "the system wants me to edit something", which
-  # on a phone with no keyboard attached is the only answer that is any use.
+  # with it. The Text Editor plugin (org.moarchy.editor, in moarchy-qml-apps
+  # further down) is the editor now: it is the GUI answer to "the system wants
+  # me to edit something", which on a phone with no keyboard attached is the
+  # only answer that is any use. It was gnome-text-editor until 2026-09-16.
   #
   # What had to move with it, because upstream's two scripts both hardcode nvim
   # as the fallback and neither can reach a GUI editor safely:
@@ -300,7 +328,9 @@ depends=(
   #   bin/omarchy-launch-editor    falls back to something installed, and runs a
   #                                GUI editor so that it BLOCKS when it is
   #                                $EDITOR -- without which `git commit` reads
-  #                                an unedited template
+  #                                an unedited template. For the plugin that is
+  #                                moarchy-editor --wait, since a plugin is not
+  #                                a process to wait on
   # Both shadow upstream by PATH order, like the other 22 in bin/.
   'plocate'
   'ripgrep'
@@ -337,26 +367,27 @@ depends=(
   'npm'
 
   # --- Telephony -------------------------------------------------------------
-  # Calls and SMS on the Quectel EG25-G. eg25-manager (modem power/GPIO) and the
-  # PinePhone ALSA UCM profile already come from the DanctNIX image; these are the
-  # layer above. gnome-calls and chatty are Phosh-era GTK apps, but they are plain
-  # Wayland clients and already laid out for a 360px-wide screen, which is exactly
-  # what this is. Together they cost ~115 MB resident.
+  # Calls and SMS. The modem's own power and audio profile are the device
+  # package's (moarchy-device-*); these are the layer above. The apps are the
+  # org.moarchy.phone and org.moarchy.messages plugins in moarchy-qml-apps,
+  # further down, and they reach the modem through processes rather than a
+  # library, because Quickshell has no D-Bus module:
+  #   modemmanager  mmcli, and the system bus signals a gdbus monitor waits on
+  #   callaudiod    earpiece/speaker/mute during a call, over busctl --user
+  # fbcli (feedbackd, which pkgbuilds/moarchy declares), gdbus (glib2) and
+  # setpriv (util-linux) are the rest, and none of them needs a line here.
   #
-  # Their systemd units need replacing, not enabling: both ship
-  # `Requisite=gnome-session-initialized.target`, which under sway never exists.
-  # pkgbuilds/moarchy installs same-named units into /etc/systemd/user, which
-  # wins over the /usr/lib copies their packages place. (This said "see
-  # install/telephony.sh" until that script went with the installer.)
-  #   gnome-calls  dialer and in-call UI
-  #   chatty       SMS/MMS
-  #   callaudiod   earpiece/speaker/headset routing during a call
-  #   mmsd-tng     MMS transport, used by chatty
+  # gnome-calls, chatty and mmsd-tng were here until 2026-09-16. Calls and
+  # Chatty were a process and a daemon apiece, ~115 MB resident together, and
+  # the daemons needed same-named replacement units in pkgbuilds/moarchy
+  # because both shipped `Requisite=gnome-session-initialized.target`, which
+  # under sway never exists. The plugins are the daemon now: the shell keeps
+  # them loaded. They must also not come back beside the plugins rather than
+  # instead of them -- Chatty takes every text off the modem and deletes it, so
+  # with it running Messages never sees one. mmsd-tng was MMS transport for
+  # Chatty; Messages is SMS only, so nothing on the image would talk to it.
   'modemmanager'
-  'gnome-calls'
-  'chatty'
   'callaudiod'
-  'mmsd-tng'
 
   # --- Apps -------------------------------------------------------------------
   # The set docs/apps.md documents as working, and the reason it is in the *base*
@@ -373,22 +404,30 @@ depends=(
   # Both families are chosen for the 360px screen: GNOME's libadwaita and KDE's
   # Kirigami apps reflow natively, and neither needs its own session -- they are
   # ordinary Wayland clients under Sway.
-  # The default calculator, calendar, clock, contacts, files, keep, vitals,
-  # weather and the rest of the moarchy-apps Quickshell set. They are plugins
+  # The default calculator, calendar, clock, contacts, files, keep, text
+  # editor, vitals, weather, phone, messages, mail and the rest of the
+  # moarchy-apps Quickshell set. They are plugins
   # the shell already holds, so summoning one is a window becoming visible
   # rather than a process starting -- which is the whole reason they replace
   # kalk, calindori, gnome-clocks, gnome-contacts, portfolio-file-manager and
-  # the GTK Keep / Vitals packages that used to sit on this line.
+  # the GTK Keep / Vitals packages that used to sit on this line,
+  # gnome-calls and chatty from the Telephony block above, and geary.
   #
   # Packaged by pkgbuilds/moarchy-qml-apps from the snapshot in qml-apps/,
   # enabled by the packaged shell.json. ui.catalog is a kit review window
   # and is not in that package.
   'moarchy-qml-apps'
 
-  'gnome-text-editor'
-  'loupe'
-  'papers'
-  'foliate'
+  # gnome-text-editor left 2026-09-16 for org.moarchy.editor, the same cut as
+  # the clocks below. It installs from the store for anybody who wants tabs,
+  # search and highlighting back, and omarchy-default-editor still offers it.
+  #
+  # loupe, papers and foliate left the same day, and not for a plugin: the
+  # default set is the shell's own apps and what a phone cannot be a phone
+  # without, and an image viewer, a PDF viewer and an e-book reader are each
+  # a tap away in the store. Until one is installed, a picture, a PDF or an
+  # .epub tapped in Files has no handler of its own, and goes wherever
+  # xdg-open's fallbacks send it -- not yet looked at on a device.
   # gnome-clocks, portfolio-file-manager, kalk, calindori and kweather left
   # 2026-09-15: the org.moarchy.{clock,files,calculator,calendar,weather}
   # plugins cover the same ground and are already loaded. kclock and index-fm
@@ -424,21 +463,26 @@ depends=(
 
   # gnome-contacts left with the others above. The plugin writes
   # ~/.local/share/moarchy-contacts/contacts.json, not evolution-data-server,
-  # so Calls and Chats still show bare numbers until someone installs
-  # gnome-contacts from the store -- that remains the only app here that can
-  # write the store they read. It is a real gap and it is documented in
-  # docs/apps.md rather than quietly putting a 2.3 MB GTK app back on the
-  # image to paper over it.
+  # and until 2026-09-16 that left Calls and Chats showing bare numbers,
+  # because evolution-data-server was the only store they read. Phone and
+  # Messages read Contacts' file, so the gap closed with them rather than by
+  # putting a 2.3 MB GTK app back on the image.
 
-  # Email. The obvious-looking pick from [danctnix] is geary-mobile, and it is
-  # a trap: its description is "This is a dummy package. It is no longer
-  # needed." The narrow-screen patches were upstreamed years ago, so the plain
-  # Arch Linux ARM build is the mobile one. Same for gnome-contacts-mobile and
-  # gnome-calendar-mobile, which are dummies too.
+  # Email is org.moarchy.mail, in moarchy-qml-apps, and has been since
+  # 2026-09-16. geary was here until then. moarchy-store's sweep had already
+  # rejected it for this screen -- "desktop-shaped three-pane mail client.
+  # Also wants an unlocked keyring" -- and where no keyring was unlocked, its
+  # prompt mapped behind its own window. It still installs with pacman for
+  # anybody who wants it; the store does not list it.
   #
-  # It wants org.freedesktop.secrets, which gnome-keyring under Support
-  # already provides -- so it needs nothing added for it.
-  'geary'
+  # (The obvious-looking pick from [danctnix] was geary-mobile, and it is a
+  # trap: "This is a dummy package. It is no longer needed." The same is true
+  # of gnome-contacts-mobile and gnome-calendar-mobile.)
+  #
+  # Mail keeps its password in a 0600 file rather than the keyring, for the
+  # keyring's reason above, and talks to the server through moarchy-mail, which
+  # is Python's standard library and nothing else. python is moarchy-qml-apps'
+  # dependency, not a line here.
 
   # No RSS reader. alligator was here -- Kirigami, 0.9 MB, chosen over newsflash
   # for its size -- and it is out with the rest of the media set below: a
@@ -452,11 +496,12 @@ depends=(
   # out because it is a preference rather than a necessity, and it is one tap
   # away in the store.
 
-  # Passwords, which keysmith is not: keysmith holds TOTP codes only. Secrets
-  # reads and writes KeePass v4 .kdbx, so the database is one the user already
-  # has and can sync. keepassxc is the alternative and is a Qt Widgets desktop
-  # app that does not reflow to 360px.
-  'secrets'
+  # No password manager. secrets was here until 2026-09-16 -- KeePass v4
+  # .kdbx, which keysmith is not, since keysmith holds TOTP codes only -- and
+  # left with loupe, papers and foliate: a preference, not something a phone is
+  # unfinished without, and one tap away in the store. keepassxc is still the
+  # wrong alternative for the reason that put secrets here: a Qt Widgets
+  # desktop app that does not reflow to 360px.
 
   # No songrec, and of the six that left the set this is the one with the
   # strongest case for going. It is Shazam, open and offline-capable, and its
@@ -499,7 +544,7 @@ depends=(
   'ttf-jetbrains-mono-nerd'
 
   # --- Support ----------------------------------------------------------------
-  'gnome-keyring'
+  # gnome-keyring is not here; it is under The shell, and the position matters.
   'libsecret'
   'imagemagick'
   'mesa-demos'

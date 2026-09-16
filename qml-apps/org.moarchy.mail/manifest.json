@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "org.moarchy.mail",
+  "name": "Mail",
+  "version": "0.1.0",
+  "author": "Simon Schubert",
+  "license": "MIT",
+  "description": "One email account over IMAP and SMTP -- folders, reading, replying, and new mail in the Inbox noticed with the window closed.",
+  "kinds": ["overlay"],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "Mail.qml"
+  }
+}

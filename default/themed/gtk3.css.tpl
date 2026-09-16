@@ -1,7 +1,8 @@
 /* The active theme's palette, for the GTK3 apps (docs/style.md I1).
  *
- * Geary is the GTK3 window a phone actually opens, and the file chooser the
- * xdg portal draws is the other one -- neither can be themed the way
+ * The file chooser the xdg portal draws is the GTK3 window a phone actually
+ * opens, and a GTK3 app installed from the store is the other -- Geary was
+ * the default one until Mail replaced it. Neither can be themed the way
  * gtk.css.tpl themes the GTK4 apps. GTK3's built-in Adwaita has its colours
  * baked in at build time, so the names a user stylesheet overrides are not the
  * ones its rules read: upstream measured exactly that with an offscreen render
@@ -38,7 +39,7 @@
  * A separate file from gtk.css.tpl rather than the same one symlinked twice,
  * because that one opens with a `:root` block of CSS variables and GTK3's
  * parser has no custom properties. The values are the same ones GTK4 gets, so
- * Geary and Contacts agree about what the theme looks like, and the reasoning
+ * a GTK3 window and a GTK4 one agree about what the theme looks like, and the reasoning
  * behind them -- text on the accent is the theme background -- is documented
  * once, there.
  */

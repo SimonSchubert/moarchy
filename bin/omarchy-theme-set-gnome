@@ -106,7 +106,7 @@ link_theme_css() {
 link_theme_css "$HOME/.config/gtk-4.0" "$THEME_DIR/gtk.css"
 link_theme_css "$HOME/.config/gtk-3.0" "$THEME_DIR/gtk3.css"
 
-# --- GTK3, which is Geary and the portal's file chooser --------------------
+# --- GTK3, which is the portal's file chooser, and store apps -------------
 # GTK3's built-in Adwaita has its colours baked in at build time, so the names
 # a user stylesheet overrides are not the ones its rules read -- upstream
 # measured exactly that in basecamp/omarchy#7557. adw-gtk3 is libadwaita's

@@ -1,9 +1,12 @@
-// The on-screen keyboard, asked to show. App-side copy of
-// default/omarchy/plugins/moarchy.common/Osk.qml -- plugins cannot import qs_ui
-// and apps cannot import moarchy.common.
+// The on-screen keyboard, asked to show. The kit's copy of moarchy's
+// default/omarchy/plugins/moarchy.common/Osk.qml: plugins here cannot import
+// that, and the shell's plugins cannot import this.
 //
-// Show is a tap on a text field (G14). Hide is not this file's: the back swipe
-// is the one way down, and it lives in the shell.
+// A field does not get a keyboard by taking focus. moarchy-keyboard writes its
+// visibility from two things only, its restore handle and SetVisible (its
+// SPEC.md AC 50), so a tap on a field has to ask. Show is that tap (moarchy's
+// gestures.md G14). Hide is not this file's: the back swipe is the one way
+// down, and it lives in the shell.
 import QtQuick
 import Quickshell
 
