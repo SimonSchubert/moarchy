@@ -1128,22 +1128,25 @@ about; on the device, opening the drawer twice with nothing closed in between
 leaves `omarchy-shell drawer openApps` byte-identical and the tiles' icons
 already drawn on the first frame of the second open
 
-**N3** The drawer's surface is mapped when an **upward** drag latches, not on
-press, and takes no input until the sheet is being drawn.
+**N3** The drawer's surface is never unmapped. Shut, it is a one-pixel band along
+the bottom edge that takes no input; it grows to the sheet when an **upward** drag
+latches, not on press, and takes no input until the sheet is being drawn.
 
-A press on the strip is usually a workspace swipe (B1, horizontal wins). Mapping
+A press on the strip is usually a workspace swipe (B1, horizontal wins). Growing
 the full grid on that press laid it out and left it composited on Top for the
 duration of the switch — the hitch that vanished when this plugin failed to
 load. Latch is 8px up, still inside the slop of a real open, so the configure
-still lands before the sheet is on screen. A press that never latches never maps.
+still lands before the sheet is on screen. A press that never latches never grows.
 
-Unmapped, a layer surface reports Qt's 100x100 default, so `grid.cellWidth` is
-computed against 100 and every delegate is rebuilt when the real size arrives.
-After the first successful open, `sheetHeight` is already known and that rebuild
-does not recur.
+It used to be mapped at latch and unmapped on close, and Quickshell deletes a
+layer-shell window that goes invisible: every open built a new window, render
+thread, GL context and scene graph, and stalled the screen for ~200 ms on the
+Pixel 3a (omarchy-test's `docs/drawer-open-stall-results.md`). As a band, an
+open is a resize — one configure — and the sheet keeps the height it last had, so
+the grid is not laid out again at one pixel.
 → a sideways swipe with `drawer state` == `closed` leaves `drawer geometry` at
-the unmapped default; an up-swipe past slop reports real dimensions; a tap
-anywhere but the strip still reaches the app underneath
+`h=1`; an up-swipe past slop reports real dimensions; a tap anywhere but the
+strip still reaches the app underneath
 
 **N4** The drawer opens with its search field unfocused and its query empty,
 however it was closed. The field has to be made to let go *before* the surface

@@ -161,13 +161,14 @@ Item {
   //
   // The open drag can use a shorter travel because it is driven from the
   // gesture strip, which does not move.
-  // Not `drawerWindow.height`, and that is the whole of this note: a
-  // layer-shell window that is not mapped reports Qt's default 100x100.
-  // Measured on the device -- `drawer geometry` answers `w=100 h=100` with the
-  // drawer down and `w=360 h=694` with it up -- and the drag that *opens* this
-  // sheet necessarily starts while it is down. Dividing a drag by 100 moves the
-  // sheet seven times finger speed until the surface maps, which is a jump on
-  // the first frames and then a visible retreat as the divisor corrects.
+  // Not `drawerWindow.height`, and that is the whole of this note: shut, this
+  // window is a one-pixel band (N3). `drawer geometry` answers `w=360 h=1` with
+  // the drawer down and `w=360 h=694` with it up -- and the drag that *opens*
+  // this sheet necessarily starts while it is down. Dividing a drag by the band
+  // moves the sheet hundreds of times finger speed until the surface grows,
+  // which is a jump on the first frames and then a visible retreat as the
+  // divisor corrects. (It was Qt's unmapped 100x100 when this was written, and
+  // seven times finger speed.)
   //
   // So: the screen until this window has been up once, its own height ever
   // after. The two differ by the bar's exclusive zone -- 26px of 720 here -- so
@@ -403,11 +404,14 @@ Item {
   // of the threshold are 180px apart, so the binding settles in one step in
   // either direction rather than oscillating.
   //
-  // False while the surface is down, and that default is the safe one: `height`
-  // is whatever the last configure left behind (100 on a surface that has never
-  // mapped), so an ungated read would map the first frame with the inset off
-  // and flash a band of wallpaper under the pill (I1).
-  readonly property bool keyboardUp: drawerWindow.visible && osk.reserving(drawerWindow)
+  // False while the surface is down, and that default is the safe one: shut,
+  // the window is a one-pixel band (N3), which `reserving()` would read as a
+  // keyboard. That answer would drop the inset, and the grow would then take two
+  // configures -- one without the inset, one with it -- and flash a band of
+  // wallpaper under the pill (I1). Gated on a height only a real sheet has, the
+  // same guard `sheetHeight` is written under, so the grow is one configure.
+  readonly property bool keyboardUp:
+    root.surfaceUp && drawerWindow.height > 200 && osk.reserving(drawerWindow)
 
 
   // The weight the bar and every other surface runs at (docs/style.md B3).
@@ -508,11 +512,15 @@ Item {
   // Whether this shell has paid for one icon rescan yet -- see open().
   property bool iconsRefreshed: false
 
-  // N3. Written by moarchy.gestures when an upward drag latches, so the map
+  // N3. Written by moarchy.gestures when an upward drag latches, so the grow
   // happens during the slop of a real open rather than on every strip press.
-  // A press is usually a workspace swipe, and mapping this grid for that is
+  // A press is usually a workspace swipe, and growing this grid for that is
   // what made the switch hitch.
   property bool warming: false
+
+  // N3. Whether the window is sheet-sized rather than the band. Warming grows
+  // it; it goes back to the band once the sheet is all the way down.
+  readonly property bool surfaceUp: root.progress > 0 || root.warming
 
   Connections {
     target: root.shell ? root.shell.appLibrary : null
@@ -1653,36 +1661,52 @@ Item {
     id: drawerWindow
 
     // The one place `sheetHeight` is written. Guarded on a number that could
-    // only be the placeholder: 100 is what an unmapped layer surface reports,
-    // and no phone this runs on has a 200px-tall sheet.
+    // only be the band (N3), and no phone this runs on has a 200px-tall sheet.
     onHeightChanged: if (drawerWindow.height > 200) root.sheetHeight = drawerWindow.height
 
-    // gestures.md N3. Mapped when an upward drag latches, not on press.
+    // gestures.md N3. Never unmapped: shut, a one-pixel band along the bottom
+    // edge; grown to the sheet when an upward drag latches, not on press.
     //
-    // The shade is the comparison: its surface is never unmapped -- shut, it is
-    // a bar-height band across the top -- so a pull-down costs a resize and
-    // this cost a map, a configure round trip, and a first layout of the whole
-    // grid. While unmapped this window reports Qt's 100x100 default (see
-    // `sheetHeight` above), so `grid.cellWidth` is computed against 100 and
-    // every delegate on screen is rebuilt when the real size arrives.
+    // It used to be `visible` only while drawn, and that cost ~200ms on every
+    // open, measured on the Pixel 3a (omarchy-test,
+    // docs/drawer-open-stall-results.md). Quickshell deletes a layer-shell
+    // window that goes invisible, so each open built a new QQuickWindow -- a
+    // render thread, a GL context, a swapchain, the whole scene graph and a
+    // first layout -- and the first frame took polish 75-114ms, sync 38-51,
+    // render 26-43 and swap 85-93 (with scene graph logging on) while the
+    // finger went on moving. Kept alive, an open is a resize: one configure and
+    // two frames that allocate buffers, measured at 27-35ms for the longest
+    // frame against ~225.
     //
-    // Warming used to start on the press, which paid all of that on a sideways
+    // The shade is the model: shut, it is a bar-height band across the top, so
+    // a pull-down costs a resize. Not left full-screen and transparent, which
+    // is a full-screen blend in every frame on a Mali-400 (build-log 6b); a
+    // band blends one row. It is not free: it still redraws when what is on the
+    // sheet changes, and the shelf follows focus, so a workspace switch commits
+    // one to three one-pixel frames here (+25ms of sway GPU time per switch on
+    // the 3a).
+    //
+    // Warming used to start on the press, which paid the grow on a sideways
     // workspace swipe as well -- the hitch that went away when this plugin
     // failed to load. Latch is 8px up, still inside the slop of a real open,
-    // and a press that never latches never maps.
-    visible: root.progress > 0 || root.warming
-    anchors { top: true; bottom: true; left: true; right: true }
+    // and a press that never latches never grows.
+    visible: true
+    anchors { top: root.surfaceUp; bottom: true; left: true; right: true }
+    implicitHeight: 1
     color: "transparent"
 
-    // N3. Mapped is not live. While warming this surface is full-screen, on
-    // Top, and over everything -- so its input region is cut to one pixel
-    // until the sheet is actually being drawn.
+    // N3. Grown is not live. While warming this surface is full-screen, on Top,
+    // and over everything -- so its input region is cut down until the sheet is
+    // actually being drawn, and stays cut on the band.
     //
     // One pixel and not none: Qt treats an empty mask as unset, and an unset
     // input region is the *whole surface* -- the opposite of what is being
     // asked for. moarchy.splash carries the same workaround for the same
-    // reason (windows.md L3).
-    Region { id: warmRegion; x: 0; y: 0; width: 1; height: 1 }
+    // reason (windows.md L3). The pixel is outside the surface, where the
+    // compositor clips it to nothing: the band is mapped for the whole session,
+    // and a pixel inside it would be a dead spot at the edge of whatever it
+    // sits over.
+    Region { id: warmRegion; x: -1; y: -1; width: 1; height: 1 }
     mask: root.progress > 0 ? null : warmRegion
 
 
@@ -1765,7 +1789,12 @@ Item {
     Rectangle {
       id: sheet
       width: parent.width
-      height: parent.height
+      // The last sheet height, not the window's: on the band the window is one
+      // pixel tall, and a sheet that followed it would lay the grid out again at
+      // one pixel on every close and at full height on every open. The screen
+      // until the window has been up once (`sheetHeight` above).
+      height: root.sheetHeight > 0 ? root.sheetHeight
+            : (drawerWindow.screen ? drawerWindow.screen.height : parent.height)
       // Rides up from below the bottom edge. Translation only: this is a
       // Mali-400 at GLES 2.0, so there are no shaders to spend, and a `scale`
       // on a full-screen item costs a re-raster where a `y` costs nothing.
