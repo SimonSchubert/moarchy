@@ -168,7 +168,7 @@ path under `/etc` that another package owns.
 > is also what upstream does: `omarchy` is a package in `pkgs.omarchy.org`.
 
 **P2** `omarchy-config` (`arch=any`) contains upstream Omarchy's configuration
-and theme layer at the pin in `manifest.toml`'s `[omarchy]` (`0534987`, v4.0.3 —
+and theme layer at the pin in `manifest.toml`'s `[omarchy]` (`c668141`, v4.0.4 —
 it lived in `install/vendor-omarchy.sh` until V3), installed to the path
 upstream hardcodes.
 
@@ -837,5 +837,5 @@ closed; the three that are still open are the ones to read.
    **Measured 2026-09-07: 9 files, 230 insertions, 30 deletions.** So the
    package stays, on the test this question set itself. Worth re-measuring on
    every upstream bump; the number to watch is this one. Reproduce it with
-   `git diff --stat` against a clean v4.0.3 checkout, or count `+`/`-` lines in
+   `git diff --stat` against a clean v4.0.4 checkout, or count `+`/`-` lines in
    `pkgbuilds/omarchy-config/port-4x.patch`.

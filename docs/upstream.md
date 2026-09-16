@@ -189,6 +189,8 @@ remainder.
 **Measured 2026-09-13:** upstream ships 444 scripts in `bin/`; 75 reference
 `hyprctl`, `hyprland`, `hyprlock` or `Hyprland`; `bin/omarchy-*` shadows 16.
 The other 59 ship as-is.
+**Re-measured at v4.0.4, 2026-09-17:** still 444 and 75. The one script
+4.0.4 changed, `omarchy-install-gaming-xbox-controllers`, is not among them.
 
 **D2** Most of the 59 are unreachable on a phone — `omarchy-hyprland-monitor-*`
 is laptop and external-display plumbing, of which this device has neither. That
@@ -265,9 +267,10 @@ Not acceptance criteria — the boundaries any implementation works inside.
   tarball. A redirect is not a pin: the ref is what makes the build
   reproducible, and the URL is what makes it fetchable, and only one of those
   is currently under our control.
-- **`quattro` is not a bump target.** v4.0.3 is still the newest tag; `quattro`
-  is where the next major is being built, and it is *behind* the pin by 103
-  commits as well as ahead by 363. Everything measured against it here is a
+- **`quattro` is not a bump target.** v4.0.4 is the newest tag; `quattro`
+  is where the next major is being built, and it is *behind* the pin by 109
+  commits as well as ahead by 409 (measured 2026-09-17; 103 and 363 against
+  v4.0.3 four days earlier). Everything measured against it here is a
   forecast of what a bump meets, not a bump.
 - **A guard that only runs on the maintainer's machine is not a guard.** §A is
   in `prepare()` because `makepkg` runs in the container, on CI, and on a bump,

@@ -1,12 +1,14 @@
 # Omarchy menu coverage
 
-Which of Omarchy 4.0.3's menu entries the phone supports, which it adapts, and
+Which of Omarchy 4.0.4's menu entries the phone supports, which it adapts, and
 which it drops. This file is the *record*; `docs/settings.md` is the contract the
 Settings UI is built to, and `bin/moarchy-selftest --settings` checks both
 against the code.
 
 Upstream ships **333 entries** in `default/omarchy/omarchy-menu.jsonc`, pinned at
-v4.0.3 (`05349870`). Every one of them appears below exactly once.
+v4.0.4 (`c668141e`). Every one of them appears below exactly once.
+v4.0.4 did not touch that file, or anything under `shell/`, so the table
+carried over from v4.0.3 unchanged.
 
 v4.0.3 added thirteen, all of them AI tooling: four agents for the default-agent
 radio, four Install > AI apps, and the `remove.ai` container with its four
@@ -465,7 +467,7 @@ Native 6 · Bridged 8 · Unsupported 14
 | `update.password` | Password | Native | dissolved: Security | only the user password survives |
 | `update.timezone` | Timezone | Native | System > Date & time | region then city, two provider pages; the select box was a filter field over ~420 entries |
 | `update.time` | Time | Bridged | System > Date & time |  |
-| `update.channel.stable` | Stable | Unsupported | -- | a channel switch moves the vendored checkout off the pinned v4.0.3 that `pkgbuilds/omarchy-config/port-4x.patch` applies against |
+| `update.channel.stable` | Stable | Unsupported | -- | a channel switch moves the vendored checkout off the pinned v4.0.4 that `pkgbuilds/omarchy-config/port-4x.patch` applies against |
 | `update.channel.rc` | RC | Unsupported | -- | as `update.channel.stable` |
 | `update.channel.edge` | Edge | Unsupported | -- | as `update.channel.stable` |
 | `update.channel.dev` | Dev | Unsupported | -- | as `update.channel.stable` |

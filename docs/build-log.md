@@ -1964,6 +1964,52 @@ read, which means geoclue has nothing and no app can have a position. Left
 open; the engine lock is the half worth remembering, because it makes every
 measurement taken before it is checked meaningless.
 
+## 6w. Upstream 4.0.4 was a kernel release (2026-09-17)
+
+Omarchy tagged v4.0.4 on 2026-09-14 (`c668141`): six commits, sixteen files,
+all of them about the x86 kernel. Desktops move to `linux-omarchy` except on T2
+Macs, and every DKMS driver install now takes the matching headers as a base
+system guarantee rather than naming `linux-headers` itself.
+
+**Nothing under `shell/`, `config/`, `default/`, `themes/` or `applications/`
+changed**, and none of the eleven files the two patches name, so both applied
+at zero offset with no `.orig`, and §A2's Hyprland grep stayed empty. That is
+upstream.md §A's first real bump, and its guards had nothing to catch.
+
+The package was then diffed against the 4.0.3-5 artifact rather than trusted
+on a green build, because "the patch applied" answers nothing about what else
+moved. Beyond `.PKGINFO` and friends, exactly ten files differ, and they are
+upstream's own diff restricted to what `package()` copies:
+`omarchy-install-gaming-xbox-controllers`, five `install/hardware/` scripts
+(`intel/ptl-kernel.sh` deleted), `install/omarchy-other.packages`, and two new
+migrations. None of them is reachable on the phone:
+
+- Both migrations are inert on aarch64. `1789325478` installs `linux-omarchy`
+  and rewrites Limine's boot order, and exits at
+  `[[ $(uname -m) == "x86_64" ]] || exit 0` before doing either. `1789444024`
+  adds headers only for a `linux-omarchy` or `linux-t2` that is present.
+  Nothing here would run them anyway. `omarchy-migrate`'s callers are
+  `omarchy-update` (`update.omarchy`, Unsupported), `omarchy-upgrade-to-quattro`
+  and `omarchy-migrate-notify`, and the notifier's unit ships under
+  `/usr/share/omarchy/default/systemd/user`, a directory systemd does not read.
+  Nothing in this repo calls or enables any of them.
+- `install.gaming.xbox-controllers` is Unsupported in `menu-coverage.md`.
+- `install/hardware/all.sh` is sourced by `omarchy-apply-hardware`, which is
+  upstream's ISO finalisation step: it refuses to run without root and
+  `--install-user`, and the only thing that invokes it is
+  `omarchy-apply-system`, which nothing invokes. The directory is shipped for
+  `install/helpers/`, not for this.
+
+§D1 re-measured: 444 scripts in `bin/`, 75 that name Hyprland, both unchanged.
+The menu is still 333 entries, since `omarchy-menu.jsonc` did not move.
+`omarchy-config` goes to 4.0.4-1. pkgrel resets with pkgver, and everything
+4.0.3-2 through -5 carried is still in the patches and `package()`.
+
+Not verified on either device, deliberately: the shell a phone runs from this
+package is byte-identical to 4.0.3-5's, so a device run would test the previous
+build again. The url still says `basecamp/omarchy` and still reaches
+`omacom/omarchy` by a 301; upstream.md's constraint about that is unchanged.
+
 ## 7. Hardware status
 
 | | |
