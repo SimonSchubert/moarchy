@@ -163,7 +163,7 @@ Missing file is `large`, which is the look this phone shipped with:
 | Radius | large | modest | square | What it is |
 | --- | --- | --- | --- | --- |
 | sheet | `Style.space(28)` | `Style.space(12)` | `0` | A full-width surface that slides in: the shade sheet, the drawer sheet. |
-| tile | `Style.space(20)` | `Style.space(8)` | `0` | Something in a grid or a row that you tap as a unit: shade tiles, theme cells, the drawer's open-app tiles. Kit `Pill` / `Fab` / `TextField` / `IconButton` / `Switch` / `Check` use this too, via `UiFile.radiusOn`, capped at half the short side so Large stays a pill/circle. |
+| tile | `Style.space(20)` | `Style.space(8)` | `0` | Something in a grid or a row that you tap as a unit: shade tiles, theme cells, the drawer's open-app tiles. Kit `Pill` / `Fab` / `TextField` / `IconButton` / `Switch` / `Check` use this too, via `UiFile.radiusOn`, capped at half the short side so Large stays a pill/circle. So does `moarchy-keyboard`'s restore handle, which reads `tile` out of the same file (its AC 59) and, having no `Style`, does not scale it. |
 | card | `Style.space(18)` | `Style.space(6)` | `0` | A stacked panel or list row: Settings rows, Wi-Fi rows, notification cards, the confirm card, Device's panels. |
 | pill / circle | `height / 2`, `width / 2` | same | same | A true capsule that is always fully round: the drawer handle, the home pill. |
 
