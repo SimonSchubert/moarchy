@@ -891,23 +891,12 @@ head_ "on-screen keyboard"
 if busctl --user get-property sm.puri.OSK0 /sm/puri/OSK0 sm.puri.OSK0 Visible >/dev/null 2>&1; then
   ok "the keyboard owns sm.puri.OSK0"
 else
-  no "sm.puri.OSK0 is not on the bus" "squeekboard is not running, so \$mod+i does nothing"
+  no "sm.puri.OSK0 is not on the bus" "moarchy-keyboard is not running, so \$mod+i does nothing"
 fi
 
-# Both gated squeekboard, which defaulted off outside GNOME/Phosh and would
-# otherwise start, bind the input method, and silently never draw. Kept because
-# they are cheap and a keyboard that needs them is still supported; a keyboard
-# that does not need them is unaffected by their being set.
-if [[ $(gsettings get org.gnome.desktop.a11y.applications screen-keyboard-enabled 2>/dev/null) == "true" ]]; then
-  ok "screen-keyboard-enabled is true"
-else
-  no "screen-keyboard-enabled is false" "gsettings set org.gnome.desktop.a11y.applications screen-keyboard-enabled true"
-fi
-if [[ $(gsettings get org.gnome.desktop.input-sources sources 2>/dev/null) == "@a(ss) []" ]]; then
-  no "no input source is configured" "squeekboard logs 'No system layout present' and draws nothing"
-else
-  ok "an input source is configured"
-fi
+# No gsettings check here. screen-keyboard-enabled and input-sources gated
+# squeekboard, and moarchy-keyboard reads neither (its SPEC.md AC 43). Nothing
+# on the image sets them, so the two checks failed on every healthy phone.
 
 # --- the terminal -----------------------------------------------------------
 # docs/apps.md T1-T3, T6. The phone carried three terminals until 2026-09-08 and
