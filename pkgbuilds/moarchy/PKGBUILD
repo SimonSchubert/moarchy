@@ -101,7 +101,8 @@ pkgver=$_ver
 #    sha512su0 and SIGILLs on this SoC; a phone holding 0.2.2-6 writes
 #    omarchy-mise-install's unversioned wrapper and upgrades to it on
 #    every tap (docs/settings.md P13).
-# 8: the editor is the Text Editor plugin now. omarchy-launch-editor and
+# 8 was never built under that number; it ships as 0.3.0-1, below.
+#    The editor is the Text Editor plugin now. omarchy-launch-editor and
 #    omarchy-default-editor fall back to moarchy-editor, moarchy-user-setup
 #    seeds it and points text/* at its hidden desktop entry, and Settings
 #    offers it first. Without the bump the builder keeps the 0.2.2-7 artifact,
@@ -112,7 +113,11 @@ pkgver=$_ver
 #    sm.puri.Chatty-daemon.service, and their default.target.wants links: the
 #    Phone and Messages plugins replace gnome-calls and chatty, and those two
 #    units exist only to start daemons the image no longer has.
-pkgrel=8
+#
+# 1 for 0.3.0. pkgver moved, and 0.3.0-1 is newer than every 0.2.2-N above,
+# including the -7 the 20260915 images carry, so going back to 1 hides nothing
+# from a phone holding any of them.
+pkgrel=1
 pkgdesc="Omarchy's look, keybindings and theming on a phone, under Sway"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'

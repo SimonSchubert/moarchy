@@ -95,7 +95,8 @@ pkgver=$_ver
 # and two weather tiles is the clocks cut again. The phone holds 0.2.2-4, so
 # a removal under that number would never be offered.
 #
-# 6: gnome-text-editor leaves. The org.moarchy.editor plugin in
+# 6 was never built under that number; it ships as 0.3.0-1, below.
+# gnome-text-editor leaves. The org.moarchy.editor plugin in
 # moarchy-qml-apps is the editor now -- both what opens a tapped text file and
 # $EDITOR, through moarchy-editor --wait -- and a phone holding 0.2.2-5 would
 # keep GNOME Text Editor as a second tile for the same job, for ever.
@@ -109,7 +110,12 @@ pkgver=$_ver
 # geary leaves in the same release, for org.moarchy.mail. A phone holding
 # 0.2.2-5 would keep Geary beside Mail: two tiles, two things holding the same
 # password, and the one of them that waits on a keyring prompt it cannot show.
-pkgrel=6
+#
+# 1 for 0.3.0. pkgver moved, and 0.3.0-1 is newer than the 0.2.2-5 the
+# 20260915 images carry, so every removal listed under 6 still reaches a phone
+# that holds it -- as a depends line that no longer names the package. pacman
+# -Syu does not uninstall what leaves this list; `pacman -Rs` does.
+pkgrel=1
 pkgdesc="The moarchy package set -- install this and you have the phone"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'

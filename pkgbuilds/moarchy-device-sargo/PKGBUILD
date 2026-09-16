@@ -36,7 +36,9 @@ pkgver=$_ver
 # 6: gained q6voiced and the PCM numbers it needs, without which a call
 #    terminates the moment it is dialled (D32).
 # 7: gained the camera colour profiles (D30), named as megapixels asks.
-pkgrel=7
+# 1 for 0.3.0: pkgver moved, and 0.3.0-1 is newer than the 0.2.2-7 the
+# 20260915 image carries. Nothing in the package changed for it.
+pkgrel=1
 pkgdesc="Google Pixel 3a (sargo) hardware support for moarchy"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'

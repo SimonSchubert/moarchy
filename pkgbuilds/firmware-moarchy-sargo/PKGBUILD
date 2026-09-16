@@ -118,7 +118,9 @@ pkgver=$_ver
 # PKGDEST -- so without this bump the build keeps yesterday's file and the
 # whole change ships as nothing at all.
 # 3: gained Global_cal.acdb, without which the phone has no sound at all.
-pkgrel=3
+# 1 for 0.3.0: pkgver moved, and 0.3.0-1 is newer than the 0.2.2-3 the
+# 20260915 image carries. Nothing in the package changed for it.
+pkgrel=1
 pkgdesc="Proprietary firmware for the Google Pixel 3a (sargo)"
 arch=('any')
 url="$_url"

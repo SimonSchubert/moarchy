@@ -23,13 +23,14 @@ _repo="$startdir/../.."
 
 pkgname=moarchy-qml-apps
 pkgver=$_ver
-# 2: org.moarchy.editor, the text editor that replaces gnome-text-editor, and
+# 2 was never built under that number; it ships as 0.3.0-1, below.
+# org.moarchy.editor, the text editor that replaces gnome-text-editor, and
 # the two things only it ships -- a second desktop entry (the hidden one
 # xdg-open runs for a text file) and /usr/bin/moarchy-editor, the process that
 # waits when the editor is $EDITOR. package() installed the first .desktop in
 # a plugin and nothing from bin/, so both needed this file to change as well
 # as the snapshot. The snapshot also moved to moarchy-apps' box system in the
-# same sync. pkgver is moarchy's and does not move for any of this.
+# same sync.
 # org.moarchy.phone and org.moarchy.messages joined the snapshot before 2 was
 # built, replacing gnome-calls and chatty. They need nothing new from
 # package(), and nothing new in depends: modemmanager and callaudiod are
@@ -40,7 +41,10 @@ pkgver=$_ver
 # a mail server, because QML cannot open a TLS socket -- and a second hidden
 # desktop entry, the mailto: handler. package() already installs both kinds.
 # What it does add is python below.
-pkgrel=2
+#
+# 1 for 0.3.0: pkgver is moarchy's, and it moved. 0.3.0-1 is newer than the
+# 0.2.2-1 the 20260915 images carry.
+pkgrel=1
 pkgdesc="Omarchy-apps Quickshell plugins shipped as default phone apps"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
