@@ -24,7 +24,9 @@ _ver=$(manifest_get moarchy version) || return 1
 
 pkgname=moarchy-device-pinephone
 pkgver=$_ver
-pkgrel=1
+# 2: parted. 0.3.0-1 is published and on a phone, and without partprobe the
+# first-boot grow does not grow anything (see depends).
+pkgrel=2
 pkgdesc="Pine64 PinePhone hardware support for moarchy"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
@@ -57,6 +59,14 @@ conflicts=('moarchy-device')
 depends=(
   'device-pine64-pinephone'
   'danctnix-usb-tethering'
+  # partprobe, for moarchy-grow-rootfs. This is the one device whose
+  # device.conf says DEVICE_GROW=partition, and that path rewrites the GPT
+  # with `sfdisk --no-reread` and then needs partprobe to tell the kernel the
+  # partition is bigger. Without it resize2fs sees the old size and the
+  # filesystem stays what the image made it: 5.9 G on a 64 G card, 116 M free,
+  # on the 0.2.2 image, and the stamp still written so it never tries again.
+  # image/Dockerfile has parted, which is why image/verify passed.
+  'parted'
 )
 
 source=('sway.conf' 'device.conf')

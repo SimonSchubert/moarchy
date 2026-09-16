@@ -72,6 +72,18 @@ fi
 verify_grow() {
 sec "behaviour: the rootfs grows onto a bigger card"
 
+# The commands the grow script runs, looked for in the IMAGE. Everything below
+# runs them in this container, which has all of them -- parted is in
+# image/Dockerfile -- so it passed for three releases while the phone had no
+# partprobe: sfdisk rewrote the table with --no-reread, the "command not found"
+# went to /dev/null, the kernel kept the old partition size, and resize2fs had
+# nothing to grow into. A 64 GB card came up with 116 MB free.
+for _c in findmnt lsblk sfdisk partprobe resize2fs; do
+  [ -x "$R/usr/bin/$_c" ] && ok "the image has $_c (moarchy-grow-rootfs runs it)" \
+                          || no "the image has no $_c -- moarchy-grow-rootfs cannot grow the rootfs on a phone"
+done
+unset _c
+
 # I7 runs exactly once, on a card, on first boot -- so without a test here the
 # first execution is on someone's phone.
 #
