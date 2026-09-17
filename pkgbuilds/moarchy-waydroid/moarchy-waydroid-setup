@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# Configure Waydroid to behave like a phone rather than a desktop.
+#
+# Run once after `waydroid init`, and again if the output geometry changes.
+# Everything here is a persist property, so it survives session restarts and
+# reboots; none of it is a file this package owns at runtime.
+#
+# docs/android.md AC 5 and AC 6 are what this satisfies.
+set -euo pipefail
+
+die() { echo "moarchy-waydroid-setup: $*" >&2; exit 1; }
+
+command -v waydroid >/dev/null || die "waydroid is not installed"
+[ -n "${SWAYSOCK:-}" ] || SWAYSOCK=$(ls /run/user/"$(id -u)"/sway-ipc.*.sock 2>/dev/null | head -1)
+[ -n "$SWAYSOCK" ] || die "no sway socket; run this inside the session"
+export SWAYSOCK
+
+# The Android display size is LATCHED AT CALIBRATION and never follows a later
+# resize: xdg_toplevel_handle_configure() only records req_width/req_height,
+# and the sole caller of choose_width_height() is finished_calibrating(), which
+# runs once per session. Whatever the window happened to be at that moment is
+# what Android believes forever -- which shows up as an app rendering into the
+# top corner with a black band below it.
+#
+# So pin it. The values are LOGICAL pixels: waydroid multiplies by
+# display_scale itself, and passing physical 1080x2082 yields 3240x6246.
+#
+# Computed, never hardcoded: the width is the output and the height is the
+# workspace, which is the output minus whatever the bar reserves.
+_w=$(swaymsg -t get_outputs | python3 -c '
+import json,sys
+o=[x for x in json.load(sys.stdin) if x.get("active")]
+print(o[0]["rect"]["width"] if o else 0)')
+_h=$(swaymsg -t get_workspaces | python3 -c '
+import json,sys
+ws=json.load(sys.stdin)
+cur=[x for x in ws if x.get("focused")] or ws
+print(cur[0]["rect"]["height"] if cur else 0)')
+
+[ "${_w:-0}" -gt 0 ] && [ "${_h:-0}" -gt 0 ] || die "could not read the output geometry"
+echo "pinning the Android display to ${_w}x${_h} logical"
+
+# multi_windows=false is not a default we inherit, it is a decision.
+#
+# true would hide both Android bars for free -- `waydroid app launch` picks
+# immersive.full=* instead of immersive.status=* when it is set. It also puts
+# Android into FREEFORM WINDOWING: apps become small floating windows with
+# Android's own titlebar, and the input method becomes a separate toplevel that
+# sway tiles like an app. Both are wrong on a 360px phone, so the bars are
+# handled by moarchy-waydroid-immersive instead.
+waydroid prop set persist.waydroid.multi_windows false
+waydroid prop set persist.waydroid.width "$_w"
+waydroid prop set persist.waydroid.height "$_h"
+
+# The image leaves ro.hardware.audio.primary unset, so Android loads
+# audio.primary.default.so -- a stub that accepts audio and discards it --
+# rather than audio.primary.waydroid.so, which talks to the host's PulseAudio
+# over the bind-mounted socket.
+#
+# NOTE: this is correct but it is not usually why a phone is silent. Android's
+# own STREAM_MUSIC starts at 5 of 15 on a fresh container, which presents as a
+# live, uncorked, full-volume host stream carrying nothing. Check
+# `dumpsys audio | grep -A6 STREAM_MUSIC` before suspecting the path.
+_base=/var/lib/waydroid/waydroid_base.prop
+if [ -f "$_base" ] && ! grep -q '^ro.hardware.audio.primary=' "$_base"; then
+  echo "ro.hardware.audio.primary=waydroid" | sudo tee -a "$_base" >/dev/null
+  echo "set the audio HAL; restart the session for it to take"
+fi
+
+echo "done -- run 'waydroid session stop' for the display size to take effect"

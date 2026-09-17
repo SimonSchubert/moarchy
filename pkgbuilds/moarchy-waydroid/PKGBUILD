@@ -1,0 +1,61 @@
+# Waydroid, configured for a phone.
+#
+# This package is configuration and two small programs. It carries no Android
+# code, no images, and nothing Google or anyone else wrote -- docs/android.md
+# D2 is why, and it is a licensing answer rather than a technical one.
+#
+# It is deliberately NOT in moarchy-meta's depends (docs/android.md AC 1).
+# Installing it commits a phone to an LXC container sharing the RAM and the
+# GPU, and `waydroid init` still has to fetch an image. That is a choice a user
+# makes, not one an image makes for them.
+#
+# What is NOT here, and deliberately:
+#
+#   The system images. Waydroid reads /usr/share/waydroid-extra/images and
+#   skips the download entirely when system.img and vendor.img are there
+#   (docs/android.md AC 3), which is the right mechanism -- but it adds 2.4 GB
+#   to a published artifact and D1 is not settled.
+#
+#   Preinstalled Android apps. Spotify, YouTube and the Play Store are other
+#   people's proprietary binaries. Shipping them in an image this project
+#   publishes is redistribution, and no amount of packaging makes it not be.
+#
+#   A sway drop-in. multi_windows stays false, so the Android input method is
+#   drawn inside the app surface and never becomes a window sway has to rule
+#   about.
+
+. "$startdir/../../scripts/manifest.sh"
+_ver=$(manifest_get moarchy version) || return 1
+
+pkgname=moarchy-waydroid
+pkgver=$_ver
+pkgrel=1
+pkgdesc="Android apps on moarchy: Waydroid configured for a phone screen"
+arch=('any')
+url='https://github.com/SimonSchubert/moarchy'
+license=('MIT')
+
+# waydroid pulls lxc, python-gbinder, nftables, dnsmasq, gtk3, python-dbus and
+# pulse-native-provider, all of which resolve from ALARM extra. Nothing here is
+# built from source (docs/android.md AC 2).
+#
+# python is named explicitly because moarchy-waydroid-immersive is a python
+# program in its own right, not because waydroid happens to need it.
+depends=('waydroid' 'python' 'sway')
+
+source=('moarchy-waydroid-setup'
+        'moarchy-waydroid-immersive'
+        'moarchy-waydroid-immersive.service')
+sha256sums=('SKIP' 'SKIP' 'SKIP')
+
+package() {
+  # /usr/lib/moarchy/bin is the project's own bin dir and is NOT on PATH,
+  # which is deliberate: these are called by a unit and by the user through an
+  # absolute path, not typed.
+  install -Dm755 "$srcdir/moarchy-waydroid-setup" \
+    "$pkgdir/usr/lib/moarchy/bin/moarchy-waydroid-setup"
+  install -Dm755 "$srcdir/moarchy-waydroid-immersive" \
+    "$pkgdir/usr/lib/moarchy/bin/moarchy-waydroid-immersive"
+  install -Dm644 "$srcdir/moarchy-waydroid-immersive.service" \
+    "$pkgdir/usr/lib/systemd/user/moarchy-waydroid-immersive.service"
+}
