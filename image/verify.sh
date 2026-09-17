@@ -101,6 +101,19 @@ have /usr/bin/megapixels
 # other eight beside them.
 have /usr/bin/fakeroot
 have /usr/bin/make
+# Mobile data (docs/devices.md D33). The mode is the check and the file is the
+# easy half: NetworkManager refuses a keyfile that the group or the world can
+# read, says so once in a journal nobody is tailing, and then behaves exactly
+# like a phone with no profile at all -- a SIM in the tray, full bars, and no
+# data. 0644 is what the first install of this file shipped.
+_md=/usr/lib/NetworkManager/system-connections/moarchy-mobile-data.nmconnection
+if [ ! -e "$R$_md" ]; then
+  no "$_md missing -- a SIM in this phone would get no data"
+elif [ "$(stat -c %a "$R$_md")" = 600 ]; then
+  ok "mobile-data profile ships 0600 (NetworkManager loads it)"
+else
+  no "mobile-data profile is $(stat -c %a "$R$_md"), not 600 -- NetworkManager refuses it"
+fi
 # Provenance: an image that answers "no commit" cannot be rebuilt or bisected.
 if [ -f "$R/usr/share/moarchy/build-info" ]; then
   . "$R/usr/share/moarchy/build-info"
@@ -398,8 +411,12 @@ if [ -s "$R/home/moarchy/.ssh/authorized_keys" ]; then
 else
   ok "no ssh key authorised (nobody but the owner can log in)"
 fi
+# /etc only. The mobile-data profile checked further up ships in /usr/lib and
+# is not a credential -- it names no operator, no APN and no password, and gets
+# all three from the SIM at runtime. A profile HERE was put here by somebody's
+# build, and the only ones that exist are a debug image's wifi and its psk.
 np=$(ls -1 "$R"/etc/NetworkManager/system-connections/ 2>/dev/null | wc -l)
-[ "$np" = 0 ] && ok "no preseeded network profiles" || no "$np network profile(s) baked in"
+[ "$np" = 0 ] && ok "no preseeded network profiles in /etc" || no "$np network profile(s) baked in"
 # -L too: an absolute symlink here would read as absent to -e, turning "sshd is
 # enabled" into a silent pass -- the direction that matters for a published image.
 if [ -e "$R/etc/systemd/system/multi-user.target.wants/sshd.service" ] ||

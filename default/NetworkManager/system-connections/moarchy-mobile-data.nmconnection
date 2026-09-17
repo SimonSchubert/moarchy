@@ -1,0 +1,30 @@
+# Mobile data, for whatever SIM is in the phone (docs/devices.md D33).
+#
+# There is no apn, username or password here and nothing per-operator to
+# maintain: auto-config reads all three out of mobile-broadband-provider-info,
+# by the operator code the modem reports once the SIM is unlocked. That package
+# is already in the image -- ModemManager pulls it in -- so this file is the
+# only missing piece between a SIM and a data connection.
+#
+# autoconnect is stated rather than left to its default, because it IS the
+# behaviour: a phone with a SIM in it carries data without being asked, and the
+# tile that turns it off is docs/shade.md S29.
+#
+# This is a packaged default, so it lives in /usr/lib and not in /etc -- the
+# override path stays free, and image/verify.sh counts /etc profiles to catch a
+# leaked credential. Editing it from the UI writes a shadowing copy into /etc,
+# which is what NetworkManager does with every read-only profile.
+[connection]
+id=Mobile data
+type=gsm
+autoconnect=true
+
+[gsm]
+auto-config=true
+
+[ipv4]
+method=auto
+
+[ipv6]
+method=auto
+addr-gen-mode=default

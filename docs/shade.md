@@ -18,6 +18,7 @@ Ids are `S<n>`, cited by any check that proves one.
 | --- | --- |
 | header | clock, date, gear, power |
 | wide tiles | Wi-Fi, Bluetooth |
+| mobile data | one wide tile, full width, on a phone with a modem |
 | small tiles | Silent, Airplane, Torch, Rotate |
 | sliders | brightness, volume |
 | media | title and transport, when something is playing |
@@ -200,6 +201,83 @@ when the adapter reads blocked, waiting ~700ms before writing `enabled` — the
 same order and the same reason as S9. Without it the switch is dead for anyone
 who has been in airplane mode, because BlueZ will not power up under a block and
 drops the write silently.
+
+## S29. Mobile data
+
+Numbered 29 and sitting here, between the wide tiles and the small ones,
+because that is where it is on screen. Ids are citation handles rather than
+positions — S11 has been Rotate since the small-tile row was written, and
+renumbering it would silently break every check that cites it.
+
+**S29** The tile is **full width**, below Wi-Fi and Bluetooth, and is **absent,
+not disabled**, when NetworkManager can see no `gsm` device — S10's rule for
+the torch, for the same reason: a phone with no modem has nothing this tile
+could do.
+
+Absent is **latched**: once a gsm device has been seen, the tile stays. Bringing
+the connection up can make ModemManager re-enumerate — one off/on took this
+modem from `Modem/1` to `Modem/0` — and NetworkManager has no gsm device for a
+few seconds either side of that, so a tile bound straight to "is there a modem
+now" vanished from under the finger that had just tapped it. Having a modem is a
+fact about the hardware; a phone with none never lights this tile at all.
+
+It is lit when mobile data is **on**, which is the setting and not the
+connection. A tile keyed on "connected" goes dark in a tunnel and lights again
+at the far end, which reads as the switch flipping by itself; S4 splits Wi-Fi
+the same way and puts the connection on the second line.
+
+Full width rather than a third half-width cell, and that is a decision with two
+halves. A third cell beside Wi-Fi and Bluetooth leaves a hole, and a fifth
+*small* tile does not fit at all: that row's label carries no width and no
+elide, so a fifth cell makes "Airplane" spill into its neighbour. This tile
+also has a second line worth reading, which is the wide tile's shape.
+
+**S29a** The second line reads, in order of preference: `Off`, `No SIM`, `SIM
+locked`, the operator's name, `Connected`, or `Not connected`. S4's ordering
+discipline — what is wrong first, then what is connected, then the bare fact
+that it is on.
+
+`SIM locked` is the line this phone shows on **every boot**: the SIM re-locks
+at power-on and nothing but the keypad answers it (`docs/devices.md` D33).
+
+**S29b** A **tap** opens the SIM keypad instead of toggling **while the SIM is
+locked**, and a **long press** opens it whatever the SIM is doing.
+
+The tap is S6a reached for a second time: the switch is a dead end while the
+SIM is locked — turning data off changes nothing anybody can see, turning it on
+cannot connect — and the keypad is the only thing on this phone that gets you
+from there to online. The hold is S6 and S6c's rule, hold for the thing the
+radio is for.
+
+**S29c** Off **stays** off across a reboot. The tile writes the profile's
+`autoconnect` as well as bringing the connection up or down, because `nmcli c
+up`/`down` lasts as long as this boot and autoconnect decides every boot after
+it. A data switch that comes back on by itself at the next power-on is somebody
+paying for a setting they turned off, which is the whole reason the switch
+exists.
+
+NetworkManager owns the persistence: the packaged profile is read-only, so the
+first write copies it into `/etc/NetworkManager/system-connections` — same
+uuid, 0600 root:root — and that copy answers from then on. Measured on sargo
+2026-09-17.
+
+**S29d** The privileged half is `bin/moarchy-data`, not `nmcli` from the shell.
+NetworkManager's `settings.modify.system` is `auth_admin`, so `nmcli c modify`
+as the session user answers `Insufficient privileges`, and a polkit prompt
+raised from the shade would land on top of the shade that asked for it. Same
+split, and the same reason, as `moarchy.sim` and `bin/moarchy-sim`.
+
+Its `status` is read once per open, like the rfkill and torch probes — nothing
+here changes while the shade is shut. Under `shade dryRun 1` the writes are
+held back and the summon is not, exactly as S6's are.
+
+Check: `omarchy-shell shade open`, then `omarchy-shell shade mobile` reads
+`present on connected unlocked sim drawn` on a phone carrying data, and
+`present on disconnected locked sim drawn` on one whose SIM is still locked.
+`omarchy-shell shade dataTap` under `dryRun 1` answers `picker` with
+`lastLaunch` `moarchy.sim` while the SIM is locked. The last token is the
+latch: across an off/on the first goes `absent` for a few seconds while this
+stays `drawn`, which is the tile not moving. All run on the device 2026-09-17.
 
 ## S7–S10. Small tiles
 

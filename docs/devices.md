@@ -659,6 +659,97 @@ ships the PCM numbers it needs.
 > not install `depends` either, so a library a package links against has to be
 > in the container too.
 
+**D33** *Added 2026-09-17, measured on the handset.* **Mobile data is one
+packaged file, and NetworkManager refuses it at 0644.** The `moarchy` package
+ships `/usr/lib/NetworkManager/system-connections/moarchy-mobile-data.nmconnection`
+at **mode 0600**, carrying `[gsm] auto-config=true` and nothing else.
+`docs/shade.md` S29 is the tile that switches it.
+
+> **Nothing was missing below the profile, which is why this is a file and not
+> a stack.** Read off the phone before anything was written: NetworkManager
+> 1.58.1 already had the modem as a **gsm device** (`qrtr0`, ports `qrtr0 (qmi)`
+> and `rmnet_ipa0 (net)`), `nmcli radio` already reported `WWAN-HW enabled` and
+> `WWAN enabled`, and `mobile-broadband-provider-info 20251101` was already in
+> the image — ModemManager pulls it in. So the operator's APN, username and
+> password are all resolvable from the SIM, and there is nothing per-operator
+> to maintain and no APN in the file.
+>
+> **The mode is the whole difficulty, and it fails silently.** The keyfile
+> reader refuses any profile the group or the world can read, *wherever it
+> lives* — /usr/lib included, secrets or none:
+>
+> ```
+> keyfile: load: ".../moarchy-mobile-data.nmconnection":
+>          failed to load connection: File permissions (100644) are insecure
+> ```
+>
+> That is one `<warn>` in a journal nobody is tailing, and the phone is then
+> indistinguishable from one with no profile at all: a SIM in the tray, bars on
+> the bar, and no data. The first install of this file shipped 0644 and did
+> exactly nothing. `image/verify.sh` asserts the mode for that reason, not the
+> file.
+>
+> **/usr/lib and not /etc**, for three reasons that agree: a package's files
+> belong in a system path (`docs/structure.md` P8, which is also why this is
+> not a line in `moarchy-firstboot`), `image/verify.sh` counts the profiles in
+> `/etc` to catch a baked-in credential, and NetworkManager copy-on-writes a
+> read-only profile into `/etc` the moment anything edits it — same uuid, 0600
+> root:root — which is what makes the tile's `off` outlive a reboot (S29c).
+>
+> Device-independent on purpose: every phone moarchy targets has a modem that
+> NetworkManager presents as a gsm device, so this sits beside ModemManager's
+> own placement in `moarchy-firstboot` rather than in a device package. Only
+> sargo has run it.
+>
+> **What is measured, and what is not.** Loaded at 0600, the profile appears in
+> `nmcli c show`, NetworkManager derives a uuid from the filename,
+> auto-activates it unprompted, and parks the device at
+> `connecting (need authentication)` — which is it waiting for the SIM PIN.
+> `bin/moarchy-data` reads and writes all of that correctly against a locked
+> SIM, and the tile draws it.
+>
+> **It carries data, measured end to end 2026-09-17** on a Telefónica Germany
+> SIM (MCC-MNC `26203`, `o2 - de+`), minutes after the PIN was entered and with
+> nothing else done by hand:
+>
+> ```
+> modem       state connected, reg home, PS attached, LTE, signal 81%
+> bearer      connected, multiplexed, apn internet.eplus.de, user eplus
+> IPv4        10.132.10.120/28 gw 10.132.10.121 dns 62.109.121.17,.18
+> IPv6        2a02:3032:1b:3a68::/64, dns 2a02:3018:0:40ff::aaaa,::bbbb
+> route       default via 10.132.10.121 dev qmapmux1.0 metric 700 (see below)
+> fetch       http=200 in 0.44s bound to the cellular netdev
+> public ip   176.0.20.10 over cellular, against the Wi-Fi v6 address over wlan0
+> ```
+>
+> **The APN was never configured anywhere.** `internet.eplus.de`, `eplus` and
+> `gprs` came out of `mobile-broadband-provider-info` via `auto-config`, which
+> is the whole case for shipping one profile with no operator in it.
+>
+> Wi-Fi keeps the default route at metric 600 against cellular's 700, so a
+> phone on both prefers Wi-Fi without anything having to say so.
+>
+> **The netdev is not `rmnet_ipa0`, and it has no fixed name.** The bearer
+> comes up *multiplexed*, so the traffic is on a QMAP channel —
+> `qmapmuxN.0@rmnet_ipa0` — while `rmnet_ipa0` holds a link-local address and
+> nothing else. A `curl --interface rmnet_ipa0` against a working connection
+> fails, which is a good hour to lose.
+>
+> **N changes.** This phone was `qmapmux1.0` on the first connect and
+> `qmapmux0.0` after one off/on twenty minutes later, with a new address and
+> gateway each time (`10.132.10.120/28`, then `10.132.110.212/29`). Anything
+> that needs the interface reads it from the default route or from `mmcli -b
+> <bearer>`; a hardcoded `qmapmux1.0` is a check that passes once. Both
+> connects answered `http=200` over the channel actually in use.
+>
+> **The modem re-enumerates on reconnect.** One `moarchy-data off; on` took it
+> from `Modem/1` to `Modem/0`, and NetworkManager had no gsm device at all for
+> several seconds around it — long enough that the tile, bound to "is there a
+> modem now", hid itself immediately after being switched on. `docs/shade.md`
+> S29 latches it; `moarchy-data status` answers `sim=` rather than
+> `sim=missing` in that window, because a device NetworkManager has lost says
+> nothing about the tray.
+
 **D30** *Added 2026-09-15, fixed the same day.* **The camera's colour needed a
 profile and a patched megapixels.** `moarchy-device-sargo` generates
 `google,b4s4-sdm670,{Rear,Front}.dcp`; `pkgbuilds/megapixels` carries a

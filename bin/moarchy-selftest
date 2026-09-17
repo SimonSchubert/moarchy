@@ -310,6 +310,48 @@ else
   fi
 fi
 
+# shade S29/S29d. Mobile data, which fails in the one way nothing on screen
+# reports: NetworkManager refuses a keyfile the group can read, logs one <warn>,
+# and then behaves exactly like a phone with no profile at all (docs/devices.md
+# D33). So the mode is a check, and so is the owner -- a hand-copied file works
+# until the next reflash.
+data_profile=/usr/lib/NetworkManager/system-connections/moarchy-mobile-data.nmconnection
+data_tool=/usr/lib/moarchy/bin/moarchy-data
+
+if [[ ! -e $data_profile ]]; then
+  no "$data_profile is missing" \
+     "D33: a SIM in this phone gets no data, with nothing on screen to say why"
+else
+  data_mode=$(stat -c %a "$data_profile" 2>/dev/null)
+  if [[ $data_mode == 600 ]]; then
+    ok "the mobile-data profile is 0600, so NetworkManager loads it (D33)"
+  else
+    no "the mobile-data profile is $data_mode, not 600" \
+       "D33: the keyfile reader calls that insecure and the profile never loads"
+  fi
+  data_owner=$(pacman -Qoq "$data_profile" 2>/dev/null)
+  [[ $data_owner == moarchy ]] \
+    && ok "it comes from the moarchy package (D33)" \
+    || no "$data_profile is owned by ${data_owner:-nothing}, not the moarchy package" \
+         "D33: it is a hand-made file and the next reflash loses it"
+fi
+
+# The tile reads its whole state through this one script, and a Process that
+# cannot find its binary does not throw -- it hands back empty text and the tile
+# quietly reports no modem (the trap moarchy.sim's header documents).
+if [[ -x $data_tool ]]; then
+  data_state=$("$data_tool" status 2>/dev/null | sed -n 's/^present=//p')
+  case "$data_state" in
+    yes) ok "moarchy-data sees a gsm device, so the tile is drawn (S29)" ;;
+    no)  skip_ "NetworkManager sees no gsm device here, so S29 hides the tile" ;;
+    *)   no "moarchy-data status answered no 'present' line" \
+            "S29d: the tile reads this script and draws nothing it cannot parse" ;;
+  esac
+else
+  no "$data_tool is missing or not executable" \
+     "S29d: the tile has no way to read or switch mobile data"
+fi
+
 # --- the coding agent tile (docs/settings.md P) ------------------------------
 head_ "coding agent"
 

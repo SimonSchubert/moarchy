@@ -1,0 +1,196 @@
+#!/bin/bash
+# Mobile data, for a tile rather than a shell.
+#
+# The switch itself is two nmcli calls, and neither can be made from the
+# session: `nmcli c modify` as the phone's user answers
+#
+#     Error: Failed to modify connection 'Mobile data': Insufficient privileges
+#
+# because NetworkManager's settings.modify.system action is auth_admin, and a
+# polkit prompt raised from the shade would land on top of the shade that asked
+# for it. So this is the privileged half, with sudo -n (passwordless by design
+# on this phone -- docs/structure.md), and docs/shade.md S29 is the tile that
+# calls it. Reads need no privilege and do not get sudo.
+#
+# Splitting it this way is the same trade as bin/moarchy-sim: QML cannot be
+# tested without a running shell, and this can be run against a phone with a
+# locked SIM, no SIM, or no modem from anywhere.
+set -uo pipefail
+
+NMCLI=/usr/bin/nmcli
+MMCLI=/usr/bin/mmcli
+
+_nm_root() { sudo -n "$NMCLI" "$@" 2>&1; }
+
+# The gsm connection, resolved by TYPE and never by name.
+#
+# `Mobile data` is the id the packaged profile carries, and it is a label: the
+# user may rename it, and the moment they change any setting from the UI,
+# NetworkManager copy-on-writes the whole profile into
+# /etc/NetworkManager/system-connections and that copy is what answers. The
+# copy keeps the uuid and the type; the name is the one field a person is
+# invited to edit. Measured on sargo 2026-09-17, where `nmcli c modify` on the
+# packaged profile produced exactly that shadow, same uuid, 0600 root:root.
+#
+# The active one wins if there are several, because that is the one carrying
+# the data this is about to turn off.
+_conn_uuid() {
+  local rows
+  rows=$("$NMCLI" -t -f UUID,TYPE,ACTIVE c show 2>/dev/null | awk -F: '$2=="gsm"')
+  [ -z "$rows" ] && return 1
+  printf '%s\n' "$rows" | awk -F: '$3=="yes"{print $1; found=1; exit} END{if(!found) exit 1}' ||
+    printf '%s\n' "$rows" | head -1 | cut -d: -f1
+}
+
+# The gsm device. On sargo this is qrtr0, the modem's QMI port, and it is NOT
+# the netdev the data flows over. The bearer comes up multiplexed, so the
+# traffic is on a QMAP channel -- `qmapmuxN.0@rmnet_ipa0` -- while rmnet_ipa0
+# itself only ever holds a link-local address. NetworkManager names the device
+# after the modem, and that is the name it takes in `nmcli d`.
+#
+# Two things worth knowing before debugging a live connection, both measured
+# 2026-09-17: `curl --interface rmnet_ipa0` fails against a working data
+# connection, and **N is not stable** -- the same phone came back as
+# `qmapmux1.0` and then `qmapmux0.0` across one off/on, so the channel is
+# found from the default route or from `mmcli -b <bearer>`, never hardcoded.
+_gsm_device() {
+  "$NMCLI" -t -f DEVICE,TYPE d 2>/dev/null | awk -F: '$2=="gsm"{print $1; exit}'
+}
+
+# The fields the tile needs, one per question it asks.
+#
+#   present    a gsm device exists -- a modem NetworkManager can carry data on
+#   device     its name in nmcli, or empty
+#   enabled    the profile's autoconnect: the SETTING, which is what the tile
+#              draws lit or dark
+#   connected  a bearer is actually up
+#   state      NetworkManager's own device state, verbatim
+#   locked     the SIM is what is holding it up
+#   sim        present | missing -- a tray with nothing in it
+#   operator   once registered
+#
+# `enabled` and `connected` are two questions and the tile asks the first,
+# deliberately. A tile keyed on `connected` goes dark in a tunnel and lights up
+# again at the other end, which reads as the setting flipping by itself; the
+# Wi-Fi tile has the same split and answers the same way (docs/shade.md S4).
+status() {
+  local dev uuid state enabled connected locked sim operator kv
+
+  # The SETTING first, and deliberately before the device: it is a question
+  # about the stored profile, which exists whether or not there is a device to
+  # apply it to. Answering it out of the device's presence is how this reported
+  # `enabled=no` for the fifteen seconds after somebody switched data ON.
+  enabled=no
+  if uuid=$(_conn_uuid); then
+    # -t -f is the only honest way to read one property: the human table pads
+    # the value and `grep -o yes` would match the word anywhere in the row.
+    case "$("$NMCLI" -t -f connection.autoconnect c show "$uuid" 2>/dev/null | cut -d: -f2)" in
+      yes) enabled=yes ;;
+    esac
+  fi
+
+  # `present=no` arrives every few seconds and not only on a phone with no
+  # modem: bringing the connection up can make ModemManager re-enumerate, which
+  # renumbers the modem (Modem/1 became Modem/0 across one off/on) and takes
+  # NetworkManager's gsm device away with it for as long as 20 seconds.
+  # docs/shade.md S29 latches the tile for exactly this reason, and everything
+  # below answers "unknown" rather than inventing a value for it.
+  dev=$(_gsm_device)
+  if [ -z "$dev" ]; then
+    echo "present=no"
+    echo "device="
+    echo "enabled=$enabled"
+    echo "connected=no"
+    echo "state="
+    echo "locked=no"
+    # Empty and not `missing`: NetworkManager having no gsm device says nothing
+    # about the tray, and answering `sim=missing` here would put "No SIM" on
+    # the tile of a phone whose SIM is fine.
+    echo "sim="
+    echo "operator="
+    return 0
+  fi
+
+  state=$("$NMCLI" -t -f DEVICE,STATE d 2>/dev/null |
+    awk -F: -v d="$dev" '$1==d{print $2; exit}')
+
+  connected=no
+  [ "$state" = "connected" ] && connected=yes
+
+  # Asked of the modem and not of NetworkManager. NM's device state for a
+  # locked SIM is `need-auth`, which is also what it says while it waits for a
+  # Wi-Fi passphrase or a wrong one -- the modem is the thing that knows a SIM
+  # is locked, and bin/moarchy-sim's own header has why `state` is the field to
+  # read rather than unlock-required.
+  locked=no
+  sim=present
+  operator=
+  if kv=$("$MMCLI" -m any --output-keyvalue 2>/dev/null) && [ -n "$kv" ]; then
+    [ "$(printf '%s\n' "$kv" | sed -n 's/^modem\.generic\.state *: *//p' | head -1)" = locked ] &&
+      locked=yes
+    # An empty tray is state-failed-reason, not state: the modem reports
+    # `failed` and the reason is what distinguishes "no SIM" from "this modem
+    # is unwell", which are the same word on screen and different problems.
+    [ "$(printf '%s\n' "$kv" |
+      sed -n 's/^modem\.generic\.state-failed-reason *: *//p' | head -1)" = sim-missing ] &&
+      sim=missing
+    operator=$(printf '%s\n' "$kv" | sed -n 's/^modem\.3gpp\.operator-name *: *//p' | head -1)
+    [ "$operator" = "--" ] && operator=
+  fi
+
+  echo "present=yes"
+  echo "device=$dev"
+  echo "enabled=$enabled"
+  echo "connected=$connected"
+  echo "state=${state:-}"
+  echo "locked=$locked"
+  echo "sim=$sim"
+  echo "operator=$operator"
+}
+
+# On and off both write the setting FIRST and move the connection second.
+#
+# The setting is the durable half: `nmcli c up`/`down` last as long as this boot
+# and autoconnect decides every boot after it, so an `off` that only ran `down`
+# would come back on by itself at the next power-on -- on a metered SIM, which
+# is somebody's money and the reason a data switch exists at all.
+#
+# --wait 0 on the up, and that is not impatience. `nmcli c up` on a locked SIM
+# blocks for the full 90s secrets timeout, and this is called from a tile: the
+# shade re-reads the state on a timer (S29d) rather than waiting for an answer
+# nobody is holding still for.
+on() {
+  local uuid
+  uuid=$(_conn_uuid) || { echo "no gsm connection profile to turn on" >&2; return 1; }
+  _nm_root c modify "$uuid" connection.autoconnect yes >/dev/null
+  # `c up` and not `d connect`: an explicit `nmcli c down` marks the DEVICE as
+  # manually disconnected, and bringing the connection up is what clears that
+  # block as well as starting the bearer.
+  _nm_root --wait 0 c up "$uuid" >/dev/null
+}
+
+off() {
+  local uuid
+  uuid=$(_conn_uuid) || { echo "no gsm connection profile to turn off" >&2; return 1; }
+  _nm_root c modify "$uuid" connection.autoconnect no >/dev/null
+  # A profile that is not up is not an error here. `nmcli c down` on an
+  # inactive connection answers "not an active connection", which is true and
+  # is not a failure of "turn data off" -- it is already off.
+  _nm_root c down "$uuid" >/dev/null 2>&1 || true
+}
+
+usage() {
+  cat <<'EOF'
+moarchy-data status   what mobile data is doing, as key=value lines
+moarchy-data on       turn mobile data on, now and at every boot
+moarchy-data off      turn it off, now and at every boot
+EOF
+}
+
+case "${1:-status}" in
+  status) status ;;
+  on)     on ;;
+  off)    off ;;
+  -h|--help|help) usage ;;
+  *)      usage >&2; exit 64 ;;
+esac

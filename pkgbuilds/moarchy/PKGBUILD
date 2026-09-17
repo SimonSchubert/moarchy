@@ -117,7 +117,12 @@ pkgver=$_ver
 # 1 for 0.3.0. pkgver moved, and 0.3.0-1 is newer than every 0.2.2-N above,
 # including the -7 the 20260915 images carry, so going back to 1 hides nothing
 # from a phone holding any of them.
-pkgrel=1
+# 2: mobile data. The gsm connection profile and bin/moarchy-data are both
+#    files this package ships, so a phone holding 0.3.0-1 has a modem that
+#    registers, carries calls and SMS, and cannot raise a data bearer at all --
+#    with nothing on screen to say why, because the tile is absent without the
+#    script (docs/devices.md D33, docs/shade.md S29).
+pkgrel=2
 pkgdesc="Omarchy's look, keybindings and theming on a phone, under Sway"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
@@ -194,6 +199,7 @@ package() {
          "$pkgdir/usr/share/moarchy/default/pacman-hooks" \
          "$pkgdir/usr/share/moarchy/default/polkit" \
          "$pkgdir/usr/share/moarchy/default/udev" \
+         "$pkgdir/usr/share/moarchy/default/NetworkManager" \
          "$pkgdir/usr/share/moarchy/default/applications" \
          "$pkgdir/usr/share/moarchy/default/glib-schemas" \
          "$pkgdir/usr/share/moarchy/default/agents"
@@ -312,6 +318,22 @@ package() {
   # override path stays free.
   install -Dm644 "$_repo/default/udev/73-moarchy-torch.rules" \
     "$pkgdir/usr/lib/udev/rules.d/73-moarchy-torch.rules"
+
+  # Mobile data, which is one file and no script. A NetworkManager profile has
+  # a system path of its own, and P8's rule is that a thing with a system path
+  # belongs in a package rather than in moarchy-firstboot. /usr/lib for the
+  # same reason as the two rules above, plus one of its own: image/verify.sh
+  # counts the profiles in /etc to catch a baked-in credential, and this has
+  # none to bake. docs/devices.md D33 is the criterion.
+  #
+  # 0600, and not out of caution about a secret -- there is no secret in it.
+  # NetworkManager's keyfile reader refuses any profile the group or the world
+  # can read, wherever it lives, with one journal line nobody is watching:
+  # "File permissions (100644) are insecure". The profile is then simply absent
+  # from `nmcli c show` and the phone has no mobile data. Measured on sargo
+  # 2026-09-17, where this file's first install shipped 0644 and did nothing.
+  install -Dm600 "$_repo/default/NetworkManager/system-connections/moarchy-mobile-data.nmconnection" \
+    "$pkgdir/usr/lib/NetworkManager/system-connections/moarchy-mobile-data.nmconnection"
 
   # --- systemd -------------------------------------------------------------
   install -Dm644 "$_repo/default/systemd/system/moarchy-firstboot.service" \

@@ -421,6 +421,7 @@ Item {
     if (!airplaneProbe.running) airplaneProbe.running = true
     if (!brightnessProbe.running) brightnessProbe.running = true
     if (!torchProbe.running) torchProbe.running = true
+    if (!dataProbe.running) dataProbe.running = true
     // Twice, on purpose, and the deferred one is not the redundant one.
     //
     // Immediately, because the sheet is as tall as its content now, so the
@@ -627,6 +628,23 @@ Item {
     function btTap(): string { root.btTap(); return root.lastAction }
     function btHold(): string { root.btHold(); return root.lastAction }
 
+    // S29d. `mobile` and not `data`: an IpcHandler is a QtObject and `data` is
+    // already one of its properties, so a function of that name would collide
+    // with it rather than be reachable.
+    function mobile(): string {
+      return [root.dataPresent ? "present" : "absent",
+              root.dataEnabled ? "on" : "off",
+              root.dataConnected ? "connected" : "disconnected",
+              root.dataLocked ? "locked" : "unlocked",
+              root.dataSimMissing ? "no-sim" : "sim",
+              // The latch, which is what decides whether the tile is on
+              // screen at all -- and the only way a check can tell a tile
+              // that is drawn and disconnected from one that has vanished.
+              root.dataSeen ? "drawn" : "hidden"].join(" ")
+    }
+    function dataTap(): string { root.dataTap(); return root.lastAction }
+    function dataHold(): string { root.dataHold(); return root.lastAction }
+
     function dryRun(on: string): string {
       root.dryRun = (on === "1" || on === "true" || on === "on")
       return root.dryRun ? "on" : "off"
@@ -692,10 +710,51 @@ Item {
     return "On"
   }
 
+  // S29a. S4's ordering discipline, applied to the other radio: what is wrong
+  // first, then what is connected, then the bare fact that it is on. "SIM
+  // locked" is the line this phone shows on every boot -- the SIM re-locks at
+  // power-on and nothing but the keypad can answer it (docs/devices.md D33).
+  readonly property string dataLabel:
+    !root.dataEnabled ? "Off"
+    : root.dataSimMissing ? "No SIM"
+    : root.dataLocked ? "SIM locked"
+    : root.dataConnected ? (root.dataOperator !== "" ? root.dataOperator : "Connected")
+    : "Not connected"
+
   property bool airplane: false
   property int brightness: 50
   property bool torchAvailable: false
   property bool torchOn: false
+
+  // S29d. Mobile data, the one tile whose whole state comes out of a moarchy
+  // script. Quickshell.Networking knows about wifi devices and nothing else,
+  // and the two writes need root -- NetworkManager's settings.modify.system is
+  // auth_admin, and a polkit prompt raised from the shade would land on top of
+  // the shade that asked for it.
+  property bool dataPresent: false
+  // Latched, and the latch is the point. Switching data on can make
+  // ModemManager re-enumerate -- one off/on took this modem from Modem/1 to
+  // Modem/0 -- and NetworkManager has no gsm device at all for a few seconds
+  // either side of that. Bound straight to dataPresent, the tile disappeared
+  // from under the finger that had just tapped it and came back a moment
+  // later. Having a modem is a fact about the hardware, so it is remembered
+  // rather than re-asked: a phone with none never sets this, and a phone whose
+  // modem has gone keeps a tile that says "Not connected", which is the better
+  // of the two wrong answers (S29).
+  property bool dataSeen: false
+  property bool dataEnabled: false
+  property bool dataConnected: false
+  property bool dataLocked: false
+  property bool dataSimMissing: false
+  property string dataOperator: ""
+
+  // Absolute, and moarchy.sim/Sim.qml's own header has the whole reason: a
+  // shell restarted from anywhere but a login session comes up without
+  // /usr/lib/moarchy/bin on PATH, a Process that cannot find its binary does
+  // not throw, and the StdioCollector still fires with empty text. A bare name
+  // here would leave this tile absent on precisely the phones that have a
+  // modem, with one line in the shell log to say why.
+  readonly property string dataTool: "/usr/lib/moarchy/bin/moarchy-data"
 
   // Airplane mode is one lever over wifi, bluetooth and the modem, which is
   // what a phone means by it -- `nmcli radio` would leave bluetooth up. The
@@ -728,6 +787,31 @@ Item {
       var out = text.trim()
       root.torchAvailable = out !== "unavailable" && out !== ""
       root.torchOn = root.torchAvailable && out !== "0"
+    }
+  }
+
+  Shared.Probe {
+    id: dataProbe
+    command: [root.dataTool, "status"]
+    onAnswered: {
+      var lines = text.trim().split("\n")
+      // A one-line answer is a script that did not run -- an empty text is
+      // what a Process that failed to start hands back, and blanking the tile
+      // on that would hide mobile data on a working phone. Leave what was
+      // there and let the next open ask again.
+      if (lines.length < 2) return
+      var kv = ({})
+      for (var i = 0; i < lines.length; i++) {
+        var at = lines[i].indexOf("=")
+        if (at > 0) kv[lines[i].slice(0, at)] = lines[i].slice(at + 1)
+      }
+      root.dataPresent = kv.present === "yes"
+      if (root.dataPresent) root.dataSeen = true
+      root.dataEnabled = kv.enabled === "yes"
+      root.dataConnected = kv.connected === "yes"
+      root.dataLocked = kv.locked === "yes"
+      root.dataSimMissing = kv.sim === "missing"
+      root.dataOperator = kv.operator ? kv.operator : ""
     }
   }
 
@@ -853,6 +937,45 @@ Item {
   }
 
   function btHold() { root.openBluetooth() }
+
+  // S29b. A tap on a locked SIM opens the keypad rather than toggling, which is
+  // S6a's reasoning reached for the second time: the switch is a dead end
+  // while the SIM is locked. Turning data off changes nothing anybody can see,
+  // turning it on cannot connect, and the keypad is the only thing on this
+  // phone that gets you from here to online.
+  function dataTap() {
+    if (root.dataLocked) {
+      root.openSim()
+      return
+    }
+    root.lastAction = "toggle"
+    if (!root.dryRun) root.setData(!root.dataEnabled)
+  }
+
+  // S29b. Held, it is the keypad whatever the SIM is doing -- the same "hold
+  // for the thing the radio is for" as the two tiles above (S6, S6c).
+  function dataHold() { root.openSim() }
+
+  function openSim() { root.openScreen("moarchy.sim") }
+
+  // Optimistic, then read back 700ms later: the same shape and the same reason
+  // as setAirplane. moarchy-data returns in well under a second even against a
+  // locked SIM -- it passes nmcli --wait 0 rather than sitting out the 90s
+  // secrets timeout -- but what it returns to is a state still settling, which
+  // is why the tile draws `enabled` (the setting) and not `connected` (S29).
+  // moarchy-data writes the profile's autoconnect too, which is what makes
+  // an `off` survive a reboot (S29c).
+  function setData(on) {
+    root.dataEnabled = on
+    Quickshell.execDetached([root.dataTool, on ? "on" : "off"])
+    dataRecheck.restart()
+  }
+
+  Timer {
+    id: dataRecheck
+    interval: 700
+    onTriggered: dataProbe.running = true
+  }
 
   function setBrightness(percent) {
     var v = Math.max(1, Math.min(100, Math.round(percent)))
@@ -1658,6 +1781,40 @@ Item {
             onActivated: root.btTap()
             onHeld: root.btHold()
           }
+        }
+
+        // --------------------------------------------------- mobile data
+        // Full width, and that is the shape rather than a default. A third
+        // half-width cell beside Wi-Fi and Bluetooth leaves a hole, and a
+        // fifth SMALL tile does not fit: that row's label has no width and no
+        // elide, so a fifth cell makes "Airplane" spill into its neighbour.
+        // This tile also has a second line genuinely worth reading -- the
+        // operator, or the reason there is no data -- which is the wide tile's
+        // shape and not the small one's.
+        //
+        // Absent, not disabled, where NetworkManager sees no gsm device at
+        // all: S10's rule for the torch.
+        //
+        // The glyph is md-network_strength_4 (U+F08FA), held at full strength
+        // the way the Wi-Fi tile holds md-wifi_strength_4 -- the tile says
+        // whether data is ON, and the bar is where strength is drawn.
+        //
+        // Picked by reading the font's cmap and NOT by copying a neighbour,
+        // which is how this arrived at an icon of two arrows: the glyphs are
+        // not in omarchy.ttf at all but in JetBrainsMono Nerd Font, by
+        // fontconfig fallback, and the Nerd Font's Material range does not sit
+        // where moarchy.bar's comments say it does. U+F08C1, the top of the
+        // bar's own signal ramp, is md-swap_horizontal_variant there.
+        WideTile {
+          width: parent.width
+          visible: root.dataSeen
+          glyph: "󰣺"
+          label: "Mobile data"
+          detail: root.dataLabel
+          on: root.dataEnabled
+          holdable: true
+          onActivated: root.dataTap()
+          onHeld: root.dataHold()
         }
 
         // --------------------------------------------------- small tiles
