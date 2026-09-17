@@ -117,12 +117,18 @@ pkgver=$_ver
 # 1 for 0.3.0. pkgver moved, and 0.3.0-1 is newer than every 0.2.2-N above,
 # including the -7 the 20260915 images carry, so going back to 1 hides nothing
 # from a phone holding any of them.
-# 2: mobile data. The gsm connection profile and bin/moarchy-data are both
+# 2 was never built under that number; it ships as 0.4.0-1, below.
+#    Mobile data. The gsm connection profile and bin/moarchy-data are both
 #    files this package ships, so a phone holding 0.3.0-1 has a modem that
 #    registers, carries calls and SMS, and cannot raise a data bearer at all --
 #    with nothing on screen to say why, because the tile is absent without the
 #    script (docs/devices.md D33, docs/shade.md S29).
-pkgrel=2
+#
+# 1 for 0.4.0. pkgver moved, and 0.4.0-1 is newer than the 0.3.0-1 [moarchy]
+# serves today, so mobile data reaches a phone holding it -- as does the rest
+# of what this build has over that one: the overview plugin on the right edge,
+# two apps on one workspace, and moarchy-selftest's checks for both.
+pkgrel=1
 pkgdesc="Omarchy's look, keybindings and theming on a phone, under Sway"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
