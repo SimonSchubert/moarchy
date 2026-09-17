@@ -44,7 +44,14 @@ pkgver=$_ver
 #
 # 1 for 0.3.0: pkgver is moarchy's, and it moved. 0.3.0-1 is newer than the
 # 0.2.2-1 the 20260915 images carry.
-pkgrel=1
+#
+# 2: moarchy-mail imports what each run needs rather than everything. On the
+# PinePhone every run of 0.3.0-1's took 1.5 s before it said a word to a
+# server, 1.1 s of it imports; in the moarchy-qml container the imports fell
+# from 41 ms to 17 for a mark, move or delete and from 39 to 24 for a refresh.
+# Same QML, same files -- and [moarchy] already serves 0.3.0-1, so without
+# this line no phone would ever get the faster one.
+pkgrel=2
 pkgdesc="Omarchy-apps Quickshell plugins shipped as default phone apps"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'

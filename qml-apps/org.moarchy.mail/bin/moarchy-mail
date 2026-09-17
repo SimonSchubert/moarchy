@@ -52,39 +52,24 @@ it opens one.
 
 from __future__ import annotations
 
+# Only what nearly every run needs is imported here. The rest -- the email
+# package, html, smtplib, urllib, xml, traceback -- is imported inside the
+# functions that use it, because on a PinePhone this file's imports were 1.1 of
+# the 1.5 seconds every run took before it said a word to a server, and marking
+# one message read needs none of them.
 import base64
 import binascii
 import contextlib
-import hashlib
-import html
 import imaplib
 import json
 import os
 import re
-import shutil
-import smtplib
 import socket
 import ssl
 import sys
-import tempfile
 import time
-import traceback
 import unicodedata
-import urllib.parse
-import urllib.request
-import xml.etree.ElementTree as ElementTree
 from datetime import datetime, timezone
-from email import policy
-from email.headerregistry import Address
-from email.message import EmailMessage
-from email.parser import BytesParser
-from email.utils import (
-    collapse_rfc2231_value,
-    format_datetime,
-    getaddresses,
-    make_msgid,
-)
-from html.parser import HTMLParser
 from pathlib import Path
 
 SCHEMA = 1
@@ -163,7 +148,8 @@ def reach_error(exc: BaseException, host: str, port: int) -> MailError:
         return MailError("network", f"{host} refused a connection on port {port}.")
     if isinstance(exc, imaplib.IMAP4.abort):
         return MailError("network", f"The connection to {host} dropped.")
-    if isinstance(exc, smtplib.SMTPServerDisconnected):
+    smtp = sys.modules.get("smtplib")
+    if smtp is not None and isinstance(exc, smtp.SMTPServerDisconnected):
         return MailError("network", f"{host} closed the connection.")
     reason = getattr(exc, "strerror", None) or str(exc) or type(exc).__name__
     return MailError("network", f"Could not reach {host}: {reason}.")
@@ -218,6 +204,8 @@ def param(part, name: str) -> str:
     if value is None:
         return ""
     if isinstance(value, tuple):
+        from email.utils import collapse_rfc2231_value
+
         value = collapse_rfc2231_value(value)
     return str(value)
 
@@ -401,6 +389,8 @@ class Runs:
         return "".join(p[0] for p in self._trimmed())
 
     def markup(self) -> str:
+        import html
+
         out = []
         for text, index, bold, quote in self._trimmed():
             piece = html.escape(text, quote=False).replace("\n", "<br>")
@@ -484,157 +474,172 @@ def _hidden(attrs: dict) -> bool:
     )
 
 
-class _Html(HTMLParser):
-    """An HTML message, as Runs.
+_HTML_PARSER = None
 
-    Tables, divs and paragraphs become lines; a link keeps its words and loses
-    its URL, which the app shows before opening it; bold stays bold; and
-    everything a newsletter hides from a person -- scripts, styles, preheaders
-    at display:none -- stays hidden. Pictures are counted, not drawn.
-    """
 
-    VOID = {
-        "area",
-        "base",
-        "br",
-        "col",
-        "embed",
-        "hr",
-        "img",
-        "input",
-        "link",
-        "meta",
-        "param",
-        "source",
-        "track",
-        "wbr",
-    }
-    SKIP = {
-        "script",
-        "style",
-        "head",
-        "title",
-        "template",
-        "noscript",
-        "svg",
-        "object",
-        "iframe",
-        "button",
-        "select",
-        "textarea",
-    }
-    BLOCK = {
-        "div",
-        "tr",
-        "li",
-        "dt",
-        "dd",
-        "section",
-        "article",
-        "header",
-        "footer",
-        "nav",
-        "aside",
-        "main",
-        "figure",
-        "figcaption",
-        "address",
-        "center",
-        "form",
-        "fieldset",
-        "details",
-        "summary",
-        "caption",
-    }
-    PARAGRAPH = {
-        "p",
-        "h1",
-        "h2",
-        "h3",
-        "h4",
-        "h5",
-        "h6",
-        "ul",
-        "ol",
-        "dl",
-        "table",
-        "blockquote",
-        "pre",
-        "hr",
-    }
-    BOLD = {"b", "strong", "h1", "h2", "h3", "h4", "h5", "h6", "th"}
+def html_parser_type():
+    """The HTML-to-Runs parser class, defined the first time it is needed."""
+    global _HTML_PARSER
+    if _HTML_PARSER is not None:
+        return _HTML_PARSER
+    from html.parser import HTMLParser
 
-    def __init__(self, runs: Runs) -> None:
-        super().__init__(convert_charrefs=True)
-        self.runs = runs
-        # (tag, skip, link, bold, quote, pre)
-        self.stack: list[tuple] = []
-        self.pictures = 0
+    class _Html(HTMLParser):
+        """An HTML message, as Runs.
 
-    def _now(self) -> tuple:
-        return self.stack[-1] if self.stack else ("", False, None, False, False, False)
+        Tables, divs and paragraphs become lines; a link keeps its words and loses
+        its URL, which the app shows before opening it; bold stays bold; and
+        everything a newsletter hides from a person -- scripts, styles, preheaders
+        at display:none -- stays hidden. Pictures are counted, not drawn.
+        """
 
-    def handle_starttag(self, tag, attrs):
-        _, skip, link, bold, quote, pre = self._now()
-        if tag == "br":
-            if not skip:
-                self.runs.newline(1, force=True)
-            return
-        if tag == "img":
-            if not skip:
-                self.pictures += 1
-            return
-        if tag == "hr":
-            if not skip:
-                self.runs.newline(2)
-            return
-        if tag in self.VOID:
-            return
-        found = dict(attrs)
-        skip = skip or tag in self.SKIP or _hidden(found)
-        if tag == "a":
-            link = safe_href(found.get("href"))
-        bold = bold or tag in self.BOLD
-        quote = quote or tag == "blockquote"
-        pre = pre or tag == "pre"
-        if not skip:
-            if tag in self.PARAGRAPH:
-                self.runs.newline(2)
-            elif tag in self.BLOCK:
-                self.runs.newline(1)
-            if tag == "li":
-                self.runs.text("• ")
-            elif tag in ("td", "th"):
-                self.runs.text(" ")
-        self.stack.append((tag, skip, link, bold, quote, pre))
+        VOID = {
+            "area",
+            "base",
+            "br",
+            "col",
+            "embed",
+            "hr",
+            "img",
+            "input",
+            "link",
+            "meta",
+            "param",
+            "source",
+            "track",
+            "wbr",
+        }
+        SKIP = {
+            "script",
+            "style",
+            "head",
+            "title",
+            "template",
+            "noscript",
+            "svg",
+            "object",
+            "iframe",
+            "button",
+            "select",
+            "textarea",
+        }
+        BLOCK = {
+            "div",
+            "tr",
+            "li",
+            "dt",
+            "dd",
+            "section",
+            "article",
+            "header",
+            "footer",
+            "nav",
+            "aside",
+            "main",
+            "figure",
+            "figcaption",
+            "address",
+            "center",
+            "form",
+            "fieldset",
+            "details",
+            "summary",
+            "caption",
+        }
+        PARAGRAPH = {
+            "p",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6",
+            "ul",
+            "ol",
+            "dl",
+            "table",
+            "blockquote",
+            "pre",
+            "hr",
+        }
+        BOLD = {"b", "strong", "h1", "h2", "h3", "h4", "h5", "h6", "th"}
 
-    def handle_startendtag(self, tag, attrs):
-        self.handle_starttag(tag, attrs)
-        if tag not in self.VOID:
-            self.handle_endtag(tag)
+        def __init__(self, runs: Runs) -> None:
+            super().__init__(convert_charrefs=True)
+            self.runs = runs
+            # (tag, skip, link, bold, quote, pre)
+            self.stack: list[tuple] = []
+            self.pictures = 0
 
-    def handle_endtag(self, tag):
-        if tag in self.VOID:
-            return
-        for i in range(len(self.stack) - 1, -1, -1):
-            if self.stack[i][0] == tag:
-                closed = self.stack[i]
-                del self.stack[i:]
-                if not closed[1]:
-                    if tag in self.PARAGRAPH:
-                        self.runs.newline(2)
-                    elif tag in self.BLOCK:
-                        self.runs.newline(1)
+        def _now(self) -> tuple:
+            return (
+                self.stack[-1] if self.stack else ("", False, None, False, False, False)
+            )
+
+        def handle_starttag(self, tag, attrs):
+            _, skip, link, bold, quote, pre = self._now()
+            if tag == "br":
+                if not skip:
+                    self.runs.newline(1, force=True)
                 return
+            if tag == "img":
+                if not skip:
+                    self.pictures += 1
+                return
+            if tag == "hr":
+                if not skip:
+                    self.runs.newline(2)
+                return
+            if tag in self.VOID:
+                return
+            found = dict(attrs)
+            skip = skip or tag in self.SKIP or _hidden(found)
+            if tag == "a":
+                link = safe_href(found.get("href"))
+            bold = bold or tag in self.BOLD
+            quote = quote or tag == "blockquote"
+            pre = pre or tag == "pre"
+            if not skip:
+                if tag in self.PARAGRAPH:
+                    self.runs.newline(2)
+                elif tag in self.BLOCK:
+                    self.runs.newline(1)
+                if tag == "li":
+                    self.runs.text("• ")
+                elif tag in ("td", "th"):
+                    self.runs.text(" ")
+            self.stack.append((tag, skip, link, bold, quote, pre))
 
-    def handle_data(self, data):
-        _, skip, link, bold, quote, pre = self._now()
-        if not skip:
-            self.runs.text(data, link=link, bold=bold, quote=quote, pre=pre)
+        def handle_startendtag(self, tag, attrs):
+            self.handle_starttag(tag, attrs)
+            if tag not in self.VOID:
+                self.handle_endtag(tag)
+
+        def handle_endtag(self, tag):
+            if tag in self.VOID:
+                return
+            for i in range(len(self.stack) - 1, -1, -1):
+                if self.stack[i][0] == tag:
+                    closed = self.stack[i]
+                    del self.stack[i:]
+                    if not closed[1]:
+                        if tag in self.PARAGRAPH:
+                            self.runs.newline(2)
+                        elif tag in self.BLOCK:
+                            self.runs.newline(1)
+                    return
+
+        def handle_data(self, data):
+            _, skip, link, bold, quote, pre = self._now()
+            if not skip:
+                self.runs.text(data, link=link, bold=bold, quote=quote, pre=pre)
+
+    _HTML_PARSER = _Html
+    return _HTML_PARSER
 
 
 def html_runs(source: str, runs: Runs) -> int:
-    parser = _Html(runs)
+    parser = html_parser_type()(runs)
     try:
         parser.feed(source)
         parser.close()
@@ -677,6 +682,8 @@ def header_addresses(msg, name: str) -> list[dict]:
                 }
             )
     except Exception:  # noqa: BLE001 -- fall back to the lenient parser
+        from email.utils import getaddresses
+
         for name_, addr in getaddresses([str(value)]):
             found.append({"name": one_line(name_), "email": one_line(addr)})
     return [a for a in found if a["email"] or a["name"]]
@@ -749,6 +756,8 @@ def attachment_payload(part) -> bytes:
     if part.get_content_type() == "message/rfc822":
         try:
             inner = part.get_payload(0)
+            from email import policy
+
             return inner.as_bytes(policy=policy.SMTP)
         except Exception:  # noqa: BLE001
             return b""
@@ -816,8 +825,16 @@ def attachments_of(msg, bodies: tuple, html_source: str) -> list[dict]:
     return found
 
 
+def parse_bytes(raw: bytes):
+    """A message, as the email package's modern API reads it."""
+    from email import policy
+    from email.parser import BytesParser
+
+    return BytesParser(policy=policy.default).parsebytes(raw)
+
+
 def parse_message(raw: bytes) -> dict:
-    msg = BytesParser(policy=policy.default).parsebytes(raw)
+    msg = parse_bytes(raw)
     plain, rich = body_parts(msg)
     plain_text = part_text(plain) if plain is not None else ""
     if plain is not None and param(plain, "format").lower() == "flowed":
@@ -876,7 +893,7 @@ def header_row(item: dict) -> dict:
     start = pick(item, "BODY[TEXT]")
     head = head if isinstance(head, bytes) else b""
     start = start if isinstance(start, bytes) else b""
-    msg = BytesParser(policy=policy.default).parsebytes(head + start)
+    msg = parse_bytes(head + start)
     at = internal_date(item.get("INTERNALDATE"))
     try:
         preview = preview_of(msg)
@@ -1105,7 +1122,11 @@ def write_private(path: Path, data: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with contextlib.suppress(OSError):
         os.chmod(data_dir(), 0o700)
-    fd, temp = tempfile.mkstemp(dir=path.parent, prefix="." + path.name + ".")
+    # os.open rather than tempfile, which costs shutil and random to import
+    # for the one name this needs. O_EXCL makes a collision an error, not a
+    # file shared with another run.
+    temp = path.parent / f".{path.name}.{os.getpid()}.{os.urandom(4).hex()}"
+    fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     try:
         with os.fdopen(fd, "wb") as handle:
             handle.write(data)
@@ -1558,6 +1579,8 @@ def verb_peek(request: dict) -> dict:
 
 
 def body_path(folder: str, uidvalidity: int, uid: int, suffix: str) -> Path:
+    import hashlib
+
     key = hashlib.md5(folder.encode("utf-8"), usedforsecurity=False).hexdigest()
     return data_dir() / "bodies" / key / f"{uidvalidity}-{uid}{suffix}"
 
@@ -1644,7 +1667,7 @@ def free_path(folder: Path, name: str) -> Path:
 def verb_attachment(request: dict) -> dict:
     _folder, _validity, _uid, raw = message_source(request)
     index = number(request, "index", -1)
-    msg = BytesParser(policy=policy.default).parsebytes(raw)
+    msg = parse_bytes(raw)
     parts = walk_parts(msg)
     if not 0 <= index < len(parts):
         raise MailError("request", "That attachment is not in this message.")
@@ -1733,11 +1756,13 @@ def verb_delete(request: dict) -> dict:
 # --- sending ------------------------------------------------------------------------
 
 
-def recipients(typed: str, what: str) -> list[Address]:
+def recipients(typed: str, what: str) -> list:
     found = []
     typed = one_line(typed or "").strip().strip(",;").replace(";", ",")
     if not typed:
         return found
+    from email.utils import getaddresses
+
     pairs = getaddresses([typed])
     # Since 3.13 the parser answers a list it cannot read with one empty pair
     # rather than guessing, and a guess is the wrong thing to send mail to.
@@ -1751,6 +1776,8 @@ def recipients(typed: str, what: str) -> list[Address]:
             shown = addr or name
             raise MailError("request", f"{shown} in {what} is not an email address.")
         try:
+            from email.headerregistry import Address
+
             found.append(Address(display_name=name, addr_spec=addr))
         except (ValueError, IndexError):
             raise MailError(
@@ -1759,7 +1786,12 @@ def recipients(typed: str, what: str) -> list[Address]:
     return found
 
 
-def build_message(account: dict, request: dict) -> EmailMessage:
+def build_message(account: dict, request: dict):
+    from email import policy
+    from email.headerregistry import Address
+    from email.message import EmailMessage
+    from email.utils import format_datetime, make_msgid
+
     to = recipients(str(request.get("to") or ""), "To")
     cc = recipients(str(request.get("cc") or ""), "Cc")
     bcc = recipients(str(request.get("bcc") or ""), "Bcc")
@@ -1794,7 +1826,7 @@ def build_message(account: dict, request: dict) -> EmailMessage:
     forward = request.get("forward")
     if isinstance(forward, dict) and forward.get("uid"):
         _folder, _validity, _uid, raw = message_source(forward)
-        original = BytesParser(policy=policy.default).parsebytes(raw)
+        original = parse_bytes(raw)
         parts = walk_parts(original)
         wanted = {
             int(i) for i in forward.get("indexes") or [] if str(i).lstrip("-").isdigit()
@@ -1824,7 +1856,9 @@ def build_message(account: dict, request: dict) -> EmailMessage:
     return msg
 
 
-def smtp_send(account: dict, password: str, msg: EmailMessage) -> None:
+def smtp_send(account: dict, password: str, msg) -> None:
+    import smtplib
+
     server = account["smtp"]
     host, port = server["host"], server["port"]
     conn = None
@@ -1925,7 +1959,7 @@ def verb_send(request: dict) -> dict:
                     mailbox(sent),
                     "(\\Seen)",
                     time.time(),
-                    msg.as_bytes(policy=policy.SMTP),
+                    msg.as_bytes(policy=msg.policy),
                 )
                 ok(typ, data, f"keep a copy in {sent}")
                 result["savedTo"] = sent
@@ -2003,6 +2037,8 @@ ALIASES = {
 
 
 def _fetch_xml(url: str) -> bytes | None:
+    import urllib.request
+
     request = urllib.request.Request(url, headers={"User-Agent": "moarchy-mail"})
     try:
         with urllib.request.urlopen(request, timeout=6, context=_context()) as response:
@@ -2016,6 +2052,8 @@ def _fetch_xml(url: str) -> bytes | None:
 def autoconfig_servers(document: bytes, address: str) -> dict | None:
     """Thunderbird's autoconfig format, the one most providers publish."""
     try:
+        from xml.etree import ElementTree
+
         root = ElementTree.fromstring(document)
     except ElementTree.ParseError:
         return None
@@ -2075,6 +2113,8 @@ def verb_autoconfig(request: dict) -> dict:
 
     # The domain's own answer first, then Thunderbird's database, which knows
     # the domain name and nothing else about who asked.
+    import urllib.parse
+
     quoted = urllib.parse.quote(address)
     for source, url in (
         (
@@ -2130,6 +2170,8 @@ def verb_setup(request: dict) -> dict:
 
 def smtp_probe(account: dict, password: str) -> MailError | None:
     """Sign in to the outgoing server and leave, so a wrong port is found now."""
+    import smtplib
+
     server = account["smtp"]
     host, port = server["host"], server["port"]
     conn = None
@@ -2183,6 +2225,8 @@ def verb_forget(_request: dict) -> dict:
     if directory.is_dir():
         for entry in directory.iterdir():
             if entry.is_dir() and not entry.is_symlink():
+                import shutil
+
                 shutil.rmtree(entry, ignore_errors=True)
             else:
                 with contextlib.suppress(OSError):
@@ -2240,6 +2284,8 @@ def main(argv: list[str]) -> int:
         emit({"ok": False, "kind": failure.kind, "error": failure.sentence})
         return 1
     except Exception as exc:  # noqa: BLE001 -- the app must get an answer it can show
+        import traceback
+
         traceback.print_exc()
         emit(
             {
