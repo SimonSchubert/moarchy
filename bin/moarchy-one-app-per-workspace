@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One app per workspace, which is what makes the swipe gestures mean anything.
+"""One app per workspace unless you ask for two, and tabs when you do.
 
 Sway tiles by default: open a second window and both get half the screen. Half
 of 360 logical pixels is 180, which no app on this phone can use. So every new
@@ -10,18 +10,43 @@ The workspace then becomes the unit a swipe moves through
 (default/omarchy/plugins/moarchy.gestures), so "next workspace" reads as
 "next app".
 
+That is what a *launch* does. Deliberately putting two windows on one workspace
+is a different act with a different answer, and the overview is where it is
+asked for: drag a card's app onto another card
+(default/omarchy/plugins/moarchy.overview, docs/gestures.md P6). A move is not a
+new window, so nothing above touches it -- but *how* the two are arranged still
+has to be decided, and a workspace holding more than one window is reconciled to
+**splitv** here: one above the other, both on screen.
+
+The direction is the whole of the decision. Sway splits a container along its
+longer side under `default_orientation auto`, which on a 360x740 phone is
+vertical -- so this names what auto would pick anyway, and names it so that a
+window moved into a container that was already `splith` does not land beside its
+neighbour at 180px each, which is the width nothing on this phone can use.
+
+A workspace with one window is left exactly as sway made it. Naming a layout for
+that case meant dispatching at every ordinary workspace on the phone, because a
+portrait output is `splitv` and the check was asking for `splith`.
+
+Reconciled on sway's own event stream and not from the sheet that asked, which
+is what makes a keyboard user's `$mod+Shift+2` land the same way as the drag.
+One rule, one owner: "what happens when a workspace would hold two" is this
+file's question, and the overview only moves the window.
+
 Deliberately NOT handled, because both should stay with their parent:
 
   floating windows   Sway floats xdg toplevels that declare a parent, which is
                      how GTK and Qt ship modal dialogs -- a "Save changes?"
                      sheet must not fly off to its own workspace, leaving the
-                     document behind.
+                     document behind. They are not counted towards a tabbed
+                     workspace either: a dialog over an app is not two apps.
   the first window   A window that lands on an empty workspace is already
                      alone. Moving it would strand an empty workspace behind it
                      and renumber everything for no gain.
 
 Run it from Sway's autostart. It is a plain event loop over sway's IPC; killing
-it restores stock tiling immediately, with no state to unwind.
+it restores stock tiling immediately, with no state to unwind -- a workspace
+left tabbed stays tabbed, which is sway's own layout and not a mode this owns.
 """
 
 import json
@@ -113,6 +138,159 @@ def first_free_workspace():
     return number
 
 
+def workspaces(tree):
+    """Every numbered workspace node in the tree.
+
+    Numbered ones only: `__i3_scratch` is a workspace with `num` -1, and the
+    scratchpad is not a screen anything here can swipe to. The same `> 0` test
+    first_free_workspace() makes, for the same reason.
+    """
+    found = []
+
+    def walk(node):
+        if node.get("type") == "workspace":
+            if isinstance(node.get("num"), int) and node["num"] > 0:
+                found.append(node)
+            return
+        for child in node.get("nodes", []):
+            walk(child)
+
+    walk(tree)
+    return found
+
+
+def focused_con_id(tree):
+    """The focused window's con_id, or None. Read so the fallback below can put
+    focus back where it found it -- a layout fix must not move the phone."""
+
+    def walk(node):
+        if node.get("focused") and (node.get("app_id") or node.get("window_properties")):
+            return node.get("id")
+        for child in node.get("nodes", []) + node.get("floating_nodes", []):
+            found = walk(child)
+            if found is not None:
+                return found
+        return None
+
+    return walk(tree)
+
+
+def holding_container(workspace):
+    """The node sway's `layout` acts on when it is addressed through one of this
+    workspace's windows: the parent of the first tiled window, or the workspace
+    itself when that window is a direct child.
+
+    Asking the workspace instead is wrong on this phone, and visibly so. A window
+    moved onto an occupied workspace joins the *container* already there, and it
+    is that container the layout lands on: the tree reads `workspace splitv > con
+    splith > [foot, foot]` and the fix has to change the inner one. The
+    workspace's own layout says `splitv` throughout -- the answer this daemon
+    wants -- so a check against it would decide the fix had already taken, leave
+    the pair side by side at 180px each, and report success.
+
+    The check has to ask the same question the command answers. Windows spread
+    across nested containers are the known limit: this names the one the command
+    would reach, so the two still agree.
+    """
+    ids = tiled_window_ids(workspace)
+    if not ids:
+        return workspace
+    target = ids[0]
+
+    def walk(node):
+        for child in node.get("nodes", []):
+            if child.get("id") == target:
+                return node
+            found = walk(child)
+            if found:
+                return found
+        return None
+
+    return walk(workspace) or workspace
+
+
+def wanted_layout(workspace):
+    """`splitv` for a workspace holding more than one window, and None for one
+    or none -- nothing to arrange, so nothing is touched.
+
+    Vertical and not horizontal, and that is the measurement this whole file is
+    written around: half of 360 logical px is 180, which no app on this phone
+    can use, where half of 740 is 370 and every app here already reflows to it.
+    It is also what sway's own `default_orientation auto` picks for a container
+    this shape -- so this is not a preference imposed over the compositor's, it
+    is the same answer made deterministic, for the case where a window is moved
+    into a container that was created `splith` and would otherwise keep it.
+
+    One window needs no layout at all, and naming one was a defect: `splith`
+    against a portrait output's `splitv` default meant every ordinary
+    single-window workspace was "wrong" and got dispatched at on every event.
+    """
+    return "splitv" if len(tiled_window_ids(workspace)) > 1 else None
+
+
+def layout_fix(workspace):
+    """The layout to dispatch for this workspace, or None to leave it alone.
+
+    A workspace someone has deliberately made `tabbed` or `stacked` is left that
+    way. Sway has those layouts, a keyboard can still reach them, and this
+    daemon's business is the arrangement a *drag* produces -- not a policy about
+    which layouts the phone is allowed to be in.
+    """
+    want = wanted_layout(workspace)
+    if want is None:
+        return None
+    have = holding_container(workspace).get("layout")
+    if have in ("tabbed", "stacked"):
+        return None
+    return None if have == want else want
+
+
+def reconcile_layouts():
+    """Put every workspace into the layout its window count asks for.
+
+    Two ways to say it, and the first one is tried because it moves nothing:
+    criteria set sway's handler context to the matched container, and `layout`
+    on a view applies to its parent -- which for a window sitting directly on a
+    workspace is the workspace. If that lands, nothing was focused and nothing
+    on screen moved.
+
+    The criteria form does land on sway 1.12 -- measured on the Pixel 3a, where
+    a pair tabs with no focus change at all. The fallback is there because that
+    is a reading of sway's command handler rather than a documented guarantee:
+    `layout` is specified as acting on the *focused* container. So the result is
+    read back, and a workspace that did not take it is focused, set, and the
+    focus put back where it was. Slower, visible for a frame, and correct on a
+    sway that resolves criteria differently.
+    """
+    tree = swaymsg("get_tree")
+    if tree is None:
+        return
+    asked = False
+    for workspace in workspaces(tree):
+        fix = layout_fix(workspace)
+        if fix is None:
+            continue
+        command(f"[con_id={tiled_window_ids(workspace)[0]}] layout {fix}")
+        asked = True
+    if not asked:
+        return
+
+    after = swaymsg("get_tree")
+    if after is None:
+        return
+    restore = focused_con_id(after)
+    moved = False
+    for workspace in workspaces(after):
+        fix = layout_fix(workspace)
+        if fix is None:
+            continue
+        command(f"[con_id={tiled_window_ids(workspace)[0]}] focus")
+        command(f"layout {fix}")
+        moved = True
+    if moved and restore is not None:
+        command(f"[con_id={restore}] focus")
+
+
 def on_new_window(container):
     con_id = container.get("id")
     if con_id is None:
@@ -148,6 +326,13 @@ def main():
         print(first_free_workspace())
         return 0
 
+    # `--reconcile` runs one layout pass and exits, which is how the selftest
+    # asserts P7 without waiting on an event loop it did not start: move a
+    # window with `swaymsg`, run this, read the layout back.
+    if "--reconcile" in sys.argv[1:]:
+        reconcile_layouts()
+        return 0
+
     proc = subprocess.Popen(
         ["swaymsg", "-t", "subscribe", "-m", '["window"]'],
         stdout=subprocess.PIPE,
@@ -163,8 +348,15 @@ def main():
             event = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if event.get("change") == "new":
+        change = event.get("change")
+        if change == "new":
             on_new_window(event.get("container") or {})
+        # Every change that can alter how many windows a workspace holds, and
+        # nothing that cannot. `title` and `focus` arrive constantly -- a
+        # terminal rewrites its title on every command -- and a get_tree per
+        # keystroke is a fork per keystroke on an A53.
+        if change in ("new", "move", "close", "floating"):
+            reconcile_layouts()
     return 0
 
 

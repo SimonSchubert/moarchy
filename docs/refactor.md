@@ -374,7 +374,7 @@ half-open on any of them.
 real cancel ends `-1`
 
 **F3** Thresholds stay with the surface, not the tracker. `homeCommit`,
-`drawerCommit`, `closeCommit`, `openFraction`, `closeFraction` and the fling
+`sheetCommit`, `closeCommit`, `openFraction`, `closeFraction` and the fling
 limits are per-gesture decisions recorded in `gestures.md`, and `finished`
 hands back two numbers and says nothing about what they mean.
 → `grep -nE 'Commit|Fraction|fling|homeExtra'` over `DragTracker.qml` matches

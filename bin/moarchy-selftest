@@ -1178,6 +1178,147 @@ print(found[0] if found else "")'; }
  ~/.config/omarchy/plugins shadows the package until the shell is restarted"
   fi
 
+
+  # --- P. the right edge, and the overview it raises ------------------------
+  #
+  # Above the uinput gate with G10 and C2, and for G10's reason: this band is
+  # transparent and reserves nothing, so where it stops is invisible from
+  # outside and a finger cannot measure it. What a finger *can* answer -- that a
+  # drag from the edge pulls the sheet 1:1 -- is P2, and it has no suite: the
+  # trace it would be read from is `overview dragTrace`.
+  skipac() { printf '  \033[90m%-4s   %s\033[0m\n' "$1" "$2"; }
+
+  ow=$(gv overviewW); osw=$(gv overviewSurfaceW); oh=$(gv overviewH)
+  if [[ -z $ow || -z $oh ]]; then
+    noac P1 "gestures geometry did not answer with overviewW and overviewH" \
+            "a shell without the right edge -- a stale copy in\
+ ~/.config/omarchy/plugins shadows the package until the shell is restarted"
+  elif [[ $ow != "$osw" ]]; then
+    noac P1 "the right edge draws ${osw}px and takes touch in ${ow}px" \
+            "nothing is drawn on this band, so the two are one number"
+  else
+    okac P1 "the right edge takes touch in ${ow}px, and that is the whole surface"
+    if [[ $oh == "$bh" ]]; then
+      okac P8 "it stops where the back edge stops (h $oh of $bscr)"
+    else
+      noac P8 "the right edge is ${oh}px tall and the left one ${bh}px" \
+              "both stop short of the same two ends (G10, G10b), off shared insets"
+    fi
+  fi
+
+  # --- P10, P3, P11. open it, read it, and let the back gesture close it -----
+  #
+  # In that order deliberately: the board is only refreshed while the sheet is
+  # up (P9), so a `grid` taken with the overview shut is the last answer it had
+  # and on a freshly restarted shell that is nothing at all.
+  timeout 8 omarchy-shell gestures overview >/dev/null 2>&1
+  sleep 1
+  o_state=$(timeout 8 omarchy-shell overview state 2>/dev/null)
+  o_grid=$(timeout 8 omarchy-shell overview grid 2>/dev/null)
+  if [[ $o_state != open ]]; then
+    noac P10 "gestures overview left the sheet ${o_state:-unanswered}" \
+             "is moarchy.overview in the plugin list?"
+  else
+    okac P10 "the right edge's summon opens the overview without a finger"
+  fi
+
+  o_cards=$(grep -c '^ws=' <<<"$o_grid")
+  s_cards=$(swaymsg -t get_workspaces 2>/dev/null | jq '[.[]|select(.num>0)]|length')
+  if [[ -z $o_grid ]]; then
+    noac P3 "overview grid answered nothing"
+  elif (( o_cards == ${s_cards:-0} )); then
+    okac P3 "the overview draws a card for each of sway's $o_cards numbered workspaces"
+  else
+    noac P3 "the overview has $o_cards cards and sway has ${s_cards:-?} workspaces" \
+            "the scratchpad is not a card, and a workspace with no number is not one either"
+  fi
+
+  # P7b. One rule for "the next free workspace", and this is the only place the
+  # three readers of it can be held against each other.
+  o_free=$(sed -n 's/^free=//p' <<<"$o_grid")
+  g_free=$(timeout 8 omarchy-shell gestures status 2>/dev/null \
+           | tr ' ' '\n' | sed -n 's/^free=//p')
+  d_free=$(timeout 8 moarchy-one-app-per-workspace --free 2>/dev/null)
+  if [[ -z $o_free || -z $g_free || -z $d_free ]]; then
+    noac P7b "free is '${o_free:-}' to the overview, '${g_free:-}' to the strip,\
+ '${d_free:-}' to the daemon"
+  elif [[ $o_free == "$g_free" && $o_free == "$d_free" ]]; then
+    okac P7b "the overview, the strip and the daemon all name workspace $o_free next"
+  else
+    noac P7b "free is $o_free to the overview, $g_free to the strip, $d_free to the daemon" \
+             "one rule, three implementations -- they have drifted before, in both directions"
+  fi
+
+  # --- P6, P7. move a window to another card, and read the layout back ------
+  #
+  # Restored afterwards, which is what makes it acceptable to run on a phone
+  # somebody is using. The move is `overview move`, which is the call the drop
+  # makes -- a check that drove the compositor itself would be a check of
+  # swaymsg.
+  p_src=$(grep -m1 -E '^ws=[0-9]+ .* n=[1-9]' <<<"$o_grid")
+  p_dst=$(grep -E '^ws=[0-9]+ .* n=[1-9]' <<<"$o_grid" | sed -n 2p)
+  if [[ -z $p_src ]]; then
+    skipac P6 "no window is open, so there is nothing to pick up"
+    skipac P7 "no window is open, so no workspace can hold two"
+  else
+    src=${p_src#ws=}; src=${src%% *}
+    cid=$(sed -n 's/.* ids=\([0-9]*\).*/\1/p' <<<"$p_src")
+    if [[ -n $p_dst ]]; then
+      dst=${p_dst#ws=}; dst=${dst%% *}
+    else
+      dst=$o_free
+    fi
+
+    timeout 8 omarchy-shell overview move "$cid" "$dst" >/dev/null 2>&1
+    sleep 1
+    p_after=$(timeout 8 omarchy-shell overview grid 2>/dev/null)
+    p_now=$(grep -E "^ws=$dst " <<<"$p_after")
+    # The id field, delimited, rather than a substring of the line: con_id 103
+    # is a substring of 1034, and a check that passes on the wrong window is
+    # worse than one that fails.
+    p_ids=$(sed -n 's/.* ids=\([0-9,-]*\).*/\1/p' <<<"$p_now")
+    if [[ ,$p_ids, == *,$cid,* ]]; then
+      okac P6 "a window moved from card $src to card $dst and the board says so"
+    else
+      noac P6 "con_id $cid is not on card $dst after the move" \
+              "$(grep -E '^ws=' <<<"$p_after" | tr '\n' ';')"
+    fi
+
+    # P7 only where the destination already held something: a workspace with one
+    # window is left as sway made it, and asserting a direction there would be
+    # asserting the opposite of the rule.
+    p_layout=$(sed -n 's/.* layout=\([a-z]*\).*/\1/p' <<<"$p_now")
+    p_n=$(sed -n 's/.* n=\([0-9]*\).*/\1/p' <<<"$p_now")
+    if [[ -z $p_dst ]]; then
+      skipac P7 "only one window is open, so nothing shares a workspace"
+    elif (( ${p_n:-0} < 2 )); then
+      noac P7 "card $dst holds ${p_n:-0} windows after the move"
+    elif [[ $p_layout == splitv ]]; then
+      okac P7 "a workspace holding $p_n windows splits vertically, ${p_n} of a 740px column"
+    elif [[ $p_layout == tabbed || $p_layout == stacked ]]; then
+      skipac P7 "card $dst was $p_layout before the move, and a layout chosen by hand is kept"
+    else
+      noac P7 "card $dst holds $p_n windows and is ${p_layout:-unknown}" \
+              "side by side is 180px each, which no app on this phone can use --\
+ is moarchy-one-app-per-workspace running?"
+    fi
+
+    timeout 8 omarchy-shell overview move "$cid" "$src" >/dev/null 2>&1
+    sleep 1
+  fi
+
+  # P11. The overview is a sheet, so the back gesture reaches it before the app
+  # underneath -- which is the whole of G1's second rung, on a fourth sheet.
+  timeout 8 omarchy-shell gestures back >/dev/null 2>&1
+  sleep 1
+  o_closed=$(timeout 8 omarchy-shell overview state 2>/dev/null)
+  if [[ $o_closed == closed ]]; then
+    okac P11 "one back swipe closes the overview"
+  else
+    noac P11 "the overview is ${o_closed:-unanswered} after a back swipe" \
+             "a sheet the back gesture cannot reach is a sheet that hides the app it then closes"
+  fi
+
   # Does the injector actually RUN? `-x` says only that the file has the bit
   # set. Every call below sends stderr to /dev/null -- it has to, or the noise
   # buries the results -- so an injector that cannot start turns into a dozen

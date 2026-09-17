@@ -135,13 +135,14 @@ pinned ref, ported to sway at build time by a patch that must apply with no fuzz
 
 ## The shell plugins
 
-Eleven plugins and one directory that is not a plugin, all under
+Twelve plugins and one directory that is not a plugin, all under
 `default/omarchy/plugins/`, installed to `/usr/share/moarchy/plugins`.
 
 | Plugin | Kind | What it owns | Contract |
 | --- | --- | --- | --- |
 | `moarchy.gestures` | panel | the bottom strip, the home pill, the back edge — every touch gesture, and the shell's only compositor-dispatch seam | [`gestures.md`](gestures.md) |
 | `moarchy.drawer` | overlay | the app grid, its search field, the open-apps shelf, the uninstall card | [`gestures.md`](gestures.md) §N, [`apps.md`](apps.md) |
+| `moarchy.overview` | overlay | every workspace as a card, and dragging a window from one to another | [`gestures.md`](gestures.md) §P |
 | `moarchy.shade` | overlay | the pull-down: quick tiles, brightness and volume, media, notification history | [`shade.md`](shade.md) |
 | `moarchy.settings` | overlay | the settings screen tree and the IPC it answers on | [`settings.md`](settings.md) |
 | `moarchy.themes` | overlay | the theme picker, as a grid of live swatches | [`settings.md`](settings.md) §theme |
@@ -168,7 +169,8 @@ Eleven plugins and one directory that is not a plugin, all under
 | `Probe.qml` | a `Process` that hands back what the command printed |
 | `Osk.qml` | the one place the on-screen keyboard is asked to show or hide |
 | `Sheet.js` | the one list of sheets, how they stack, and what every `open()` does identically |
-| `ShellApps.js` | which of our screens are windows, and the two compositor helpers |
+| `Apps.js` | a window → its icon, its name, its glyph. The drawer's shelf and the overview's cards draw the same tile from it |
+| `ShellApps.js` | which of our screens are windows, and the compositor helpers |
 | `Theme.js` | the colour arithmetic: luminance, contrast, mix, readableOn |
 
 **A second copy of any of these fails `scripts/style-check.sh`.** That is the
@@ -181,8 +183,10 @@ The thing to know before touching any of them, and the reason a sheet that opens
 puts some of its neighbours away and not others:
 
 ```
- Overlay   the shade · the gesture strip · the back edge · the launch splash
- Top       the drawer · the theme picker · the status bar · moarchy.device
+ Overlay   the shade · the gesture strip · the back edge · the right edge ·
+           the launch splash
+ Top       the drawer · the overview · the theme picker · the status bar ·
+           moarchy.device
            the on-screen keyboard (moarchy-keyboard, its own package)
  windows   Settings · Wi-Fi · Bluetooth · SIM — and every app
  Bottom    the home catcher, under everything
@@ -205,7 +209,8 @@ Two consequences that are easy to get wrong, and have been:
 | Term | Meaning |
 | --- | --- |
 | **strip** | the 20px band along the bottom edge that `moarchy.gestures` reserves off every window, permanently |
-| **sheet** | a full-screen surface that is dismissed rather than left running: the shade, the drawer, the theme picker |
+| **edge** | one of the two 16px bands `moarchy.gestures` takes touch in ahead of an app: the left one is back, the right one raises the overview |
+| **sheet** | a full-screen surface that is dismissed rather than left running: the shade, the drawer, the overview, the theme picker |
 | **shell app** | a screen this shell draws and maps as an ordinary window: Settings, Wi-Fi, Bluetooth, SIM |
 | **overlay / panel / bar** | the three plugin *kinds* the host knows. A "sheet" is our word; `kind` is the host's |
 | **travel** | the distance in scene pixels that carries a drag's progress from 0 to 1 |
@@ -262,6 +267,7 @@ upgrade rather than doing it, for exactly that reason.
 | --- | --- |
 | `scripts/style-check.sh` | the whole static half: tokens, type, colour, shape, press states, the shared-code rules, the sheet rule, and that every shipped SVG parses. Runs anywhere |
 | `node scripts/sheet-test.js` | the stacking rule, against the shipped `Sheet.js` |
+| `python3 scripts/test-workspace-layout.py` | the workspace-layout rule ([`gestures.md`](gestures.md) P7), against the shipped daemon with `swaymsg` stubbed |
 | `bin/moarchy-selftest` | on the phone. `--gestures`, `--settings`, `--surfaces`, `--windows` are opt-in suites, and they cite the criterion ids in these documents |
 | `scripts/provision.sh` | the dev loop, one step per verb: `steps` lists them, no argument runs prereqs → image → build → flash, then `deploy`, `install`, `watch`, `verify` once the phone is up |
 | `scripts/build-image.sh`, `scripts/verify-image.sh` | the flashable image, and the checks against it |

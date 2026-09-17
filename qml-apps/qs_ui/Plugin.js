@@ -21,13 +21,19 @@ function dataDir(app, home, xdg, override) {
 
 // What an app's window pushes out of the way as it opens.
 //
-// The shade, the drawer and the theme picker are the three surfaces that can be
-// up when somebody taps an app, and all three are modal in the sense that
-// matters: they cover the screen. Leaving one of them open behind a window is
-// how a back swipe ends up dismissing the wrong thing.
+// The shade, the drawer, the overview and the theme picker are the four
+// surfaces that can be up when somebody taps an app, and all four are modal in
+// the sense that matters: they cover the screen. Leaving one of them open
+// behind a window is how a back swipe ends up dismissing the wrong thing.
+//
+// It is the shell's own Sheet.js list, read from the other side of the repo
+// boundary -- an app cannot import moarchy.common, so this is the one copy the
+// rule is allowed. A sheet added there and not here is a sheet left standing
+// over a window that has just opened.
 //
 // A no-op off the shell, where `shell` is null and there is nothing to hide.
-var OVERLAYS = ["moarchy.shade", "moarchy.drawer", "moarchy.themes"]
+var OVERLAYS = ["moarchy.shade", "moarchy.drawer", "moarchy.overview",
+                "moarchy.themes"]
 
 function hideOverlays(shell) {
   if (!shell || typeof shell.isPluginOpen !== "function") return

@@ -6,10 +6,10 @@ What the phone's touch gestures must do. Written to the rule in
 `bin/moarchy-selftest --gestures` and `--surfaces` cite these ids. A criterion
 is in one of three states, and the difference matters: **run** — it has a `→`
 check and a suite executes it; **written** — it has a `→` check that nothing
-runs; **stated** — it has no check at all. 50 of the 110 below are run. The
-other 60, and the six the suites run without a `→` line here, are listed under
-[Coverage](#coverage) at the foot — where the two lists currently name 50 of
-those 60 and are due a regeneration by the command they carry.
+runs; **stated** — it has no check at all. 58 of the 124 below are run. The
+other 66, and the six the suites run without a `→` line here, are listed under
+[Coverage](#coverage) at the foot — where the two lists currently name 56 of
+those 66 and are due a regeneration by the command they carry.
 
 ## Vocabulary
 
@@ -20,6 +20,7 @@ those 60 and are due a regeneration by the command they carry.
 | **app** | A workspace with a window on it, or Settings, which is treated as one (K). |
 | **shell app** | A screen this shell draws itself and maps as an ordinary window, so every criterion about apps applies to it. Four of them: Settings, Wi-Fi, Bluetooth and SIM (K). |
 | **drawer** | The searchable app grid, with a shelf of open apps along its top (`moarchy.drawer`). Every up-swipe raises this. |
+| **overview** | The vertical list of workspace cards (`moarchy.overview`). The right edge raises it, and it is the one surface that can put two apps on one workspace. |
 | **shade** | The pull-down from the top edge (`moarchy.shade`). |
 | **travel** | Drag distance as a fraction of the sheet being dragged — the drawer's own height, ~694 logical px. One pixel of finger is one pixel of sheet, on every surface that drags it (D2a). |
 
@@ -331,8 +332,10 @@ is a settable property, not a constant baked into a binding: Android makes this
 device-configurable and exposes a per-edge sensitivity slider, which is an
 admission that no single value is right.
 
-**G9** Only the left edge is claimed. Android takes both; the right edge stays
-with apps here, which halves what this costs them.
+**G9** The left edge is back and the right edge is the overview (P1) — one 16px
+band each, and no third. Android puts back on both edges; the second one is spent
+here on the map instead, because a phone that already has one way back does not
+need two.
 
 **G10** The band does not run the full height of the screen. It stops **one
 strip plus one keyboard panel** short of the bottom — 220 logical px — and
@@ -1160,6 +1163,152 @@ away for a release.
 
 ---
 
+## P. Right edge — the overview
+
+The sideways swipe steps one workspace at a time (B1) and the drawer lists every
+window in one flat shelf (M). Neither answers "where is everything", and on a
+phone where a workspace *is* an app that question is the map. §P is that map,
+and the one place a workspace can be given a second app.
+
+**P1** Swiping in from the **right edge** raises the overview: every workspace as
+a card, newest number last, scrolling vertically. The band is **16 logical px**,
+the same width and for the same reason as the back edge (G8), and like it the
+surface never grows.
+
+Nothing is drawn on the band. The back edge shows an arc because a back swipe has
+nothing else to look at (G12); this one pulls a sheet in under the finger, so the
+gesture's own result is the cue — which is also why this surface needs no wider
+drawing band and no input mask (G13).
+→ `omarchy-shell gestures geometry` reports `overviewW` == 16 scaled and
+`overviewSurfaceW` == `overviewW`
+
+**P2** The sheet follows the finger: one pixel of finger is one pixel of sheet
+(D2a), released past halfway it opens and short of it springs back, and a fling
+either way decides whatever the travel. That is the drawer's release rule read on
+the other axis, through the same `sheetCommit`.
+→ `omarchy-shell overview dragTrace` leaves ≥ 8 samples across a slow drag in
+from the edge, rising monotonically, and ends `-1` on a cancel or `-2` on a touch
+the watchdog retired
+
+**P3** The cards are what sway is holding: every numbered workspace, in number
+order, each showing the windows on it. The scratchpad is not one of them.
+
+Read from `swaymsg -t get_tree` and not from `Quickshell.I3`, which publishes no
+window list at all — and a con_id, which P6 moves windows by, appears nowhere
+else.
+→ `omarchy-shell overview grid` prints one `ws=` line per numbered workspace with
+its `apps=` and `ids=` in layout order, and a final `free=` line
+
+**P4** Tapping a card goes to that workspace; tapping a tile goes to that window;
+both close the overview. The focused workspace's card and the card a drop would
+land on are marked the same way, in the accent — this shell's existing word for
+"this is where you would end up" (A4, C2, M4).
+→ tapping a tile leaves `omarchy-shell overview state` == `closed` and the
+focused workspace holding that window
+
+**P5** A tile is the drawer's tile: the same icon, the same name, the same glyph
+for a shell app. One resolver, `moarchy.common/Apps.js`, because two surfaces
+drawing the same window from the same handle must not disagree about it.
+→ `grep -c 'Apps\.' moarchy.drawer/Drawer.qml moarchy.overview/Overview.qml` is
+non-zero for both, and neither file builds its own appId index
+
+**P6** **Press and hold a tile to pick the window up**, then drop it on another
+card to move it there. The window rides under the finger; the card it would land
+on is marked; a release on the card it came from, or in the gap between two
+cards, changes nothing.
+
+The lift is claimed by *time* because there is no axis left to claim it by: the
+list under the tile scrolls vertically, the sheet itself closes rightward, and a
+window has to be able to travel in both of those directions to reach a card. The
+delay is the drawer's 500ms (L1).
+→ `omarchy-shell overview lift <ws> <index>` then `overview dropOn <ws>` moves
+that window, and `overview move <con_id> <ws>` is the same call without the
+gesture: `overview grid` shows it under the second `ws=` and no longer under the
+first. With a finger, `sudo moarchy-touch drag X1 Y1 X2 Y2 700` — a press, a
+wait, then travel, because a lift is claimed by time and anything that begins by
+moving is a scroll
+
+**P7** A workspace holding **more than one window is split vertically** — one
+above the other, both on screen. Half of 360 logical px is 180, which no app on
+this phone can use, where half of 740 is 370 and every app here already reflows
+to it. That is the same measurement that makes a *launch* go to a free workspace
+instead (F1); the difference is that a drag is somebody asking for two.
+
+The direction is named rather than left to sway. `default_orientation auto`
+picks vertical for a container this shape on its own, but a window moved onto an
+occupied workspace joins the container that is already there and keeps *its*
+direction — so an inherited `splith` puts the pair side by side at 180px each
+unless something says otherwise.
+
+The layout asked about is the **container that holds the windows**, not the
+workspace. That same joining is why: the tree reads `workspace splitv > con
+splith > [foot, foot]`, so the workspace says `splitv` — the answer wanted —
+over a pair that is side by side, and a check against it reports success while
+the phone is unusable.
+
+A workspace with one window is left exactly as sway made it, and one somebody
+has made `tabbed` or `stacked` by hand keeps that: sway has those layouts and
+this is not a policy about which the phone may be in.
+
+`bin/moarchy-one-app-per-workspace` reconciles it on sway's own event stream, so
+a keyboard user's `$mod+Shift+2` lands the same way as the drag. The overview
+only moves the window.
+→ with two windows moved onto one workspace, `swaymsg -t get_workspaces | jq
+'.[].representation'` shows them inside `V[...]` and their two `rect`s divide the
+workspace's height, not its width;
+`moarchy-one-app-per-workspace --reconcile` forces one pass without the daemon,
+and `python3 scripts/test-workspace-layout.py` settles the rule, the direction,
+the nesting and the focus-restoring fallback without a phone at all
+
+**P7a** Cards are all one height, and a workspace with more windows than fit gets
+a count in the last slot rather than a taller card. A drop is aimed by
+arithmetic — while a window is in the air the tile holds the exclusive grab, so
+no card underneath ever sees a touch to answer with — and that arithmetic is what
+fixes the height.
+
+**P7b** The last card is the next free workspace, so "somewhere else" is a place
+on screen rather than a gesture you have to know. It is the number the home swipe
+would take you to and the number a new window would land on (F1).
+→ `omarchy-shell overview grid`'s `free=` equals
+`moarchy-one-app-per-workspace --free` and `gestures status`'s `free=`
+
+**P7c** A card says `TABS` or `STACKED` only when the windows on it are hidden
+behind each other. Tiled is the ordinary case and a label on every multi-window
+card would be a word that never varies; what a glance at the phone cannot tell
+you is that a workspace holds two apps and shows one.
+
+**P8** The surface is never unmapped: shut it is a one-pixel column along the
+right edge, grown when the drag latches and not on press. The drawer's
+measurement, on the other axis — a layer-shell window that goes invisible is
+deleted, so every open would rebuild a scene graph while the finger was already
+moving (N3).
+
+The band stops short of the same two ends as the back edge and for the same
+reasons: one strip plus one keyboard panel at the bottom (G10), the status bar
+plus one header bar at the top (G10b). Both numbers are shared rather than
+mirrored — what they clear runs the full width of the screen, and the keyboard's
+outermost key column is at both edges.
+→ `omarchy-shell gestures geometry` reports `overviewH` == `h`
+
+**P9** Shut, this plugin runs nothing: no `swaymsg`, no timer, no subscription.
+It reads the tree when the sheet comes up and when sway says something changed
+while it is up.
+→ `grep -c 'surfaceUp' moarchy.overview/Overview.qml` guards both the refresh and
+the two `Connections`
+
+**P10** The overview is reachable without a finger.
+→ `omarchy-shell overview open|close|toggle|state|progress|grid|move|lift|dropOn`,
+and `omarchy-shell gestures overview` for the summon the edge performs
+
+**P11** The overview is a sheet, so the rules about sheets are the rules about it:
+it puts away the drawer and the theme picker beside it and the shade above it
+(B6), a back swipe closes it before it closes the app under it (G1), a sideways
+swipe sweeps it (B3), and an app's window opening leaves none of it behind.
+→ with the overview up, one `omarchy-shell gestures back` leaves
+`overview state` == `closed` with the open-window count unchanged
+
+---
+
 ## Constraints
 
 Not acceptance criteria — the boundaries any implementation works inside.
@@ -1229,11 +1378,18 @@ went stale the first time a check was added above them and then silently
 reported a different document's ids. Ids are not unique across files, so the
 list it prints is a superset: take from it only what this file defines.
 
-**Written, but nothing runs it** (28). Each has a `→` check that no suite
+**Written, but nothing runs it** (32). Each has a `→` check that no suite
 executes, so it is as unverified as one with no check at all:
 
 > A3a · A8 · A10 · C1 · C3 · C4 · C5 · G10b · G11 · G12 · G13 · H1 · H4 ·
-> I5a · I5b · I6 · I7 · K8 · L8 · M2 · M3 · M7 · M7a · M8 · M9 · N1 · N2 · N3
+> I5a · I5b · I6 · I7 · K8 · L8 · M2 · M3 · M7 · M7a · M8 · M9 · N1 · N2 · N3 ·
+> P2 · P4 · P5 · P9
+
+§P arrives with four of them. P2 is the one that matters: it is the drag itself,
+and the trace that would settle it (`overview dragTrace`) needs a finger the
+suite can only synthesise through `/dev/uinput` — the same gate every other
+`→` line in §A sits behind, and the reason G12 has been on this list since it
+was written.
 
 All of §C is here: the hold cannot be fired by a suite without installing an
 agent, which is C's own note. All of §I's assertable half is here too, and that
@@ -1241,11 +1397,11 @@ is not deliberate — I6 is covered in substance by A7 (`bin/moarchy-selftest`
 notes this at the `--surfaces` end), but I5a, I5b, I7 and I1's companions are
 simply unrun.
 
-**Stated, with no check** (22). Behavioural claims with nothing to settle them
+**Stated, with no check** (24). Behavioural claims with nothing to settle them
 from a terminal; several are hand checks on glass by nature:
 
 > B2 · D2 · D3 · D4 · F1 · G1 · G5 · G7 · G8 · G9 · G10a · H3 · H5 · H6 · H7a ·
-> H7b · H8 · K10 · L4 · M10 · M11 · M12
+> H7b · H8 · K10 · L4 · M10 · M11 · M12 · P7a · P7c
 
 M4 left this list by being split: the accent dot is still a hand check on glass,
 and the glyph beside it is a declaration `scripts/style-check.sh` can read. The

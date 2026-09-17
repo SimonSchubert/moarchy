@@ -20,6 +20,7 @@ home drawer sits at roughly y=1420, not y=710.
 Needs root, because /dev/uinput is root-only:
 
     sudo moarchy-touch swipe 500 1420 150 1420
+    sudo moarchy-touch drag 120 245 360 460 700
     sudo moarchy-touch hold 360 1420 700
     sudo moarchy-touch tap 360 700
 """
@@ -129,6 +130,33 @@ def hold(x, y, ms):
     t.close()
 
 
+def drag(x1, y1, x2, y2, hold_ms, ms):
+    """Press, wait, then drag -- the gesture the overview moves a window with
+    (docs/gestures.md P6).
+
+    Not `swipe` with a slow start: a lift is claimed by *time*, and travel past
+    the slop cancels it, so anything that begins by moving is a scroll however
+    slowly it moves. The wait jitters by a pixel for `hold`'s reason -- identical
+    coordinates are coalesced away below the client, and a touch that stops
+    sending reads as stalled rather than as held.
+    """
+    t = Touch()
+    t.down(x1, y1)
+    for i in range(max(1, int(hold_ms / 100))):
+        t.move(x1 + (i % 2), y1)
+        time.sleep(0.1)
+    steps = max(2, int(ms / 16))
+    for i in range(1, steps + 1):
+        f = i / steps
+        t.move(x1 + (x2 - x1) * f, y1 + (y2 - y1) * f)
+        time.sleep(ms / 1000 / steps)
+    # A beat with the finger still down at the destination, so the drop target
+    # is read from where the drag ended rather than from the frame it arrived on.
+    time.sleep(0.15)
+    t.up()
+    t.close()
+
+
 def tap(x, y):
     t = Touch()
     t.down(x, y)
@@ -147,10 +175,14 @@ def main(argv):
             swipe(*(int(a) for a in args[:4]), ms)
         elif cmd == "hold" and len(args) == 3:
             hold(int(args[0]), int(args[1]), int(args[2]))
+        elif cmd == "drag" and len(args) in (5, 6):
+            ms = int(args[5]) if len(args) == 6 else 400
+            drag(*(int(a) for a in args[:5]), ms)
         elif cmd == "tap" and len(args) == 2:
             tap(int(args[0]), int(args[1]))
         else:
-            sys.exit("usage: swipe X1 Y1 X2 Y2 [MS] | hold X Y MS | tap X Y")
+            sys.exit("usage: swipe X1 Y1 X2 Y2 [MS] | drag X1 Y1 X2 Y2 HOLD_MS [MS]"
+                     " | hold X Y MS | tap X Y")
     except PermissionError:
         sys.exit("/dev/uinput needs root: rerun with sudo")
     return 0

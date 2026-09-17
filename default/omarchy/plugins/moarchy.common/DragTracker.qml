@@ -32,7 +32,7 @@
 // ---------------------------------------------------------------------------
 // What it does not own
 // ---------------------------------------------------------------------------
-// **Thresholds** (F3). `drawerCommit`, `closeCommit`, `openFraction`,
+// **Thresholds** (F3). `sheetCommit`, `closeCommit`, `openFraction`,
 // `closeFraction`, `homeCommit` and the fling limits are per-gesture decisions
 // recorded in docs/gestures.md, and they belong to the surface that makes
 // them. `finished` hands back progress and velocity and says nothing about
