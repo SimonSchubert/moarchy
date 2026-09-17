@@ -9,8 +9,11 @@
 #
 # Covers: A1/A2/A3 (no literals), B1 (family), B3 (weight), B5 (glyph slots),
 # C4 (no stray hex), D1 (four named radii), H1/H6 (a pressed state on every
-# control, guarded where the control is also a drag handle). Plus one thing
-# that is not an AC at all: that every SVG this project ships still parses.
+# control, guarded where the control is also a drag handle). Plus three things
+# that are not ACs at all: that every SVG this project ships still parses, the
+# sheet-stacking rule, and the workspace-layout rule the overview drags onto
+# (gestures.md P7) -- both of which decide behaviour and neither of which needs
+# the phone to run.
 #
 # Does NOT cover E (touch targets) or F (text inputs): a hit area is a runtime
 # rectangle, and the accessors that answer for it -- `omarchy-shell drawer
@@ -282,6 +285,18 @@ if command -v node >/dev/null 2>&1; then
   fi
 else
   skip "the Sheet.js cases need node, which is not installed here (I1a)"
+fi
+
+# gestures.md P7. What a workspace holding two windows is arranged as, which is
+# the rule the overview's drag exists on top of. The daemon's own functions with
+# `swaymsg` stubbed, so the command strings are asserted rather than the phone --
+# including the fallback that focuses a window to set the layout, and therefore
+# has to put focus back.
+printf '\nworkspace layout (gestures.md P7, not a style.md section)\n'
+if ws_out=$(python3 scripts/test-workspace-layout.py 2>&1); then
+  ok "one window splits, two are tabs, and the fallback restores focus ($(grep -c 'ok' <<<"$ws_out") cases, P7)"
+else
+  no "the workspace layout rule is broken (P7)" "$ws_out"
 fi
 
 # Chrome file. Corners and shade sizes live in ~/.config/omarchy/ui.toml, and

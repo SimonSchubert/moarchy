@@ -20,23 +20,28 @@
 // receive the touch themselves.
 //
 // ---------------------------------------------------------------------------
-// The three surfaces, and why each sits on the layer it does
+// The four surfaces, and why each sits on the layer it does
 // ---------------------------------------------------------------------------
-//   strip     Overlay, bottom, 20px, exclusive.  The drawer and home (A, B).
-//             Overlay because moarchy-keyboard is on Top with an exclusive zone, so
-//             anything lower loses the bottom edge to the keyboard.
-//   home      Bottom, full screen, no exclusion.  The drawer (D).
-//             *Below* every window, so on a blank workspace it receives the
-//             touch and on an occupied one the app is over it and it receives
-//             nothing. The layer does the work -- there is no "is this
-//             workspace empty" test anywhere in this file, because asking that
-//             question is what made the drawer open when it should not have.
-//   backEdge  Overlay, left, 16px.  Back (G).
-//             Above windows, because it has to take the touch before the app
-//             does. That is the one place here that steals input from an app,
-//             it is bounded to 16px, and like the strip it never grows.
+//   strip         Overlay, bottom, 20px, exclusive.  The drawer and home (A, B).
+//                 Overlay because moarchy-keyboard is on Top with an exclusive
+//                 zone, so anything lower loses the bottom edge to the keyboard.
+//   home          Bottom, full screen, no exclusion.  The drawer (D).
+//                 *Below* every window, so on a blank workspace it receives the
+//                 touch and on an occupied one the app is over it and it
+//                 receives nothing. The layer does the work -- there is no "is
+//                 this workspace empty" test anywhere in this file, because
+//                 asking that question is what made the drawer open when it
+//                 should not have.
+//   backEdge      Overlay, left, 16px.  Back (G).
+//   overviewEdge  Overlay, right, 16px.  The overview (P).
+//                 Above windows, because both have to take the touch before the
+//                 app does. They are the two places here that steal input from
+//                 an app, each is bounded to 16px, and like the strip neither
+//                 ever grows. Both stop short of the same two ends for the same
+//                 reasons (G10, G10b) -- the keyboard's outermost key column and
+//                 the app's own header controls are at both edges, not one.
 //
-// Wayland's implicit grab is what makes all three work: wl_touch.down goes to
+// Wayland's implicit grab is what makes all four work: wl_touch.down goes to
 // the surface under the finger and motion keeps arriving there however far the
 // finger travels. So a 20px strip can track a full-height swipe, and none of
 // these surfaces has to grow mid-gesture -- which also means a bug here can
@@ -86,9 +91,21 @@ Item {
   // that no single value is right. Expect to change it.
   readonly property int backEdgeWidth: Style.space(16)
 
-  // G10. How far short of the bottom the back edge stops. Below this the strip
-  // wants taps, and above the strip the keyboard does -- and this surface was
-  // taking both, because it is on Overlay and they are not.
+  // P8. The right edge's band, which is G8's number and G8's argument: it is a
+  // property rather than a literal because no single value is right, and the two
+  // edges are separate properties because the same finger does not have the same
+  // reach at both sides of a phone it is holding in one hand.
+  readonly property int overviewEdgeWidth: Style.space(16)
+
+  // G10, P8. How far short of the bottom an edge surface stops. Below this the
+  // strip wants taps, and above the strip the keyboard does -- and the back edge
+  // was taking both, because it is on Overlay and they are not.
+  //
+  // One property for both edges, not because they happen to agree but because
+  // the two things it clears run the full width of the screen: the strip is
+  // edge to edge, and the keyboard's outermost key columns are the ones this
+  // number exists to hand back -- `a` and shift on the left, backspace and enter
+  // on the right.
   //
   // A number rather than an arrangement, and that is forced. Sway resolves
   // exclusive zones layer by layer from Overlay down, so the keyboard's zone
@@ -99,7 +116,7 @@ Item {
   //
   // The panel height is not scaled with the theme (Osk.qml says why): scaling
   // it would cut the back edge shorter than the keys it exists to clear.
-  readonly property int backEdgeBottomInset:
+  readonly property int edgeBottomInset:
     root.stripHeight + osk.keyboardPanelHeight
 
   // G10b. What a GTK app's header bar reserves at the top, in logical px.
@@ -111,9 +128,10 @@ Item {
   // AdwHeaderBar's own 47. GTK3 and Kirigami land within a pixel or two of it.
   readonly property int headerBarHeight: 47
 
-  // G10b. How far short of the TOP the back edge stops, so the control an app
-  // puts at its top-left -- libadwaita's back chevron, a hamburger, Geary's
-  // folder button -- is tappable.
+  // G10b, P8. How far short of the TOP an edge surface stops, so the controls an
+  // app puts along its header are tappable: libadwaita's back chevron, a
+  // hamburger and Geary's folder button on the left, the window menu and the
+  // primary action on the right.
   //
   // This surface is anchored top and bottom on Overlay, and sway resolves
   // exclusive zones from Overlay down, so the bar's zone (Top) is subtracted
@@ -122,7 +140,7 @@ Item {
   //
   // The bar half goes through the theme (it is our surface); the header half
   // does not (it is not). Same split as the bottom inset, opposite ends.
-  readonly property int backEdgeTopInset:
+  readonly property int edgeTopInset:
     Style.bar.sizeHorizontal + root.headerBarHeight
 
   // I1a. Is the on-screen keyboard reserving space right now?
@@ -252,15 +270,18 @@ Item {
   // sheet, so the gesture costs the same finger movement either way.
   readonly property real homeExtra: 0.15
 
-  // D2. Half the sheet decides, on both surfaces that drag it: released above
-  // halfway it animates up, below it animates back down. That is what a bottom
-  // sheet does everywhere else -- the sheet is the thing being positioned, so
-  // the question is which end it is nearer -- and it is what was asked for, in
-  // those words.
+  // D2, P2. Half the sheet decides, on every surface that drags one: released
+  // past halfway it animates open, short of it back shut. That is what a sheet
+  // does everywhere else -- the sheet is the thing being positioned, so the
+  // question is which end it is nearer -- and it is what was asked for, in those
+  // words.
   //
   // It was 0.35, inherited from the shade, whose sheet is a different shape and
-  // whose drag has no second stop past it.
-  readonly property real drawerCommit: 0.5
+  // whose drag has no second stop past it. It was `drawerCommit` while the
+  // drawer was the only sheet an edge could pull up; the overview is dragged by
+  // the same rule on the other axis (P2), and one threshold is what keeps "far
+  // enough" something you learn once.
+  readonly property real sheetCommit: 0.5
 
   // A3. Speed past which a release commits whatever the travel, in logical px
   // per ms. It was 0.6 against a reading that could not be trusted: measured
@@ -324,12 +345,14 @@ Item {
   readonly property real openVelocity:
     root.lastDrag ? root.lastDrag.openVelocity : 0
 
-  // Whether this gesture has latched onto the drawer: "none" or "drawer".
-  // Latched on the first clearly-upward movement and held for the rest of the
-  // gesture, so a swipe that starts up and drifts sideways cannot hand the
-  // sheet back mid-pull and change workspace instead.
+  // Which sheet this gesture has latched onto: "none", "drawer" or "overview".
+  // Latched on the first clearly-upward movement -- clearly-leftward, on the
+  // right edge -- and held for the rest of the gesture, so a swipe that starts
+  // along the axis and drifts across it cannot hand the sheet back mid-pull and
+  // change workspace instead.
   //
-  // It used to name which of two overlays was being dragged. There is one.
+  // It is also what dropDrag() reads to know a cancelled touch left a sheet
+  // parked half-open. A latch that set no mode would put nothing back.
   property string dragMode: "none"
 
   // Which surface is driving: "strip" or "home". They raise the same sheet and
@@ -346,6 +369,13 @@ Item {
   // shell.callIfLoaded(id, method, arg) -- marshals a string per call, and
   // this runs at touch-event rate.
   property var dragTarget: null
+
+  // Which sheet that object is, so the commit can go through the host by id.
+  // Two edges drag two different sheets now -- the strip and the wallpaper the
+  // drawer (A, D), the right edge the overview (P) -- and `releaseTarget` used
+  // to name the drawer outright. A commit that summoned the wrong sheet would
+  // leave the one being dragged parked at 1.0 with the host believing it shut.
+  property string dragSheet: ""
 
   // Where the pull stood when the finger went down, so the same strip can push
   // a sheet back as well as pull it up.
@@ -686,11 +716,13 @@ Item {
   // ------------------------------------------------------ driving an overlay
   function resolveTarget(id: string): void {
     root.dragTarget = null
+    root.dragSheet = ""
     root.dragStartPull = 0
     if (!root.shell || !root.shell.panelLoaders) return
     var loader = root.shell.panelLoaders[id]
     if (!loader || !loader.item) return
     root.dragTarget = loader.item
+    root.dragSheet = id
     // Do not map the sheet here. resolveTarget runs on every strip press, and
     // most of those are a workspace swipe (B1: horizontal wins). Warming on
     // press mapped the full grid, laid it out, and left it composited on Top
@@ -706,7 +738,10 @@ Item {
     root.dragStartPull = Number(loader.item.progress) || 0
   }
 
-  function beginDrawer(): void {
+  // N3, P8. Map the sheet, now that the gesture has latched. Both sheets that
+  // are dragged from an edge stay mapped as a band and grow on this call, so
+  // this knows which one only as "the target".
+  function beginSheet(): void {
     if (root.dragTarget && typeof root.dragTarget.warming !== "undefined")
       root.dragTarget.warming = true
   }
@@ -742,8 +777,11 @@ Item {
     // After `dragging = false`, so the Behavior is live and this eases rather
     // than snaps -- which is the whole of F4.
     if (root.dragSource === "strip") root.dragTarget.homeHint = 0
-    if (open) Sheet.summon(root.shell, Sheet.DRAWER)
-    else if (root.shell) root.shell.hide(Sheet.DRAWER)
+    // The sheet this gesture resolved, not the drawer by name (P2).
+    // `dragSheet` and `dragTarget` are set together or not at all, so reaching
+    // here with a target means there is an id to commit through.
+    if (open) Sheet.summon(root.shell, root.dragSheet)
+    else if (root.shell) root.shell.hide(root.dragSheet)
     else root.dragTarget.progress = open ? 1 : 0
   }
 
@@ -1081,6 +1119,7 @@ Item {
     root.pendingMode = "none"
     root.dragSource = ""
     root.dragTarget = null
+    root.dragSheet = ""
     root.dragStartPull = 0
   }
 
@@ -1096,7 +1135,7 @@ Item {
       root.run("home")
     } else {
       root.releaseTarget(root.openVelocity >= root.fling
-        || (root.openVelocity > -root.fling && root.pull >= root.drawerCommit))
+        || (root.openVelocity > -root.fling && root.pull >= root.sheetCommit))
     }
   }
 
@@ -1135,7 +1174,7 @@ Item {
 
     onBegan: {
       root.dragMode = root.pendingMode
-      if (root.dragMode === "drawer") root.beginDrawer()
+      if (root.dragMode === "drawer") root.beginSheet()
     }
     onMoved: p => root.setTargetProgress(stripDrag.travelled)
     onFinished: (p, v) => root.releaseStrip()
@@ -1156,12 +1195,12 @@ Item {
 
     onBegan: {
       root.dragMode = "drawer"
-      root.beginDrawer()
+      root.beginSheet()
     }
     onMoved: p => root.setTargetProgress(homeDrag.travelled)
     onFinished: (p, v) => root.releaseTarget(
       root.openVelocity >= root.fling
-      || (root.openVelocity > -root.fling && root.pull >= root.drawerCommit))
+      || (root.openVelocity > -root.fling && root.pull >= root.sheetCommit))
     onCanceled: from => root.dropDrag()
   }
 
@@ -1206,6 +1245,45 @@ Item {
     onCanceled: from => { root.backPull = 0; root.markBackTrace(-1) }
   }
 
+  // P1, P2. The right edge, which drags a sheet rather than arming a command --
+  // so unlike the back edge it looks like the strip's tracker with `axis` set,
+  // not like backDrag.
+  //
+  // Leftward opens, which is a negative delta on X the way upward is on Y, so
+  // `openDirection` and `latchSign` are both -1. `axisDominant`, because a
+  // vertical drag that begins at the edge is an app being scrolled, exactly as
+  // G6 says of the other side.
+  Shared.DragTracker {
+    id: overviewDrag
+    axis: "x"
+    travel: root.targetTravel()
+    openDirection: -1
+    latchSign: -1
+    axisDominant: true
+    slop: root.slop
+    // Nothing to drag means nothing to latch: the plugin can have failed to
+    // load, and an already-open overview has nowhere further to go -- there is
+    // no second stop past this sheet the way there is past the drawer (A4).
+    latchable: root.dragTarget !== null && root.dragStartPull < 1
+    startFrom: root.dragStartPull
+
+    onBegan: {
+      root.dragMode = "overview"
+      root.beginSheet()
+    }
+    onMoved: p => root.setTargetProgress(overviewDrag.travelled)
+
+    // The drawer's release rule, on the other axis (P2). `v` is signed toward
+    // open, so a fling out from the edge is the positive one.
+    onFinished: (p, v) => {
+      root.releaseTarget(v >= root.fling
+        || (v > -root.fling && overviewDrag.travelled >= root.sheetCommit))
+      root.reset()
+    }
+
+    onCanceled: from => root.dropDrag()
+  }
+
   // Lets the wiring be tested without a finger:
   //   omarchy-shell gestures swipe left
   //   omarchy-shell gestures back
@@ -1246,6 +1324,14 @@ Item {
       return "ok: agent"
     }
 
+    // P1. The right edge, without a finger. Distance is what opens the sheet
+    // and an IPC verb has no distance, so this is the committed end of it --
+    // `overview progress` is where a real drag is measured.
+    function overview(): string {
+      Sheet.summon(root.shell, Sheet.OVERVIEW)
+      return "ok: overview"
+    }
+
     // G. Reachable without a finger, and the only way to test the priority
     // order without a keyboard on screen.
     function back(): string {
@@ -1269,13 +1355,18 @@ Item {
       // G13. `w` is the *input* band and stays that, with the drawn width
       // published beside it. Repurposing `w` would change what every existing
       // reader is asserting without the reader noticing.
+      //
+      // P8's numbers are appended rather than given a verb of their own, for
+      // the same reason `w` keeps its meaning: the two edges share both insets,
+      // so a check that read one edge's `inset` and the other's from a second
+      // command could pass while they had come apart.
       return "backEdge w=" + root.backEdgeWidth
              + " surfaceW=" + Math.round(backEdge.width)
              + " h=" + Math.round(backEdge.height)
-             + " inset=" + root.backEdgeBottomInset
+             + " inset=" + root.edgeBottomInset
              // G10b. Published beside the bottom one, because `h` alone cannot
              // say which end a missing band was lost at.
-             + " topInset=" + root.backEdgeTopInset
+             + " topInset=" + root.edgeTopInset
              + " header=" + root.headerBarHeight
              + " strip=" + root.stripHeight
              + " panel=" + osk.keyboardPanelHeight
@@ -1287,6 +1378,13 @@ Item {
              + " home=" + Math.round(home.height)
              + " kbd=" + (root.keyboardReserving ? 1 : 0)
              + " band=" + (root.fillStripBand ? 1 : 0)
+             // P8. The right edge. `overviewW` is its input band, and it has no
+             // drawn width to publish beside it -- the surface is the band,
+             // because nothing is drawn on it (P1). `overviewSurfaceW` says so
+             // rather than being left out: an equal pair is the assertion.
+             + " overviewW=" + root.overviewEdgeWidth
+             + " overviewSurfaceW=" + Math.round(overviewEdge.width)
+             + " overviewH=" + Math.round(overviewEdge.height)
     }
 
     function status(): string {
@@ -1634,9 +1732,9 @@ Item {
     // positive bottom margin shrinks a surface anchored to both -- the same
     // lever the drawer uses in the other direction, where a negative one
     // extends it past the usable area (I5a).
-    margins.bottom: root.backEdgeBottomInset
+    margins.bottom: root.edgeBottomInset
     // G10b. The same lever at the other end, for the app's header bar.
-    margins.top: root.backEdgeTopInset
+    margins.top: root.edgeTopInset
 
     WlrLayershell.namespace: "moarchy-back"
     WlrLayershell.layer: WlrLayer.Overlay
@@ -1735,6 +1833,69 @@ Item {
                         duration: 90; easing.type: Easing.OutCubic }
       NumberAnimation { target: root; property: "backFlash"; to: 0
                         duration: 320; easing.type: Easing.OutCubic }
+    }
+  }
+
+  // ======================================================= the right edge
+  //
+  // P1. The second surface here that takes touch ahead of an app, and the same
+  // bargain as the first: 16px, never grown, on Overlay so it sits above the
+  // drawer and the shade rather than under them.
+  //
+  // It is the plainest surface in this file -- no cue, no mask, no widening --
+  // and each of those absences follows from one fact. The back edge draws an arc
+  // because a back swipe has nothing else to look at (G12); this one pulls a
+  // sheet in under the finger, so the thing that says how far the gesture has
+  // got is the gesture's own result. Nothing is drawn here, so there is no cue
+  // to make room for, so the surface is exactly the band it takes touch in and
+  // has nothing to mask back off (G13's whole subject).
+  PanelWindow {
+    id: overviewEdge
+
+    anchors { top: true; bottom: true; right: true }
+    implicitWidth: root.overviewEdgeWidth
+    color: "transparent"
+
+    // P8. The same two insets as the other edge, in the same direction: a
+    // positive margin shrinks a surface anchored to both ends. The keyboard's
+    // right-hand column -- backspace, enter -- and an app's own header controls
+    // are what they hand back here, where on the left it is shift and a back
+    // chevron.
+    margins.bottom: root.edgeBottomInset
+    margins.top: root.edgeTopInset
+
+    WlrLayershell.namespace: "moarchy-overview-edge"
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+    exclusionMode: ExclusionMode.Ignore
+
+    MultiPointTouchArea {
+      anchors.fill: parent
+      maximumTouchPoints: 1
+
+      onPressed: pts => {
+        if (pts.length === 0) return
+        // Resolved on the press and not on the latch, the way the strip does
+        // it: the tracker has to know on its first frame whether there is
+        // anything to drag and where it already stands. Mapping the sheet is
+        // the part that waits -- beginSheet() runs from onBegan (P8).
+        root.dragSource = "overview"
+        root.resolveTarget(Sheet.OVERVIEW)
+        overviewDrag.press(pts[0].sceneX, pts[0].sceneY)
+      }
+
+      onUpdated: pts => {
+        if (pts.length === 0) return
+        overviewDrag.move(pts[0].sceneX, pts[0].sceneY)
+      }
+
+      // reset() after release() and not instead of it. A latched drag has
+      // already been through onFinished by the time this line runs and reset is
+      // idempotent; an unlatched one -- a brush on the edge, or a press with the
+      // sheet already open, which cannot latch -- never reaches a handler at all
+      // and would otherwise leave `dragTarget` resolved for the next gesture.
+      onReleased: pts => { overviewDrag.release(); root.reset() }
+      onCanceled: pts => overviewDrag.cancel()
     }
   }
 }

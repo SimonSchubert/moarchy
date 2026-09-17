@@ -95,3 +95,41 @@ function goToFreeWorkspace(shell) {
   gestures.goToFreeWorkspace()
   return true
 }
+
+// The lowest workspace number sway does not currently have -- gestures.md F1.
+//
+// Asked rather than worked out, for goToFreeWorkspace()'s reason: the rule has
+// two implementations already (QML in moarchy.gestures, Python in
+// bin/moarchy-one-app-per-workspace) and they have drifted twice, in both
+// directions. A third would be a third chance to drift.
+//
+// 0 when the gestures plugin is not loaded, which a caller must treat as "no
+// answer" rather than as workspace zero: sway has no workspace 0 and
+// dispatching to one creates a named workspace nothing can swipe to.
+function freeWorkspace(shell) {
+  var gestures = item(shell, "moarchy.gestures")
+  if (!gestures || typeof gestures.firstFreeWorkspace !== "function") return 0
+  return Number(gestures.firstFreeWorkspace()) || 0
+}
+
+// Send a command to the compositor -- gestures.md P6.
+//
+// Here for focusToplevel()'s reason rather than a new one: moarchy.gestures owns
+// the socket and is the shell's only compositor-dispatch seam, and a second
+// plugin opening its own I3 connection is a second answer to "how does this
+// shell talk to sway".
+//
+// It does not own the commands. The overview's moves are arrangement decisions
+// -- which window, which workspace -- and those belong to the surface that made
+// them, the same way DragTracker takes a threshold and never picks one. Callers
+// pass sway syntax and read the criteria rules in focusToplevel() before
+// building one.
+//
+// False when there is nothing to dispatch through, so a caller can say so
+// rather than believing a command was sent.
+function dispatch(shell, cmd) {
+  var gestures = item(shell, "moarchy.gestures")
+  if (!gestures || typeof gestures.dispatch !== "function") return false
+  gestures.dispatch(String(cmd))
+  return true
+}

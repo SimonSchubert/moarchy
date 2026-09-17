@@ -37,6 +37,11 @@ a fresh session, to catch up.
 workspace, and `moarchy-one-app-per-workspace` makes that the normal case.
 Split a workspace and the borders come back — they are then the only thing
 saying which pane has focus.
+
+A workspace given a second window through the overview (gestures.md P6) is split
+vertically, so this is exactly the case the paragraph above describes: two
+visible windows, two sets of borders, and the border is what says which of them
+has focus.
 → W1 holds with one window; with two, each window's `rect` is inset by the
 border and the two are adjacent
 

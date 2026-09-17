@@ -178,6 +178,8 @@ One drag up from the home pill has two stops, the way Android's does:
 | Swipe up **on the wallpaper** | The app drawer, tracking the finger 1:1 |
 | Press and hold the pill | The default coding agent, in a terminal — the picker, with none chosen yet |
 | Swipe left / right | Next / previous workspace, which is next / previous app |
+| Swipe in from the **right edge** | The overview — every workspace as a card, one under the other |
+| Hold a card's app and drag it | Move that app to another workspace. Two on one workspace tile, one above the other |
 | Tap an open-app tile | Switch to that app |
 | Flick an open-app tile up | Close that app |
 | Pull down from the status bar | The shade: quick settings, brightness, media |
@@ -189,6 +191,19 @@ drawer now lists the open apps along its own top, so the switcher was deleted
 rather than kept beside a launcher that shows the same thing. Nothing on the
 strip closes a window: apps are closed from the drawer's shelf, one tile at a
 time (C4, M6).
+
+The two vertical edges are one gesture each, and the right one is the map. A
+swipe in from it pulls the **overview** across: every workspace as a card, one
+under the other, each showing the windows on it. Tap a card to go there, tap an
+app to go straight to it, or **hold an app and drag it onto another card** to
+move it — which is the one way a workspace comes to hold two.
+
+Two windows side by side on a 360px screen get 180px each, which nothing here
+can use — so a workspace that holds more than one is **split vertically**, one
+above the other, at 370px each. `bin/moarchy-one-app-per-workspace` does that on
+sway's own event stream, so a keyboard user's `$mod+Shift+2` lands the same way
+as the drag. Launching an app still gives it a workspace of its own — sharing one
+is something you ask for, once, by dragging.
 
 The hold is the other gesture Android spends on what its owner reaches for
 most. Here that is the coding agent, and the pill **shakes** while the press

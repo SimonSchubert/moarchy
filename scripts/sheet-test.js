@@ -20,11 +20,11 @@ const src = fs.readFileSync(
 // `.pragma library` is a QML engine directive and not JavaScript.
 const sheet = {}
 new Function("exports", src.replace(/^\s*\.pragma\s+library\s*$/m, "") +
-  "\n;Object.assign(exports, { SHEETS, SHADE, DRAWER, THEMES, WINDOW, TOP," +
-  " OVERLAY, ids, cover, payload, summon })")(sheet)
+  "\n;Object.assign(exports, { SHEETS, SHADE, DRAWER, OVERVIEW, THEMES, WINDOW," +
+  " TOP, OVERLAY, ids, cover, payload, summon })")(sheet)
 
-const { SHADE, DRAWER, THEMES, WINDOW, TOP, OVERLAY } = sheet
-const ALL = [SHADE, DRAWER, THEMES]
+const { SHADE, DRAWER, OVERVIEW, THEMES, WINDOW, TOP, OVERLAY } = sheet
+const ALL = [SHADE, DRAWER, OVERVIEW, THEMES]
 
 let fail = 0
 const check = (ok, what, detail) => {
@@ -42,9 +42,10 @@ const same = (a, b) => JSON.stringify([...a].sort()) === JSON.stringify([...b].s
 console.log("cover(): every sheet at or above the caller, never itself (B6)")
 for (const [name, mine, rank, up, want] of [
   ["the shade covers nothing -- it is the only sheet on Overlay", SHADE, OVERLAY, ALL, []],
-  ["the drawer covers the picker beside it and the shade above", DRAWER, TOP, ALL, [SHADE, THEMES]],
-  ["the picker covers the drawer beside it and the shade above", THEMES, TOP, ALL, [SHADE, DRAWER]],
-  ["a shell app is a window, so it covers all three", "moarchy.wifi", WINDOW, ALL, ALL],
+  ["the drawer covers the two beside it and the shade above", DRAWER, TOP, ALL, [SHADE, OVERVIEW, THEMES]],
+  ["the overview covers the two beside it and the shade above", OVERVIEW, TOP, ALL, [SHADE, DRAWER, THEMES]],
+  ["the picker covers the two beside it and the shade above", THEMES, TOP, ALL, [SHADE, DRAWER, OVERVIEW]],
+  ["a shell app is a window, so it covers all four", "moarchy.wifi", WINDOW, ALL, ALL],
   ["...including the picker on its own (I2a)", "moarchy.wifi", WINDOW, [THEMES], [THEMES]],
   ["nothing open, nothing hidden", DRAWER, TOP, [], []],
   ["a sheet never hides itself", DRAWER, TOP, [DRAWER], []],
@@ -70,8 +71,8 @@ for (const [raw, want] of [
 }
 
 console.log("ids(): topmost first, which is the order the back gesture walks (G11)")
-check(JSON.stringify(sheet.ids()) === JSON.stringify(ALL), "shade, drawer, themes",
-      sheet.ids().join(" "))
+check(JSON.stringify(sheet.ids()) === JSON.stringify(ALL),
+      "shade, drawer, overview, themes", sheet.ids().join(" "))
 
 console.log("summon(): goes through the host, so openPanelIds stays its record")
 const h = host([])

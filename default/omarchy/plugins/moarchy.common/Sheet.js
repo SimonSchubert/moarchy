@@ -30,11 +30,13 @@
 // swipe up means the drawer and nothing else -- names it rather than spelling it.
 var SHADE = "moarchy.shade"
 var DRAWER = "moarchy.drawer"
+var OVERVIEW = "moarchy.overview"
 var THEMES = "moarchy.themes"
 
 var SHEETS = [
   { id: SHADE, rank: 2 },
   { id: DRAWER, rank: 1 },
+  { id: OVERVIEW, rank: 1 },
   { id: THEMES, rank: 1 }
 ]
 

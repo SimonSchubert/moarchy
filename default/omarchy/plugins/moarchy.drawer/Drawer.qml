@@ -68,6 +68,7 @@ import qs.Ui as Ui
 // batched guard script its pages are read with. See the header note above.
 import "../moarchy.settings/Search.js" as Search
 import "../moarchy.settings/Guards.js" as Guards
+import "../moarchy.common/Apps.js" as Apps
 import "../moarchy.common/Theme.js" as Theme
 import "../moarchy.common/ShellApps.js" as ShellApps
 import "../moarchy.common/Sheet.js" as Sheet
@@ -625,52 +626,22 @@ Item {
     return out
   }
 
-  // ---------------------------------------------- appId -> desktop entry
+  // ------------------------------------------- what to draw for a window
   //
-  // `appLibrary` can sort entries and turn an icon name into a source, but it
-  // has no lookup by id. Build the index once and rebuild it when the app list
-  // moves -- scanning sortedEntries() inside a delegate would be O(apps) per
-  // tile per frame.
+  // The index and the four resolvers are moarchy.common/Apps.js: the overview's
+  // cards draw the same tile from the same handle (gestures.md P5), and a
+  // second implementation of "which icon is this window" is how the shelf came
+  // to draw every moarchy-apps plugin as `org.quickshell` with no artwork at
+  // all (K5).
   //
-  // Separate from `appRows` on purpose: that one is the *query's* answer and
-  // re-sorts on every keystroke, and a tile's icon must not depend on what is
-  // in the search field.
+  // The index is held here rather than there because the *timing* is this
+  // sheet's: rebuilt on `appsChanged` below, where the overview rebuilds when
+  // its own sheet comes up. Separate from `appRows` on purpose -- that one is
+  // the query's answer and re-sorts on every keystroke, and a tile's icon must
+  // not depend on what is in the search field.
   property var appIdIndex: ({})
 
-  function buildIndex(): void {
-    var map = ({})
-    if (!root.shell || !root.shell.appLibrary) { root.appIdIndex = map; return }
-    var rows = root.shell.appLibrary.sortedEntries("")
-    for (var i = 0; i < rows.length; i++) {
-      var entry = rows[i].entry
-      if (!entry) continue
-      var id = String(entry.id || "").toLowerCase().replace(/\.desktop$/, "")
-      if (!id) continue
-      if (map[id] === undefined) map[id] = entry
-      // Sway reports the app_id an app sets for itself, which is often the last
-      // segment of a reverse-DNS desktop id -- org.gnome.Papers maps to an
-      // app_id of "papers". Index both; first writer wins, so an exact match is
-      // never displaced by a suffix collision.
-      var tail = id.split(".").pop()
-      if (tail && map[tail] === undefined) map[tail] = entry
-
-      // A shell app's window carries the shell process's own app id (K9), so
-      // nothing above can ever find its entry. The entry names the plugin in
-      // its Exec line -- `omarchy-shell shell toggle <id>` -- and that is the
-      // only place the two are joined: Quickshell's DesktopEntry exposes name,
-      // icon, categories and exec, and no way to read an X- key, so the
-      // X-Moarchy-Plugin these entries also carry is unreachable from here.
-      //
-      // Kept under a prefix so a plugin id can never be returned for an app_id
-      // that happens to spell the same thing.
-      var toggled = root.pluginSummonedBy(entry)
-      if (toggled) {
-        var key = "plugin:" + toggled[1].toLowerCase()
-        if (map[key] === undefined) map[key] = entry
-      }
-    }
-    root.appIdIndex = map
-  }
+  function buildIndex(): void { root.appIdIndex = Apps.index(root.shell) }
 
   // Whether a window of this entry's app is already open. Asked of the same
   // appId index the shelf resolves its icons through, so an app is "running"
@@ -679,80 +650,21 @@ Item {
     if (!entry) return false
     var open = root.openApps || []
     for (var i = 0; i < open.length; i++) {
-      var e = open[i] ? root.entryForAppId(open[i].appId) : null
+      var e = open[i] ? Apps.entryForAppId(root.appIdIndex, open[i].appId) : null
       if (e && String(e.id) === String(entry.id)) return true
     }
     return false
   }
 
-  // The plugin id an entry summons, as a one-element match, or null for an
-  // entry that starts a process. Written once: buildIndex keys the shelf's
-  // icons off it (K5) and launch() asks it whether a window is coming (L10).
-  function pluginSummonedBy(entry) {
-    if (!entry) return null
-    return /(?:^|\s)shell\s+toggle\s+(\S+)/.exec(String(entry.execString || ""))
-  }
+  // L10. Whether an entry summons a plugin rather than starting a process.
+  function pluginSummonedBy(entry) { return Apps.pluginSummonedBy(entry) }
 
-  function entryForAppId(appId) {
-    if (!appId) return null
-    var e = root.appIdIndex[String(appId).toLowerCase()]
-    return e === undefined ? null : e
-  }
+  function openIconFor(app) { return Apps.iconFor(root.shell, root.appIdIndex, app) }
+  function openNameFor(app) { return Apps.nameFor(root.shell, root.appIdIndex, app) }
 
-  function entryForPluginId(pluginId) {
-    if (!pluginId) return null
-    var e = root.appIdIndex["plugin:" + String(pluginId).toLowerCase()]
-    return e === undefined ? null : e
-  }
-
-  // K5, M4. A shell app names and draws itself: its app id is the shell
-  // process's own (K9), so there is no desktop entry to look either up in. The
-  // plugin that draws the window is asked instead, and asked by *handle* --
-  // ShellApps.forToplevel compares the toplevel against each plugin's
-  // appWindow.toplevel, which the window itself resolved once when it mapped.
-  function shellAppFor(app) {
-    return ShellApps.forToplevel(root.shell, app)
-  }
-
-  // K5, M4 again, for the icon. openNameFor has asked the plugin since K5 and
-  // this did not, so a shell app resolved a name and never an artwork -- and
-  // the app id it falls back on is `org.quickshell` for every one of them. It
-  // went unseen while the only shell apps were Settings, Wi-Fi and Bluetooth,
-  // which open from the shade and never take a tile on the shelf.
-  function openIconFor(app) {
-    if (!app || !root.shell || !root.shell.appLibrary) return ""
-    var own = root.shellAppFor(app)
-    var entry = own ? root.entryForPluginId(own.pluginId) : root.entryForAppId(app.appId)
-    if (!entry) return ""
-    return root.shell.appLibrary.iconSource(entry.icon)
-  }
-
-  function openNameFor(app) {
-    if (!app) return ""
-    var own = root.shellAppFor(app)
-    if (own) return String(own.appWindow.appName || "")
-    var entry = root.entryForAppId(app.appId)
-    if (entry && root.shell && root.shell.appLibrary)
-      return root.shell.appLibrary.entryName(entry)
-    return app.appId || app.title || "Window"
-  }
-
-  // The page a shell app is on, which its own window already carries, and the
-  // window title for anything else. A shell app's title is "<name> — <page>",
-  // so reading it off the window rather than off the toplevel is what keeps a
-  // line from repeating its own name. Only the IPC prints it: a tile is too
-  // narrow for a second line (M4).
-  function openTitleFor(app) {
-    if (!app) return ""
-    var own = root.shellAppFor(app)
-    if (own) return String(own.appWindow.pageTitle || "")
-    return String(app.title || "")
-  }
-
-  function openGlyphFor(app) {
-    var own = root.shellAppFor(app)
-    return own ? String(own.appWindow.glyph || "") : ""
-  }
+  // Only the IPC prints the title: a tile is too narrow for a second line (M4).
+  function openTitleFor(app) { return Apps.titleFor(root.shell, app) }
+  function openGlyphFor(app) { return Apps.glyphFor(root.shell, app) }
 
   // The tiles are a grid row: same icon, same column pitch, same label, one
   // dot (M4). The height is the grid's cell plus the dot and its gap, because
