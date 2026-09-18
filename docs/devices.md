@@ -750,6 +750,88 @@ at **mode 0600**, carrying `[gsm] auto-config=true` and nothing else.
 > `sim=missing` in that window, because a device NetworkManager has lost says
 > nothing about the tray.
 
+**D34** *Added 2026-09-19, measured on the handset.* **The speakers were quiet
+in three places at once, and only one of them was a volume control.**
+`alsa-ucm-conf-moarchy-sdm670` enables both CS35L36 boost converters,
+`moarchy` ships `moarchy-loudness.service`, and `moarchy-device-sargo` depends
+on `swh-plugins` and carries the filter graph it runs.
+
+> Reported as "Spotify is very quiet" while playing through Waydroid. Every
+> stage that has a number was already at its maximum: the PipeWire sink at
+> 100%, the `Waydroid` sink-input at 100% and uncorked, `Top`/`Bottom Analog
+> PCM Volume` 19/19, `Digital PCM Volume` 816/816. A phone at full volume,
+> quiet.
+>
+> **1. Android has its own volume, and nothing on this phone can reach it.**
+> `STREAM_MUSIC` was at **13 of 15** — about -6.5 dB on Android's curve. The
+> volume rocker (`default/sway/bindings.conf`) and the shade's slider both
+> drive the PipeWire sink, which had no headroom left, so turning the volume up
+> was a no-op that looked like a broken rocker. `cmd media_session volume
+> --stream 3 --set 15` sets it; `media volume` is not a command in this image.
+> This one is not packaged and cannot be: it is state inside the Android
+> container, and it is the first thing to check when Waydroid is quiet
+> (`docs/android.md`).
+>
+> **2. Both speaker amplifiers had their boost converters bypassed.** The amps
+> are Cirrus **CS35L36**s (`cs35l36.2-0040` top/earpiece, `2-0041` bottom), and
+> the device tree provisions a **10 V rail** for them —
+> `cirrus,boost-ctl-millivolt = 10000`, 1 uH, 1800 mA peak. Both
+> `BOOST Enable Switch` controls read `off`, so the amps were swinging against
+> VBAT. This was the only hardware gain the phone had left, and it is audible.
+>
+> The cset goes in the Speakers **EnableSequence**, not `BootSequence` where a
+> volume default would naturally live, because **this device's boot sequences do
+> not take**: `BootSequence` sets `Top Analog PCM Volume` to 17 and it reads 19;
+> `FixedBootSequence` sets four ramp and zero-cross switches to 1 and all four
+> read `off`. `EnableSequence` does take — `SEC_TDM_RX_0 Voice Mixer
+> VoiceMMode1` reads `on` and nothing else sets it — and it re-runs on every
+> profile switch.
+>
+> **WirePlumber parses the UCM once and caches it.** Editing the profile and
+> cycling the card profile re-runs the *old* sequence, which is indistinguishable
+> from a patch that does not work. Verified the way that could fail instead:
+> forced both controls `off`, restarted `wireplumber`, and watched them come
+> back `on` by themselves.
+>
+> **3. The headroom was going unused, which is what "quiet" actually meant.**
+> With the first two fixed, music still reached the speaker at **-17.0 dBFS RMS
+> with peaks at -3.6**. That gap is the loudness: a small driver only ever sees
+> the peaks, and spends the rest of its time far from the excursion the
+> amplifier could give it. An SC4 compressor into a fast lookahead limiter
+> closes it.
+>
+> | | RMS | peak |
+> |---|---|---|
+> | as reported | -23.7 dBFS | -10.0 dBFS |
+> | `STREAM_MUSIC` 15/15 | -17.0 dBFS | -3.6 dBFS |
+> | + compressor and limiter | **-10.8 dBFS** | -0.5 dBFS, zero clipped |
+>
+> **Measure the monitor, not the room.** Every layer here reports a healthy
+> number while the sound is quiet, so the only honest instrument is
+> `parecord` on the sink's `.monitor` and RMS in dBFS. Two approaches were tried
+> and abandoned first: recording the built-in microphone clips at
+> `ADC1 Capture Volume` 63/63, and A/B-ing against whatever music happens to be
+> playing is worthless — the *same* setting drifted **8.7 dB** between two runs,
+> which is larger than the effect being chased. (`audioop` is gone in Python
+> 3.13; compute RMS from `array` by hand.)
+>
+> **The filter runs as a client, and that is not a style choice.** A drop-in on
+> the daemon's own config would mean restarting PipeWire, and a `pipewire-pulse`
+> restart drops Waydroid's audio HAL connection — the HAL does not reconnect,
+> so Android goes silent until the container restarts. `pipewire -c
+> filter-chain.conf` in its own unit builds the sink against the running daemon.
+>
+> **`priority.session = 2000` is load-bearing.** The filter sink has to outrank
+> the ALSA sink or a freshly flashed phone, with no stored WirePlumber state,
+> elects the hardware sink and routes nothing through the graph — a chain that
+> is built, correct, and inaudible. Verified by deleting
+> `default.configured.audio.sink` from the WirePlumber state and restarting it.
+>
+> **Not measured:** loudness in SPL, battery cost of the 10 V rail, and whether
+> the compressor settings hold up on speech or podcasts — they were tuned by ear
+> against music, and they are live-adjustable with `pw-cli s <id> Props` for
+> exactly that reason.
+
 **D30** *Added 2026-09-15, fixed the same day.* **The camera's colour needed a
 profile and a patched megapixels.** `moarchy-device-sargo` generates
 `google,b4s4-sdm670,{Rear,Front}.dcp`; `pkgbuilds/megapixels` carries a
@@ -1028,6 +1110,52 @@ Restated as a checklist, in build order. Each carries its state.
 
    The Bluetooth AC that the previous revision of this file declined to write
    is now written, because the measurement it was waiting for has been taken.
+
+10. **D34 — MEASURED ON THE HANDSET 2026-09-19; PACKAGED, NOT YET BUILT OR
+    FLASHED.** The speaker loudness work. What was measured on the running
+    phone, with the tuned chain live: music reaching the speaker went from
+    **-23.7 dBFS RMS / -10.0 peak** as reported, to **-10.8 dBFS RMS / -0.5
+    peak with zero clipped samples**, across three independent causes —
+    Android's own `STREAM_MUSIC` at 13/15, both CS35L36 boost converters
+    bypassed, and the crest factor nothing was reclaiming.
+
+    Each half of the persistence was verified against the case that would fail,
+    not the case that would pass: the boost cset by forcing both controls
+    `off` and watching a `wireplumber` restart bring them back `on`, and the
+    default-sink election by deleting `default.configured.audio.sink` from the
+    WirePlumber state and confirming the filter sink still won on
+    `priority.session`. The packaged fragment was moved to
+    `/usr/share/pipewire/filter-chain.conf.d/` and the hand-placed copy under
+    `~/.config` removed before that test, so the path the package ships to is
+    the path that was measured.
+
+    **Not done:** no package has been rebuilt from these PKGBUILDs, so the
+    `sed` that patches `VoiceCall.conf` has been proved only against the
+    pristine upstream file outside makepkg, and nothing has been flashed. Until
+    an image carries it, the claim is that the *fix* works and not that the
+    *packaging* does — the same distinction AC 9 draws, and the one this
+    project keeps having to redraw.
+
+    **The handset carries hand-placed copies that will collide, and they have
+    to go before these packages are installed on it.** Whoever installs them
+    first should remove all three, because each one *wins* against the package
+    rather than losing to it:
+
+    ```
+    /usr/share/pipewire/filter-chain.conf.d/99-loudness.conf   # -> two graphs
+    ~/.config/systemd/user/moarchy-loudness.service            # -> shadows /usr/lib
+    ~/.config/systemd/user/pipewire.service.wants/moarchy-loudness.service
+    ```
+
+    The first is the worst of them: PipeWire reads every fragment in that
+    directory, so the hand-placed one and the packaged
+    `99-moarchy-loudness.conf` build **two** chains, both claiming
+    `priority.session = 2000`. A user unit also takes precedence over
+    `/usr/lib/systemd/user`, so the old copy would keep running after an
+    upgrade changed the packaged one. `pacman` will additionally refuse the
+    unowned `/usr/share` path with "exists in filesystem" — compare first, then
+    `--overwrite` scoped to it. The device also still carries `alsa-utils`,
+    installed by hand for `amixer` and deliberately not packaged.
 
 AC 7 was the one that could fail for reasons none of the others predicted,
 which is why it was last and why nothing above it depended on owning a Pixel

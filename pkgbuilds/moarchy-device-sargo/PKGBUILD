@@ -38,7 +38,9 @@ pkgver=$_ver
 # 7: gained the camera colour profiles (D30), named as megapixels asks.
 # 1 for 0.3.0: pkgver moved, and 0.3.0-1 is newer than the 0.2.2-7 the
 # 20260915 image carries. Nothing in the package changed for it.
-pkgrel=1
+# 2: gained the speaker loudness stage -- swh-plugins, the tuning the filter
+#    graph reads, and the symlink that enables moarchy-loudness.service (D34).
+pkgrel=2
 pkgdesc="Google Pixel 3a (sargo) hardware support for moarchy"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
@@ -106,6 +108,16 @@ conflicts=('moarchy-device')
 # hardware value (§4), and q6voiced's own unit is written to be skipped on a
 # device that ships no config rather than to fail.
 #
+# swh-plugins is the speaker loudness stage, and it is here for the same reason
+# the ALSA profile is: it is the difference between a phone that makes a sound
+# and a phone somebody can hear. With every gain in the chain at its ceiling,
+# music still reached these speakers at -17 dBFS RMS, because music's peaks are
+# 15-20 dB above its average and the driver only ever sees the peaks. The SC4
+# compressor and the fast lookahead limiter out of this package close that gap;
+# loudness.conf below is the tuning, and moarchy (not this package) ships the
+# unit that runs it. Measured: -10.8 dBFS RMS, peaks pinned at -0.5, nothing
+# clipped (D34).
+#
 # qbootctl is what stops this phone bricking itself. An A/B bootloader counts
 # down a retry counter on every handoff and marks the slot unbootable at zero
 # unless the OS calls back; measured here as slot-retry-count:a:0 and
@@ -122,11 +134,12 @@ depends=(
   'alsa-ucm-conf-moarchy-sdm670'
   'q6voiced'
   'qbootctl'
+  'swh-plugins'
 )
 
 source=('sway.conf' 'device.conf' 'qbootctl-mark-successful.service' 'q6voiced.conf'
-        'make-dcp.py')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+        'make-dcp.py' 'loudness.conf')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 # The camera colour profiles are GENERATED, not committed. make-dcp.py's header
 # says why: a .dcp is a small TIFF whose payload is nine numbers twice over, and
@@ -171,6 +184,20 @@ package() {
     "$pkgdir/usr/share/megapixels/config/google,b4s4-sdm670,Rear.dcp"
   install -Dm644 "$srcdir/front.dcp" \
     "$pkgdir/usr/share/megapixels/config/google,b4s4-sdm670,Front.dcp"
+
+  # The speaker tuning, read by moarchy-loudness.service through PipeWire's
+  # own filter-chain.conf.d lookup. /usr/share rather than /etc because it is a
+  # package's opinion and not an administrator's, and rather than ~/.config
+  # because it has to be true for a user who has never logged in.
+  install -Dm644 "$srcdir/loudness.conf" \
+    "$pkgdir/usr/share/pipewire/filter-chain.conf.d/99-moarchy-loudness.conf"
+
+  # Enabled here, like q6voiced above and for the same reason: moarchy ships
+  # the unit for every device, and only a device that ships a filter graph has
+  # anything for it to do.
+  install -d "$pkgdir/usr/lib/systemd/user/pipewire.service.wants"
+  ln -s ../moarchy-loudness.service \
+    "$pkgdir/usr/lib/systemd/user/pipewire.service.wants/moarchy-loudness.service"
 
   # The voice PCM, read by q6voiced's unit as an EnvironmentFile. Device 4 is
   # VoiceMMode1 on this card -- confirmed against /proc/asound/pcm on the

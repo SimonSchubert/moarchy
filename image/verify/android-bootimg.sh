@@ -273,6 +273,40 @@ else
   no "no conf.d/sdm660/'Google Pixel 3a'.conf -- the profile exists and nothing looks it up"
 fi
 
+# 2b. Loudness. Every one of these is a file that exists or does not, and the
+# failure of each is the same symptom -- a phone at full volume that nobody can
+# hear (D34). None of it is inferable from the profile being present.
+if grep -q "BOOST Enable Switch" "$R/usr/share/alsa/ucm2/Google/sargo/VoiceCall.conf" 2>/dev/null; then
+  ok "the Speakers verb enables both CS35L36 boost converters"
+else
+  no "VoiceCall.conf has no BOOST cset -- the amps run off VBAT, not the 10 V rail (D34)"
+fi
+
+# The graph and the unit that runs it are shipped by two different packages, so
+# check them apart: either one alone is silent in a way the other explains.
+[ -s "$R/usr/share/pipewire/filter-chain.conf.d/99-moarchy-loudness.conf" ] \
+  && ok "the speaker loudness filter graph is installed" \
+  || no "no filter-chain.conf.d/99-moarchy-loudness.conf -- nothing to compress (D34)"
+
+[ -s "$R/usr/lib/systemd/user/moarchy-loudness.service" ] \
+  && ok "moarchy-loudness.service is installed" \
+  || no "no moarchy-loudness.service -- the graph would ship and never run (D34)"
+
+if [ -L "$R/usr/lib/systemd/user/pipewire.service.wants/moarchy-loudness.service" ]; then
+  ok "moarchy-loudness.service is enabled"
+else
+  no "moarchy-loudness.service is not enabled -- installed, correct, and never started (D34)"
+fi
+
+# The graph names two LADSPA plugins by absolute path. A missing swh-plugins is
+# a filter-chain that fails to build its nodes at startup, which is a line in a
+# user journal and silence everywhere else.
+for _p in sc4_1882 fast_lookahead_limiter_1913; do
+  [ -s "$R/usr/lib/ladspa/$_p.so" ] \
+    && ok "LADSPA $_p is present" \
+    || no "no /usr/lib/ladspa/$_p.so -- the loudness graph cannot load (D34)"
+done
+
 # 3. Call audio specifically. A call is not carried by the modem alone: q6voiced
 # holds VoiceMMode1 open for its duration, and without it a dial is torn down
 # the moment it is made -- which looks like a network problem and is not.

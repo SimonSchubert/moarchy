@@ -31,6 +31,28 @@
 # name has to be the card's name exactly -- "Google Pixel 3a", spaces and all,
 # under sdm660. Get it wrong and everything above still happens.
 
+# --- Why this package patches a file it also installs ----------------------
+#
+# The upstream profile brings the card up with both CS35L36 boost converters
+# BYPASSED, so the amplifiers swing against VBAT (~3.8 V) instead of the 10 V
+# rail the device tree provisions for them -- cirrus,boost-ctl-millivolt=10000,
+# 1 uH, 1800 mA peak, under masked-devices/qupv3_se10_i2c/cs35l36@4{0,1}. It is
+# the only hardware gain the phone has left: analog PCM is already 19/19 and
+# digital 816/816.
+#
+# The csets go in the Speakers EnableSequence and NOT in BootSequence, where
+# volume defaults would naturally live, because this device's boot sequences
+# demonstrably do not take. Read off the handset: BootSequence sets
+# 'Top Analog PCM Volume' to 17 and it reads 19; FixedBootSequence sets four
+# ramp and zero-cross switches to 1 and all four read off. What does take is
+# EnableSequence -- 'SEC_TDM_RX_0 Voice Mixer VoiceMMode1' reads on, and nothing
+# else sets it. EnableSequence also re-runs on every profile switch, which
+# BootSequence would not.
+#
+# Patched here rather than carried as a .patch file because the anchor is one
+# line and the guards below fail the build loudly if the pinned ref ever moves
+# out from under it.
+
 . "$startdir/../../scripts/manifest.sh"
 _ver=$(manifest_get moarchy version) || return 1
 _url=$(manifest_get device.sargo ucm-url) || return 1
@@ -38,7 +60,10 @@ _ref=$(manifest_get device.sargo ucm-ref) || return 1
 
 pkgname=alsa-ucm-conf-moarchy-sdm670
 pkgver=$_ver
-pkgrel=1
+# 2: the Speakers verb gained the two csets that enable the CS35L36 boost
+# converters. The upstream profile leaves them bypassed, which costs the phone
+# most of its volume (devices.md D34).
+pkgrel=2
 pkgdesc="ALSA use-case configuration for SDM670 (Google Pixel 3a)"
 arch=('any')
 url="$_url"
@@ -58,6 +83,28 @@ package() {
 
   install -Dm644 "$src/Google/sargo/sargo.conf"     "$dst/Google/sargo/sargo.conf"
   install -Dm644 "$src/Google/sargo/VoiceCall.conf" "$dst/Google/sargo/VoiceCall.conf"
+
+  # Enable both boost converters as the speakers are routed. Inserted with
+  # sed's `r` so the replacement text keeps its tabs and its single quotes
+  # without a layer of shell escaping over the top of an ALSA cset.
+  local _vc="$dst/Google/sargo/VoiceCall.conf"
+  local _anchor="cset \"name='Bottom AMP Enable Switch' 1\""
+  grep -qF "$_anchor" "$_vc" ||
+    { echo "!! VoiceCall.conf has no Speakers EnableSequence AMP cset to anchor to"; return 1; }
+
+  cat > "$srcdir/boost.cset" <<'CSET'
+
+		# The two amps come up with their boost converters bypassed; see
+		# this package's PKGBUILD for why these live here and not in
+		# BootSequence.
+		cset "name='Top BOOST Enable Switch' 1"
+		cset "name='Bottom BOOST Enable Switch' 1"
+CSET
+  sed -i -e "/Bottom AMP Enable Switch' 1/r $srcdir/boost.cset" "$_vc"
+
+  # The anchor matching and the edit landing are two different things.
+  grep -q "Top BOOST Enable Switch" "$_vc" ||
+    { echo "!! the boost csets did not land -- the phone would be quiet (D34)"; return 1; }
 
   # The lookup entry, by the card's own name. Shipped as the symlink upstream
   # ships rather than as a copy, so there is one file to correct if the profile

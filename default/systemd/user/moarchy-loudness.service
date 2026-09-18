@@ -1,0 +1,34 @@
+[Unit]
+Description=moarchy speaker loudness stage (PipeWire filter-chain)
+Documentation=man:pipewire-module-filter-chain(7)
+# A phone speaker is not short of gain, it is short of average level: music
+# peaks near full scale while its RMS sits 15-20 dB below, so the driver spends
+# almost none of its time near the excursion the amplifier could give it. This
+# runs whatever filter graph the device package installed -- a compressor into a
+# limiter, for a phone -- and that is the last lever once every volume control
+# in the chain is already at maximum (docs/devices.md D34).
+#
+# Nothing device-specific is named here. The unit is the mechanism; the tuning
+# is a hardware value and belongs to the device package, which is also what
+# enables this unit. A device that ships no fragment never pulls it in, so the
+# condition below is a second line rather than the first.
+ConditionPathExistsGlob=/usr/share/pipewire/filter-chain.conf.d/*.conf
+
+# Run as a CLIENT of the running daemon, which is the whole reason this is its
+# own unit rather than a drop-in on pipewire.conf. Editing the daemon's own
+# config means restarting the daemon, and a pipewire-pulse restart drops
+# Waydroid's audio HAL connection -- the HAL does not reconnect, so Android goes
+# silent until the container is restarted.
+After=pipewire.service
+Requires=pipewire.service
+PartOf=pipewire.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/pipewire -c filter-chain.conf
+Restart=on-failure
+RestartSec=2
+Slice=session.slice
+
+[Install]
+WantedBy=pipewire.service

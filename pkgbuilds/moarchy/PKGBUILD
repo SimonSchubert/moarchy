@@ -128,7 +128,10 @@ pkgver=$_ver
 # serves today, so mobile data reaches a phone holding it -- as does the rest
 # of what this build has over that one: the overview plugin on the right edge,
 # two apps on one workspace, and moarchy-selftest's checks for both.
-pkgrel=3
+# 4: ships moarchy-loudness.service, the generic half of the speaker loudness
+# stage. The tuning that unit reads is a hardware value and lives in the device
+# package, which is also what enables it (devices.md D34).
+pkgrel=4
 pkgdesc="Omarchy's look, keybindings and theming on a phone, under Sway"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
@@ -354,6 +357,14 @@ package() {
 
   install -Dm644 "$_repo/default/systemd/user/moarchy-user-setup.service" \
     "$pkgdir/usr/lib/systemd/user/moarchy-user-setup.service"
+
+  # Installed, NOT enabled. It is WantedBy=pipewire.service, and the symlink
+  # that pulls it in belongs to whichever device package ships a filter-chain
+  # fragment for it to run -- the same split as q6voiced, and for the same
+  # reason: a unit enabled on a phone with nothing to run would be a
+  # condition-skipped line in every boot of every other device.
+  install -Dm644 "$_repo/default/systemd/user/moarchy-loudness.service" \
+    "$pkgdir/usr/lib/systemd/user/moarchy-loudness.service"
   install -Dm644 "$_repo/default/systemd/sway-session.target" \
     "$pkgdir/usr/lib/systemd/user/sway-session.target"
 
