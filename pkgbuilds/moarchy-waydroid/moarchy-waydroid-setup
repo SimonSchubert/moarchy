@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Configure Waydroid to behave like a phone rather than a desktop.
 #
-# Run once after `waydroid init`, and again if the output geometry changes.
-# Everything here is a persist property, so it survives session restarts and
-# reboots; none of it is a file this package owns at runtime.
+# Run once after `waydroid init`, and again if the output geometry, the scale,
+# the bar or the strip ever changes. Everything here is either a persist
+# property or a generated sway snippet, so it survives session restarts and
+# reboots.
 #
-# docs/android.md AC 5 and AC 6 are what this satisfies.
+# docs/android.md AC 5, AC 6 and AC 10 are what this satisfies.
 set -euo pipefail
 
 die() { echo "moarchy-waydroid-setup: $*" >&2; exit 1; }
@@ -15,30 +16,8 @@ command -v waydroid >/dev/null || die "waydroid is not installed"
 [ -n "$SWAYSOCK" ] || die "no sway socket; run this inside the session"
 export SWAYSOCK
 
-# The Android display size is LATCHED AT CALIBRATION and never follows a later
-# resize: xdg_toplevel_handle_configure() only records req_width/req_height,
-# and the sole caller of choose_width_height() is finished_calibrating(), which
-# runs once per session. Whatever the window happened to be at that moment is
-# what Android believes forever -- which shows up as an app rendering into the
-# top corner with a black band below it.
-#
-# So pin it. The values are LOGICAL pixels: waydroid multiplies by
-# display_scale itself, and passing physical 1080x2082 yields 3240x6246.
-#
-# Computed, never hardcoded: the width is the output and the height is the
-# workspace, which is the output minus whatever the bar reserves.
-_w=$(swaymsg -t get_outputs | python3 -c '
-import json,sys
-o=[x for x in json.load(sys.stdin) if x.get("active")]
-print(o[0]["rect"]["width"] if o else 0)')
-_h=$(swaymsg -t get_workspaces | python3 -c '
-import json,sys
-ws=json.load(sys.stdin)
-cur=[x for x in ws if x.get("focused")] or ws
-print(cur[0]["rect"]["height"] if cur else 0)')
-
-[ "${_w:-0}" -gt 0 ] && [ "${_h:-0}" -gt 0 ] || die "could not read the output geometry"
-echo "pinning the Android display to ${_w}x${_h} logical"
+state=$(waydroid status 2>/dev/null | awk -F'\t' '/^Container:/{print $2}')
+[ -n "$state" ] || die "no waydroid session; run 'waydroid session start' first"
 
 # multi_windows=false is not a default we inherit, it is a decision.
 #
@@ -46,11 +25,127 @@ echo "pinning the Android display to ${_w}x${_h} logical"
 # immersive.full=* instead of immersive.status=* when it is set. It also puts
 # Android into FREEFORM WINDOWING: apps become small floating windows with
 # Android's own titlebar, and the input method becomes a separate toplevel that
-# sway tiles like an app. Both are wrong on a 360px phone, so the bars are
-# handled by moarchy-waydroid-immersive instead.
+# sway tiles like an app. Both are wrong on a 360px phone.
 waydroid prop set persist.waydroid.multi_windows false
+
+# The insets have to be readable, and `immersive.status=*` -- whatever the last
+# `waydroid app launch` left behind -- reports the status bar as a zero-height
+# frame. Clear it before measuring, or the arithmetic below silently computes
+# an overhang of zero.
+sudo waydroid shell -- settings put global policy_control "null*" >/dev/null 2>&1 \
+  || die "could not reach the container; is it running?"
+
+# ---------------------------------------------------------------------------
+# The geometry, computed on the device (AC 10)
+# ---------------------------------------------------------------------------
+# Nothing below is a constant, and that is the criterion rather than tidiness:
+# the numbers depend on the panel, the scale, this bar's height, this strip's
+# height AND Android's own inset resources, and four of those six have already
+# changed once in this project's life.
+#
+# Layer surfaces are invisible to sway's IPC -- `get_tree` does not list them --
+# so the bar and the strip are read off the WORKSPACE rect, which is the output
+# minus whatever each of them reserves. That is also why this cannot be asked
+# of the plugins: it has to work with the shell restarting underneath it.
+#
+# Android's insets come from the container in physical pixels; dividing by the
+# output scale puts them in the logical pixels sway and the props both speak.
+_geom=$(
+  {
+    swaymsg -t get_outputs
+    echo "---"
+    swaymsg -t get_workspaces
+    echo "---"
+    sudo waydroid shell -- dumpsys window -a 2>/dev/null \
+      | grep -oE "type=ITYPE_(STATUS_BAR|NAVIGATION_BAR) frame=\[[0-9,]+\]\[[0-9,]+\]" \
+      | sort -u
+  } | python3 -c '
+import json, re, sys
+
+blocks = sys.stdin.read().split("\n---\n")
+if len(blocks) != 3:
+    sys.exit("could not read the geometry")
+
+outs = [o for o in json.loads(blocks[0]) if o.get("active")]
+if not outs:
+    sys.exit("no active output")
+out = outs[0]
+W, H = out["rect"]["width"], out["rect"]["height"]
+scale = float(out.get("scale") or 1)
+
+wss = json.loads(blocks[1])
+cur = [w for w in wss if w.get("focused")] or wss
+if not cur:
+    sys.exit("no workspace")
+ws = cur[0]["rect"]
+
+# What the bar and the strip reserve, in logical pixels.
+bar = ws["y"]
+strip = H - bar - ws["height"]
+
+# Android reports each inset as a frame in physical pixels.
+insets = {}
+for line in blocks[2].strip().splitlines():
+    m = re.match(r"type=ITYPE_(\w+) frame=\[(\d+),(\d+)\]\[(\d+),(\d+)\]", line.strip())
+    if m:
+        insets[m.group(1)] = int(m.group(5)) - int(m.group(3))
+st = insets.get("STATUS_BAR", 0) / scale
+nav = insets.get("NAVIGATION_BAR", 0) / scale
+if st <= 0:
+    sys.exit("android reports no status bar inset; is policy_control still immersive?")
+
+# Overhang each screen edge by however much Android asks for beyond what our
+# own chrome occupies, so the inset BOUNDARIES land on the bar and the strip
+# rather than inside the app.
+y = round(bar - st)
+h = round(H + (st - bar) + (nav - strip))
+print(f"{W} {h} {y} {H} {bar} {strip} {st:.2f} {nav:.2f}")
+'
+) || die "could not compute the geometry"
+
+read -r _w _h _y _out_h _bar _strip _st _nav <<<"$_geom"
+[ "${_w:-0}" -gt 0 ] && [ "${_h:-0}" -gt 0 ] || die "could not compute the geometry"
+
+echo "output ${_w}x${_out_h}, bar ${_bar}, strip ${_strip}, android insets ${_st}/${_nav} logical"
+echo "pinning the Android display to ${_w}x${_h} logical at y=${_y}"
+
+# The Android display size is LATCHED AT CALIBRATION and never follows a later
+# resize: xdg_toplevel_handle_configure() only records req_width/req_height, and
+# the sole caller of choose_width_height() is finished_calibrating(), which runs
+# once per session. Whatever the window happened to be at that moment is what
+# Android believes forever -- which shows up as an app rendering into the top
+# corner with a black band below it. So pin it.
+#
+# The values are LOGICAL pixels: waydroid multiplies by display_scale itself,
+# and passing physical 1080x2238 yields 3240x6714.
 waydroid prop set persist.waydroid.width "$_w"
 waydroid prop set persist.waydroid.height "$_h"
+
+# ---------------------------------------------------------------------------
+# The sway half, generated because the numbers are
+# ---------------------------------------------------------------------------
+# Floating, not fullscreen: sway v1.12 orders its scene
+# tiling -> floating -> shell_top -> fullscreen -> shell_overlay, so a
+# fullscreen window draws OVER the bar while a floating one sits under both it
+# and the strip.
+#
+# `move absolute position` and not `move position`: the latter is
+# workspace-relative, so it lands below the bar instead of at the output origin,
+# and a clamp makes the wrong form look right exactly once.
+_conf="$HOME/.config/sway/config.d/90-moarchy-waydroid.conf"
+mkdir -p "$(dirname "$_conf")"
+cat > "$_conf" <<CONF
+# GENERATED by moarchy-waydroid-setup. Do not edit: it is overwritten, and the
+# numbers are computed from this device (docs/android.md AC 10).
+#
+# Gives an Android toplevel the whole output plus an overhang at each edge, so
+# the app draws behind the bar and the strip while Android pads its own content
+# with the insets it reports. Paired with persist.waydroid.height=${_h}: the two
+# must agree or Android renders into a window of the wrong size and clips.
+for_window [app_id="^waydroid\\."] floating enable, border none, resize set width ${_w} px height ${_h} px, move absolute position 0 ${_y}
+CONF
+echo "wrote $_conf"
+swaymsg reload >/dev/null || die "sway reload failed"
 
 # The image leaves ro.hardware.audio.primary unset, so Android loads
 # audio.primary.default.so -- a stub that accepts audio and discards it --

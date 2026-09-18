@@ -20,16 +20,24 @@
 #   people's proprietary binaries. Shipping them in an image this project
 #   publishes is redistribution, and no amount of packaging makes it not be.
 #
-#   A sway drop-in. multi_windows stays false, so the Android input method is
-#   drawn inside the app surface and never becomes a window sway has to rule
-#   about.
+#   A packaged sway drop-in. The window rule cannot be a constant -- it is
+#   computed from the panel, the scale, the bar, the strip and Android's own
+#   inset resources (AC 10) -- so moarchy-waydroid-setup generates it into
+#   ~/.config/sway/config.d/ on the device instead.
+#
+#   An immersive watcher. moarchy-waydroid-immersive existed until 2026-09-18
+#   and forced policy_control=immersive.full=* on every sway window::new. That
+#   is now measurably the wrong thing twice over: immersive is what destroys
+#   the insets an app pads its content against, and a watcher cannot fix the
+#   layout of a window that already exists. moarchy-android-launch asserts the
+#   value BEFORE the activity starts instead -- docs/android.md AC 11.
 
 . "$startdir/../../scripts/manifest.sh"
 _ver=$(manifest_get moarchy version) || return 1
 
 pkgname=moarchy-waydroid
 pkgver=$_ver
-pkgrel=1
+pkgrel=2
 pkgdesc="Android apps on moarchy: Waydroid configured for a phone screen"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
@@ -39,23 +47,24 @@ license=('MIT')
 # pulse-native-provider, all of which resolve from ALARM extra. Nothing here is
 # built from source (docs/android.md AC 2).
 #
-# python is named explicitly because moarchy-waydroid-immersive is a python
-# program in its own right, not because waydroid happens to need it.
-depends=('waydroid' 'python' 'sway')
+# python is named explicitly because moarchy-waydroid-setup does its geometry
+# arithmetic in python3, not because waydroid happens to need it. glib2 for
+# gdbus, which moarchy-android-launch uses to unfreeze the container: a DBus
+# round trip rather than a python interpreter start-up on every app launch.
+depends=('waydroid' 'python' 'sway' 'glib2')
+
+install=moarchy-waydroid.install
 
 source=('moarchy-waydroid-setup'
-        'moarchy-waydroid-immersive'
-        'moarchy-waydroid-immersive.service')
-sha256sums=('SKIP' 'SKIP' 'SKIP')
+        'moarchy-android-launch')
+sha256sums=('SKIP' 'SKIP')
 
 package() {
   # /usr/lib/moarchy/bin is the project's own bin dir and is NOT on PATH,
-  # which is deliberate: these are called by a unit and by the user through an
-  # absolute path, not typed.
+  # which is deliberate: these are called by the drawer and by the user through
+  # an absolute path, not typed.
   install -Dm755 "$srcdir/moarchy-waydroid-setup" \
     "$pkgdir/usr/lib/moarchy/bin/moarchy-waydroid-setup"
-  install -Dm755 "$srcdir/moarchy-waydroid-immersive" \
-    "$pkgdir/usr/lib/moarchy/bin/moarchy-waydroid-immersive"
-  install -Dm644 "$srcdir/moarchy-waydroid-immersive.service" \
-    "$pkgdir/usr/lib/systemd/user/moarchy-waydroid-immersive.service"
+  install -Dm755 "$srcdir/moarchy-android-launch" \
+    "$pkgdir/usr/lib/moarchy/bin/moarchy-android-launch"
 }

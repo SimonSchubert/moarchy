@@ -1096,7 +1096,26 @@ Item {
     if (!root.pluginSummonedBy(entry) && !root.entryIsRunning(entry))
       ShellApps.goToFreeWorkspace(root.shell)
 
-    root.shell.appLibrary.launch(entry.id, root.shell.appLibrary.entryName(entry))
+    // An Android app does NOT go through its own Exec line, and that is the
+    // whole of docs/android.md AC 11. Waydroid generates
+    // `Exec=waydroid app launch <pkg>`, and that command writes
+    // policy_control=immersive.status=* at or before the window's first
+    // layout, which removes the status bar inset the app pads its content
+    // against -- so its first line of content lands behind the bar. Nothing
+    // can repair it afterwards: a window already laid out stays laid out.
+    //
+    // Routed here rather than by rewriting the .desktop files because
+    // waydroid's user_manager regenerates every one of them on each session
+    // start. A rewrite converges; this holds.
+    //
+    // The id and the Wayland app_id are the same string, `waydroid.<pkg>`,
+    // which is also why an Android window resolves its icon with no new code.
+    var id = String(entry.id || "")
+    if (id.indexOf("waydroid.") === 0 && id.indexOf(".", 9) > 0)
+      Quickshell.execDetached(["/usr/lib/moarchy/bin/moarchy-android-launch",
+                               id.substring(9)])
+    else
+      root.shell.appLibrary.launch(entry.id, root.shell.appLibrary.entryName(entry))
     root.dismiss()
   }
 

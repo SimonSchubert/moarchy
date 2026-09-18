@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# Launch an Android app so that it actually GETS Android's insets.
+#
+# This replaces `waydroid app launch`, and replacing it is the whole point:
+# that command writes policy_control=immersive.status=* at or before the
+# window's FIRST LAYOUT (tools/actions/app_manager.py:78-85), which sets the
+# status bar inset to a zero-height frame -- and the inset is what an app pads
+# its own content against. Without it the app's first line of content draws
+# behind moarchy's bar.
+#
+# docs/android.md AC 11 records the three orderings that were measured before
+# this script existed. Two of them do not work:
+#
+#   set null* AFTER the launch      the inset comes back and the app never
+#                                   re-flows -- a window already laid out stays
+#                                   laid out
+#   set null* BEFORE the launch     the rewrite still wins the race to layout
+#   never call `waydroid app launch` works
+#
+# So there is no watcher that can fix this after the fact, which is why
+# moarchy-waydroid-immersive was deleted rather than amended.
+#
+# moarchy.drawer calls this directly for any waydroid.<pkg> entry. The
+# generated .desktop files are deliberately left alone: waydroid's user_manager
+# rewrites them on every session start, so anything patched into them converges
+# rather than holds (docs/android.md §7).
+set -euo pipefail
+
+pkg=${1:-}
+[ -n "$pkg" ] || { echo "usage: moarchy-android-launch <android package>" >&2; exit 2; }
+
+# An Android package name, and nothing that can carry shell syntax into the
+# `sh -c` below. The argument arrives from a .desktop id, which is not a
+# trusted string just because we generated the launcher that reads it.
+[[ "$pkg" =~ ^[A-Za-z0-9_][A-Za-z0-9_.]*$ ]] || {
+  echo "moarchy-android-launch: not an android package name: $pkg" >&2; exit 2; }
+
+command -v waydroid >/dev/null || {
+  echo "moarchy-android-launch: waydroid is not installed" >&2; exit 1; }
+
+# `suspend_action: freeze` leaves the container FROZEN between uses. An attach
+# works while frozen -- measured, 1.07s -- but the app would not run, so
+# unfreeze it the way upstream's launcher does.
+#
+# Over gdbus rather than through `waydroid`, because that is one DBus round
+# trip against a python interpreter start-up on an A53.
+gdbus call --system \
+  --dest id.waydro.Container \
+  --object-path /ContainerManager \
+  --method id.waydro.ContainerManager.Unfreeze >/dev/null 2>&1 || true
+
+# Single-window mode shows whichever surface `waydroid.active_apps` names, and
+# `waydroid app launch` is normally what sets it. Without this a cold app gets
+# **no Wayland window at all** -- measured, and it presents as a launch that
+# silently did nothing while `topResumedActivity` says the app is up.
+#
+# NOT under sudo: `waydroid prop` resolves the session bus of the calling user,
+# and root has no session ([[sudo-drops-moarchy-bin]]'s family of trap).
+waydroid prop set waydroid.active_apps "$pkg" >/dev/null 2>&1 || true
+
+# ONE attach for everything Android-side. Each `waydroid shell` costs ~1.1s on
+# this hardware and all of `waydroid app launch` costs ~0.9s to window, so
+# three attaches would be a launch the phone visibly lost.
+#
+# send-disable-flag is re-asserted on every launch rather than set once: a
+# SystemUI restart clears it, and it is the only thing stopping Android's own
+# clock and icons drawing through the bar, which is transparent over an Android
+# window (AC 6, AC 12).
+#
+# No force-stop first, deliberately. It would give a correct layout every time
+# and kill playback on every tap. The cost is that an app already running with
+# suppressed insets -- launched some other way -- keeps them until it is
+# stopped once.
+sudo waydroid shell -- sh -c '
+  settings put global policy_control "null*"
+  cmd statusbar send-disable-flag clock system-icons notification-icons
+  act=$(cmd package resolve-activity --brief '"$pkg"' | tail -1 | tr -d "\r")
+  [ -n "$act" ] || exit 1
+  am start -n "$act"
+' >/dev/null 2>&1

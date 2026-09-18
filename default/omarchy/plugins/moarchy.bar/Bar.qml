@@ -165,6 +165,36 @@ Item {
   readonly property color dim: Util.alpha(Color.bar.text, 0.55)
   readonly property int edgePad: Style.space(8)
 
+  // ------------------------------------------ transparent over Android apps
+  //
+  // An Android app is the one window on this phone that draws *behind* this
+  // surface. Its Waydroid display is pinned past both screen edges and the
+  // toplevel is floating at a negative y, so the pixels under this bar are the
+  // app's own -- Android pads its content clear of them with the status bar
+  // inset it reports (95px measured on sargo, against this bar's 78px).
+  // Painting an opaque background over them is the only case here where the bar
+  // hides something real rather than wallpaper, so it steps aside there and
+  // nowhere else. docs/android.md AC 12.
+  //
+  // NOT the `transparent` key this bar refuses to read, and the difference is
+  // why this one is safe: that was a global flag written by
+  // `omarchy-bar transparent`, whose config reload takes this bar down and
+  // leaves upstream's in its place. This is derived from focus, nothing writes
+  // it, and no config carries it across a reboot.
+  //
+  // `activeToplevel` alone reads null with a window plainly focused -- the trap
+  // moarchy.gestures documents at focusedToplevel() -- so fall back to the
+  // per-toplevel `activated` flag, which is what demonstrably tracks focus.
+  readonly property bool androidFocused: {
+    var tl = ToplevelManager.activeToplevel
+    if (!tl) {
+      var list = ToplevelManager.toplevels ? ToplevelManager.toplevels.values : []
+      for (var i = 0; i < list.length; i++)
+        if (list[i] && list[i].activated) { tl = list[i]; break }
+    }
+    return !!tl && String(tl.appId || "").indexOf("waydroid.") === 0
+  }
+
   // DemiBold, not Regular. Light text on a dark bar reads thinner than it
   // measures, and at 12px on the one surface that is always on screen that
   // showed as a clock you had to look at twice.
@@ -485,7 +515,10 @@ Item {
         // whose config reload takes this bar down and leaves upstream's in its
         // place. Honouring a flag we refuse to let anything set would only
         // strand a phone whose shell.json still carries it from before.
-        color: root.background
+        //
+        // The one exception is an Android window, which draws under this
+        // surface rather than beside it -- see androidFocused above.
+        color: root.androidFocused ? "transparent" : root.background
         surfaceFormat.opaque: false
 
         WlrLayershell.namespace: "moarchy-bar"

@@ -81,10 +81,18 @@ content of the proposed package:
 ```
 persist.waydroid.multi_windows = false   # see AC 5
 persist.waydroid.width  = <output logical width>
-persist.waydroid.height = <workspace logical height>
-+ an immersive watcher                   # see AC 6
-+ a Back rung in the gestures ladder     # see AC 7
+persist.waydroid.height = <output + both inset overhangs>   # AC 5, AC 10
++ a sway rule giving the toplevel that size at a negative y # AC 5, AC 10
++ a launcher that replaces `waydroid app launch`            # AC 11
++ a bar that steps aside for an Android window              # AC 12
++ a Back rung in the gestures ladder                        # AC 7
 ```
+
+The height is the **output** plus an overhang at each edge, not the workspace
+rect. Pinning it to the workspace (what this file said until 2026-09-18) makes
+Android's display exactly the tile sway gives it, which is self-consistent and
+gives up the thing this is for: the app's own background behind our chrome, and
+Android — rather than sway's tiling — doing the padding.
 
 ---
 
@@ -167,20 +175,52 @@ disappear when uninstalled.
 → install any app; `~/.local/share/applications/waydroid.<pkg>.desktop` exists
 and the drawer shows it **without a shell restart**.
 
-**AC 5** An Android app fills the screen: no black band, no Android titlebar.
-→ `wm size` equals the sway window rect in physical pixels.
+**AC 5** An Android app fills the screen **and its content clears moarchy's own
+chrome**, with no black band and no Android titlebar.
+→ `wm size` equals the pinned size, the toplevel rect equals it, and the two
+insets land on the bar and the strip: on sargo `wm size` 1080x2259, rect
+`{0,-6,360,753}`, `ITYPE_STATUS_BAR` ending at screen y=77 against the bar's 78
+and `ITYPE_NAVIGATION_BAR` starting at 2160, which is the strip's top edge.
+Measured 2026-09-18.
+
+The numbers are **derived, never hardcoded** (AC 10). Android's insets are
+bigger than this phone's chrome — 28dp against a 26px bar, 24dp against a 20px
+strip — so a window sized to the output leaves a gap at each edge. The window
+overhangs both screen edges by the difference instead, which is why its height
+exceeds the output and its `y` is negative.
+
+**Floating, not fullscreen.** sway v1.12's scene order is
+`tiling -> floating -> shell_top -> fullscreen -> shell_overlay`
+(`include/sway/tree/root.h`), so a fullscreen window draws *over* the bar while
+a floating one sits under both it and the strip. `move absolute position` is
+load-bearing: plain `move position` is workspace-relative and lands at y=26.
+
 **`multi_windows` stays false**: true hides the bars for free but puts Android
 into freeform windowing — apps become small floating windows with Android
 titlebars — and makes the IME its own tiled toplevel. Measured, both.
 
-**AC 6** Neither Android bar is visible, **after a launch from the drawer**.
-→ `settings get global policy_control` reads `immersive.full=*` with an app
-foreground. The drawer's entries are `Exec=waydroid app launch <pkg>`, and
-`waydroid app launch` **rewrites `policy_control` on every launch**
-(`tools/actions/app_manager.py:78-85`), so this cannot be a one-time setting.
-The prototype re-asserts it from a sway `window::new` subscription.
-*Known gap:* it fires on new windows, so an activity change inside an existing
-window (Play Store installing, say) can still bring the bar back.
+**AC 6** Both Android bars are **present as inset providers and never drawn**.
+→ `dumpsys window -a | grep ITYPE_` reports `ITYPE_STATUS_BAR
+frame=[0,0][1080,95] visible=true`, and no Android clock or status icon is on
+screen. This **replaces** the old criterion, which was "neither Android bar is
+visible" via `policy_control=immersive.full=*`. That is now the thing we must
+not do: immersive is what sets the status bar inset to
+`frame=[0,0][1080,0] visible=false`, and without the inset an app draws its
+first line of content behind moarchy's bar.
+
+Two mechanisms, both measured:
+
+- `policy_control=null*` (the value Waydroid's own `show-full-ui` writes) keeps
+  both insets. It must be in place **before the window's first layout** — AC 11.
+- `cmd statusbar send-disable-flag clock system-icons notification-icons` blanks
+  SystemUI's contents while keeping the 95px inset. Needed only because the bar
+  is transparent over an Android window (AC 12): Android's status bar was always
+  being drawn, and an opaque bar was hiding it. It is cleared by a SystemUI
+  restart, so the launcher re-asserts it every launch.
+
+`moarchy-waydroid-immersive` and its user unit are **gone**, not amended. A
+`window::new` watcher cannot do this job: by the time a window exists the layout
+has happened, and re-asserting afterwards does not re-pad the app (AC 11).
 
 **AC 7** The left-edge back swipe navigates *inside* an Android app rather than
 closing it.
@@ -199,6 +239,58 @@ non-goal amended, the package listed.
 sit beside moarchy's own with nothing to tell them apart.
 → decide: a badge, or `launcher.hides` entries for Android apps that duplicate
 something native.
+
+**AC 10** The geometry is **computed on the device**, never a constant in a
+file. `moarchy-waydroid-setup` reads the output rect, the workspace rect (which
+is where the bar and strip heights come from, since layer surfaces are invisible
+to sway's IPC) and Android's own inset frames, and emits both the size pin and
+the sway rule.
+→ `persist.waydroid.height` and the generated
+`~/.config/sway/config.d/90-moarchy-waydroid.conf` agree, and neither 753 nor
+-6 appears as a literal in the repo. The same script on a device with a
+different scale, bar height or panel must produce different numbers without
+being edited.
+
+**AC 11** `policy_control` is `null*` **at the window's first layout**, after a
+launch **from the drawer**.
+→ poison it (`settings put global policy_control "immersive.status=*"`), launch
+from the drawer, and read it back: `null*`, with the status inset non-zero.
+
+This is the criterion the whole design turns on, and three orderings were
+measured on 2026-09-18 to establish it:
+
+| when `null*` is set | top padded? |
+|---|---|
+| after the launch | **no** — the inset returns but the app never re-flows |
+| before `waydroid app launch` | **no** — its rewrite still wins the race to layout |
+| before the activity starts, without `waydroid app launch` | **yes** |
+
+So `waydroid app launch` cannot be used at all, and `moarchy-android-launch`
+replaces it: unfreeze over `gdbus`, set `waydroid.active_apps` (without it a
+cold app gets **no Wayland window**), then one `waydroid shell` attach that sets
+`policy_control`, blanks the bar contents, resolves the launcher activity and
+starts it. **One** attach because each costs ~1.1s measured, against
+`waydroid app launch`'s ~0.9s to window.
+
+It does **not** force-stop first, deliberately: that would kill playback on
+every tap. The cost is that an app already running with the wrong insets keeps
+them until it is stopped once.
+
+**AC 12** The bar is transparent while an Android window is focused, and opaque
+everywhere else.
+→ sample the bar band with `grim`: over a Waydroid window it is the app's own
+pixels, continuous across the bar's bottom edge; on the home screen it is
+`Color.bar.background`. Measured both ways, 2026-09-18.
+
+This is **not** the `bar.transparent` key `Bar.qml` refuses to read. That was a
+global flag written by `omarchy-bar transparent`, whose config reload takes this
+bar down and leaves upstream's in its place. This is derived from focus, nothing
+writes it, and no config carries it across a reboot.
+
+*Open, and known:* our glyphs are light, so a light-themed Android app puts
+light text on a light header. Spotify and YouTube are both dark. If it bites, the
+answer is a scrim rather than full transparency — one value in `androidFocused`'s
+consumer, not a redesign.
 
 ---
 
@@ -262,5 +354,20 @@ first launch after an install adds `dex2oat`.
   offers *Continue anyway*, reaching a real login screen. Curve behaved
   **differently installed from Play than sideloaded**, which is the caution
   worth keeping: a sideloaded APK failing is not evidence the app fails.
-- The immersive watcher and the Back rung exist as prototypes on one device,
-  under `/tmp`, surviving no reboot.
+- The Back rung exists as a prototype on one device, under `/tmp`, surviving no
+  reboot.
+- **The drawer is the only launch path covered.** `moarchy.drawer` routes
+  `waydroid.*` entries through `moarchy-android-launch` itself, which Waydroid
+  cannot race. Anything else that starts an Android app — `gtk-launch` by hand,
+  `omarchy-launch-or-focus`, an intent from another app — still goes through
+  `waydroid app launch` and lands with the status bar inset suppressed.
+  Rewriting the generated `.desktop` files would cover every path, but
+  `user_manager` regenerates them on each session start, so it needs a watcher
+  and converges rather than holding; measured on 2026-09-18, 3 of 25 entries sat
+  reverted between a regeneration and the re-fixup. Routing in our own code has
+  no such window, which is why it is the shipped half.
+- **Duplicate surfaces after repeated launches.** Ten force-stop/`am start`
+  cycles left three `waydroid.com.spotify.music` toplevels in `get_tree` at
+  once, and Spotify eventually came up mapped but unpainted
+  (`topResumedActivity` set, nothing drawn). A session restart clears both. Not
+  understood, and not provoked by ordinary use.
