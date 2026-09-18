@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "moarchy.volume",
+  "name": "Volume panel",
+  "version": "1.0.0",
+  "author": "moarchy",
+  "description": "The vertical volume track the hardware rocker raises, with mute under it.",
+  "kinds": [
+    "panel"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "panel": "Volume.qml"
+  }
+}

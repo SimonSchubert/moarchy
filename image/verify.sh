@@ -326,6 +326,23 @@ for _pdir in /repo/qml-apps/org.moarchy.*/; do
 done
 unset _pdir _pid _shelljson _tile
 
+# The same question for the phone UI's own plugins, which had no check at all:
+# a directory that ships in the package and is not named in shell.json is a
+# surface that never loads, and nothing about the image says so -- the count
+# above passes, the files are all there, and the phone simply does without it.
+# Third-party ids are only enabled by being listed (PluginRegistry.isEnabled);
+# upstream's first-party ones are enabled by default and ours never are.
+_shelljson="$R/usr/share/omarchy/config/omarchy/shell.json"
+for _pdir in /repo/default/omarchy/plugins/moarchy.*/; do
+  _pid=$(basename "$_pdir")
+  # moarchy.common has no manifest, so the registry skips it and so does this.
+  [ -f "$_pdir/manifest.json" ] || continue
+  grep -q "\"id\": \"$_pid\"" "$_shelljson" \
+    && ok "shell.json enables $_pid" \
+    || no "shell.json does not enable $_pid -- the plugin ships and never loads"
+done
+unset _pdir _pid _shelljson
+
 hy=$(grep -rl 'import Quickshell.Hyprland' "$R/usr/share/omarchy/shell" --include=*.qml 2>/dev/null | wc -l)
 i3=$(grep -rl 'import Quickshell.I3'       "$R/usr/share/omarchy/shell" --include=*.qml 2>/dev/null | wc -l)
 [ "$i3" -gt 0 ] && ok "$i3 QML files on Quickshell.I3" || no "no I3 imports -- the port is not in the image"

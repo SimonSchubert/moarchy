@@ -1,0 +1,53 @@
+#!/bin/bash
+# The volume rocker: what the three XF86Audio* keys run (docs/volume.md V1-V3).
+#
+#   moarchy-volume up      5% louder, and unmuted (V2)
+#   moarchy-volume down    5% quieter, mute left alone
+#   moarchy-volume mute    toggle
+#
+# This moves the sink and stops. It sends no IPC and asks for no panel: the
+# plugin that draws the vertical track binds the sink and raises itself when
+# what it is bound to changes, so the feedback follows the volume however the
+# volume moved -- this script, the shade's slider, an Android app under
+# Waydroid, a headset's own buttons (V3).
+#
+# Two things that buys, and they are the reason it is written this way round
+# rather than the way upstream's OSD is fed:
+#
+#   - The rocker works with the shell down, or too busy to answer. A phone
+#     whose volume keys stop working because a QML surface is wedged is worse
+#     than one that changes volume with nothing drawn.
+#   - Every caller gets the panel for free. Nothing has to remember to announce
+#     what it just did, which is the half that is always forgotten.
+#
+# wpctl rather than pactl: the phone's other volume writer is the shell, which
+# sets PwNodeAudio.volume on the 0..1 scale wpctl speaks, and one scale across
+# the two is one fewer place for a rounding disagreement to live.
+set -uo pipefail
+
+SINK="@DEFAULT_AUDIO_SINK@"
+STEP=5
+
+case "${1:-}" in
+  up)
+    # V2. Up means "I want to hear this", so it unmutes on the way. Ordered
+    # unmute-then-raise: the other way round leaves a frame where the new
+    # volume is set on a sink that is still silent, which the panel would draw.
+    wpctl set-mute "$SINK" 0 >/dev/null 2>&1
+    # -l 1.0 is the ceiling. Without it wpctl walks past 100% into the
+    # software boost, which on this speaker is distortion and not loudness.
+    exec wpctl set-volume -l 1.0 "$SINK" "${STEP}%+"
+    ;;
+  down)
+    # V2. No unmute. A thumb on the down key is asking for quieter, and a phone
+    # that unmuted itself here would be loud at exactly the wrong moment.
+    exec wpctl set-volume "$SINK" "${STEP}%-"
+    ;;
+  mute)
+    exec wpctl set-mute "$SINK" toggle
+    ;;
+  *)
+    echo "usage: moarchy-volume {up|down|mute}" >&2
+    exit 2
+    ;;
+esac

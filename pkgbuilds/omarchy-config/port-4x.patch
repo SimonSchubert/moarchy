@@ -13,7 +13,7 @@ index e6202da..548f01a 100644
            "verticalFormat": "HH\n\u2014\nmm"
          },
          {
-@@ -60,7 +60,96 @@
+@@ -60,7 +60,99 @@
            "id": "omarchy.power"
          }
        ]
@@ -55,6 +55,9 @@ index e6202da..548f01a 100644
 +    },
 +    {
 +      "id": "moarchy.splash"
++    },
++    {
++      "id": "moarchy.volume"
 +    },
 +    {
 +      "id": "org.moarchy.calculator"

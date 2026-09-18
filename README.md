@@ -227,7 +227,7 @@ what each owns, how the screens stack, where a given change goes, and what to ru
 
 | Path | What it is |
 | --- | --- |
-| `default/omarchy/plugins/` | The phone UI: eleven quickshell plugins and the shared code under `moarchy.common/` |
+| `default/omarchy/plugins/` | The phone UI: thirteen quickshell plugins and the shared code under `moarchy.common/` |
 | `manifest.toml` | The version pins. The only file that says what version of anything is built |
 | `pkgbuilds/` | `moarchy`, `omarchy-config` (upstream + the Sway port as a patch), `moarchy-meta`, `moarchy-keyring` |
 | `pkgbuilds/moarchy-meta/PKGBUILD` | The aarch64 package set, as `depends`, with every omission explained |

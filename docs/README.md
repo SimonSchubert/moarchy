@@ -4,8 +4,8 @@ Two genres live here, and the difference decides what belongs in a file.
 
 **Contract docs** say what the phone must do. Behaviour, present tense, with a
 check a terminal can run: `gestures.md`, `settings.md`, `shade.md`,
-`windows.md`, `style.md`, and the T-series in `apps.md`. `bin/moarchy-selftest`
-cites their ids, so a criterion with no test is visible.
+`volume.md`, `windows.md`, `style.md`, and the T-series in `apps.md`.
+`bin/moarchy-selftest` cites their ids, so a criterion with no test is visible.
 
 **Decision records** say how the project is built and why it is built that way:
 `structure.md`, `devices.md`, `upstream.md`. They have no checks. Rationale is
@@ -101,6 +101,7 @@ alongside the change that made them untrue.
 | [`gestures.md`](gestures.md) | Contract — every touch gesture: the strip, the edges, the drawer, long-press |
 | [`settings.md`](settings.md) | Contract — the Settings screens, their rows, and the IPC they answer on |
 | [`shade.md`](shade.md) | Contract — the pull-down: tiles, sliders, media, notifications |
+| [`volume.md`](volume.md) | Contract — the hardware volume keys and the panel they raise |
 | [`windows.md`](windows.md) | Contract — the window area and the launch splash |
 | [`style.md`](style.md) | Contract — type, colour, shape, touch targets, motion. Binds the keyboard and store repos too |
 | [`apps.md`](apps.md) | What ships on the phone and what each app is for, with screenshots off the device |
@@ -135,7 +136,7 @@ pinned ref, ported to sway at build time by a patch that must apply with no fuzz
 
 ## The shell plugins
 
-Twelve plugins and one directory that is not a plugin, all under
+Thirteen plugins and one directory that is not a plugin, all under
 `default/omarchy/plugins/`, installed to `/usr/share/moarchy/plugins`.
 
 | Plugin | Kind | What it owns | Contract |
@@ -152,6 +153,7 @@ Twelve plugins and one directory that is not a plugin, all under
 | `moarchy.device` | overlay | live hardware: battery, thermals, CPU, memory, storage | [`devices.md`](devices.md) |
 | `moarchy.bar` | bar | the status bar, display-only | [`style.md`](style.md) |
 | `moarchy.splash` | panel | the launching app's icon, from the tap until its window appears | [`windows.md`](windows.md) §L |
+| `moarchy.volume` | panel | the vertical volume track the hardware rocker raises, and mute | [`volume.md`](volume.md) |
 | `moarchy.common` | **not a plugin** | the shared code below. No `manifest.json`, so the registry skips it | [`refactor.md`](refactor.md) §E8 |
 
 ### What is shared, and the rule about it
@@ -186,7 +188,7 @@ puts some of its neighbours away and not others:
 
 ```
  Overlay   the shade · the gesture strip · the back edge · the right edge ·
-           the launch splash
+           the launch splash · the volume panel
  Top       the drawer · the overview · the theme picker · the status bar ·
            moarchy.device
            the on-screen keyboard (moarchy-keyboard, its own package)

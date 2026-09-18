@@ -2064,6 +2064,65 @@ the bin covers nothing; the list pays a card's height for it at all times.
 not run: it drives real touch, and the device was in use. The screenshots in
 `README.md` still show the shelf until they are retaken.
 
+## 6y. The rocker had no picture (2026-09-19)
+
+Pressing the volume keys changed the volume and drew nothing. The binding went
+straight to `wpctl`, under a comment saying the shell watches PipeWire and puts
+an overlay up by itself. It does not: upstream's OSD is *told*, over IPC, by
+each command that changes something, and on this phone the only command that
+ever told it was `omarchy-brightness-display`. So the one hardware control the
+device really has was the one with no feedback -- and a sink already at 100%
+takes a `5%+` and stays put, which is the state §6x's speaker work was reported
+from as "the rocker is broken".
+
+**The wiring is inverted from upstream's, and that is the part worth keeping.**
+`moarchy-volume` moves the sink and stops; `moarchy.volume` binds the sink and
+raises itself when what it is bound to changes. Nothing has to remember to
+announce anything, so the shade's slider, `wpctl` over ssh and an Android app
+under Waydroid all raise the same panel -- and the rocker still works with the
+shell down or too busy to answer, which is the failure a told panel would hand
+to the one control that must not have it. The cost is one latch: a sink
+publishes its volume as it binds, so changes are ignored for 800ms after the
+audio object changes identity, or the phone greets you with a volume panel at
+login.
+
+**The phone agreed with the arithmetic and refuted two checks.** `volume
+geometry` came back `card=288,248 56x244 track=294,254 44x180 mute=294,442
+44x44 margin=16 screen=360x740`, which is the layout table evaluated by hand,
+and a real `KEY_VOLUMEUP` through `/dev/uinput` moved the sink 0.40 to 0.45 and
+opened the panel -- the whole chain, not an IPC shortcut standing in for the
+binding.
+
+The two that were wrong were both checks, and both were green for a bad reason
+first:
+
+- **`visible` is inherited.** `volume level` reported `fill=` off
+  `fill.visible`, which reads false whenever the *window* is down -- so the
+  report said the track was empty at every volume, and V5, which reads it from
+  a closed panel, would have passed on a fill bound to nothing. It reads the
+  level now.
+- **A sleep measured the load.** V6 set a level, slept 0.5s and read the glyph.
+  The shell learns about a volume change through PipeWire on its own event
+  loop, and with Waydroid running that lands later than that: the check read
+  the *previous* level's glyph and called it a colour. It waits for the panel
+  and the sink to agree now. The ladder it was accusing was correct at every
+  level.
+
+**The glyphs were settled off the font, not off their names.** The four are not
+adjacent -- F057F is a bare cone, F0580 one wave, F057E two, F075F the crossed
+speaker -- and the codepoints either side of them are a knot and a walking man.
+Rendered out of the phone's own JetBrainsMono Nerd Font rather than inferred,
+which is Android's own four-state ladder.
+
+**One failure was a neighbour, not a bug.** V12 (no panel over an open shade)
+failed once, on a phone where another session had the shade open and then took
+it away mid-run. Both ways of opening the shade suppress correctly; the check
+now runs on a device nobody else is driving. It is the third time this quarter
+that a shared device has produced a red line with a local explanation.
+
+The panel draws square on this phone because `ui.toml` says `corners =
+"square"`, which is the chrome file working rather than a missing radius.
+
 ## 7. Hardware status
 
 | | |

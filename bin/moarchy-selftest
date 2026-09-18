@@ -12,7 +12,7 @@
 # Read-only apart from hiding the on-screen keyboard, which the checks need in a
 # known state and which the next text field will undo.
 #
-# Four opt-in suites take a flag, because each needs more than a read:
+# Five opt-in suites take a flag, because each needs more than a read:
 #
 #   --gestures   drives real touch through /dev/uinput. Needs root and
 #                python-evdev, and closes a window at the end. Section L
@@ -34,6 +34,10 @@
 #                Opens a terminal and an app and closes both again, and turns
 #                gaps on for a second. Takes about a minute: L6 is a 15s
 #                timeout that has to be waited out.
+#   --volume     the rocker and the panel it raises, against docs/volume.md.
+#                Moves the volume, mutes and unmutes, and blanks the screen
+#                once; the sink is put back on any exit. V8-V10 need the touch
+#                injector and root and skip without them.
 
 set -uo pipefail
 
@@ -798,7 +802,7 @@ except Exception:
   fi
 done
 
-for target in drawer shade themes settings device; do
+for target in drawer shade themes settings device volume; do
   if st=$(timeout 5 omarchy-shell "$target" state 2>/dev/null) && [[ -n $st ]]; then
     ok "$target IPC answers ($st)"
   else
@@ -5055,6 +5059,472 @@ print(" ".join(out))'; }
   #     can be read without a finger; proving touch passes through the square
   #     itself needs the injector and root, like I5.
   # L8  an animation. A screenshot cannot tell a pulse from a still frame.
+fi
+
+# ---------------------------------------------------------------------------
+# --volume: the rocker and the panel it raises, against docs/volume.md
+#
+# Opt-in, because it moves the volume for real. The suite sets levels, mutes and
+# unmutes, blanks the screen once (V13), and puts the sink back exactly as it
+# found it on the way out -- on any exit, not at the foot of the block, because
+# a run that dies half way through must not leave the phone muted.
+#
+# About a minute of wall clock, most of it waiting: V7 is a 3s timeout asserted
+# from both sides, and every check that has to watch the panel *arrive* has to
+# see it down first.
+# ---------------------------------------------------------------------------
+if [[ ${1:-} == "--volume" ]]; then
+  head_ "volume (docs/volume.md)"
+
+  v_ok()   { printf '  \033[90m%-4s\033[0m ' "$1"; shift; ok "$@"; }
+  v_no()   { printf '  \033[90m%-4s\033[0m ' "$1"; shift; no "$@"; }
+  v_skip() { printf '  \033[90m%-4s   %s\033[0m\n' "$1" "$2"; }
+
+  v_ipc() { timeout 8 omarchy-shell volume "$@" 2>/dev/null; }
+
+  # A field out of one of the panel's reports. Empty stays empty and is never
+  # compared as a number: a shell too busy to answer returns nothing, and
+  # `[[ "" -eq 0 ]]` is true in bash -- so a check written the obvious way
+  # passes on silence.
+  v_field() { grep -o "\<$1=[^ ]*" <<<"$2" | head -1 | cut -d= -f2-; }
+
+  sink_vol()   { wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null | awk '{print $2}'; }
+  sink_muted() { wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null \
+                 | grep -qi muted && echo yes || echo no; }
+  set_vol()    { wpctl set-volume @DEFAULT_AUDIO_SINK@ "$1" >/dev/null 2>&1; }
+  set_mute()   { wpctl set-mute @DEFAULT_AUDIO_SINK@ "$1" >/dev/null 2>&1; }
+
+  # Wait until the panel agrees with the sink, rather than sleeping and hoping.
+  #
+  # The shell learns about a volume change through PipeWire on its own event
+  # loop, and on a phone with Waydroid running that can land well after `wpctl`
+  # has returned. A fixed sleep here read the level *before* the one just set
+  # and reported the glyph for it -- a check that measures the phone's load and
+  # calls it a colour.
+  v_settle() { # $1 = the level to wait for, as an integer percent
+    local i
+    for i in $(seq 20); do
+      [[ $(v_field level "$(v_ipc level)") == "$1" ]] && return 0
+      sleep 0.25
+    done
+    return 1
+  }
+
+  # Floats, in the one language on this image that has them.
+  near() { python3 -c 'import sys
+a, b, tol = (float(x) for x in sys.argv[1:4])
+sys.exit(0 if abs(a - b) <= tol else 1)' "$1" "$2" "$3" 2>/dev/null; }
+
+  # --- put the sink back however this ends ----------------------------------
+  v_orig_vol=$(sink_vol)
+  v_orig_mute=$(sink_muted)
+  # The volume last, then the panel: putting the sink back is itself a change
+  # the panel watches for, so hiding first would leave the run's last act on
+  # screen for three seconds.
+  restore_sink() {
+    [[ -n $v_orig_vol ]] && set_vol "$v_orig_vol"
+    if [[ $v_orig_mute == yes ]]; then set_mute 1; else set_mute 0; fi
+    sleep 0.4
+    v_ipc hide >/dev/null 2>&1
+  }
+  trap restore_sink EXIT
+
+  # --- is the plugin half of this suite on this shell? ----------------------
+  #
+  # Same reason --gestures probes before it drives: a suite committed ahead of
+  # its plugin half leaves main failing every check for a reason nowhere near
+  # what the checks are about.
+  if [[ $(v_ipc ping) != "ok" ]]; then
+    v_no V1 "moarchy.volume does not answer IPC" \
+            "it is not loaded: missing from shell.json plugins[], or this build predates it. Nothing below can be read"
+  elif [[ -z $v_orig_vol ]]; then
+    # V14's state, and the reason it is a skip rather than a pass: every check
+    # below measures a sink moving, and on a phone with none they would all
+    # fail for one reason that has nothing to do with any of them.
+    v_skip V1 "the whole suite is skipped: wpctl reports no default sink ($(v_ipc level))"
+  else
+
+  # --- V3: the keys ask the shell for nothing -------------------------------
+  #
+  # The architecture, greppable. If this ever fails, the panel has become
+  # something that must be told, and every other way the volume moves has
+  # silently stopped drawing it.
+  v_bin="$MOARCHY_BIN/moarchy-volume"
+  if [[ ! -x $v_bin ]]; then
+    v_no V3 "no moarchy-volume at $v_bin" "the rocker is bound to a command that is not installed"
+  elif [[ $(grep -c omarchy-shell "$v_bin" || true) -eq 0 ]]; then
+    v_ok V3 "moarchy-volume moves the sink and sends no IPC"
+  else
+    v_no V3 "moarchy-volume calls the shell" \
+            "the panel is being told rather than watching, so a busy shell now costs the feedback"
+  fi
+
+  # --- V4: where the panel is ----------------------------------------------
+  # Declared before they are filled: `set -u` is on, and the checks further
+  # down do arithmetic on them. A geometry that did not answer has to leave
+  # them empty and skip, not take the suite down with an unbound variable.
+  v_sw=""; v_sh=""; v_cx=""; v_cy=""; v_cw=""; v_ch=""
+  v_geom=$(v_ipc geometry)
+  v_screen=$(v_field screen "$v_geom")
+  v_margin=$(v_field margin "$v_geom")
+  v_card=$(v_field card "$v_geom")
+  v_layer=$(v_field layer "$v_geom")
+  # "card=288,252 56x236" -- the `card=` field is the origin and the size is
+  # the word after it, so both come out of the same report in one read.
+  v_cardsize=$(grep -o 'card=[0-9-]*,[0-9-]* [0-9]*x[0-9]*' <<<"$v_geom" | awk '{print $2}')
+  if [[ -z $v_screen || -z $v_card || -z $v_cardsize ]]; then
+    v_no V4 "volume geometry did not answer (${v_geom:-empty})" \
+            "the panel is loaded but its surface never got a configure"
+  else
+    v_sw=${v_screen%x*}; v_sh=${v_screen#*x}
+    v_cx=${v_card%,*};   v_cy=${v_card#*,}
+    v_cw=${v_cardsize%x*}; v_ch=${v_cardsize#*x}
+    v_right=$((v_cx + v_cw))
+    v_mid=$((v_cy + v_ch / 2))
+    if [[ $((v_sw - v_right)) -eq ${v_margin:-0} && $v_layer == overlay ]] \
+       && near "$v_mid" "$((v_sh / 2))" 1; then
+      v_ok V4 "the card sits $v_margin px off the right edge, centred on the screen's height ($v_card ${v_cw}x${v_ch} of $v_screen)"
+    else
+      v_no V4 "the card is at $v_card ${v_cw}x${v_ch} on $v_screen (margin=$v_margin layer=$v_layer)" \
+              "expected its right edge $v_margin short of ${v_sw}, its middle at $((v_sh / 2)), on the overlay layer"
+    fi
+  fi
+
+  # Put the sink where a check can watch it move, and the panel down so that
+  # what the check watches is the panel arriving rather than the panel that was
+  # already there. The precondition is asserted, not assumed: a suite that
+  # starts from an open panel proves nothing about what opened it.
+  v_arm() {
+    set_vol "${1:-50%}"
+    sleep 1
+    v_ipc hide >/dev/null
+    sleep 0.4
+    [[ $(v_ipc state) == "closed" ]]
+  }
+
+  # --- V1: a key press moves the sink and raises the panel ------------------
+  if ! v_arm; then
+    v_no V1 "the panel would not go down before the check" \
+            "state reads $(v_ipc state) after a hide, so nothing below can tell an arrival from a leftover"
+  else
+    v1_before=$(sink_vol)
+    [[ -n $v1_before ]] || v1_before=0
+    moarchy-volume up
+    sleep 0.6
+    v1_after=$(sink_vol)
+    v1_state=$(v_ipc state)
+    if near "$v1_after" "$(python3 -c "print(float('$v1_before') + 0.05)")" 0.005 \
+       && [[ $v1_state == open ]]; then
+      v_ok V1 "a key press moves the volume 5% ($v1_before -> $v1_after) and raises the panel"
+    else
+      v_no V1 "up left the volume at $v1_after (from $v1_before) and the panel $v1_state" \
+              "expected +0.05 and an open panel"
+    fi
+  fi
+
+  # --- V2: up unmutes, down does not ---------------------------------------
+  set_vol 50%
+  set_mute 1
+  sleep 0.5
+  moarchy-volume up
+  sleep 0.5
+  v2_up=$(sink_muted)
+  set_mute 1
+  sleep 0.5
+  moarchy-volume down
+  sleep 0.5
+  v2_down=$(sink_muted)
+  if [[ $v2_up == no && $v2_down == yes ]]; then
+    v_ok V2 "up unmutes, down leaves mute alone"
+  else
+    v_no V2 "after up muted=$v2_up, after down muted=$v2_down" \
+            "expected no and yes: a thumb on the down key is asking for quieter"
+  fi
+  set_mute 0
+
+  # --- V5, V6: what is drawn -----------------------------------------------
+  set_vol 0
+  v_settle 0
+  v5=$(v_ipc level)
+  v5_level=$(v_field level "$v5"); v5_fill=$(v_field fill "$v5")
+  set_vol 1%
+  v_settle 1
+  v5b=$(v_ipc level)
+  v5b_fill=$(v_field fill "$v5b")
+  # Both ends, because either alone is green for the wrong reason: a fill
+  # bound to nothing reads 0 at zero, and a fill that ignores the level reads
+  # the same number at both.
+  if [[ $v5_level == 0 && $v5_fill == 0 && -n $v5b_fill && $v5b_fill -gt 0 ]]; then
+    v_ok V5 "the track is empty at zero and ${v5b_fill}px at 1%"
+  else
+    v_no V5 "at zero the panel reports ${v5:-nothing}; at 1% ${v5b:-nothing}" \
+            "expected level=0 fill=0 and then a fill that is not 0"
+  fi
+
+  v6_low=""; v6_high=""
+  v6_mute=$(v_field glyph "$v5")
+  set_vol 15%;  v_settle 15  && v6_low=$(v_field glyph "$(v_ipc level)")
+  set_vol 100%; v_settle 100 && v6_high=$(v_field glyph "$(v_ipc level)")
+  if [[ $v6_mute == mute && $v6_low == low && $v6_high == high ]]; then
+    v_ok V6 "the glyph follows the level (0=mute 15=low 100=high)"
+  else
+    v_no V6 "the glyph read ${v6_mute:-?} at 0, ${v6_low:-?} at 15 and ${v6_high:-?} at 100" \
+            "expected mute, low, high; an empty reading is a level the panel never caught up with"
+  fi
+
+  # --- V7: three seconds, restarted by every press --------------------------
+  if ! v_arm; then
+    v_skip V7 "V7 skipped: the panel would not go down first"
+  else
+    moarchy-volume up
+    sleep 2
+    v7_at2=$(v_ipc state)
+    sleep 2
+    v7_at4=$(v_ipc state)
+    if [[ $v7_at2 == open && $v7_at4 == closed ]]; then
+      v_ok V7 "the panel is up at 2s and gone at 4s"
+    else
+      v_no V7 "the panel read $v7_at2 at 2s and $v7_at4 at 4s" \
+              "expected open then closed: the timeout is 3s"
+    fi
+
+    if v_arm; then
+      moarchy-volume up
+      sleep 2
+      moarchy-volume up
+      sleep 2
+      v7_again=$(v_ipc state)
+      if [[ $v7_again == open ]]; then
+        v_ok V7a "a second press restarts the three seconds"
+      else
+        v_no V7a "the panel read $v7_again 4s after the first press and 2s after the second" \
+                 "expected open: each press restarts the timeout"
+      fi
+    else
+      v_skip V7a "V7a skipped: the panel would not go down first"
+    fi
+  fi
+
+  # --- the injector, for V8, V9 and V10's second half -----------------------
+  #
+  # moarchy-touch declares a 720x1440 space of its own and libinput maps that
+  # onto the output, so a logical coordinate becomes a touch one by the
+  # *screen's* size and not by its scale. Both axes, separately: 720/360 is 2
+  # and 1440/740 is not, and a y computed with the x ratio lands 3% low --
+  # which is most of a 36px button.
+  v_touch="$MOARCHY_BIN/moarchy-touch"
+  v_touch_w=$(sed -n 's/^WIDTH, HEIGHT = \([0-9]*\), *\([0-9]*\).*/\1/p' "$v_touch" 2>/dev/null)
+  v_touch_h=$(sed -n 's/^WIDTH, HEIGHT = \([0-9]*\), *\([0-9]*\).*/\2/p' "$v_touch" 2>/dev/null)
+  # The argument is an expression ("288 + 44 / 2"), so it is bracketed before
+  # the ratio is applied -- unbracketed, precedence silently scales the last
+  # term only and every aimed touch lands somewhere plausible and wrong.
+  tpx() { python3 -c "print(round(($1) * ${v_touch_w:-720} / ${v_sw:-360}))"; }
+  tpy() { python3 -c "print(round(($1) * ${v_touch_h:-1440} / ${v_sh:-740}))"; }
+
+  # The injector waits 2s for libinput to notice its new device before it
+  # sends anything, and the panel's own timeout is 3s -- so a `show` sent
+  # before the command has most of a second left by the time the finger lands,
+  # and the drag would finish against a panel that had gone. Raise it from
+  # underneath instead: start the touch, wait out the settle, show, and let the
+  # press arrive on a fresh three seconds.
+  v_touch_with_panel() {
+    sudo "$v_touch" "$@" >/dev/null 2>&1 &
+    local pid=$!
+    sleep 1.8
+    v_ipc show >/dev/null
+    wait "$pid"
+  }
+
+  v_can_touch=""
+  if [[ ! -x $v_touch ]]; then
+    v_why="moarchy-touch is not installed"
+  elif ! sudo -n true 2>/dev/null; then
+    v_why="/dev/uinput needs root and sudo wants a password"
+  elif [[ -z $v_sw || -z $v_cy ]]; then
+    v_why="V4 could not read the geometry, so nothing can be aimed"
+  else
+    v_can_touch=1
+  fi
+
+  # --- V8: the drag is live -------------------------------------------------
+  if [[ -z $v_can_touch ]]; then
+    v_skip V8 "V8 skipped: $v_why"
+  else
+    set_vol 20%
+    sleep 0.5
+    v8_geom=$(v_ipc geometry)
+    v_track=$(v_field track "$v8_geom")
+    v_tracksize=$(grep -o 'track=[0-9-]*,[0-9-]* [0-9]*x[0-9]*' <<<"$v8_geom" | awk '{print $2}')
+    v_tx=${v_track%,*}; v_ty=${v_track#*,}
+    v_tw=${v_tracksize%x*}; v_th=${v_tracksize#*x}
+    # Down the track is quieter, so the drag runs from three quarters down to
+    # one quarter down: 25% to 75% of the volume, in one gesture.
+    v_dx=$(tpx "$v_tx + $v_tw / 2")
+    v_dy1=$(tpy "$v_ty + $v_th * 0.75")
+    v_dy2=$(tpy "$v_ty + $v_th * 0.25")
+    v_touch_with_panel drag "$v_dx" "$v_dy1" "$v_dx" "$v_dy2" 700
+    sleep 0.5
+    v8=$(v_ipc drag)
+    v8_commits=$(v_field commits "$v8"); v8_to=$(v_field to "$v8")
+    if [[ -n $v8_commits && $v8_commits -gt 2 ]] && near "${v8_to:-0}" 75 12; then
+      v_ok V8 "the drag wrote $v8_commits values on the way and finished at ${v8_to}%"
+    else
+      v_no V8 "the drag reported ${v8:-nothing}" \
+              "expected commits above 2 and a finish near 75%: a slider that only commits on release reports 1"
+    fi
+  fi
+
+  # --- V9: the mute button --------------------------------------------------
+  if [[ -z $v_can_touch ]]; then
+    v_skip V9 "V9 skipped: $v_why"
+  else
+    set_vol 40%
+    set_mute 0
+    sleep 0.5
+    v9_geom=$(v_ipc geometry)
+    v_mute=$(v_field mute "$v9_geom")
+    v_mutesize=$(grep -o 'mute=[0-9-]*,[0-9-]* [0-9]*x[0-9]*' <<<"$v9_geom" | awk '{print $2}')
+    v_mx=${v_mute%,*}; v_my=${v_mute#*,}
+    v_mw=${v_mutesize%x*}; v_mh=${v_mutesize#*x}
+    v9_before=$(v_ipc level)
+    v_touch_with_panel tap "$(tpx "$v_mx + $v_mw / 2")" "$(tpy "$v_my + $v_mh / 2")"
+    sleep 0.6
+    v9_after=$(v_ipc level)
+    if [[ $(v_field muted "$v9_before") == no && $(v_field muted "$v9_after") == yes \
+          && $(v_field level "$v9_before") == "$(v_field level "$v9_after")" ]]; then
+      v_ok V9 "a tap on the button mutes and the level it will return to stays on screen"
+    else
+      v_no V9 "before: ${v9_before:-nothing}; after: ${v9_after:-nothing}" \
+              "expected muted to flip from no to yes with level unchanged"
+    fi
+    set_mute 0
+  fi
+
+  # --- V10: the card clears the edge band, and the edge still answers -------
+  v_edge=$(v_field w "$(timeout 8 omarchy-shell gestures geometry 2>/dev/null)")
+  if [[ -z $v_edge || -z $v_margin ]]; then
+    v_skip V10 "V10 skipped: gestures geometry did not answer, so there is no band to compare with"
+  elif [[ $v_margin -ge $v_edge ]]; then
+    v_ok V10 "the card stops ${v_margin}px short of the edge, clearing the ${v_edge}px band"
+  else
+    v_no V10 "the card's margin is $v_margin against a ${v_edge}px edge band" \
+            "the panel sits on the swipe-in band and takes it for the three seconds it is up"
+  fi
+
+  # The half a number cannot settle: with the panel up, does a swipe from the
+  # right edge across the card's own height still reach the edge? An input
+  # region that came out wrong is invisible until something is under it.
+  v_right_target=$(v_field right "$(timeout 8 omarchy-shell gestures targets 2>/dev/null)")
+  case ${v_right_target:-none} in
+    moarchy.overview) v_rt=overview ;;
+    moarchy.drawer)   v_rt=drawer ;;
+    moarchy.shade)    v_rt=shade ;;
+    moarchy.themes)   v_rt=themes ;;
+    *)                v_rt="" ;;
+  esac
+  if [[ -z $v_can_touch ]]; then
+    v_skip V10a "V10a skipped: $v_why"
+  elif [[ -z $v_rt ]]; then
+    v_skip V10a "V10a skipped: the right edge raises ${v_right_target:-nothing}, so there is nothing to see arrive"
+  else
+    timeout 8 omarchy-shell "$v_rt" close >/dev/null 2>&1
+    v10_mid=$((v_cy + v_ch / 2))
+    v_touch_with_panel drag "$(tpx "$v_sw - 2")" "$(tpy "$v10_mid")" \
+                            "$(tpx "$v_sw * 0.4")" "$(tpy "$v10_mid")" 600
+    sleep 1.5
+    v10_state=$(timeout 8 omarchy-shell "$v_rt" state 2>/dev/null)
+    if [[ $v10_state == open ]]; then
+      v_ok V10a "with the panel up, a swipe in at its own height still raises $v_rt"
+    else
+      v_no V10a "$v_rt reads ${v10_state:-nothing} after a swipe in beside the panel" \
+              "the panel's input region is wider than its card, so it ate the edge"
+    fi
+    timeout 8 omarchy-shell "$v_rt" close >/dev/null 2>&1
+    sleep 0.5
+  fi
+
+  # --- V11: nothing is reserved --------------------------------------------
+  v11_rect() { swaymsg -t get_tree | python3 -c '
+import json, sys
+found = []
+def walk(n):
+    if n.get("focused") and n.get("pid"): found.append(n["rect"])
+    for k in ("nodes", "floating_nodes"):
+        for c in n.get(k, []): walk(c)
+walk(json.load(sys.stdin))
+print("%d %d %d %d" % tuple(found[0][k] for k in ("x", "y", "width", "height")) if found else "")'; }
+  v11_before=$(v11_rect)
+  if [[ -z $v11_before ]]; then
+    v_skip V11 "V11 skipped: no window is focused, so there is nothing that could be pushed"
+  else
+    v_ipc show >/dev/null
+    sleep 0.6
+    v11_during=$(v11_rect)
+    v11_state=$(v_ipc state)
+    if [[ $v11_before == "$v11_during" && $v11_state == open ]]; then
+      v_ok V11 "the focused window is the same rect with the panel up ($v11_during)"
+    else
+      v_no V11 "the window was [$v11_before] and is [$v11_during] with the panel $v11_state" \
+              "an exclusive zone here reflows every tiled window twice per key press"
+    fi
+  fi
+
+  # --- V12: not over the shade ---------------------------------------------
+  timeout 8 omarchy-shell shade open >/dev/null 2>&1
+  sleep 1.2
+  v12_shade=$(timeout 8 omarchy-shell shade state 2>/dev/null)
+  if [[ $v12_shade != open ]]; then
+    v_skip V12 "V12 skipped: the shade reads ${v12_shade:-nothing}, so the suppression has nothing to suppress under"
+  else
+    v_ipc hide >/dev/null
+    sleep 0.3
+    set_vol 50%
+    sleep 0.3
+    moarchy-volume up
+    sleep 0.8
+    v12=$(v_ipc state)
+    if [[ $v12 == closed ]]; then
+      v_ok V12 "the panel stays down while the shade is open"
+    else
+      v_no V12 "the panel reads $v12 over an open shade" \
+              "the shade's own slider is already moving, and this draws a second one over it"
+    fi
+  fi
+  timeout 8 omarchy-shell shade close >/dev/null 2>&1
+  sleep 0.5
+
+  # --- V13: with the screen off --------------------------------------------
+  # Somewhere with room to go down: from 0 the key would be a no-op and the
+  # check would read it as a key that did not work.
+  set_vol 50%
+  sleep 0.5
+  v13_before=$(sink_vol)
+  moarchy-screen blank >/dev/null 2>&1
+  sleep 0.8
+  moarchy-volume down
+  sleep 4
+  v13_after=$(sink_vol)
+  v13_state=$(v_ipc state)
+  moarchy-screen wake >/dev/null 2>&1
+  sleep 0.5
+  if [[ $v13_before != "$v13_after" && $v13_state == closed ]]; then
+    v_ok V13 "the keys work blanked ($v13_before -> $v13_after) and leave nothing mapped"
+  else
+    v_no V13 "blanked, the volume went $v13_before -> $v13_after and the panel reads $v13_state" \
+            "either the key did nothing, or a surface raised over a dark panel is still up when it lights"
+  fi
+
+  fi  # the plugin answers
+
+  restore_sink
+  trap - EXIT
+
+  printf '  \033[90m%-4s\033[0m   \033[90mnot covered: V14 V15\033[0m\n' ""
+  # V14  needs a phone with no sink. Unloading the sound card to make one is a
+  #      worse risk than the criterion is worth; `volume level` publishes
+  #      `sink=` so the branch is one read away from visible.
+  # V15  is greppable, and scripts/style-check.sh already fails on a sheet id
+  #      written outside Sheet.js.
 fi
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"

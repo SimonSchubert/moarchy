@@ -25,7 +25,7 @@ comment in its header claimed it mirrored every other screen in the shell.
 
 | Term | What it means |
 | --- | --- |
-| **surface** | One screen this shell draws: the bar, the drawer, the shade, Settings, Themes, Wi-Fi, Bluetooth, Device, the splash. |
+| **surface** | One screen this shell draws: the bar, the drawer, the shade, Settings, Themes, Wi-Fi, Bluetooth, Device, the splash, the volume panel. |
 | **token** | A value read from `Style` or `Color` rather than written as a number. |
 | **chrome** | What is drawn to say a control is there: the pill, the circle, the track. |
 | **target** | The region that answers a tap. Not the same object as the chrome, and this file spends §E on the difference. |
@@ -116,7 +116,7 @@ edge rather than centred may stay a plain `Text`.
 | --- | --- | --- |
 | bar | `Color.bar.*` | `moarchy.bar` |
 | full-screen | `Color.menu.*` | drawer, Settings, Themes, Device |
-| popup / pull-down | `Color.popups.*` | shade, Wi-Fi, Bluetooth, SIM |
+| popup / pull-down | `Color.popups.*` | shade, Wi-Fi, Bluetooth, SIM, the volume panel |
 
 Every token named here is one upstream's `Color` singleton actually has:
 `foreground`, `background`, `accent`, `urgent`, `muted`, and a nested object per
@@ -552,6 +552,8 @@ numbers.
 | `moarchy.shade` | gear / power | `shadeRound` drawn (36 roomy / 32 compact), answering toward 44 (E2, E3) | ok |
 | `moarchy.shade` | media prev / play / next | `tapSlot` ≥ 44 | ok, E4 E5 |
 | `moarchy.shade` | Clear all | 44 tall | ok, E2 |
+| `moarchy.volume` | track | 44 × 180 | ok |
+| `moarchy.volume` | mute | `shadeRound` drawn (36 roomy / 32 compact), answering in a 44 slot | ok, E4 E5 |
 | `moarchy.drawer` | app cell | 90 × 86 | ok |
 | `moarchy.drawer` | settings result row | 58 full-width | ok |
 | `moarchy.drawer` | search field | fills its pill | ok, F1–F5 |
