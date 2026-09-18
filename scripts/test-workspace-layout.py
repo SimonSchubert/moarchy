@@ -173,6 +173,71 @@ check(sent == [], "a tree that already agrees is not touched", sent)
 _, sent = run([])
 check(sent == [], "a compositor that is not answering is a no-op", sent)
 
+print("occupancy: who is already here, which is not who can be arranged")
+# The shape the phone makes of an Android app: one tiled window, and over it a
+# floating toplevel that covers the output because moarchy-waydroid-setup
+# floats it (docs/android.md AC 5).
+android = {"id": 1, "type": "root", "floating_nodes": [], "nodes": [{
+    "id": 2, "type": "output", "name": "DSI-1", "floating_nodes": [], "nodes": [
+        workspace(1, "splitv", [window(400, "org.kde.keysmith", "Keysmith")],
+                  focused=True,
+                  floating=[window(401, "waydroid.com.spotify.music", "Spotify")]),
+    ]}]}
+crowded = module["workspaces"](android)[0]
+check(module["occupant_ids"](crowded) == [400, 401],
+      "a floating Android window is somebody who is already here",
+      module["occupant_ids"](crowded))
+check(module["tiled_window_ids"](crowded) == [400],
+      "and is still not something `layout splitv` can arrange",
+      module["tiled_window_ids"](crowded))
+
+
+def landed(tree, con_id):
+    """on_new_window() for a window already in `tree`, returning its commands.
+
+    The daemon re-reads the tree rather than trusting the event's container, so
+    the fixture is the whole of what it sees -- which is also the only way the
+    floating case can be written: `window::new` is serialised before sway has
+    applied `for_window ... floating enable`, so the event says `con` for a
+    window that is about to float (locate())."""
+    mod = load()
+    sent = []
+    mod["swaymsg"] = lambda *a: (tree if a[0] == "get_tree"
+                                 else [{"num": w["num"]}
+                                       for w in mod["workspaces"](tree)])
+    mod["command"] = sent.append
+    mod["on_new_window"]({"id": con_id})
+    return sent
+
+
+print("on_new_window: windows.md W6, a new window never lands on top of one")
+check(landed(android, 400) == ["[con_id=400] move container to workspace number 2",
+                               "workspace number 2"],
+      "an app opened over an Android one is moved to a free workspace, and "
+      "focus follows it -- this is the launch that used to tile underneath "
+      "Spotify, full width and invisible", landed(android, 400))
+check(landed(android, 401) == [],
+      "and the floating window itself is left where it is: this is the test "
+      "that keeps a modal dialog with the document it belongs to")
+
+alone = {"id": 1, "type": "root", "floating_nodes": [], "nodes": [{
+    "id": 2, "type": "output", "name": "DSI-1", "floating_nodes": [], "nodes": [
+        workspace(1, "splitv", [window(410, "foot", "~")], focused=True),
+    ]}]}
+check(landed(alone, 410) == [],
+      "a window with the workspace to itself is not moved anywhere -- moving "
+      "it would strand an empty workspace and renumber everything for nothing")
+
+pair = {"id": 1, "type": "root", "floating_nodes": [], "nodes": [{
+    "id": 2, "type": "output", "name": "DSI-1", "floating_nodes": [], "nodes": [
+        workspace(1, "splitv", [window(420, "foot", "~"),
+                                window(421, "org.gnome.Loupe", "cat.png")],
+                  focused=True),
+    ]}]}
+check(landed(pair, 421) == ["[con_id=421] move container to workspace number 2",
+                            "workspace number 2"],
+      "and the ordinary tiled case is unchanged", landed(pair, 421))
+
 print("first_free_workspace: the rule gestures.md F1 has three readers of")
 module["swaymsg"] = lambda *a: [{"num": 1}, {"num": 2}, {"num": 4}, {"num": -1}]
 check(module["first_free_workspace"]() == 3, "the lowest gap, not the highest plus one",

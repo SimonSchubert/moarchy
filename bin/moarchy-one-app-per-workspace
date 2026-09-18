@@ -38,8 +38,11 @@ Deliberately NOT handled, because both should stay with their parent:
   floating windows   Sway floats xdg toplevels that declare a parent, which is
                      how GTK and Qt ship modal dialogs -- a "Save changes?"
                      sheet must not fly off to its own workspace, leaving the
-                     document behind. They are not counted towards a tabbed
-                     workspace either: a dialog over an app is not two apps.
+                     document behind. Nor are they arranged: a layout acts on
+                     the tiling container and a dialog over an app is not two
+                     panes. They are *counted*, though, and that is a
+                     distinction this file did not draw until an app opened
+                     underneath Spotify -- see window_ids().
   the first window   A window that lands on an empty workspace is already
                      alone. Moving it would strand an empty workspace behind it
                      and renumber everything for no gain.
@@ -94,9 +97,34 @@ def locate(node, con_id, workspace=None, floating=False):
     return None
 
 
-def tiled_window_ids(workspace):
-    """Ids of the tiled windows on a workspace. Floating ones are not counted:
-    a dialog open over an app does not make the workspace crowded."""
+def window_ids(workspace, floating):
+    """Ids of the windows on a workspace: the tiled ones, and the floating ones
+    too when `floating` is set.
+
+    Two questions, and they need different answers -- which is the whole reason
+    this takes an argument rather than being the one list it used to be:
+
+      who is already here     every window, floating included. A floating
+                              window is *on screen*, and on this phone it is
+                              usually on all of it: an Android toplevel is
+                              floating because `moarchy-waydroid-setup` floats
+                              it, so that it can overhang the output and let
+                              the app pad itself with Android's own insets
+                              (docs/android.md AC 5). Counting only the tiled
+                              ones meant a workspace holding Spotify read as
+                              empty, and the next app tiled *underneath* it --
+                              full width, correctly placed, and invisible.
+      what a layout acts on   the tiled ones. `layout splitv` arranges the
+                              tiling container and a floating window is not in
+                              it, so counting one would dispatch a split at a
+                              workspace that has nothing to split.
+
+    The dialog rule is not this function's and never was. "A Save changes?
+    sheet must not fly off to its own workspace" is about which windows may be
+    *moved*, and that is the floating test in on_new_window() below, which
+    stays. A dialog still counts as an occupant, and should: its parent is
+    tiled beside it, so the workspace was occupied either way.
+    """
     found = []
 
     def walk(node):
@@ -106,10 +134,26 @@ def tiled_window_ids(workspace):
             found.append(node["id"])
         for child in node.get("nodes", []):
             walk(child)
+        if floating:
+            for child in node.get("floating_nodes", []):
+                walk(child)
 
     for child in workspace.get("nodes", []):
         walk(child)
+    if floating:
+        for child in workspace.get("floating_nodes", []):
+            walk(child)
     return found
+
+
+def occupant_ids(workspace):
+    """Every window on a workspace -- is anybody already here? (windows.md W6)"""
+    return window_ids(workspace, True)
+
+
+def tiled_window_ids(workspace):
+    """The windows a layout command can arrange (gestures.md P7)."""
+    return window_ids(workspace, False)
 
 
 def first_free_workspace():
@@ -306,7 +350,7 @@ def on_new_window(container):
     if workspace is None or floating:
         return
 
-    others = [i for i in tiled_window_ids(workspace) if i != con_id]
+    others = [i for i in occupant_ids(workspace) if i != con_id]
     if not others:
         return  # it has the workspace to itself already
 

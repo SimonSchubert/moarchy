@@ -297,13 +297,23 @@ an exclusive-focus layer surface deactivates the window beneath it. Every
 toplevel then reads unfocused, so "is a window focused" cannot decide whether
 this gesture is already home.
 
-The workspace's own `representation` is the signal that cannot be perturbed by
-a layer surface, and it is consulted alongside the focused toplevel. It is the
-one I3 refreshes late, which is the right way round here: a stale empty reading
-costs one skipped hop, where a stale focus reading costs the gesture.
+So the answer is **latched before the sheet takes the screen** — on the strip
+press for a drag, on the summon for `shell toggle` — and held until a workspace
+change makes it an answer about somewhere else. One function, `workspaceOccupied()`,
+because the drawer's pre-launch hop (windows.md L10) asks the same question and
+the two drifted apart once already.
+
+The workspace's own `representation` was that second signal and is not any
+more. It cannot be perturbed by a layer surface, which is what recommended it,
+but it is wrong in both directions: I3 refreshes it on workspace events while a
+window arrives on a window event, it is built from the workspace's *tiling*
+list so no floating window is ever in it — every Android window, android.md
+AC 5 — and an emptied workspace keeps a `V[]`, which is not the empty string.
+It is still published, as an input rather than as the answer.
 → `omarchy-shell gestures status` with the drawer up over an app reports
-`focus=none` and `rep="V[…]"` in the same line; a home gesture from there
-leaves the focused workspace's `representation` empty
+`focus=none` and `occupied=yes` in the same line, and does so over an Android
+app, where `rep` reads `""`; a home gesture from there leaves the focused
+workspace's `representation` empty
 
 ---
 

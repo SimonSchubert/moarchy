@@ -14,7 +14,7 @@ before any of this applies, and they belong to [gestures.md](gestures.md).
 
 ---
 
-## W1–W5. The window area
+## W1–W6. The window area
 
 **W1** A single app on a workspace fills its workspace exactly. No wallpaper
 shows around it, on any edge.
@@ -75,6 +75,28 @@ columns that were never at stake — the bar anchors top, the keyboard anchors
 bottom, and neither costs a character of width. What it cost was the keyboard:
 Settings ▸ Install from the AUR, `passwd`, and every other bridged row that
 asks a question drew a prompt over a keyboard whose keys took no touches.
+
+**W6** A window never lands on a workspace that already holds one. Whatever
+opened it — the drawer, a keybinding, a terminal, another app —
+`bin/moarchy-one-app-per-workspace` moves it to a free workspace and follows it
+there. This is the guarantee; the drawer's own hop (L10) only makes it look
+immediate.
+
+**A floating window counts as an occupant**, and this is the whole of the
+criterion that was missing. Android toplevels are floating — that is how they
+overhang the output far enough for the app to pad itself with Android's own
+insets (android.md AC 5) — and a workspace holding one used to read as empty,
+so the next app tiled *underneath* it: full width, correctly placed, and
+invisible behind a full-screen app. The phone looked like it had ignored the
+tap.
+
+Counting one is not moving one. A window that is itself floating stays where it
+is, because that is how GTK and Qt ship modal dialogs and a "Save changes?"
+sheet must not fly off to its own workspace leaving the document behind.
+→ `scripts/test-workspace-layout.py` runs the daemon's own `on_new_window()`
+over a fixture of one tiled window under one floating Android window; on the
+phone, with an Android app up, `swaymsg exec foot` leaves the terminal on a
+workspace of its own and focused
 
 ---
 
@@ -174,19 +196,37 @@ immediately, before the window exists. The splash (L1) is drawn over the
 wallpaper of the workspace the window is about to land on, not over the app you
 were in.
 
-Focus already followed a new window — it maps on the focused workspace, which
-is occupied, so `bin/moarchy-one-app-per-workspace` moves it to a free one and
-follows it. What that cannot do is act before the window exists, and on this
-hardware an app launch is seconds.
+W6 already guarantees where the window ends up; this is about *when*. The
+daemon cannot act before the window exists, and on this hardware an app launch
+is seconds — seconds spent looking at the app you were leaving, with the splash
+over it.
+
+**The occupancy test may not be read off the seat.** The drawer holds
+`keyboard_interactivity` Exclusive while it is up, so sway deactivates the
+window underneath and the focused toplevel reads null over an app that is
+plainly there — the surface asking the question is the one that took the
+answer away. Sway's workspace `representation` does not stand in for it: it is
+refreshed on *workspace* events while a window arrives on a *window* event, and
+it is built from the workspace's tiling list, so a floating window — every
+Android window, W6 — is not in it at all. Both of those read "empty" over
+Spotify, and the app opened behind it.
+
+So the answer is latched before a sheet takes the screen — on the strip press
+for a drag, and on the summon for `shell toggle` — and `gestures status`
+publishes it as `occupied=` beside the two inputs, so a check can see the
+answer rather than reimplement it.
 
 Two exceptions, and both are "there will be no new window to arrive on". An
 entry that summons a plugin (L5) may draw a layer surface, which is visible
 from every workspace; and an app that is already running maps nothing at all,
 because `gtk-launch` asks the running instance to present itself.
-→ from a workspace holding an app, `omarchy-shell drawer launch <id>` for an
-app that is not running leaves the focused workspace, within two seconds,
-holding that app and nothing else; for `moarchy.device`, and for an app already
-running on a workspace of its own, the focused workspace has not changed
+→ with the drawer **open** over an app — the state a finger leaves it in, and
+the one the old check missed by launching from a closed drawer —
+`omarchy-shell drawer launch <id>` for an app that is not running changes the
+focused workspace within two seconds, before the window exists; over an Android
+app, `gestures status` reads `focus=none rep="" occupied=yes`; for
+`moarchy.device`, and for an app already running on a workspace of its own, the
+focused workspace has not changed
 
 ### What the splash does not cover
 

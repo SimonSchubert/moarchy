@@ -4855,6 +4855,81 @@ print(" ".join(out))'; }
   done
   sleep 1
 
+  # --- W6: a floating window occupies its workspace ------------------------
+  #
+  # The Android shape without Android: one window, floated the way
+  # moarchy-waydroid-setup floats a `waydroid.*` toplevel, and then a second
+  # window opened on top of it. `moarchy-one-app-per-workspace` must move the
+  # second one away and follow it, exactly as it does for a tiled pair.
+  #
+  # Floated with a dispatch rather than by launching a real Android app: this
+  # runs on the PinePhone too, waydroid is on one of the two phones, and what
+  # is being checked is the daemon's reading of the tree and not Waydroid.
+  # What it cannot stand in for is `for_window` applying the rule at map time,
+  # which android.md AC 5 owns.
+  #
+  # Before the fix this went red by leaving both windows on one workspace: the
+  # daemon counted only the tiling list, so a workspace holding one full-screen
+  # floating app read as empty and the new window tiled underneath it.
+  ws_num() { swaymsg -t get_workspaces | python3 -c 'import json,sys
+n=[w["num"] for w in json.load(sys.stdin) if w["focused"]]
+print(n[0] if n else "")'; }
+
+  ws_of() { swaymsg -t get_tree | python3 -c '
+import json, sys
+want = sys.argv[1]
+found = []
+def walk(n, ws=None):
+    if n.get("type") == "workspace": ws = n.get("num")
+    if n.get("app_id") == want: found.append(ws)
+    for k in ("nodes", "floating_nodes"):
+        for c in n.get(k, []): walk(c, ws)
+walk(json.load(sys.stdin))
+print(found[0] if found else "")' "$1"; }
+
+  before_ids=$(con_ids)
+  swaymsg exec -- foot --app-id=moa-w6-float >/dev/null 2>&1
+  # Waited for on the tree rather than on focus. Focus is the wrong instrument
+  # twice over here: a sheet left up holds it and no view reads focused at all,
+  # and this phone under load took longer to give a terminal focus than to map
+  # it -- which failed this check once for a window that was plainly there.
+  for _ in $(seq 40); do [[ -n $(ws_of moa-w6-float) ]] && break; sleep 1; done
+  if [[ -z $(ws_of moa-w6-float) ]]; then
+    w_no W6 "the first window never came up" "W6 has no occupant to be about"
+  else
+    swaymsg '[app_id="moa-w6-float"] focus' >/dev/null 2>&1
+    swaymsg '[app_id="moa-w6-float"] floating enable' >/dev/null 2>&1
+    sleep 1
+    float_ws=$(ws_of moa-w6-float)
+    swaymsg exec -- foot --app-id=moa-w6-new >/dev/null 2>&1
+    new_ws=""
+    for _ in $(seq 40); do
+      new_ws=$(ws_of moa-w6-new)
+      # The daemon moves on the `new` event, so a first reading can catch the
+      # window on the workspace it mapped on. Settled is one that is not the
+      # occupant's -- or forty seconds of it still being there.
+      [[ -n $new_ws && $new_ws != "$float_ws" ]] && break
+      sleep 1
+    done
+    if [[ -z $new_ws ]]; then
+      w_no W6 "the second window never came up" "nothing landed for the daemon to move"
+    elif [[ $new_ws == "$float_ws" ]]; then
+      w_no W6 "both windows are on workspace $float_ws" \
+              "a window opened over a floating app is invisible behind it -- the tap reads as nothing happening"
+    elif [[ $(ws_num) != "$new_ws" ]]; then
+      # "and follows it there" is half of W6: an app that opens on a workspace
+      # you are not standing on is worse than one that did not move at all.
+      w_no W6 "it moved to workspace $new_ws but the phone is on $(ws_num)" \
+              "the app opened somewhere you are not"
+    else
+      w_ok W6 "a window opened over a floating app is moved to workspace $new_ws and focus follows it"
+    fi
+  fi
+  for id in $(con_ids); do
+    [[ " $before_ids " == *" $id "* ]] || swaymsg "[con_id=$id] kill" >/dev/null 2>&1
+  done
+  sleep 1
+
   # --- L1, L2, L6, L7: a launch that never arrives -------------------------
   #
   # A desktop id with no application behind it. gtk-launch fails, no toplevel
@@ -5050,6 +5125,117 @@ print(" ".join(out))'; }
   else
     w_no L9a "$target's splash drew '$saw_drawn', not its icon" \
             "the store's Open would announce a generic square for every app"
+  fi
+
+  # --- L10: the hop happens, and it happens from behind the drawer ---------
+  #
+  # Two checks, because the first one alone is what let this ship broken. L10
+  # was only ever exercised with the drawer CLOSED -- an IPC launch needs no
+  # finger -- and closed is the one state in which the occupancy test works:
+  # the app underneath still has focus. A finger leaves the drawer open, the
+  # drawer holds keyboard focus Exclusive, every toplevel reads deactivated,
+  # and the launch believed it was standing on an empty workspace.
+  #
+  # So the signal is asserted first, over a *floating* window, which is the
+  # Android shape (W6): `focus` reads none, `rep` reads empty, and `occupied`
+  # must still read yes. Those are the two inputs and the answer, so a red
+  # here names which of the three moved.
+  before_ids=$(con_ids)
+  swaymsg exec -- foot --app-id=moa-l10 >/dev/null 2>&1
+  # On the tree and not on focus, for W6's reason: this phone under load has
+  # taken longer to give a terminal focus than to map it.
+  for _ in $(seq 40); do [[ -n $(ws_of moa-l10) ]] && break; sleep 1; done
+  if [[ -z $(ws_of moa-l10) ]]; then
+    w_no L10 "no window came up" "L10 cannot be measured from an empty workspace"
+  else
+    swaymsg '[app_id="moa-l10"] focus' >/dev/null 2>&1
+    swaymsg '[app_id="moa-l10"] floating enable' >/dev/null 2>&1
+    sleep 1
+    timeout 8 omarchy-shell drawer open >/dev/null 2>&1
+    sleep 2
+    gs=$(timeout 8 omarchy-shell gestures status 2>/dev/null)
+    occ=$(sed -n 's/.*occupied=\([a-z]*\).*/\1/p' <<<"$gs")
+    if [[ $occ == "yes" ]]; then
+      w_ok L10 "with the drawer up over a floating app the workspace still reads occupied"
+    elif [[ -z $occ ]]; then
+      w_no L10 "gestures status publishes no occupied= field (${gs:-no answer})" \
+               "the launch is back to reading focus and representation, and both say empty here"
+    else
+      w_no L10 "occupied=$occ from behind the drawer ($gs)" \
+               "a launch from here opens the app underneath the one on screen"
+    fi
+
+    # And the hop itself, end to end: the focused workspace must change
+    # *before* the window exists, which is the whole of L10. Skipped rather
+    # than guessed at when the app maps inside the first poll -- the same
+    # honesty L1 keeps about a splash it never sampled.
+    # Chosen again rather than reusing L1/L4's target, and chosen by what is
+    # on the tree: an app that is already running maps no new window, which is
+    # L10's own second exception, so launching one proves nothing either way.
+    # On a shared phone somebody else's terminal is enough to make `foot` that
+    # app, and then the only check of the hop itself never runs. Light windowed
+    # apps, in preference order, first one that has no window.
+    hop_target=""
+    for cand in $target foot org.gnome.Console org.kde.keysmith org.gnome.Loupe \
+                org.gnome.Papers org.gnome.Nautilus; do
+      grep -qx "$cand" <<<"$entries" || continue
+      [[ -n $(ws_of "$cand") ]] && continue
+      hop_target=$cand
+      break
+    done
+
+    if [[ -z $hop_target ]]; then
+      w_skip L10 "the hop is unproven: every candidate app is already running, and a running app maps no window to arrive on"
+    else
+      from_ws=$(ws_num)
+      timeout 8 omarchy-shell drawer launch "$hop_target" >/dev/null 2>&1
+      hopped=""; mapped=""
+      for _ in $(seq 10); do
+        [[ -n $(ws_of "$hop_target") ]] && { mapped=1; break; }
+        [[ $(ws_num) != "$from_ws" ]] && { hopped=$(ws_num); break; }
+        sleep 0.3
+      done
+      if [[ -n $hopped ]]; then
+        w_ok L10 "the tap left workspace $from_ws for $hopped before $hop_target had a window"
+      elif [[ -n $mapped ]]; then
+        w_skip L10 "the hop is unproven: $hop_target mapped before the first poll"
+      else
+        w_no L10 "still on workspace $from_ws two seconds after the tap" \
+                 "the splash is drawn over the app you were leaving, and the new window lands on top of it"
+      fi
+      # Waited out rather than left running: the cleanup below kills by con_id
+      # against a list taken before this block, and a window that maps after
+      # it would be left on somebody's phone.
+      for _ in $(seq 20); do [[ -n $(ws_of "$hop_target") ]] && break; sleep 1; done
+    fi
+    timeout 8 omarchy-shell drawer close >/dev/null 2>&1
+  fi
+  for id in $(con_ids); do
+    [[ " $before_ids " == *" $id "* ]] || swaymsg "[con_id=$id] kill" >/dev/null 2>&1
+  done
+  sleep 1
+
+  # And the other direction, which is what stops `occupied` being a constant
+  # that happens to read the way the checks above want. On a workspace with
+  # nothing on it the answer must be no, or every launch from the home screen
+  # hops to a *different* empty workspace and the swipe order grows a gap.
+  # Sway's `representation` cannot tell these apart -- an emptied workspace
+  # keeps a `V[]`, measured on sargo -- and that is why the hop stopped
+  # reading it.
+  free_ws=$(sed -n 's/.*free=\([0-9]*\).*/\1/p' <<<"$(timeout 8 omarchy-shell gestures status 2>/dev/null)")
+  if [[ -z $free_ws ]]; then
+    w_skip L10 "the empty case is unproven: gestures status did not answer"
+  else
+    swaymsg "workspace number $free_ws" >/dev/null 2>&1
+    sleep 2
+    gs=$(timeout 8 omarchy-shell gestures status 2>/dev/null)
+    occ=$(sed -n 's/.*occupied=\([a-z]*\).*/\1/p' <<<"$gs")
+    if [[ $occ == "no" ]]; then
+      w_ok L10 "and a workspace with nothing on it reads occupied=no ($(sed -n 's/.*\(rep="[^"]*"\).*/\1/p' <<<"$gs"))"
+    else
+      w_no L10 "empty workspace $free_ws reads occupied=${occ:-?} ($gs)" \
+               "every launch and every home swipe now hops to a workspace it is already on the far side of"
+    fi
   fi
 
   printf '  \033[90m%-4s\033[0m   \033[90mnot covered: W3 L3 L8\033[0m\n' ""

@@ -647,6 +647,61 @@ Item {
     return null
   }
 
+  // The last window that had focus on the workspace we are standing on, so
+  // that "is this workspace occupied" still has an answer once our own
+  // surfaces have taken the focus away (windows.md L10, gestures.md F5).
+  //
+  // Latched rather than read, because there is no live signal left to read.
+  // A sheet holds keyboard_interactivity Exclusive while it is on screen, so
+  // sway deactivates the window underneath and every toplevel reads
+  // `activated` false -- measured: `gestures status` over an app goes from
+  // `focus=org.kde.keysmith` to `focus=none` the moment the drawer maps, and
+  // back again when it closes. The drawer is the surface that asks this
+  // question, which is why it is the surface that cannot answer it.
+  //
+  // Only ever *set* from a real focus, and cleared only by a workspace
+  // change. Clearing it when a sheet goes down instead looked tidier and was
+  // wrong: releaseStrip() hides the sheet and *then* goes home, and focus
+  // takes a compositor round trip to come back -- so home asked the question
+  // in the one frame where the live answer and the latched one were both
+  // gone, and did nothing at all. A latch that is only invalidated by the
+  // thing that actually invalidates it has no such frame.
+  property var lastFocusedToplevel: null
+
+  // Sample the focus, at a moment where it is still the app's.
+  //
+  // Both callers are "one of our sheets is about to take the screen", and
+  // both are early enough: a drag grabs focus at `progress > 0`, which is
+  // frames after the press this runs on, and a summon grabs it a compositor
+  // round trip after the property change this runs on.
+  function noteFocused(): void {
+    var tl = root.focusedToplevel()
+    if (tl) root.lastFocusedToplevel = tl
+  }
+
+  // A sheet going up, for the summon path: `shell toggle`, the store's Open,
+  // a check's `drawer open`. The drag path cannot use it -- `releaseTarget()`
+  // only summons once the finger lifts, long after the sheet took focus --
+  // and goes through resolveTarget() on the press instead.
+  Connections {
+    target: root.shell
+    function onOpenPanelIdsChanged() { root.noteFocused() }
+  }
+
+  // A workspace change, which is the one thing that makes the latch an answer
+  // about somewhere else. Everything else leaves it true: a window that
+  // closed is caught by the liveness test in workspaceOccupied(), and focus
+  // moving between two windows of one workspace does not change whether that
+  // workspace has any.
+  //
+  // Workspace events are the one class Quickshell refreshes this model on,
+  // which is what makes clearing reliable where the reading it replaced is
+  // not.
+  Connections {
+    target: I3
+    function onFocusedWorkspaceChanged() { root.lastFocusedToplevel = null }
+  }
+
   // F1. The lowest workspace number Sway does not currently have.
   //
   // This used to ask each workspace whether its `representation` was empty,
@@ -702,6 +757,44 @@ Item {
     return ""
   }
 
+  // Is there an app on the workspace I am standing on? windows.md L10, F5.
+  //
+  // One question with two readers -- the home swipe and the drawer's
+  // pre-launch hop -- so one answer, here. They each had their own before, and
+  // the same defect reached them one at a time.
+  //
+  // Focus, and focus as it was before we covered it. Nothing else:
+  //
+  //   the focused toplevel   right whenever anything is focused, and null
+  //                          under any sheet of ours, because an exclusive
+  //                          keyboard grab deactivates the window beneath
+  //   the last focused one   latched before the sheet took the focus, held
+  //                          until the workspace changes, and checked against
+  //                          the live list here -- a window that closed while
+  //                          the sheet was up must not answer for a workspace
+  //                          it has left
+  //
+  // **Not sway's `representation`,** which used to be the second signal and
+  // is wrong in both directions. It is refreshed on *workspace* events while a
+  // window arrives on a *window* one, so it reads "" over an app that mapped
+  // since the last switch. It is built from the workspace's *tiling* list, so
+  // a floating window is not in it at all -- which is every Android window,
+  // because moarchy-waydroid-setup floats them to let them overhang the output
+  // (android.md AC 5): that pair is how an app came to open *underneath*
+  // Spotify, full width and invisible behind it. And an emptied workspace
+  // keeps a `V[]` that is not the empty string, so it says "occupied" of a
+  // workspace with nothing on it -- measured on sargo, where it would send
+  // home from home to a different empty workspace.
+  //
+  // It is still published by `gestures status`, as the reading that was not
+  // enough rather than as the answer.
+  function workspaceOccupied(): bool {
+    if (root.focusedToplevel()) return true
+    if (!root.lastFocusedToplevel) return false
+    var open = ToplevelManager.toplevels ? ToplevelManager.toplevels.values : []
+    return open.indexOf(root.lastFocusedToplevel) >= 0
+  }
+
   function firstFreeWorkspace(): int {
     var taken = ({})
     var list = I3.workspaces ? I3.workspaces.values : []
@@ -716,25 +809,30 @@ Item {
 
   // windows.md L10. Go and stand on the workspace the next window will land on.
   //
-  // The same two lines run("home") uses, under the same guard, and for the
-  // same reason in both places: already on an empty workspace there is nowhere
-  // to go, and going anyway hops to a *different* empty one and churns the
-  // numbering for nothing. `representation` is read alongside the focused
-  // toplevel because an exclusive-focus layer surface -- the drawer, which is
-  // what calls this -- deactivates the window underneath, so focus alone
-  // answers "nothing is open" over an app that is plainly there (F5).
+  // Guarded, for run("home")'s reason: already on an empty workspace there is
+  // nowhere to go, and going anyway hops to a *different* empty one, strands
+  // a gap in the numbering and sends the sideways swipe through it.
   //
   // Called before the launch rather than after the window maps. What follows
   // is seconds of gtk-launch on this hardware, and bin/moarchy-one-app-per-
   // workspace only moves the new window once it exists -- so until then you
   // are looking at the app you launched *from*, with the splash over it.
+  // That daemon is the guarantee and this is the one that makes it look
+  // immediate: it counts the same occupants (W6), so a launch this one
+  // declines to move is one the daemon will not move either.
   function goToFreeWorkspace(): void {
-    if (root.focusedToplevel() || root.focusedRepresentation() !== "")
+    if (root.workspaceOccupied())
       root.dispatch("workspace number " + root.firstFreeWorkspace())
   }
 
   // ------------------------------------------------------ driving an overlay
   function resolveTarget(id: string, edge: string): void {
+    // Before anything can go up over the workspace, which is the last moment
+    // the app on it still holds focus (windows.md L10). On the press rather
+    // than on the latch: most presses are a sideways swipe and this costs
+    // them a property read, where `beginSheet()` would miss the swipe up that
+    // carries straight on from an already-open drawer.
+    root.noteFocused()
     root.dragTarget = null
     root.dragSheet = ""
     root.dragStartPull = 0
@@ -879,29 +977,26 @@ Item {
       // would hop to a *different* empty workspace and churn the numbering for
       // nothing.
       //
-      // Two signals, and the second one is the fix for a gesture that did
-      // nothing at all. `focusedToplevel()` alone was the test, on the
-      // reasoning that no toplevel is activated when focus is on an empty
-      // workspace -- true, and true for a second reason as well: an
-      // exclusive-focus *layer surface* deactivates the window beneath it, so
-      // with one up every toplevel reads unfocused too.
+      // Occupancy, and it is asked through workspaceOccupied() because this
+      // and the drawer's pre-launch hop are the same question and drifting
+      // answers to it have now cost two gestures.
       //
-      // The drawer is such a surface -- it owns a search field, so it takes the
-      // keyboard -- and it is now what is on screen when this runs, because the
-      // home band is reached by dragging it. So the drag hid the drawer, called
-      // this, and this concluded the phone was already home and returned. From
-      // outside: the drawer slid away and nothing happened. The carousel took
-      // no keyboard focus, which is why the band worked for as long as it held
-      // it, and why this surfaced with the drawer rather than with the change
-      // that moved the band.
+      // `focusedToplevel()` alone was the test here, on the reasoning that no
+      // toplevel is activated when focus is on an empty workspace -- true, and
+      // true for a second reason as well: an exclusive-focus *layer surface*
+      // deactivates the window beneath it, so with one up every toplevel reads
+      // unfocused too. The drawer is such a surface -- it owns a search field,
+      // so it takes the keyboard -- and it is what is on screen when this
+      // runs, because the home band is reached by dragging it. So the drag hid
+      // the drawer, called this, and this concluded the phone was already home
+      // and returned: the drawer slid away and nothing happened.
       //
-      // `representation` is sway's own description of what is laid out on the
-      // workspace. A layer surface cannot perturb it, so it answers while the
-      // drawer is still mapped. It is the signal I3 refreshes late -- a
-      // workspace that just *gained* a window can still read empty (F1) -- and
-      // that is the right way round here: a stale empty reading costs one
-      // skipped hop, where a stale focus reading cost the whole gesture.
-      if (root.focusedToplevel() || root.focusedRepresentation() !== "")
+      // `representation` was added beside it and fixed that, for every app
+      // sway has in its tiling list. It does not cover an Android one -- a
+      // floating window is in no representation at all -- so from Spotify the
+      // home swipe went back to doing nothing, which is the same defect
+      // arriving a second time through the same gap.
+      if (root.workspaceOccupied())
         root.dispatch("workspace number " + root.firstFreeWorkspace())
     }
     else if (action === "clear") root.hideTopmostOverlay()
@@ -1486,12 +1581,20 @@ Item {
                                 ? ToplevelManager.toplevels.values.length : 0)
                   + " free=" + root.firstFreeWorkspace()
                   + " shellapp=" + (own ? own.pluginId : "none")
-                  // The second signal the home switch reads (F5). Published
-                  // because it is the one that answers *through* a sheet: with
-                  // the drawer up, `focus` reads none over an app that is
-                  // plainly there, and the difference between the two fields is
-                  // the whole of the defect F5 records.
+                  // What sway says is laid out here. It was the home switch's
+                  // second signal (F5) and is no longer any switch's signal
+                  // at all, and it is published for exactly that reason: it
+                  // is the reading that looks like it answers this question
+                  // and does not, in both directions, and a check can only
+                  // say which reading moved if it can see them all.
                   + " rep=" + JSON.stringify(root.focusedRepresentation())
+                  // windows.md L10, F5. The answer the two fields above are
+                  // read for, and now neither of them: over an Android app
+                  // with the drawer up, `focus` is none and `rep` is "" and
+                  // the workspace is occupied all the same. A check that
+                  // could only see the inputs would have to reimplement the
+                  // rule to test it.
+                  + " occupied=" + (root.workspaceOccupied() ? "yes" : "no")
                   // C2. Where the hold stands. Published because the cue it
                   // drives is a 4px line moving 4px, which no other check can
                   // see -- and because `idle` here is the cheapest proof from

@@ -76,7 +76,7 @@ Waydroid gets more right than expected. These need **no code**:
 |---|---|
 | Drawer entries | Waydroid writes `~/.local/share/applications/waydroid.<pkg>.desktop` per launcher app (`tools/services/user_manager.py:97-131`) |
 | Icons and names | the Wayland `app_id` is `waydroid.<pkg>` — the *same string* as the desktop id — so `Apps.index()` resolves both already; the icon is an absolute PNG path, which `AppLibrary.iconSource()` handles |
-| Window management | Android apps are ordinary toplevels, so `moarchy-one-app-per-workspace` gives each its own workspace |
+| Window management | Android apps are ordinary toplevels, so `moarchy-one-app-per-workspace` gives each its own workspace — though "no code" was too strong: the sway rule below floats them (AC 5), and both that daemon and the drawer's hop had to learn that a floating window occupies a workspace before this was true (windows.md W6, L10) |
 | Notifications | Waydroid forwards to `org.freedesktop.Notifications` (`tools/services/notification_manager.py:74`), so Android notifications land in moarchy's shade with their icons |
 | Clipboard | bridged both ways |
 
