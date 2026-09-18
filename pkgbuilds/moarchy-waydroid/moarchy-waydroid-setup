@@ -11,6 +11,8 @@ set -euo pipefail
 
 die() { echo "moarchy-waydroid-setup: $*" >&2; exit 1; }
 
+_base_prop=/var/lib/waydroid/waydroid_base.prop
+
 command -v waydroid >/dev/null || die "waydroid is not installed"
 [ -n "${SWAYSOCK:-}" ] || SWAYSOCK=$(ls /run/user/"$(id -u)"/sway-ipc.*.sock 2>/dev/null | head -1)
 [ -n "$SWAYSOCK" ] || die "no sway socket; run this inside the session"
@@ -27,6 +29,81 @@ state=$(waydroid status 2>/dev/null | awk -F'\t' '/^Container:/{print $2}')
 # Android's own titlebar, and the input method becomes a separate toplevel that
 # sway tiles like an app. Both are wrong on a 360px phone.
 waydroid prop set persist.waydroid.multi_windows false
+
+# ---------------------------------------------------------------------------
+# The density, before anything that measures dp (AC 13)
+# ---------------------------------------------------------------------------
+# Waydroid's hwcomposer computes `lcd_density = 180 * scale` in
+# finished_calibrating() and only when ro.sf.lcd_density is unset, which on a
+# scale-3 phone is 540. That is not this panel: 1080x2220 in 62x127mm is 444
+# ppi, so 540 makes every Android app 23% too large AND tells Android the
+# screen is 320dp wide when it is 393dp -- narrow enough that apps pick
+# small-screen layouts. Spotify drew a one-column shortcut grid at 540 and its
+# normal two-column one at 440.
+#
+# The panel's physical size comes from the DRM connector rather than a constant,
+# for the same reason as everything else here (AC 10). sway does not expose it
+# -- get_outputs has no mm anywhere -- and this device tree has no width-mm, so
+# modetest is the source.
+# The panel's pixel size is the output rect times the scale; its physical size
+# comes from the DRM connector. Neither is a constant here, for the same reason
+# as the geometry below (AC 10).
+_px=$(swaymsg -t get_outputs | python3 -c '
+import json, sys
+o = [x for x in json.load(sys.stdin) if x.get("active")]
+if not o:
+    sys.exit("no active output")
+r, sc = o[0]["rect"], float(o[0].get("scale") or 1)
+print(int(round(r["width"] * sc)), int(round(r["height"] * sc)))
+') || die "could not read the output"
+read -r _px_w _px_h <<<"$_px"
+
+# sway does not expose the panel's physical size -- get_outputs has no mm
+# anywhere -- and this device tree carries no width-mm, so the DRM connector
+# via modetest is the only source on the device.
+_diag_mm=$({ modetest -c 2>/dev/null || true; } | python3 -c '
+import math, re, sys
+for line in sys.stdin:
+    f = line.split()
+    # id encoder status name size(mm) modes encoders
+    if len(f) >= 6 and f[2] == "connected" and re.match(r"^\d+x\d+$", f[4]):
+        w, h = (int(v) for v in f[4].split("x"))
+        if w and h:
+            print(int(round(math.hypot(w, h))))
+        break
+')
+
+if [ -n "${_diag_mm:-}" ] && [ "${_diag_mm:-0}" -gt 0 ]; then
+  # Rounded to the nearest 10 so it reads like a device density rather than a
+  # measurement: 444 becomes 440, which is what a stock Pixel 3a ships and what
+  # Android's own resource buckets are written around.
+  _want=$(python3 -c "
+import math
+print(int(round(math.hypot($_px_w, $_px_h) / ($_diag_mm / 25.4) / 10.0)) * 10)")
+  _have=$(sudo waydroid shell -- getprop ro.sf.lcd_density 2>/dev/null | tr -d '\r')
+  if [ "${_have:-0}" != "$_want" ]; then
+    echo "panel ${_px_w}x${_px_h} in ${_diag_mm}mm -> density $_want (container has ${_have:-unset})"
+    if sudo grep -q '^ro.sf.lcd_density=' "$_base_prop" 2>/dev/null; then
+      sudo sed -i "s/^ro.sf.lcd_density=.*/ro.sf.lcd_density=$_want/" "$_base_prop"
+    else
+      echo "ro.sf.lcd_density=$_want" | sudo tee -a "$_base_prop" >/dev/null
+    fi
+    cat <<MSG
+
+Density written, and this script stops here on purpose. It is read at container
+boot, and every inset below is measured in dp -- so computing the geometry now
+would compute it against the density being replaced:
+
+    waydroid session stop
+    waydroid session start          # in the phone's session
+    $0
+
+MSG
+    exit 0
+  fi
+else
+  echo "warning: could not read the panel size from modetest; leaving the density alone" >&2
+fi
 
 # The insets have to be readable, and `immersive.status=*` -- whatever the last
 # `waydroid app launch` left behind -- reports the status bar as a zero-height
@@ -50,6 +127,29 @@ sudo waydroid shell -- settings put global policy_control "null*" >/dev/null 2>&
 #
 # Android's insets come from the container in physical pixels; dividing by the
 # output scale puts them in the logical pixels sway and the props both speak.
+# Right after a session start SystemUI has not registered its inset sources yet
+# and the status bar reads as a zero-height frame. The guard in the python below
+# turns that into a clean failure rather than a silently wrong number -- it fired
+# on the first real run of this script -- but the operator should not have to
+# re-run for a race, so wait for it.
+_status_inset() {
+  sudo waydroid shell -- dumpsys window -a 2>/dev/null | python3 -c '
+import re, sys
+for line in sys.stdin:
+    m = re.search(r"type=ITYPE_STATUS_BAR frame=\[\d+,(\d+)\]\[\d+,(\d+)\]", line)
+    if m:
+        print(int(m.group(2)) - int(m.group(1)))
+        break
+else:
+    print(0)
+'
+}
+for _i in $(seq 1 10); do
+  [ "$(_status_inset)" -gt 0 ] && break
+  [ "$_i" = 1 ] && echo "waiting for SystemUI to publish its insets..."
+  sleep 3
+done
+
 _geom=$(
   {
     swaymsg -t get_outputs
@@ -156,9 +256,8 @@ swaymsg reload >/dev/null || die "sway reload failed"
 # own STREAM_MUSIC starts at 5 of 15 on a fresh container, which presents as a
 # live, uncorked, full-volume host stream carrying nothing. Check
 # `dumpsys audio | grep -A6 STREAM_MUSIC` before suspecting the path.
-_base=/var/lib/waydroid/waydroid_base.prop
-if [ -f "$_base" ] && ! grep -q '^ro.hardware.audio.primary=' "$_base"; then
-  echo "ro.hardware.audio.primary=waydroid" | sudo tee -a "$_base" >/dev/null
+if [ -f "$_base_prop" ] && ! grep -q '^ro.hardware.audio.primary=' "$_base_prop"; then
+  echo "ro.hardware.audio.primary=waydroid" | sudo tee -a "$_base_prop" >/dev/null
   echo "set the audio HAL; restart the session for it to take"
 fi
 

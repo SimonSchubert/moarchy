@@ -2,14 +2,16 @@
 
 How moarchy runs Android apps, and what it costs to ship that by default.
 
-Status: **measured on the Pixel 3a, 2026-09-17.** Waydroid 1.6.3 from ALARM
+Status: **measured on the Pixel 3a, 2026-09-17, and again 2026-09-18** (the
+insets, the density and the launcher). Waydroid 1.6.3 from ALARM
 `extra`, LineageOS 20 (Android 13) arm64 with GApps, on `moarchy-sargo`.
 Telegram, Google Maps, Basecamp, CoinGecko, OKX, Wise and Curve all install,
 launch and render. Google Play works, signed in, and installs apps that then
 appear in moarchy's own drawer with their icons.
 
-Nothing in this file is packaged yet. Everything below ran by hand on one
-device, and §7 is the list of what that leaves open.
+`moarchy-waydroid` is packaged and ships in 0.4.0; the inset, density and
+launcher work landed after it and is unreleased. Everything below was measured
+on one device, and §7 is the list of what that leaves open.
 
 Companion to [devices.md](devices.md), whose §2 non-goal this amends, and to
 [structure.md](structure.md), which decides what a package is.
@@ -51,7 +53,10 @@ sargo is the opposite: `ro.hardware.vulkan=freedreno` and
 `ro.opengles.version=196610` (GLES 3.2) land in `waydroid_base.prop` without
 help, and the hwcomposer reads `wp_fractional_scale_v1` and sets
 `lcd_density = 180 × scale` — 540 at our scale 3, so Android renders at native
-resolution and correct physical size.
+resolution but **not** at the right physical size: this panel is 1080x2220 in
+62x127mm, which is 444 ppi, so 540 is 23% too dense. That is corrected by
+AC 13; the sentence here claimed otherwise until it was measured on
+2026-09-18.
 
 **The kernel needs no change.** `linux-moarchy-sdm670`'s config already has
 `CONFIG_ANDROID_BINDER_IPC=y` with `ANDROID_BINDER_DEVICES="binder,hwbinder,vndbinder"`.
@@ -82,9 +87,10 @@ content of the proposed package:
 persist.waydroid.multi_windows = false   # see AC 5
 persist.waydroid.width  = <output logical width>
 persist.waydroid.height = <output + both inset overhangs>   # AC 5, AC 10
-+ a sway rule giving the toplevel that size at a negative y # AC 5, AC 10
++ a sway rule giving the toplevel that size at that offset  # AC 5, AC 10
 + a launcher that replaces `waydroid app launch`            # AC 11
 + a bar that steps aside for an Android window              # AC 12
++ a density that matches the panel rather than the scale     # AC 13
 + a Back rung in the gestures ladder                        # AC 7
 ```
 
@@ -291,6 +297,36 @@ writes it, and no config carries it across a reboot.
 light text on a light header. Spotify and YouTube are both dark. If it bites, the
 answer is a scrim rather than full transparency — one value in `androidFocused`'s
 consumer, not a redesign.
+
+**AC 13** Android's density matches the panel, and is **computed from it**.
+→ `wm density` equals `round(diagonal px / diagonal inches / 10) * 10` for the
+DRM connector's reported size — 440 on sargo, against the 540 the hwcomposer
+computes on its own.
+
+`lcd_density = 180 × scale` (`finished_calibrating()`, and only when
+`ro.sf.lcd_density` is unset) assumes a logical pixel is 1/180", where on this
+panel it is 1/147". The cost is not only that everything is 23% too large:
+540 also tells Android the screen is **320dp wide when it is 393dp**, which is
+a narrower bucket than a 2014 phone, so apps choose small-screen layouts.
+Spotify drew a one-column shortcut grid at 540 and its normal two-column grid
+at 440, with four filter chips fitting instead of three and a bit.
+
+The panel's physical size is read from the DRM connector with `modetest`, which
+is the only source on the device: sway's `get_outputs` carries no mm anywhere,
+and sargo's device tree has no `width-mm`.
+
+**This is why AC 5's overhang is nearly zero at the correct density.** Android's
+28dp status bar is 77px at 440 against this bar's 78, and its 24dp nav bar is
+66px against the strip's 60 — so the computed geometry becomes `742 at y=0`
+rather than `753 at y=-6`. The insets and our chrome agree to a pixel at the
+top, which is a coincidence rather than a design, and it is the reason to
+compute rather than choose: at 540 the same script produced 753 and -6, and
+both were right for their density.
+
+*Two-pass, and deliberately.* Changing the density needs a container restart
+before the dp-measured insets mean anything, so the script writes it and stops
+with the three commands to run. A single pass would compute the geometry against
+the density it is replacing.
 
 ---
 

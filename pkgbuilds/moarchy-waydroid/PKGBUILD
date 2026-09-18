@@ -51,7 +51,9 @@ license=('MIT')
 # arithmetic in python3, not because waydroid happens to need it. glib2 for
 # gdbus, which moarchy-android-launch uses to unfreeze the container: a DBus
 # round trip rather than a python interpreter start-up on every app launch.
-depends=('waydroid' 'python' 'sway' 'glib2')
+# libdrm for modetest, which is how the panel's physical size is read: it is
+# the only source on the device, and the density depends on it (AC 13).
+depends=('waydroid' 'python' 'sway' 'glib2' 'libdrm')
 
 install=moarchy-waydroid.install
 
