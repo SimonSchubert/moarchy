@@ -89,7 +89,7 @@ persist.waydroid.width  = <output logical width>
 persist.waydroid.height = <output + both inset overhangs>   # AC 5, AC 10
 + a sway rule giving the toplevel that size at that offset  # AC 5, AC 10
 + a launcher that replaces `waydroid app launch`            # AC 11
-+ chrome that swaps behaviour per edge for an Android window # AC 12
++ a bar that steps aside, and a handle Android stops drawing # AC 12
 + a density that matches the panel rather than the scale     # AC 13
 + a Back rung in the gestures ladder                        # AC 7
 ```
@@ -222,7 +222,9 @@ Two mechanisms, both measured:
   SystemUI's contents while keeping the 95px inset. Needed only because the bar
   is transparent over an Android window (AC 12): Android's status bar was always
   being drawn, and an opaque bar was hiding it. It is cleared by a SystemUI
-  restart, so the launcher re-asserts it every launch.
+  restart, so the launcher re-asserts it every launch — after its own restart of
+  SystemUI rather than before, since that is one of the restarts that would
+  clear it (AC 12).
 
 `moarchy-waydroid-immersive` and its user unit are **gone**, not amended. A
 `window::new` watcher cannot do this job: by the time a window exists the layout
@@ -282,42 +284,69 @@ It does **not** force-stop first, deliberately: that would kill playback on
 every tap. The cost is that an app already running with the wrong insets keeps
 them until it is stopped once.
 
-**AC 12** Over an Android window the chrome swaps behaviour at each edge: the
-bar goes **transparent** and the strip goes **opaque**. Everywhere else both are
-as they were.
+**AC 12** Over an Android window the bar goes **transparent** and the strip
+stays transparent, as it is everywhere else — so both bands are the app's own
+background, with one pill in the lower one and it is ours.
 → sample both bands with `grim`. Over a Waydroid window the bar band is the
 app's own pixels, continuous across y=78; on the home screen it is
-`Color.bar.background`. The strip band is flat `Color.bar.background` with
-exactly one pill in it — brightest pixel ~70 on this theme, against the 221–235
-of Android's own handle. Measured all four ways, 2026-09-18.
+`Color.bar.background`. The strip band is the app's background continuous across
+y=2160 — 15 under YouTube, 255 under Maps — carrying our pill and no pixel above
+100 anywhere else. Measured both ways and both apps, 2026-09-18.
 
-**Why the strip goes the other way.** Android draws its gesture handle *inside
-the app surface* — 108dp wide, 10dp up from the bottom of its own display —
-which at this density lands within three pixels of our pill and reads as one fat
-smudged bar. It cannot be turned off from outside, and three mechanisms were
-tried:
+**Android draws its own gesture handle inside the app surface**, 108dp wide and
+10dp up from the bottom of its display. Measured: 296px wide at rows 2184–2198,
+brightness 221–236, which is *the same rows* as our own pill at 2184–2196. Two
+bars, one bright and one dim, reading as a single smudge.
+
+For a few hours the answer was to cover it — the strip went opaque over an
+Android window — and that is what this AC replaced. It stopped the app's
+background 20px short of the screen and put a slab of chrome colour under every
+light app, which is a worse thing to look at than the problem it solved. So take
+the handle out at the source:
 
 | | |
 |---|---|
 | `settings put secure sysui_nav_bar` | dead in Android 13 — `NavigationBarInflaterView` no longer implements `Tunable` |
 | `cmd statusbar send-disable-flag home` | does not touch the handle (the clock and status icons it does blank — AC 6) |
-| `org.lineageos.overlay.customization.navbar.nohint` | worked once, then silently reverted to `STATE_DISABLED` while still `mIsMutable: true` with a valid idmap. **Unexplained.** It survived until the density changed (AC 13), which regenerates overlay idmaps, and would not re-enable afterwards. LineageOS 20 has no hint setting to drive it either — `force_show_navbar` is the only related key in its provider |
+| `org.lineageos.overlay.customization.navbar.nohint` | the wrong lever, and now measured rather than guessed: its idmap maps `navigation_bar_height`, `navigation_bar_height_landscape` and `navigation_bar_width`, and its own value for all three is **0dp**. It deletes the navigation bar, and the INSET with it — the one thing here worth keeping. That it also reverts to `STATE_DISABLED` on its own is still unexplained, and no longer matters |
+| a **fabricated RRO** zeroing `com.android.systemui:dimen/navigation_handle_radius` | **this one.** `NavigationHandle.onDraw` fills a round rect of height `2 * radius`, so zero draws nothing, and nothing else in SystemUI reads that dimension. `cmd overlay fabricate` needs no APK, so no Android code enters the project, and the inset is untouched: `ITYPE_NAVIGATION_BAR frame=[0,2160][1080,2226]` before and after |
 
-So the strip covers it instead, and what it covers is the app's **nav bar inset
-region** — empty by construction, because Android has already padded the content
-above it. The cost is the app's background no longer bleeding the last 20px; on
-a dark app it is not detectable, and on a light one the bar is transparent over
-it anyway.
+**`moarchy-android-launch` applies it, not `moarchy-waydroid-setup`**, and that
+is forced rather than chosen. A fabricated overlay lives in
+`/data/resource-cache` and is registered in `/data/system/overlays.xml`, and a
+`waydroid session stop` takes both: after a restart the `.frro` file is gone,
+`cmd overlay list` does not name it, and the resource reads `2.0dip` again — all
+three measured. Every Android app on moarchy is started from the launcher, so
+the launcher is the only place that can hold it, and the setup script's own last
+line tells the operator to stop the session.
 
-This is **not** the `bar.transparent` key `Bar.qml` refuses to read. That was a
-global flag written by `omarchy-bar transparent`, whose config reload takes this
-bar down and leaves upstream's in its place. This is derived from focus, nothing
-writes it, and no config carries it across a reboot.
+**Registering it is not enough**, which cost a run to find out. SystemUI reads
+the radius when it inflates the navigation bar, and a freshly booted SystemUI
+inflates *before* it notices an overlay registered a second earlier — the handle
+came back 20s into a launch that had just enabled it. So the launcher restarts
+SystemUI on that cold path and waits for its navigation bar to exist again
+before `am start`: waiting for the process is not waiting for the window, and
+the app's first layout is the one that counts (AC 11). It costs 4.2s for the
+first launch of a session against 2.4s warm, and the disable flags are asserted
+after the restart rather than before it, or they go with it.
 
-*Open, and known:* our glyphs are light, so a light-themed Android app puts
-light text on a light header. Spotify and YouTube are both dark. If it bites, the
-answer is a scrim rather than full transparency — one value in `androidFocused`'s
-consumer, not a redesign.
+**The pill carries its own contrast now.** It used to be given one, because the
+band behind it was either this strip's colour or the wallpaper; over an Android
+app it is the app's background, and a 30%-foreground pill measures 235 against
+Maps' 255 — there, but only just. A ring of `Color.background` behind it is
+invisible against everything the strip normally sits on and an outline against
+everything else: 144 with a 125 ring on Maps' white, 67 with a 10 ring on
+YouTube's 15.
+
+The bar half is **not** the `bar.transparent` key `Bar.qml` refuses to read. That
+was a global flag written by `omarchy-bar transparent`, whose config reload takes
+this bar down and leaves upstream's in its place. This is derived from focus,
+nothing writes it, and no config carries it across a reboot.
+
+*Open, and known:* our bar glyphs are light, so a light-themed Android app puts
+light text on a light header. Spotify and YouTube are both dark; Maps is not. If
+it bites, the answer is a scrim rather than full transparency — one value in
+`androidFocused`'s consumer in `Bar.qml`, not a redesign.
 
 **AC 13** Android's density matches the panel, and is **computed from it**.
 → `wm density` equals `round(diagonal px / diagonal inches / 10) * 10` for the
@@ -422,7 +451,10 @@ first launch after an install adds `dex2oat`.
   `user_manager` regenerates them on each session start, so it needs a watcher
   and converges rather than holding; measured on 2026-09-18, 3 of 25 entries sat
   reverted between a regeneration and the re-fixup. Routing in our own code has
-  no such window, which is why it is the shipped half.
+  no such window, which is why it is the shipped half. The same bullet now
+  carries the gesture handle: the launcher is also what registers the overlay
+  that stops Android drawing it (AC 12), so an app started any other way in a
+  fresh session gets both the suppressed inset and the handle.
 - **Duplicate surfaces after repeated launches.** Ten force-stop/`am start`
   cycles left three `waydroid.com.spotify.music` toplevels in `get_tree` at
   once, and Spotify eventually came up mapped but unpainted

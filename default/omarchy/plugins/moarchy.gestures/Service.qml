@@ -647,15 +647,6 @@ Item {
     return null
   }
 
-  // Whether the focused window is an Android app, which is the one case where
-  // our chrome and the app's own insets have to cooperate rather than just
-  // stack: the app draws behind both edges (docs/android.md AC 5) and Android
-  // pads its content clear of them with the insets it reports.
-  readonly property bool androidFocused: {
-    var tl = root.focusedToplevel()
-    return !!tl && String(tl.appId || "").indexOf("waydroid.") === 0
-  }
-
   // F1. The lowest workspace number Sway does not currently have.
   //
   // This used to ask each workspace whether its `representation` was empty,
@@ -1532,21 +1523,18 @@ Item {
     anchors { bottom: true; left: true; right: true }
     implicitHeight: root.stripHeight
 
-    // Transparent over everything except an Android window, and there the bar
-    // does the opposite of this -- docs/android.md AC 12. Android draws its own
-    // gesture handle inside the app surface, 108dp wide and 10dp up from the
-    // bottom of ITS display, which lands within three pixels of this pill and
-    // reads as one fat smudged bar. It cannot be turned off from outside:
-    // `sysui_nav_bar` is dead in Android 13, `send-disable-flag home` does not
-    // touch the handle, and LineageOS's own nohint overlay is mutable with a
-    // valid idmap yet silently reverts to disabled (measured 2026-09-18).
-    //
-    // So cover it. What this paints over is the app's NAV BAR INSET region,
-    // which is empty by construction -- Android has already padded the content
-    // above it -- so the only thing lost is the app's background colour
-    // bleeding the last 20px, and the only thing gained is one pill instead of
-    // two.
-    color: root.androidFocused ? Color.bar.background : "transparent"
+    // Transparent everywhere, including over an Android window, and that last
+    // part is a claim about the container rather than about this file --
+    // docs/android.md AC 12. Android draws its own gesture handle inside the
+    // app surface, 108dp wide and 10dp up from the bottom of ITS display,
+    // which lands on the same rows as this pill; for a few hours this strip
+    // went opaque to cover it and the app's own background stopped an inch
+    // short of the screen. `moarchy-waydroid-setup` now takes the handle out at
+    // the source -- a fabricated RRO zeroing SystemUI's
+    // `navigation_handle_radius` -- so there is nothing left here to hide, and
+    // what fills this band is the app's own background in the nav bar inset
+    // region it has already padded its content clear of.
+    color: "transparent"
 
     WlrLayershell.namespace: "moarchy-gestures"
     WlrLayershell.layer: WlrLayer.Overlay
@@ -1588,6 +1576,27 @@ Item {
       scale: root.homeArmed ? 1.6
            : 1 + 0.5 * root.holdPop
              + Math.min(0.4, Math.max(0, -root.dy) / (root.commitDistance * 4))
+
+      // The pill used to be guaranteed its contrast, because the band behind it
+      // was either this strip's own colour or the wallpaper. Over an Android
+      // app it is the app's background: 15 on YouTube, 255 on Maps, and a 30%
+      // foreground pill measures 235 against the second -- there, but only
+      // just.
+      //
+      // So carry the contrast rather than borrow it. This ring is
+      // `Color.background`, which is the colour of whatever this strip sits on
+      // everywhere except an Android window, so it is invisible by
+      // construction in the case it is not needed and an outline in the case it
+      // is. A child with a negative z draws behind its parent, which also means
+      // it inherits the pill's x and scale -- the two things every animation in
+      // here drives -- without a binding of its own.
+      Rectangle {
+        z: -1
+        anchors.fill: parent
+        anchors.margins: -1
+        radius: height / 2
+        color: Util.alpha(Color.background, 0.55)
+      }
 
       Behavior on x {
         enabled: !root.tracking

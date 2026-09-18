@@ -62,10 +62,39 @@ waydroid prop set waydroid.active_apps "$pkg" >/dev/null 2>&1 || true
 # this hardware and all of `waydroid app launch` costs ~0.9s to window, so
 # three attaches would be a launch the phone visibly lost.
 #
-# send-disable-flag is re-asserted on every launch rather than set once: a
-# SystemUI restart clears it, and it is the only thing stopping Android's own
-# clock and icons drawing through the bar, which is transparent over an Android
-# window (AC 6, AC 12).
+# Two of the four things it does are re-asserted on every launch rather than set
+# once, because the container throws them away on its own schedule.
+# send-disable-flag lasts until SystemUI restarts, and it is the only thing
+# stopping Android's own clock and icons drawing through the bar, which is
+# transparent over an Android window (AC 6, AC 12). The gesture-handle override
+# does not survive a `waydroid session stop` at all: a fabricated RRO lives in
+# the container's /data/resource-cache, which a boot clears, so after a session
+# restart the .frro file is gone, `cmd overlay list` no longer names it and the
+# resource reads 2.0dip again -- measured 2026-09-18, all three.
+# Every Android app on moarchy is started from here, so this is the one place
+# that can hold it, and it is why moarchy-waydroid-setup does not try: that
+# script's own last line tells the operator to stop the session.
+#
+# What the override buys is the strip going transparent over an Android app
+# (AC 12). Android draws its gesture handle INSIDE the app surface, on the same
+# rows as our own pill, and `NavigationHandle.onDraw` fills a round rect of
+# height `2 * navigation_handle_radius` -- so a radius of zero draws nothing,
+# and nothing else in SystemUI reads that dimension. LineageOS's nohint overlay
+# is the obvious candidate and is the wrong one: its idmap maps
+# `navigation_bar_height`, so it deletes the INSET, which is the thing the app
+# pads its content against (`cmd overlay dump
+# org.lineageos.overlay.customization.navbar.nohint`).
+#
+# Fabricated, so there is no APK and no Android code in this project -- and
+# fabricated overlays live in /data/resource-cache, which the container clears
+# on boot, which is why this is here and not in the setup script.
+#
+# Guarded, because re-registering it makes SystemUI re-inflate the navigation
+# bar: a flicker per launch for nothing, and on the cold path a restart this
+# waits out.
+#
+# The disable flags are asserted last for the same reason they are asserted at
+# all: the restart above would take them with it.
 #
 # No force-stop first, deliberately. It would give a correct layout every time
 # and kill playback on every tap. The cost is that an app already running with
@@ -73,6 +102,34 @@ waydroid prop set waydroid.active_apps "$pkg" >/dev/null 2>&1 || true
 # stopped once.
 sudo waydroid shell -- sh -c '
   settings put global policy_control "null*"
+  cmd overlay list | grep -q "\[x\] com.android.shell:moarchy_nohandle" || {
+    cmd overlay fabricate --target com.android.systemui --name moarchy_nohandle \
+      com.android.systemui:dimen/navigation_handle_radius 0x05 0x0
+    cmd overlay enable --user 0 com.android.shell:moarchy_nohandle
+
+    # Registering it is not enough: SystemUI reads the radius when it inflates
+    # the navigation bar, and a freshly booted one inflates BEFORE it notices an
+    # overlay that appeared a second ago -- measured, handle back on screen 20s
+    # after a launch that had just enabled it. Restarting SystemUI makes it
+    # deterministic, and this is the first launch of a session, which is already
+    # the slow one.
+    old=$(pidof com.android.systemui)
+    kill $old 2>/dev/null
+    i=0
+    while [ "$i" -lt 60 ]; do
+      new=$(pidof com.android.systemui)
+      [ -n "$new" ] && [ "$new" != "$old" ] && break
+      i=$((i + 1)); sleep 0.25
+    done
+    # And then for its navigation bar to exist again, because that inset is what
+    # the app about to start lays itself out against. Waiting for the process is
+    # not waiting for the window (AC 11: only the first layout counts).
+    i=0
+    while [ "$i" -lt 60 ]; do
+      dumpsys window -a 2>/dev/null | grep -q ITYPE_NAVIGATION_BAR && break
+      i=$((i + 1)); sleep 0.5
+    done
+  }
   cmd statusbar send-disable-flag clock system-icons notification-icons
   act=$(cmd package resolve-activity --brief '"$pkg"' | tail -1 | tr -d "\r")
   [ -n "$act" ] || exit 1
