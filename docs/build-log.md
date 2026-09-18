@@ -2048,9 +2048,21 @@ tap had (`activate()` is a no-op on this compositor, and a tap driven from the
 app it names cannot see that); the M block became a P block that drives the
 same three gestures on the other surface.
 
-**Not run on either device.** `scripts/style-check.sh` passes at 17/17 and the
-suites parse; `bin/moarchy-selftest --gestures` needs the phone, and the
-screenshots in `README.md` still show the shelf until they are retaken.
+**Then the phone refuted one line of it.** Installed as 0.4.0-2 on the Pixel
+3a, the IPC half came out exactly as written -- `drawer openApps` gone,
+`overview windows` answering with the sheet shut, `binTarget` going
+`drawn=false` to `drawn=true` across a lift, `aim` into the band flipping
+`lifted` from `over 1` to `over bin`, `trash` closing a window and `tileTarget`
+answering `no tile` before the app had -- but a `grim` of the lit bin showed it
+sitting on top of the free-workspace card, whose label was the only part of it
+left visible. The argument for overlaying the band (cards are short, the phone
+has few workspaces) was written on this host and was wrong on a phone with six
+of them, which is an ordinary number. The band is reserved off the list now and
+the bin covers nothing; the list pays a card's height for it at all times.
+
+`scripts/style-check.sh` passes at 17/17. `bin/moarchy-selftest --gestures` has
+not run: it drives real touch, and the device was in use. The screenshots in
+`README.md` still show the shelf until they are retaken.
 
 ## 7. Hardware status
 

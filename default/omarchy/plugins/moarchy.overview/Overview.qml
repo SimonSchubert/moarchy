@@ -605,10 +605,13 @@ Item {
     return out
   }
 
-  // The two coordinate frames a check needs: scene, which `aim` takes, and
-  // global, which `sudo moarchy-touch` takes. The drawer's `cellTarget` reports
-  // the same pair, and a target reported in one frame only is a check that taps
-  // 26px high and hits nothing (style.md F6).
+  // The two coordinate frames a check needs, and the reason it needs both
+  // spelled out: `rect` is this sheet's own, which is what `aim` takes, and
+  // `global` is what `mapToGlobal` answers -- which on a layer surface arranged
+  // below the bar does NOT add the bar's height, so the two come back equal.
+  // A finger has to be aimed at `rect` plus the focused workspace's own y, the
+  // way the suite does it; trusting `global` is the 26px miss style.md F6 is
+  // about, and a 171px one has happened here before (build-log 8).
   function rectOf(item): string {
     var p = item.mapToItem(null, 0, 0)
     var g = item.mapToGlobal(0, 0)
@@ -995,6 +998,10 @@ Item {
     root.cardPad * 2 + root.cardCaption + root.tileHeight
   readonly property int cardGap: Style.space(8)
   readonly property int sheetMargin: Style.space(12)
+  // P12. The bin's band, reserved off the list whether or not anything is in
+  // the air. Comfortably over style.md E1's 44 and well under a card, because
+  // this is height the list pays for permanently.
+  readonly property int binHeight: Style.space(56)
 
   // The windows a card draws, and how many it could not. The last slot becomes
   // a count once there are more than `columns`, so a phone that somehow has six
@@ -1230,8 +1237,15 @@ Item {
         Flickable {
           id: list
           width: parent.width
+          // P12. Minus the bin's band: reserved rather than overlaid, because
+          // a band drawn over the list hides the card at the bottom of it --
+          // measured on the phone, that card is the free workspace (P7b), which
+          // is the drop a drag is most often aimed at. Reserving it on the lift
+          // instead would relayout the list on the frame a window leaves the
+          // ground and move every card out from under the finger.
           height: sheet.height - Style.space(4) - Style.space(44)
                 - Style.space(4) - root.gestureStrip
+                - root.binHeight - root.cardGap
           contentHeight: cardColumn.height
           boundsBehavior: Flickable.StopAtBounds
           clip: true
@@ -1475,12 +1489,10 @@ Item {
       // P12. The bin, drawn for the length of a lift and at no other time.
       //
       // Across the foot of the sheet, where a thumb already is at the end of a
-      // drag. An overlay and not a row in the Column above: reserving space for
-      // it would relayout the card list on the frame a window leaves the ground,
-      // which moves every card out from under the finger that just picked one
-      // up. What it covers instead is the bottom of that list, and one app per
-      // workspace (F1) is what makes that cheap -- the cards are short and the
-      // band sits below the last of them until the phone has six of them.
+      // drag, in a band the list is already stopping short of (`binHeight`).
+      // Positioned here rather than laid out in the Column: it comes and goes
+      // with the lift, and a child that appears in a Column moves what is above
+      // it.
       //
       // It answers nothing: like the ghost below, the tile holds the exclusive
       // grab while a window is in the air, so an input region here would take
@@ -1497,7 +1509,7 @@ Item {
         // The list's own bottom, which already clears the strip in both
         // keyboard states -- one number rather than two that have to agree.
         anchors.bottomMargin: root.gestureStrip
-        height: root.cardHeight
+        height: root.binHeight
 
         radius: root.radiusCard
         // Lit in `urgent` under the window and outlined in it otherwise: the

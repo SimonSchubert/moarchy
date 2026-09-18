@@ -1225,6 +1225,14 @@ lift and at no other time: there is nothing to put in it otherwise, and a
 standing target that destroys something is a target a thumb finds by accident
 (C4).
 
+Its band is **reserved off the list** whether or not anything is in the air, so
+the bin covers no card. Drawn over the list instead it hides the card at the
+bottom of the sheet, which is the free workspace (P7b) — the drop a drag is most
+often aimed at. The list pays about a card's height for that permanently, and
+the alternative is worse in both directions: reserving the band on the lift
+would relayout the list on the frame a window leaves the ground, moving every
+card out from under the finger that just picked one up.
+
 It is marked in **`urgent`** where a card is marked in the accent. The accent is
 this shell's word for "this is where you would end up" (A4, C2, P4) and the bin
 is not a place you end up — it is the one drop on this sheet that cannot be
