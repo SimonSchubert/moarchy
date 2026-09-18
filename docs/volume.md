@@ -6,12 +6,15 @@ normative. The archaeology lives in [build-log.md](build-log.md).
 Ids are `V<n>`, cited by `bin/moarchy-selftest --volume` and by the code.
 
 **The keys and the panel are two things that never call each other.**
-`bin/moarchy-volume` moves the sink and stops; `moarchy.volume` watches the
-sink and draws what it sees. That is the whole wiring, and V3 is the criterion
-that keeps it: a shell that is down, or too busy to answer, costs the feedback
-and never the control — and any other way the volume moves (the shade's
-slider, an Android app under Waydroid, `wpctl` over ssh) raises the same panel
-with no second caller to teach.
+`bin/moarchy-volume` moves the sink and writes a timestamp; `moarchy.volume`
+watches both and draws what it sees. That is the whole wiring, and V3 is the
+criterion that keeps it: a shell that is down, or too busy to answer, costs the
+feedback and never the control — and any other way the volume moves (the
+shade's slider, an Android app under Waydroid, `wpctl` over ssh) raises the
+same panel with no second caller to teach.
+
+The timestamp exists for one case and it is the case this surface was built
+for (V1a): at 100% the up key changes nothing, so there is no change to watch.
 
 **Brightness is not here.** It keeps upstream's `omarchy.osd` card, fed by
 `omarchy-osd` from `omarchy-brightness-display`. This phone has no brightness
@@ -42,6 +45,14 @@ wires it to, so nothing about it is per-device.
 → `wpctl get-volume @DEFAULT_AUDIO_SINK@` differs by 0.05 across
 `moarchy-volume up`, and `omarchy-shell volume state` reads `open` after it
 
+**V1a** A press at either end of the range raises the panel too. At 100% a
+`5%+` leaves the sink where it is and PipeWire publishes nothing — which is the
+"the rocker is broken" reading this panel answers — so the key stamps
+`~/.local/state/moarchy/volume-key` and the panel watches the path. The same at
+0 on the way down.
+→ from `wpctl set-volume @DEFAULT_AUDIO_SINK@ 1.0` with the panel down,
+`moarchy-volume up` leaves `omarchy-shell volume state` == `open` and `level=100`
+
 **V2** Volume **up** unmutes. Volume **down** leaves mute alone: a thumb on the
 down key wants quieter, and a phone that unmuted itself on the way down would
 be loud at exactly the moment its owner asked for the opposite.
@@ -49,8 +60,11 @@ be loud at exactly the moment its owner asked for the opposite.
 `wpctl get-volume @DEFAULT_AUDIO_SINK@` without `[MUTED]`, and `moarchy-volume
 down` from the same state keeps it
 
-**V3** `moarchy-volume` asks the shell for nothing. It sets the sink, and the
-panel appears because the sink changed.
+**V3** `moarchy-volume` asks the shell for nothing and waits for nothing. It
+sets the sink and writes a file; both triggers are things the panel reads, not
+calls it answers, so a shell that is down or busy leaves an unread stamp rather
+than a keypress that failed. A `qs ipc` per press would also be a process per
+repeat, and sway repeats a held binding about 25 times a second.
 → `grep -c omarchy-shell /usr/lib/moarchy/bin/moarchy-volume` is 0
 
 ## V4–V7. The panel

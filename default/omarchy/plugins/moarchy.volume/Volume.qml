@@ -222,6 +222,42 @@ Item {
     root.raise()
   }
 
+  // ------------------------------------------------------- the key stamp
+  //
+  // V1a. The sink is not the whole story, and the gap is the case this surface
+  // was built for: at 100% a press of the up key sets the volume to 100%,
+  // PipeWire publishes nothing because nothing changed, and a panel that only
+  // watches the sink stays down -- the rocker reading as broken, again, this
+  // time with a surface installed to say otherwise. The same at 0 going down.
+  //
+  // So `moarchy-volume` writes a timestamp and this watches the path. It is
+  // still not being *told* in the sense V3 rules out: nothing is sent, nothing
+  // is waited on, and a shell that is not running leaves an unread file rather
+  // than a command that failed.
+  //
+  // `keyStampSeen` is the same latch as `armed`, one trigger along: FileView
+  // loads the file once when the shell starts, and a panel that greeted every
+  // login would be the bug the sink's latch already exists to prevent.
+  property bool keyStampSeen: false
+
+  FileView {
+    id: keyStamp
+
+    path: (Quickshell.env("XDG_STATE_HOME") || (Quickshell.env("HOME") + "/.local/state"))
+          + "/moarchy/volume-key"
+    watchChanges: true
+    printErrors: false
+
+    onLoaded: {
+      if (!root.keyStampSeen) { root.keyStampSeen = true; return }
+      root.raise()
+    }
+    // Absent is the normal state until the first press ever. Latch anyway, so
+    // the press that creates it is a press and not a first sighting.
+    onLoadFailed: root.keyStampSeen = true
+    onFileChanged: Qt.callLater(function () { keyStamp.reload() })
+  }
+
   // ------------------------------------------------------------ the drag
   //
   // V8. Live, like the shade's volume slider and unlike its brightness one:

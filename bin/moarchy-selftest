@@ -5408,6 +5408,28 @@ sys.exit(0 if abs(a - b) <= tol else 1)' "$1" "$2" "$3" 2>/dev/null; }
     fi
   fi
 
+  # --- V1a: a press that changes nothing is still a press -------------------
+  #
+  # The case the panel was built for, and the one the sink alone cannot see.
+  set_vol 100%
+  v_settle 100
+  v_ipc hide >/dev/null
+  sleep 0.4
+  if [[ $(v_ipc state) != closed ]]; then
+    v_skip V1a "V1a skipped: the panel would not go down at full volume first"
+  else
+    moarchy-volume up
+    sleep 1
+    v1a_state=$(v_ipc state)
+    v1a_level=$(v_field level "$(v_ipc level)")
+    if [[ $v1a_state == open && $v1a_level == 100 ]]; then
+      v_ok V1a "a press at 100% raises the panel with nothing to change"
+    else
+      v_no V1a "at full volume the panel read $v1a_state at level=${v1a_level:-?}" \
+               "PipeWire publishes nothing when nothing changes, so this is the press the key stamp is for"
+    fi
+  fi
+
   # --- V2: up unmutes, down does not ---------------------------------------
   set_vol 50%
   set_mute 1

@@ -28,6 +28,28 @@ set -uo pipefail
 SINK="@DEFAULT_AUDIO_SINK@"
 STEP=5
 
+# The stamp the panel watches, so that a press which changes nothing is still a
+# press (V1a).
+#
+# At 100% a `5%+` sets the volume to 100%, PipeWire publishes no change because
+# nothing changed, and a panel that only watches the sink stays down -- which is
+# precisely the "the rocker is broken" reading this whole surface exists to
+# answer. The same at 0 on the way down.
+#
+# A file and not an IPC call, and the difference is the cost: sway repeats a
+# held binding ~25 times a second, and a `qs ipc` process per repeat is a
+# backlog on this SoC. A redirect is a bash builtin -- no fork, nothing to wait
+# for, and nothing that can fail in a way that costs the keypress. The shell
+# watches the path with a FileView; if it is not running, nobody reads it and
+# the volume still moved (V3).
+STAMP_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/moarchy"
+stamp() {
+  [[ -d $STAMP_DIR ]] || mkdir -p "$STAMP_DIR" 2>/dev/null || return 0
+  # The content has to differ every time: a watcher that compares contents
+  # would see one unchanging file and report nothing after the first press.
+  printf '%s\n' "${EPOCHREALTIME:-$SECONDS}" >"$STAMP_DIR/volume-key" 2>/dev/null || true
+}
+
 case "${1:-}" in
   up)
     # V2. Up means "I want to hear this", so it unmutes on the way. Ordered
@@ -36,15 +58,18 @@ case "${1:-}" in
     wpctl set-mute "$SINK" 0 >/dev/null 2>&1
     # -l 1.0 is the ceiling. Without it wpctl walks past 100% into the
     # software boost, which on this speaker is distortion and not loudness.
-    exec wpctl set-volume -l 1.0 "$SINK" "${STEP}%+"
+    wpctl set-volume -l 1.0 "$SINK" "${STEP}%+"
+    stamp
     ;;
   down)
     # V2. No unmute. A thumb on the down key is asking for quieter, and a phone
     # that unmuted itself here would be loud at exactly the wrong moment.
-    exec wpctl set-volume "$SINK" "${STEP}%-"
+    wpctl set-volume "$SINK" "${STEP}%-"
+    stamp
     ;;
   mute)
-    exec wpctl set-mute "$SINK" toggle
+    wpctl set-mute "$SINK" toggle
+    stamp
     ;;
   *)
     echo "usage: moarchy-volume {up|down|mute}" >&2
