@@ -20,9 +20,9 @@
 // A con_id is what this screen exists to move things by. `[con_id=N] move
 // container to workspace number M` addresses exactly one window; the title
 // criteria the back gesture falls back on address every window that spells the
-// same thing (M5), which on a phone where two terminals are ordinary is a drag
-// that moves the wrong one. So: the tree, on the sheet's own terms, while the
-// sheet is up.
+// same thing (P4, P13), which on a phone where two terminals are ordinary is a
+// drag that moves -- or closes -- the wrong one. So: the tree, on the sheet's
+// own terms, while the sheet is up.
 //
 // ---------------------------------------------------------------------------
 // What it does not own

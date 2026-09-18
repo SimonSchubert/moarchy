@@ -186,7 +186,7 @@ because `gtk-launch` asks the running instance to present itself.
 → from a workspace holding an app, `omarchy-shell drawer launch <id>` for an
 app that is not running leaves the focused workspace, within two seconds,
 holding that app and nothing else; for `moarchy.device`, and for an app already
-on the shelf, the focused workspace has not changed
+running on a workspace of its own, the focused workspace has not changed
 
 ### What the splash does not cover
 

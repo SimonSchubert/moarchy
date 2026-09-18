@@ -141,8 +141,8 @@ Twelve plugins and one directory that is not a plugin, all under
 | Plugin | Kind | What it owns | Contract |
 | --- | --- | --- | --- |
 | `moarchy.gestures` | panel | the bottom strip, the home pill, the back edge — every touch gesture, and the shell's only compositor-dispatch seam | [`gestures.md`](gestures.md) |
-| `moarchy.drawer` | overlay | the app grid, its search field, the open-apps shelf, the uninstall card | [`gestures.md`](gestures.md) §N, [`apps.md`](apps.md) |
-| `moarchy.overview` | overlay | every workspace as a card, and dragging a window from one to another | [`gestures.md`](gestures.md) §P |
+| `moarchy.drawer` | overlay | the app grid, its search field, the uninstall card | [`gestures.md`](gestures.md) §N, [`apps.md`](apps.md) |
+| `moarchy.overview` | overlay | every workspace as a card, dragging a window from one to another, and the bin that closes one | [`gestures.md`](gestures.md) §P |
 | `moarchy.shade` | overlay | the pull-down: quick tiles, brightness and volume, media, notification history | [`shade.md`](shade.md) |
 | `moarchy.settings` | overlay | the settings screen tree and the IPC it answers on | [`settings.md`](settings.md) |
 | `moarchy.themes` | overlay | the theme picker, as a grid of live swatches | [`settings.md`](settings.md) §theme |
@@ -171,7 +171,7 @@ Twelve plugins and one directory that is not a plugin, all under
 | `Sheet.js` | the one list of sheets, how they stack, and what every `open()` does identically |
 | `Edge.js` | which axis an edge is, which way it opens, and where a sheet sits part-way in. The one place a sheet's entry edge is arithmetic rather than an `if` |
 | `TrailingSquare.qml` | the rectangle that squares off a sheet's trailing corners, on whichever edge is trailing |
-| `Apps.js` | a window → its icon, its name, its glyph. The drawer's shelf and the overview's cards draw the same tile from it |
+| `Apps.js` | a window → its icon, its name, its glyph. The overview's cards draw their tiles from it, and the drawer asks it whether an app is already running |
 | `ShellApps.js` | which of our screens are windows, and the compositor helpers |
 | `Theme.js` | the colour arithmetic: luminance, contrast, mix, readableOn |
 

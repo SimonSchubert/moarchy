@@ -131,14 +131,19 @@ def hold(x, y, ms):
 
 
 def drag(x1, y1, x2, y2, hold_ms, ms):
-    """Press, wait, then drag -- the gesture the overview moves a window with
-    (docs/gestures.md P6).
+    """Press, optionally wait, then drag -- the gesture the overview moves a
+    window with (docs/gestures.md P6).
 
-    Not `swipe` with a slow start: a lift is claimed by *time*, and travel past
-    the slop cancels it, so anything that begins by moving is a scroll however
-    slowly it moves. The wait jitters by a pixel for `hold`'s reason -- identical
-    coordinates are coalesced away below the client, and a touch that stops
-    sending reads as stalled rather than as held.
+    `hold_ms` may be 0, and for the overview it is: the lift is claimed by
+    travel past the slop, so a dwell before it proves nothing the travel does
+    not. It is kept as an argument because a dwell is what tells a lift apart
+    from a hold that has to *not* fire (P6, L1), and the wait jitters by a pixel
+    for `hold`'s reason -- identical coordinates are coalesced away below the
+    client, and a touch that stops sending reads as stalled rather than as held.
+
+    What is not optional is the beat at the end, below: the drop target is read
+    from where the drag stopped, and a release on the same frame as the last
+    move can land before it.
     """
     t = Touch()
     t.down(x1, y1)

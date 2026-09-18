@@ -266,10 +266,10 @@ Item {
   }
 
   // The names the controls on this sheet already read. `sheetPressX` and
-  // `sheetPressY` are the hold's (L3) and the shelf tile's: a long press has
-  // to be cancelled by travel in *any* direction, because a finger that has
-  // gone 40px sideways has plainly stopped meaning "tell me about this one",
-  // and the sheet's own gesture is one axis and has never needed x.
+  // `sheetPressY` are the hold's (L3): a long press has to be cancelled by
+  // travel in *any* direction, because a finger that has gone 40px sideways has
+  // plainly stopped meaning "tell me about this one", and the sheet's own
+  // gesture is one axis and has never needed x.
   readonly property bool sheetDragging: sheetDrag.latched
   readonly property bool sheetWasDrag: sheetDrag.wasDrag
   readonly property real sheetPressX: sheetDrag.startX
@@ -560,127 +560,38 @@ Item {
     function onAppsChanged() { root.appsRevision++; root.buildIndex() }
   }
 
-  onShellChanged: { root.buildIndex(); root.rebuildMru() }
-  Component.onCompleted: { root.buildIndex(); root.rebuildMru() }
+  onShellChanged: root.buildIndex()
+  Component.onCompleted: root.buildIndex()
 
-  // ----------------------------------------------------- M. open apps (M1-M11)
+  // ------------------------------------------ is this app already running?
   //
-  // The shelf at the top of the sheet, and the one thing on this surface that
-  // does not come out of `appLibrary`: a window is not an entry.
+  // The one question this sheet asks about *windows* rather than about desktop
+  // entries, and it is asked on the launch path: an app that is already running
+  // maps no new window, so the hop to a free workspace has nothing to arrive on
+  // (windows.md L10).
   //
-  // It used to be asked of moarchy.recents, which owned the only
-  // ToplevelManager walk in the shell. The carousel is gone (M0) and its model
-  // came here rather than to a shared component, because there is exactly one
-  // consumer left: a component shared by one plugin is indirection with a
-  // manifest. What it kept from the carousel is every line of reasoning below
-  // -- the MRU rule, the appId index and its suffix fallback, the shell-app
-  // branch -- because none of that was about being a carousel.
-  //
-  // zwlr-foreign-toplevel-management-v1, which Sway implements, gives the
-  // appId, the title, which window is active, a closed() signal, and the only
-  // two verbs a tile needs: close(), and enough identity to focus by. No fork,
-  // no `swaymsg -t get_tree` walk, no polling.
-
-  // Most-recently-used first, which is the order a thumb expects: the app you
-  // just left is the leftmost tile. ToplevelManager hands windows over in
-  // creation order, so the ordering is kept here.
-  property var mru: []
-
-  function indexOfToplevel(list, tl) {
-    for (var i = 0; i < list.length; i++) if (list[i] === tl) return i
-    return -1
-  }
-
-  // Everything the shelf can show: the compositor's windows, which since K1
-  // includes this shell's own screens -- Settings, Wi-Fi and Bluetooth are
-  // windows and arrive here like `foot` does, with no branch of their own.
-  function liveApps() {
-    var windows = ToplevelManager.toplevels ? ToplevelManager.toplevels.values : []
-    var out = []
-    for (var i = 0; i < windows.length; i++) out.push(windows[i])
-    return out
-  }
-
-  // Rebuilt rather than mutated, because a `var` holding an array only
-  // notifies on assignment -- pushing into it in place updates nothing.
-  function rebuildMru(): void {
-    var live = root.liveApps()
-    var next = []
-
-    // Anything already ranked keeps its rank, as long as it still exists.
-    for (var i = 0; i < root.mru.length; i++)
-      if (root.indexOfToplevel(live, root.mru[i]) >= 0) next.push(root.mru[i])
-
-    // New windows go to the front: a window that just mapped is the most
-    // recent thing there is.
-    for (var j = 0; j < live.length; j++)
-      if (root.indexOfToplevel(next, live[j]) < 0) next.unshift(live[j])
-
-    // And the active one leads, so the first tile is the app the swipe came
-    // out of. activeToplevel reads null here even with a window focused -- the
-    // same reason the back gesture had to stop trusting it -- so fall back to
-    // the per-toplevel `activated` flag, which does track focus.
-    var active = ToplevelManager.activeToplevel
-    if (!active)
-      for (var k = 0; k < live.length; k++)
-        if (live[k] && live[k].activated) { active = live[k]; break }
-    if (active) {
-      var at = root.indexOfToplevel(next, active)
-      if (at > 0) { next.splice(at, 1); next.unshift(active) }
-    }
-    root.mru = next
-  }
-
-  Connections {
-    target: ToplevelManager
-    function onActiveToplevelChanged() { root.rebuildMru() }
-  }
-
-  Connections {
-    target: ToplevelManager.toplevels
-    function onValuesChanged() { root.rebuildMru() }
-  }
-
-  // M10. Windows this opening of the drawer has asked to close. `close()` is a
-  // request and not a kill -- an editor with unsaved work answers it with a
-  // dialog and keeps its window -- so a tile that waited for the toplevel to
-  // actually go would hang in the air for as long as the app took to decide,
-  // or spring back under a finger that had already thrown it away. It goes at
-  // once, and this is what keeps it gone. Cleared by open(), so an app that
-  // refused to quit is running and has its tile back.
-  property var closingApps: []
-
-  readonly property var openApps: {
-    var live = root.mru || []
-    var out = []
-    for (var i = 0; i < live.length; i++)
-      if (root.closingApps.indexOf(live[i]) < 0) out.push(live[i])
-    return out
-  }
-
-  // ------------------------------------------- what to draw for a window
-  //
-  // The index and the four resolvers are moarchy.common/Apps.js: the overview's
-  // cards draw the same tile from the same handle (gestures.md P5), and a
-  // second implementation of "which icon is this window" is how the shelf came
-  // to draw every moarchy-apps plugin as `org.quickshell` with no artwork at
-  // all (K5).
+  // Answered through moarchy.common/Apps.js, which is the same appId index the
+  // overview resolves its tiles through (gestures.md P5). One index, because
+  // two implementations of "which app is this window" is how every moarchy-apps
+  // plugin came to be drawn as `org.quickshell` with no artwork at all (K5).
   //
   // The index is held here rather than there because the *timing* is this
   // sheet's: rebuilt on `appsChanged` below, where the overview rebuilds when
   // its own sheet comes up. Separate from `appRows` on purpose -- that one is
-  // the query's answer and re-sorts on every keystroke, and a tile's icon must
-  // not depend on what is in the search field.
+  // the query's answer and re-sorts on every keystroke, and what is running
+  // must not depend on what is in the search field.
   property var appIdIndex: ({})
 
   function buildIndex(): void { root.appIdIndex = Apps.index(root.shell) }
 
-  // Whether a window of this entry's app is already open. Asked of the same
-  // appId index the shelf resolves its icons through, so an app is "running"
-  // here exactly when the shelf would draw a tile for it.
+  // Read straight off zwlr-foreign-toplevel-management-v1, which sway
+  // implements: no fork, no `swaymsg -t get_tree` walk, no polling, and an
+  // appId per window, which is all this question needs. Since K1 that list
+  // includes this shell's own screens -- Settings, Wi-Fi, Bluetooth and SIM are
+  // windows and arrive here like `foot` does, with no branch of their own.
   function entryIsRunning(entry): bool {
     if (!entry) return false
-    var open = root.openApps || []
+    var open = ToplevelManager.toplevels ? ToplevelManager.toplevels.values : []
     for (var i = 0; i < open.length; i++) {
       var e = open[i] ? Apps.entryForAppId(root.appIdIndex, open[i].appId) : null
       if (e && String(e.id) === String(entry.id)) return true
@@ -690,50 +601,6 @@ Item {
 
   // L10. Whether an entry summons a plugin rather than starting a process.
   function pluginSummonedBy(entry) { return Apps.pluginSummonedBy(entry) }
-
-  function openIconFor(app) { return Apps.iconFor(root.shell, root.appIdIndex, app) }
-  function openNameFor(app) { return Apps.nameFor(root.shell, root.appIdIndex, app) }
-
-  // Only the IPC prints the title: a tile is too narrow for a second line (M4).
-  function openTitleFor(app) { return Apps.titleFor(root.shell, app) }
-  function openGlyphFor(app) { return Apps.glyphFor(root.shell, app) }
-
-  // The tiles are a grid row: same icon, same column pitch, same label, one
-  // dot (M4). The height is the grid's cell plus the dot and its gap, because
-  // a tile carries one thing a cell does not and shortening the label to pay
-  // for it would make the shelf's type smaller than the grid's -- which is the
-  // second visual language M4 exists to avoid.
-  readonly property int openDot: Math.max(4, Style.space(5))
-  readonly property int openCellHeight: Style.space(86)
-
-  // M6. Travel that a tile has to be flicked up before releasing closes its
-  // app.
-  readonly property int openDismissTravel: Style.space(40)
-
-  // M5. A sway focus dispatch and not `activate()`: the foreign-toplevel
-  // request does nothing on this compositor, for `foot` as much as for one of
-  // this shell's own windows. The call is handed to moarchy.gestures, which is
-  // where every other compositor call in this shell already lives.
-  function focusOpen(app): void {
-    if (!app) return
-    ShellApps.focusToplevel(root.shell, app)
-    root.dismiss()
-  }
-
-  // M6, M9. `close()` is xdg_toplevel.close -- a close *request*, so an editor
-  // with unsaved work prompts rather than dies. That is what makes firing it
-  // from a flick acceptable, and a shell app takes it like any other window:
-  // Qt hides the window and the plugin's own onUnmapped resets its state (K6).
-  //
-  // Closing the last one leaves the drawer standing (M9). There is nowhere to
-  // send it: this surface is not a switcher that empties, it is the launcher.
-  function closeOpen(app): void {
-    if (!app) return
-    app.close()
-    var next = root.closingApps.slice()
-    next.push(app)
-    root.closingApps = next
-  }
 
   // --------------------------------------------------- settings results (O)
   //
@@ -1119,19 +986,6 @@ Item {
     root.query = ""
     searchField.text = ""
 
-    // M10. A window that refused to close is still running, and this is where
-    // it gets its tile back.
-    //
-    // Guarded, and the guard is not a micro-optimisation. `openApps` is a
-    // binding over this, so an assignment notifies whether or not the value
-    // changed; it re-evaluates to a fresh JS array, and the shelf's ListView
-    // discards and rebuilds every delegate -- each one re-resolving an icon, a
-    // glyph and a name. That landed on the frame the sheet arrives, which is
-    // the frame the drawer looked slow on. Nothing was ever closed on most
-    // opens, so most of those rebuilds produced the list that was already
-    // there.
-    if (root.closingApps.length > 0) root.closingApps = []
-
     // L5. The drawer opens on the grid, never on somebody's half-read card.
     root.closeDetail()
     // A4. A drag that armed home and was then abandoned must not leave the
@@ -1474,55 +1328,6 @@ Item {
     }
 
 
-    // ---------------------------------------------------- M. open apps
-    //
-    // One line per tile, in the format `recents list` prints -- same order,
-    // same fields, a shell app named by its plugin id for the reason recorded
-    // there (K9). M1 is then a diff of the two rather than two lists read side
-    // by side, which is the only way to assert that this row *is* the
-    // carousel's model and not a second one that happens to agree today.
-    function openApps(): string {
-      var out = []
-      var live = root.openApps
-      for (var i = 0; i < live.length; i++) {
-        var app = live[i]
-        if (!app) continue
-        var own = ShellApps.forToplevel(root.shell, app)
-        out.push((own ? own.pluginId : (app.appId || "?"))
-                 + " " + root.openTitleFor(app))
-      }
-      return out.join("\n")
-    }
-
-    // Where a tile is, so the flick (M6) and the tap (M5) can be aimed rather
-    // than guessed at -- the same two coordinate frames cellTarget reports,
-    // and for the same reason.
-    //
-    // `no row` is what it answers while the shelf is not drawn, which is what
-    // M2 and M9 are checked with. A word and not a coordinate, deliberately: a
-    // check handed a rect it cannot tell from a real one is a check that taps
-    // the search field and passes (style.md F6).
-    function openTarget(index: string): string {
-      // Through `headerItem` and its alias, because the shelf is the grid's
-      // header now and an id declared inside a Component cannot be named from
-      // out here. A collapsed header answers `no row` the same way a missing
-      // one does: both mean there is nothing on screen to aim at.
-      var section = grid ? grid.headerItem : null
-      if (!section || !section.shown) return "no row"
-      var openRow = section.row
-      if (!openRow || typeof openRow.itemAtIndex !== "function") return "no row"
-      var item = openRow.itemAtIndex(parseInt(String(index || "0")))
-      if (!item) return "no tile"
-      var app = item.modelData
-      var own = app ? ShellApps.forToplevel(root.shell, app) : null
-      var p = item.mapToItem(null, 0, 0)
-      var g = item.mapToGlobal(0, 0)
-      return "id=" + (own ? own.pluginId : (app && app.appId ? String(app.appId) : ""))
-           + " rect=" + Math.round(p.x) + "," + Math.round(p.y)
-           + " size=" + Math.round(item.width) + "x" + Math.round(item.height)
-           + " global=" + Math.round(g.x) + "," + Math.round(g.y)
-    }
-
     // Opens the card on an id, down the same function the hold timer calls.
     // Keyed the way `launch` is, and it misses for the same reason: callers
     // pass the bare id with no .desktop suffix.
@@ -1663,9 +1468,8 @@ Item {
     // a pull-down costs a resize. Not left full-screen and transparent, which
     // is a full-screen blend in every frame on a Mali-400 (build-log 6b); a
     // band blends one row. It is not free: it still redraws when what is on the
-    // sheet changes, and the shelf follows focus, so a workspace switch commits
-    // one to three one-pixel frames here (+25ms of sway GPU time per switch on
-    // the 3a).
+    // sheet changes, which is a one-pixel frame here (+25ms of sway GPU time
+    // per switch on the 3a when it lands on a workspace change).
     //
     // Warming used to start on the press, which paid the grow on a sideways
     // workspace swipe as well -- the hitch that went away when this plugin
@@ -2141,345 +1945,6 @@ Item {
           // delegates each holding a decoded icon is real memory on a phone
           // that has 900MB to play with.
           cacheBuffer: cellHeight * 2
-
-          // A header changes where the content *starts*, not only how tall it
-          // is: `originY` moves up by the header's height and `contentY` does
-          // not follow, so a shelf that appears after the view was built
-          // leaves the grid scrolled to exactly where its first row used to
-          // be -- the apps look right and the row above them is cut in half,
-          // which is precisely how it landed on the phone the first time.
-          //
-          // Corrected by the same delta rather than by snapping to the top,
-          // because the two cases want the same answer: at the top, moving
-          // `contentY` by the change keeps the shelf fully visible; scrolled
-          // into the apps -- where a closing app can collapse the header under
-          // you -- it keeps what is on screen exactly where it is. Neither is
-          // a scroll anybody asked for.
-          property real lastOriginY: 0
-          onOriginYChanged: {
-            var shift = grid.originY - grid.lastOriginY
-            grid.lastOriginY = grid.originY
-            if (shift !== 0) grid.contentY += shift
-          }
-
-          // ----------------------------------------- M. open apps
-          //
-          // The shelf is the grid's *header*, not a sibling above it, so it
-          // scrolls with the apps instead of standing over them: dragging the
-          // grid up carries the row off the top the way it carries the first
-          // row of icons, and there is one scrolling thing on this sheet
-          // rather than one that moves and one that does not.
-          //
-          // That is also why the flick (M6) has to claim its axis explicitly
-          // in the tile below. Pinned, the row had no competitor for an
-          // upward drag; inside the scroll it has the grid, and an
-          // arbitration that is left to whichever threshold fires first is
-          // one that resolves differently on a slow finger than on a fast one.
-          header: Column {
-            id: openSection
-
-            // How the IPC reaches the tiles: an id inside a Component is
-            // scoped to that Component, so `grid.headerItem` is the only
-            // handle there is from outside it.
-            property alias row: openRow
-
-            readonly property bool shown:
-              root.openApps.length > 0 && root.query === ""
-
-            width: grid.width
-            // Collapsed to nothing rather than merely hidden (M2, M3). A
-            // header keeps its height in `contentHeight` whether it is
-            // visible or not, so an invisible one leaves its own height as a
-            // hole at the top of the grid -- a screenful of apps pushed down
-            // by a row that is not there.
-            height: openSection.shown ? openSection.implicitHeight : 0
-            visible: openSection.shown
-            spacing: Style.space(2)
-            // The gap to the first row of apps. It was the sheet column's
-            // spacing while this was a sibling; inside the view there is no
-            // spacing to inherit and the shelf has to carry its own.
-            bottomPadding: Style.space(10)
-
-            Text {
-              id: openCaption
-              leftPadding: Style.space(6)
-              topPadding: Style.space(2)
-              bottomPadding: Style.space(2)
-              text: "OPEN"
-              font.family: Style.font.family
-              font.pixelSize: Style.font.caption
-              font.weight: root.textWeight
-              // The settings caption's letter spacing, because this is the same
-              // kind of thing: a divider that happens to be a word (O).
-              font.letterSpacing: Style.space(1)
-              color: root.subdued
-            }
-
-            ListView {
-              id: openRow
-              width: parent.width
-              height: root.openCellHeight
-              orientation: ListView.Horizontal
-              model: root.openApps
-              spacing: 0
-              boundsBehavior: Flickable.StopAtBounds
-              // Four fit, and four is what this phone has room for. A fifth
-              // window makes the row scroll rather than making the tiles
-              // smaller: a tile narrower than a grid cell stops being one (M4).
-              //
-              // Horizontal only, which is what keeps the flick (M6) and the
-              // sheet's close drag (M7) reachable through it: a Flickable
-              // steals the grab on the axis it flicks, and this one does not
-              // flick vertically.
-              interactive: contentWidth > width
-              // Clipped, unlike the carousel's row. That one is the whole
-              // surface and has nothing to spill onto; this one is a 86px band
-              // in the middle of a sheet, so an unclipped tile scrolled off its
-              // left edge would paint over the search field. A flicked tile
-              // therefore leaves under the caption rather than over it, which
-              // is the same direction and reads the same way.
-              clip: true
-              cacheBuffer: root.openCellHeight * 2
-
-              delegate: Item {
-                id: tileSlot
-                required property var modelData
-
-                // K5, M4. A shell app has no desktop entry to take an icon from
-                // -- its app id is the shell process's own -- so it wears the
-                // glyph its card wears. Non-empty for exactly those.
-                readonly property string glyph: root.openGlyphFor(tileSlot.modelData)
-
-                width: grid.cellWidth
-                height: openRow.height
-
-                // M6. The flick is hand-rolled rather than a MouseArea `drag`,
-                // for the reason every gesture on this sheet is: this handler is
-                // also the sheet's close-drag handle (H1), and Qt's own drag
-                // would latch on the downward travel that belongs to the sheet.
-                // Clamped to `maximumY: 0` it would move nothing while doing it,
-                // so the symptom would be a downward drag that quietly stopped
-                // closing the drawer -- and stopped delivering the click too.
-                //
-                // Read the way sheetMove reads travel, in scene coordinates and
-                // in the same frame, so exactly one of the two ever latches.
-                property bool flicking: false
-                // Cleared on the next press and not on release, for the reason
-                // `sheetWasDrag` is: `clicked` arrives after `released`, and a
-                // flag cleared too early focuses the app that was just thrown
-                // away.
-                property bool wasFlick: false
-
-                Item {
-                  id: tile
-                  // Width and height rather than `anchors.fill`: the flick moves
-                  // `y`, and an item anchored to its parent has no y of its own
-                  // to move.
-                  width: parent.width
-                  height: parent.height
-
-                  PressVeil {
-                    anchors.fill: parent
-                    anchors.margins: Style.space(3)
-                    radius: root.radiusTile
-                    // Off once the tile is following the finger: the movement is
-                    // the feedback, and a lit tile on its way out is noise (H6).
-                    on: tileArea.pressed && !root.sheetDragging && !tileSlot.flicking
-                  }
-
-                  Column {
-                    anchors.centerIn: parent
-                    width: parent.width - Style.space(6)
-                    spacing: Style.space(4)
-
-                    Item {
-                      anchors.horizontalCenter: parent.horizontalCenter
-                      width: root.iconSize
-                      height: root.iconSize
-
-                      Image {
-                        anchors.fill: parent
-                        visible: tileSlot.glyph === ""
-                        // Without sourceSize an SVG rasterises at its natural
-                        // size -- 512px squares, held per tile.
-                        sourceSize: Qt.size(root.iconSize, root.iconSize)
-                        asynchronous: true
-                        cache: true
-                        fillMode: Image.PreserveAspectFit
-                        source: tileSlot.glyph === ""
-                          ? root.openIconFor(tileSlot.modelData) : ""
-                      }
-
-                      // Centred on its ink rather than on the box the font
-                      // reserves, next to icons that are centred exactly
-                      // (style.md B5, E5).
-                      Ui.OpticalGlyph {
-                        anchors.fill: parent
-                        visible: tileSlot.glyph !== ""
-                        text: tileSlot.glyph
-                        fontFamily: Style.font.family
-                        fontSize: root.iconSize
-                        color: root.textOnSurface
-                      }
-                    }
-
-                    Text {
-                      width: parent.width
-                      horizontalAlignment: Text.AlignHCenter
-                      text: root.openNameFor(tileSlot.modelData)
-                      font.family: Style.font.family
-                      font.pixelSize: Style.font.caption
-                      font.weight: root.textWeight
-                      color: root.textOnSurface
-                      elide: Text.ElideRight
-                      // One line, where the grid's cell takes two. A second line
-                      // here would move the dot down a row on some tiles and not
-                      // others, and a marker that is not in the same place on
-                      // every tile is not a marker.
-                      maximumLineCount: 1
-                    }
-
-                    // M4. The whole of what says "running". It is the accent
-                    // because the accent is what this shell already uses for
-                    // "the window you would go back to" -- it is the carousel's
-                    // border on the active card, at the size a tile can carry.
-                    Rectangle {
-                      anchors.horizontalCenter: parent.horizontalCenter
-                      width: root.openDot
-                      height: root.openDot
-                      radius: width / 2
-                      color: Color.accent
-                    }
-                  }
-
-                  // The spring is for the gesture that did *not* commit: a tile
-                  // let go short of the travel comes back rather than sliding,
-                  // which is the same answer a carousel card gives. Off while
-                  // the finger owns `y`, so the tile tracks it 1:1.
-                  Behavior on y {
-                    enabled: !tileSlot.flicking
-                    SpringAnimation { spring: 4; damping: 0.4 }
-                  }
-                  Behavior on opacity { NumberAnimation { duration: 140 } }
-                }
-
-                MouseArea {
-                  id: tileArea
-                  anchors.fill: parent
-
-                  // Axis arbitration, and the whole of it. Three things want
-                  // a drag that starts on a tile: the row beside it pages
-                  // (horizontal), the grid underneath scrolls (vertical,
-                  // because the shelf is inside it), and the tile itself
-                  // flicks away (vertical). So the axis is claimed on the
-                  // first real movement and nothing is left to threshold
-                  // order: vertical-dominant and this handler keeps the
-                  // gesture, horizontal-dominant and the row is free to take
-                  // it -- exactly the split the carousel's cards get for free
-                  // from a horizontal view and a `drag.axis: YAxis`.
-                  //
-                  // The cost is stated rather than hidden: the grid cannot be
-                  // scrolled by a finger that starts on a tile. It is one 86px
-                  // row at the top of a sheet that is scrollable everywhere
-                  // else, and the alternative -- letting the grid win -- is a
-                  // flick that closes an app only when the grid happens to be
-                  // at its top.
-                  preventStealing: false
-
-                  onPressed: mouse => {
-                    tileSlot.flicking = false
-                    tileSlot.wasFlick = false
-                    tileArea.preventStealing = false
-                    flickOut.stop()
-                    tile.y = 0
-                    tile.opacity = 1
-                    // The sheet's press, unchanged: a downward drag from a tile
-                    // is still a drag on the sheet (M7).
-                    root.sheetPress(this, mouse)
-                    // M8. Deliberately no armHold(): the detail card is about a
-                    // desktop entry and a tile is a window.
-                  }
-
-                  onPositionChanged: mouse => {
-                    var p = this.mapToItem(null, mouse.x, mouse.y)
-                    var dy = p.y - root.sheetPressY
-                    var dx = p.x - root.sheetPressX
-                    // Claimed once, on the first movement past a few pixels,
-                    // and well under either flick or scroll threshold -- the
-                    // point is to have decided before anything else asks.
-                    if (!tileArea.preventStealing
-                        && (Math.abs(dx) > 3 || Math.abs(dy) > 3))
-                      tileArea.preventStealing = Math.abs(dy) > Math.abs(dx)
-                    // Upward past the slop is a flick, and stays one for the
-                    // rest of the gesture -- a finger that comes back down does
-                    // not hand the sheet a drag it never started.
-                    if (!root.sheetDragging
-                        && (tileSlot.flicking || dy < -root.dragSlop)) {
-                      tileSlot.flicking = true
-                      // The slop comes out of the travel, so the tile starts
-                      // moving from where the finger was when it latched rather
-                      // than jumping by one slop.
-                      tile.y = Math.max(-tileSlot.height,
-                                        Math.min(0, dy + root.dragSlop))
-                      return
-                    }
-                    root.sheetMove(this, mouse)
-                  }
-
-                  onReleased: {
-                    if (tileSlot.flicking) {
-                      tileSlot.flicking = false
-                      tileSlot.wasFlick = true
-                      if (tile.y <= -root.openDismissTravel) flickOut.start()
-                      else tile.y = 0
-                      // The sheet's touch still has to be ended. It never
-                      // latched -- a flick is upward and this sheet latches
-                      // downward -- so before F2 leaving it unfinished cost
-                      // nothing. It now strands a live watchdog that fires
-                      // four seconds later and puts `progress` back: measured
-                      // on the device, M5 read the drawer as open because M6's
-                      // flick had reopened it from behind.
-                      root.sheetCancel()
-                      return
-                    }
-                    root.sheetRelease()
-                  }
-
-                  onCanceled: {
-                    tileSlot.flicking = false
-                    tile.y = 0
-                    root.sheetCancel()
-                  }
-
-                  onClicked: {
-                    if (root.sheetWasDrag || tileSlot.wasFlick) return
-                    root.focusOpen(tileSlot.modelData)
-                  }
-                }
-
-                // Let the tile leave before the model drops it, so the row
-                // closing the gap reads as a consequence rather than a glitch --
-                // the carousel's dismissOut, at a tile's scale.
-                SequentialAnimation {
-                  id: flickOut
-                  ParallelAnimation {
-                    NumberAnimation { target: tile; property: "y"
-                                      to: -tileSlot.height
-                                      duration: 140; easing.type: Easing.OutCubic }
-                    NumberAnimation { target: tile; property: "opacity"; to: 0
-                                      duration: 140 }
-                  }
-                  ScriptAction {
-                    script: {
-                      root.closeOpen(tileSlot.modelData)
-                      tile.y = 0
-                      tile.opacity = 1
-                    }
-                  }
-                }
-              }
-            }
-          }
 
           delegate: Item {
             required property var modelData

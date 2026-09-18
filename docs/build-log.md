@@ -2010,6 +2010,48 @@ package is byte-identical to 4.0.3-5's, so a device run would test the previous
 build again. The url still says `basecamp/omarchy` and still reaches
 `omacom/omarchy` by a 301; upstream.md's constraint about that is unchanged.
 
+## 6x. One surface for what is running (2026-09-18)
+
+The drawer had a shelf of open apps across its top and the overview had a card
+per workspace, and both were answering "what is running". The shelf went, with
+its twelve criteria (§M), and what it could do that the overview could not --
+close a window -- went to the overview as a bin.
+
+**The shelf's own axis problem went with it.** A tile inside the grid's header
+had three claimants for a vertical drag: the row paged sideways, the grid
+scrolled, and the tile flicked away. It arbitrated by hand -- `preventStealing`
+flipped on the first 3px of dominant travel -- and §8's first open defect was a
+downward flick that stopped closing the drawer in exactly the horizontal band
+that row occupies. `refactor.md` H4 had named that arbitration and left it.
+
+**The lift stopped being claimed by time.** A hold was the only axis left when
+a window had to be able to travel up and down to reach a card and rightward
+belonged to the sheet. A bin is a place rather than a direction, so the lift is
+now the ordinary claim every other gesture here makes -- travel past
+`dragSlop` -- and the tile takes the grab from the press instead of racing the
+Flickable's own threshold for it. The 500ms that made drag-and-drop feel like a
+wait is gone rather than shortened; the drawer's hold (L1) keeps the number,
+and there is still one hold on this phone.
+
+**What a close is, and is not.** A drop in the bin dispatches
+`[con_id=N] kill`, which is sway's name for `xdg_toplevel.close` -- a request,
+so an editor with unsaved work prompts. By con_id and not through the
+foreign-toplevel handle, which is matched on app id and title and is ambiguous
+for two terminals and for every one of this shell's own screens.
+
+Five IPC verbs moved or arrived with it. `drawer openApps` became
+`overview windows` -- read from `ToplevelManager` rather than from the board,
+so it still answers with the sheet shut, which is the state K1, K4, K5 and K6
+all ask it in -- and `lifted`, `aim`, `trash`, `binTarget` and `tileTarget` are
+what make P4, P6, P12 and P13 runnable. P4 gained the finger check the shelf's
+tap had (`activate()` is a no-op on this compositor, and a tap driven from the
+app it names cannot see that); the M block became a P block that drives the
+same three gestures on the other surface.
+
+**Not run on either device.** `scripts/style-check.sh` passes at 17/17 and the
+suites parse; `bin/moarchy-selftest --gestures` needs the phone, and the
+screenshots in `README.md` still show the shelf until they are retaken.
+
 ## 7. Hardware status
 
 | | |
@@ -2022,37 +2064,14 @@ build again. The url still says `basecamp/omarchy` and still reaches
 
 ## 8. Known-bad / open
 
-- **A downward flick starting on the open-apps shelf does not close the drawer,
-  where the same flick closes it from everywhere else.** Reported 2026-09-15 by
-  the session that fixed the speed reading (a7045b4), measured at five of six
-  start positions closing — y=120, 200, 500, 800, 1100 panel — and y≈300-400
-  panel failing, with a drag trace of `98 95 93 … 78` indistinguishable from the
-  runs that succeed.
-
-  **The trace is what identifies it, by being identical.** It records progress,
-  not speed. Ending at 78 with `closeCommit: 0.7` means the distance rule could
-  never have committed that gesture in *any* of the six runs — 0.78 is above the
-  threshold, so every one of them closed on the fling term or not at all. So this
-  is not a threshold that wants moving and not a travel that fell short: it is a
-  flick that stops being read as a flick in one horizontal band.
-
-  **That band is the shelf row.** Bar 26 + handle strip + the 46px search pill +
-  spacing puts `openRow` at roughly 120-206 logical, and y=300-400 panel is
-  150-200 logical, inside it.
-
-  **?** The hypothesis, not concluded: `tileArea` is the one control on this
-  sheet that still hand-rolls its own axis arbitration — `preventStealing: false`
-  until `|dx| > 3 || |dy| > 3`, inside a horizontal `ListView` that competes for
-  the same grab. `refactor.md` H4 names it and deliberately left it, on the
-  grounds that its two tests are each a different half of the tracker's condition.
-  A few opening frames spent deciding who owns the gesture is exactly what would
-  starve an interval-based speed reading of its early samples, and a7045b4 made
-  the reading an interval. If that is it, the defect is older than a7045b4 and was
-  invisible while speed was read between two adjacent events.
-
-  Cheapest next step: drive the same flick from inside and outside the band with a
-  probe on the tracker, and compare the number of position events each delivers
-  before the latch — not the traces, which already agree.
+- ~~**A downward flick starting on the open-apps shelf does not close the
+  drawer.**~~ **Gone with the row, 2026-09-18** (§6x): the drawer has no shelf,
+  so it has no band that behaves differently. It was never root-caused, and the
+  hypothesis it died with is the one thing worth keeping — a control that
+  decides who owns a gesture over the first few frames starves an
+  interval-based speed reading of its early samples, and the tile it named was
+  the only control on that sheet still doing it. The overview's tile, which
+  inherited the gesture, claims the grab on the press instead (P6).
 
 - ~~**The drawer's shelf does not answer a synthetic touch.**~~ **Root-caused
   2026-09-15, and it was the check.** M5, M6, L1 and L3 aimed their touches by

@@ -4,7 +4,7 @@
   "name": "Overview",
   "version": "1.0.0",
   "author": "moarchy",
-  "description": "Every workspace as a card, opened by the right-edge swipe in. Drag an app from one workspace to another.",
+  "description": "Every workspace as a card, opened by the right-edge swipe in. Drag an app to another workspace, or into the bin to close it.",
   "kinds": [
     "overlay"
   ],

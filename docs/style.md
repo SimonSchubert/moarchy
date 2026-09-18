@@ -522,8 +522,7 @@ done has pointed GTK at nothing.
 
 The shell cannot see it, which is why it went unnoticed for so long:
 Quickshell walks the icon directories itself, so the drawer's grid, the
-the drawer's shelf tiles and this shade's notification icons (`shade.md` S25)
-have
+overview's tiles and this shade's notification icons (`shade.md` S25) have
 always resolved correctly whatever this setting said. The one surface this
 project looks at hardest is the one surface the bug cannot reach.
 

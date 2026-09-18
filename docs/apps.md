@@ -296,8 +296,8 @@ a GLES 2.0 GPU, not something configuration fixes.
 ### Web apps
 
 A site a phone treats as an app: its own window with no browser chrome, its own
-name and icon on the drawer's shelf, its own entry in the drawer's grid. Ids
-are `B<n>`.
+name and icon on its tile in the overview, its own entry in the drawer's grid.
+Ids are `B<n>`.
 
 **B1** A web app opens as a window of its own site: no tab strip, no
 bookmarks, no other site reachable from it, and its own cookies and login.
@@ -321,12 +321,13 @@ strip, and `org.gnome.Epiphany.WebApp_<slug>` is its own profile
 
 **B2** Each web app is its own window identity. The profile directory's
 basename becomes the window's app id — `org.gnome.Epiphany.WebApp_x_com` — and
-the entry names it in `StartupWMClass`, which is what gives the shelf tile
-and the shade's notification card (`shade.md` S25) a name and an icon to take.
+the entry names it in `StartupWMClass`, which is what gives its tile in the
+overview and the shade's notification card (`shade.md` S25) a name and an icon
+to take.
 Without it a web app's card reads `org.gnome.Epiphany.WebApp_x_com`, and two
 web apps sharing one profile would collapse into a single card.
 → `swaymsg -t get_tree` reports one `app_id` per web app, each matching its
-entry's `StartupWMClass`; `omarchy-shell drawer openApps` names the app
+entry's `StartupWMClass`; `omarchy-shell overview windows` names the app
 
 **B3** The drawer carries **X** and **Discord** from first boot, with their own
 artwork. Both are upstream's own entries and upstream's own icons; nothing on

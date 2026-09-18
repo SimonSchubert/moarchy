@@ -128,7 +128,7 @@ pkgver=$_ver
 # serves today, so mobile data reaches a phone holding it -- as does the rest
 # of what this build has over that one: the overview plugin on the right edge,
 # two apps on one workspace, and moarchy-selftest's checks for both.
-pkgrel=1
+pkgrel=2
 pkgdesc="Omarchy's look, keybindings and theming on a phone, under Sway"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'

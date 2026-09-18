@@ -392,18 +392,18 @@ else
   no "the drag tracker has drifted (F)" "$f"
 fi
 
-# --- gestures.md M4: a shell app's tile wears its own glyph -------------------
+# --- gestures.md K5: a shell app's tile wears its own glyph -------------------
 # Not a style.md section. A shell app's window carries the shell process's own
-# app id, so the drawer's shelf has no desktop entry to take an icon from and
+# app id, so the overview's tile has no desktop entry to take an icon from and
 # asks the plugin for a glyph instead -- and an empty one falls through to an
 # Image with an empty source, which draws nothing at all. Settings shipped that
-# way from a116d9a: the tile carried the right name, the running dot and a
-# blank square, and every automated check passed, because M4 is about a
-# character and nothing was reading it.
+# way from a116d9a: the tile carried the right name and a blank square, and
+# every automated check passed, because the criterion is about a character and
+# nothing was reading it.
 #
 # The declaration and not the rendering, which is the half a terminal can see.
-printf '\nshell apps (gestures.md M4, not a style.md section)\n'
-m4=$(python3 - "$PLUGINS" <<'M4PY'
+printf '\nshell apps (gestures.md K5, not a style.md section)\n'
+glyphs=$(python3 - "$PLUGINS" <<'GLYPHPY'
 import pathlib, re, sys
 
 problems, seen = [], 0
@@ -438,18 +438,18 @@ for path in sorted(pathlib.Path(sys.argv[1]).glob("*/*.qml")):
             problems.append(f"{rel}:{i + 1}  AppWindow declares no glyph")
         elif glyph.group(1) in ('""', "''"):
             problems.append(f"{rel}:{i + 1}  AppWindow declares an empty glyph; "
-                            "its tile on the drawer's shelf draws nothing")
+                            "its tile in the overview draws nothing")
 if not seen:
     problems.append("!! no AppWindow found -- this check is reading nothing")
 print("%d|%s" % (seen, "; ".join(problems)))
-M4PY
+GLYPHPY
 )
-m4_n=${m4%%|*}
-m4_bad=${m4#*|}
-if [[ -z ${m4_bad// /} ]]; then
-  ok "every shell app declares a glyph for its shelf tile ($m4_n windows, M4)"
+glyph_n=${glyphs%%|*}
+glyph_bad=${glyphs#*|}
+if [[ -z ${glyph_bad// /} ]]; then
+  ok "every shell app declares a glyph for its tile ($glyph_n windows, K5)"
 else
-  no "a shell app has no glyph (M4)" "$m4_bad"
+  no "a shell app has no glyph (K5)" "$glyph_bad"
 fi
 
 # --- the artwork parses ------------------------------------------------------

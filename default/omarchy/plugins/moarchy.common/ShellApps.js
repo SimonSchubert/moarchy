@@ -38,8 +38,7 @@ function forToplevel(shell, tl) {
   // never the set of plugins that draw a window. Reusing it here made it a
   // second list by accident, with the same failure mode the header describes:
   // moarchy-apps ships Keep, Launches and Chrome as plugins, none of them are
-  // in IDS, and every one of them showed on the shelf as `org.quickshell` with
-  // no icon.
+  // in IDS, and every one of them drew as `org.quickshell` with no icon.
   //
   // Asking the loaders instead means a plugin that draws a window is found
   // because it draws a window. shell.qml registers a panel loader for every
@@ -59,8 +58,8 @@ function forToplevel(shell, tl) {
 // Focus a window -- any window, not only a shell app.
 //
 // It lives beside the shell-app helpers because both of this file's importers
-// need it and neither owns a compositor connection: moarchy.drawer when a tile
-// on its shelf is tapped, moarchy.common/AppWindow when a screen is already
+// need it and neither owns a compositor connection: moarchy.overview when a
+// tile on a card is tapped, moarchy.common/AppWindow when a screen is already
 // running and is
 // summoned again. The call is handed to moarchy.gestures, which is where every
 // other compositor call in this shell already lives.

@@ -6,8 +6,8 @@ What the phone's touch gestures must do. Written to the rule in
 `bin/moarchy-selftest --gestures` and `--surfaces` cite these ids. A criterion
 is in one of three states, and the difference matters: **run** — it has a `→`
 check and a suite executes it; **written** — it has a `→` check that nothing
-runs; **stated** — it has no check at all. 66 of the 145 below are run. The
-other 79, and the six the suites run without a `→` line here, are listed under
+runs; **stated** — it has no check at all. 66 of the 134 below are run. The
+other 68, and the five the suites run without a `→` line here, are listed under
 [Coverage](#coverage) at the foot.
 
 ## Vocabulary
@@ -18,8 +18,8 @@ other 79, and the six the suites run without a `→` line here, are listed under
 | **home screen** | A sway workspace with no windows on it: wallpaper, bar, pill. One app per workspace, so an empty workspace *is* the home screen. |
 | **app** | A workspace with a window on it, or Settings, which is treated as one (K). |
 | **shell app** | A screen this shell draws itself and maps as an ordinary window, so every criterion about apps applies to it. Four of them: Settings, Wi-Fi, Bluetooth and SIM (K). |
-| **drawer** | The searchable app grid, with a shelf of open apps along its top (`moarchy.drawer`). The strip's sheet as shipped. |
-| **overview** | The vertical list of workspace cards (`moarchy.overview`). The right edge's sheet as shipped, and it is the one surface that can put two apps on one workspace. |
+| **drawer** | The searchable app grid (`moarchy.drawer`). The strip's sheet as shipped. |
+| **overview** | The vertical list of workspace cards (`moarchy.overview`). The right edge's sheet as shipped. It is the one surface that can put two apps on one workspace, and the one place a window is closed by hand. |
 | **shade** | The pull-down from the top edge (`moarchy.shade`). |
 | **the strip's sheet** | What an up-swipe from the strip raises. Named by a setting (Q1), so §A says *the drawer* where it means *this*, and its checks run against the pairing that ships. |
 | **the edge's sheet** | What a swipe in from the right edge raises. Named by the same setting, and §P reads the same way. |
@@ -202,7 +202,8 @@ and no agent window
 **C4** Nothing on the strip closes a window. An edge a thumb rests on is the
 wrong place to destroy something: what it closed would be invisible at the
 moment it closed, and it would have no undo. `$mod+w` still closes the focused
-window for anyone with a keyboard, and the shelf closes one you can see (M6).
+window for anyone with a keyboard, and the overview's bin closes one you can
+see (P12).
 → no press on the strip, of any duration, lowers the open-window count
 
 **C5** The hold reaches the agent from wherever the strip does. The shell's own
@@ -273,9 +274,9 @@ swipe order stays contiguous. There is no ceiling on the search: sway's
 `bin/moarchy-one-app-per-workspace` — the same rule in Python, the pair this
 must not drift from — never had one.
 
-**F2** Going home never closes anything. Every app still has its tile on the
-drawer's shelf afterwards.
-→ `drawer openApps` count unchanged across a home gesture
+**F2** Going home never closes anything. Every app is still on the workspace it
+was on afterwards, with the overview still drawing a card that holds it.
+→ `overview windows` count unchanged across a home gesture
 
 **F4** The sheet does not snap back on its way out. What signals the home band
 -- the sheet travelling on past the first stop -- is at its *furthest* there,
@@ -327,7 +328,7 @@ leaves the app underneath alone.
 → that plugin's `state` == `closed`; open-window count unchanged
 
 **G4** An app focused with nothing over it → the app is asked to close.
-→ `omarchy-shell drawer openApps` is one line shorter
+→ `omarchy-shell overview windows` is one line shorter
 
 **G5** A bare home screen with nothing over it → the swipe does nothing.
 
@@ -737,7 +738,7 @@ their own.
 **K1** The three shell screens are xdg toplevels. Sway tiles them,
 `bin/moarchy-one-app-per-workspace` moves each one to a workspace of its own and
 focuses it, and `ToplevelManager` reports them — which is what makes the tile
-on the drawer's shelf a real one rather than a stand-in.
+the overview draws for one a real window rather than a stand-in.
 
 Quickshell's `FloatingWindow` is what this rests on: a window the shell's own
 process owns, which the compositor treats as any other client's. It carries no
@@ -745,7 +746,7 @@ server-side decoration (`deco_rect` is zero under `default_border pixel 2` with
 `hide_edge_borders smart`), so a shell app alone on its workspace fills it edge
 to edge, under the bar and above the strip, exactly as `foot` does.
 → with Settings open, `swaymsg -t get_tree` has an `app_id == "org.quickshell"`
-node that is the only window on its workspace, and `drawer openApps` names
+node that is the only window on its workspace, and `overview windows` names
 `moarchy.settings`
 
 **K2** Swiping sideways off a shell app and back again arrives back *on* it, on
@@ -762,24 +763,31 @@ launcher that lands an app somewhere else. The screen stays where it was put.
 `swaymsg workspace prev_on_output` leaves `settings state` == `open`
 
 **K4** Going home (A4, F1) leaves a shell app running on its workspace, the way
-it leaves any app running. Its tile is on the drawer's shelf and tapping it
-comes back to the page it was on. There is no hidden state: a shell app is on
+it leaves any app running. Its tile is on its card in the overview and tapping
+it comes back to the page it was on. There is no hidden state: a shell app is on
 screen, on another workspace, or gone.
 → after the home band, the focused workspace's `representation` is empty,
-`drawer openApps` still names `moarchy.settings`, and `settings state` == `open`
+`overview windows` still names `moarchy.settings`, and `settings state` == `open`
 
 **K5** A shell app names and draws itself: the glyph the shade opens it by, the
 app's name, and — where there is room for a third line, which on a tile there is
-not (M4) — the page it is on. None of it comes from a desktop entry, because
+not (P5) — the page it is on. None of it comes from a desktop entry, because
 there is none to find (K9). It comes from the plugin, which is the one place
-that knows, and `drawer openApps` prints the pair.
+that knows, and `overview windows` prints the pair.
+
+The glyph is declared, not derived: an empty one falls through to an `Image`
+with an empty source, and the tile is a blank box under a correct label — which
+no check that counted tiles would see.
+→ `scripts/style-check.sh` reports every `AppWindow` declaring a non-empty
+`glyph`, counted, and names the file and line of one that does not;
+`overview windows` prints that plugin's id and the page it is on
 
 **K6** Two things close a shell app, and both drop its tile and reset the page
-stack: flicking the tile away (M6), and the back gesture with nothing left to go
-back to (K7). That pairing is exactly what those two gestures already do to a
-window — M6 closes the window a tile stands for, G4 closes the focused app —
-and here they *are* those two gestures rather than a copy of them.
-→ after either, `drawer openApps` has no `moarchy.settings` line and
+stack: dropping the tile in the overview's bin (P12), and the back gesture with
+nothing left to go back to (K7). That pairing is exactly what those two gestures
+already do to a window — P12 closes the window a tile stands for, G4 closes the
+focused app — and here they *are* those two gestures rather than a copy of them.
+→ after either, `overview windows` has no `moarchy.settings` line and
 `settings stack` is one line
 
 **K7** The back gesture over a shell app walks its page stack first, and closes
@@ -836,7 +844,7 @@ the drawer, an IPC verb. Naming a page still navigates (`settings.md` A7); it is
 the summon that names none that means "the screen I was on".
 → with Settings running on another workspace at `appearance.bar`, `settings
 open` leaves the focused workspace holding it, `settings page` unchanged, and
-`drawer openApps` with one `moarchy.settings` line
+`overview windows` with one `moarchy.settings` line
 
 ---
 
@@ -872,7 +880,7 @@ to the same `MouseArea` the timer fired from, so the flag that swallows the
 click is cleared on the *next* press, exactly as `sheetWasDrag` is: cleared on
 release it is already false when the click arrives, and the app you asked about
 is the app that starts.
-→ after the hold, `omarchy-shell drawer openApps` gained no line
+→ after the hold, `omarchy-shell overview windows` gained no line
 
 **L3** Travel cancels the hold; the hold does not cancel travel. A finger that
 goes down on an icon and then drags is a close drag from the first pixel past
@@ -997,122 +1005,6 @@ app reappear on a `pacman -Syu` as if the removal had not worked.
 
 ---
 
-## M. Open apps in the drawer
-
-One app per workspace means every app that is running is running somewhere you
-cannot see from the surface you are standing on. So the top of the sheet says
-what is already open: four tiles of the grid's own size, most recent first,
-with one dot each to say they are running.
-
-This is the one thing the drawer's header note says it will not do — "a row of
-controls at the top is a row of apps you cannot see". A row of open apps is not
-controls. It is content, it is drawn only when there is any (M2), and the apps
-it costs you are four you can still scroll to.
-
-**M1** The row sits between the search field and the first row of apps, and
-**scrolls with them**: it is the grid's own header, not a shelf pinned above a
-moving grid, so dragging the apps up carries it off the top the way it carries
-the first row of icons. One tile per open **window**, most-recently-used first,
-left to right, with the app you just left leading.
-
-One `ToplevelManager` walk, one appId → desktop-entry index, one MRU, living in
-the one surface that draws it. Two windows of one app are two tiles. A shell app
-— Settings, Wi-Fi, Bluetooth (K10) — is a window and gets a tile on exactly
-those terms, with no branch of its own anywhere on the shelf (K1).
-→ `omarchy-shell drawer openApps` has one line per open window, the first line
-is the app just left, and a shell app's line names its plugin id
-
-**M2** The row is drawn only when there is something in it. With nothing open
-anywhere the drawer is a search field and a grid, unchanged.
-→ with no windows open, `omarchy-shell drawer openTarget 0` is `no row`
-
-**M3** Typing hides it. A query turns the sheet into a ranked answer — apps,
-then settings (O) — and a shelf that ignores the query is not part of that
-answer.
-→ after `omarchy-shell drawer type fire`, `drawer openTarget 0` is `no row`
-
-**M4** A tile says it is running, and says it with something no grid cell has:
-an accent dot under the label. Everything else about it is a grid cell — same
-icon size, same column pitch, same label — because it is the same app, and a
-shelf drawn in a second visual language reads as a second kind of thing.
-A shell app (K) has no desktop entry to take an icon from, so its tile wears
-its own glyph, the way its card does (K5). That glyph is declared, not derived:
-an empty one falls through to an `Image` with an empty source and the tile is a
-blank box under a correct label, which no check that counted tiles would see.
-→ `scripts/style-check.sh` reports every `AppWindow` declaring a non-empty
-`glyph`, counted, and names the file and line of one that does not
-
-**M5** Tapping a tile switches to that window and closes the drawer. It does
-not launch a second copy. The same `swaymsg` dispatch a card's tap takes, for
-the reason recorded there: `foreign-toplevel activate()` does nothing on this
-compositor.
-→ the focused workspace is the one holding that window; `drawer state` ==
-`closed`
-
-**M6** Flicking a tile **up** closes that app and the tile leaves the row. It is
-`xdg_toplevel.close` — a close *request*, so an editor with unsaved work prompts
-rather than dies, which is what makes firing it from a flick acceptable. On a
-Settings tile it is that same request like any other, so the page stack resets
-with the window (K6).
-
-Nothing on the tile advertises the gesture, and that is the cost of not having a
-control. The alternatives were a ✕ badge — which `style.md` E1/E3 rule out,
-because a 44px target inside an 86px tile sits on top of the tile's own tap
-target, and a mis-tap would close what you meant to open — and a hold menu,
-which M8 rules out for its own reasons.
-→ after a flick over `drawer openTarget 0`, `drawer openApps` is one line
-shorter
-
-**M7** A drag **down** from a tile still closes the drawer (H1). The two
-directions are read separately and the sheet's own drag latches on downward
-travel alone (H5), so neither gesture can be reached by overshooting the other.
-→ a 1200ms drag down from a tile leaves `drawer state` == `closed` and every
-window still open
-
-**M7a** A finger that starts on a tile never scrolls the grid. Three things
-want that drag once the shelf is inside the scroll — the row pages sideways,
-the grid scrolls, the tile flicks away — so the tile claims the axis on the
-first few pixels of movement rather than leaving it to whichever threshold
-fires first, which would resolve one way on a slow finger and the other on a
-fast one. Vertical is the tile's and horizontal is the row's.
-
-The cost is one 86px row you cannot start a scroll from. The alternative is
-worse: letting the grid win the vertical axis leaves a flick that closes an app
-only while the grid happens to be at its top, which is a gesture that works
-until it silently does not.
-→ a slow 1200ms drag up from a tile closes that app; `drawer geometry` shows
-the grid did not scroll
-
-**M8** A hold on a tile does nothing. The detail card (L) is about a *desktop
-entry* — its package, its size, what removing it would take — and a tile is a
-window: a shell app has no entry at all (K9), and two windows of one app would
-open one card twice. The grid below still holds every one of these apps, and
-the hold there still answers.
-→ a 900ms hold over a tile leaves `omarchy-shell drawer detail` empty
-
-**M9** Closing the last one leaves the drawer open with no row. An empty shelf
-is a launcher with nothing running, which is the ordinary state of a phone at
-boot and not a dead end.
-→ `drawer state` == `open`, `drawer openTarget 0` == `no row`
-
-**M10** A close is a request, and this row does not pretend otherwise. The tile
-goes as soon as it is flicked — an app that stops to ask about unsaved work
-would otherwise leave a tile mid-animation — but it is gone from *this* opening
-of the drawer only, not from the model: an app that refuses to quit is still
-running and has its tile again the next time the drawer comes up.
-
-**M11** The grid is unchanged. An open app keeps its cell there, and tapping
-that cell still launches, because the shelf is a shortcut and not a filter — a
-grid that removed what was running would move under you every time something
-started.
-
-**M12** There is deliberately no bulk "clear all". Apps are closed one at a
-time — by flicking a tile away (M6), or with the back gesture (G4). A single
-control that closes every open app is one mis-tap from losing all of them, and
-like the hold-to-close C4 refuses, it has no undo.
-
----
-
 ## N. Opening the drawer
 
 The sheet is dragged open by a finger at 60Hz on a Mali-400, and everything the
@@ -1131,17 +1023,6 @@ icons after the shell has read them and touches no `.desktop` file afterwards.
 that call sits behind a flag `open()` sets; on the device, a second
 `omarchy-shell drawer open` spawns no `find` under the shell —
 `pgrep -af 'find .*icons' -P $(pgrep -x quickshell)` during the open is empty
-
-**N2** Opening the drawer rebuilds the open-apps shelf only when the shelf has
-changed. `openApps` is a binding, so assigning its dependency notifies whether
-or not the value moved, and the `ListView` then discards and rebuilds every
-delegate — icon, glyph and name resolved again per tile, for a list that is
-usually identical.
-→ `open()`'s reset of `closingApps` is guarded by a test of its own length —
-the other assignment is `closeOpen()` adding to it, which is the change M10 is
-about; on the device, opening the drawer twice with nothing closed in between
-leaves `omarchy-shell drawer openApps` byte-identical and the tiles' icons
-already drawn on the first frame of the second open
 
 **N3** The drawer's surface is never unmapped. Shut, it is a one-pixel band along
 the bottom edge that takes no input; it grows to the sheet when an **upward** drag
@@ -1177,10 +1058,11 @@ away for a release.
 
 ## P. Right edge — the overview
 
-The sideways swipe steps one workspace at a time (B1) and the drawer lists every
-window in one flat shelf (M). Neither answers "where is everything", and on a
-phone where a workspace *is* an app that question is the map. §P is that map,
-and the one place a workspace can be given a second app.
+The sideways swipe steps one workspace at a time (B1), and on a phone where a
+workspace *is* an app, stepping cannot answer "where is everything". §P is the
+map that does: every window the phone has, on the workspace holding it. It is
+the one place a workspace can be given a second app, and the one place a window
+is closed by hand.
 
 **P1** Swiping in from the **right edge** raises the edge's sheet — the overview
 as shipped (Q1), and §P is written about it: every workspace as a card, newest
@@ -1215,31 +1097,47 @@ its `apps=` and `ids=` in layout order, and a final `free=` line
 **P4** Tapping a card goes to that workspace; tapping a tile goes to that window;
 both close the overview. The focused workspace's card and the card a drop would
 land on are marked the same way, in the accent — this shell's existing word for
-"this is where you would end up" (A4, C2, M4).
+"this is where you would end up" (A4, C2).
 → tapping a tile leaves `omarchy-shell overview state` == `closed` and the
 focused workspace holding that window
 
-**P5** A tile is the drawer's tile: the same icon, the same name, the same glyph
-for a shell app. One resolver, `moarchy.common/Apps.js`, because two surfaces
-drawing the same window from the same handle must not disagree about it.
+**P5** A tile is an icon and a name, and for a shell app the glyph it declares
+(K5) — there being no desktop entry to take an icon from. Two lines and not
+three: a tile is a quarter of a card's width, and a third line on one that had
+room for it is a tile that reads differently from the three beside it.
+
+The resolvers are `moarchy.common/Apps.js`, which is also the appId index the
+drawer asks whether an app is already running before it hops a workspace to
+launch it (`windows.md` L10). One index, because two that answer the same
+question disagree the day one of them goes stale.
 → `grep -c 'Apps\.' moarchy.drawer/Drawer.qml moarchy.overview/Overview.qml` is
 non-zero for both, and neither file builds its own appId index
 
-**P6** **Press and hold a tile to pick the window up**, then drop it on another
-card to move it there. The window rides under the finger; the card it would land
-on is marked; a release on the card it came from, or in the gap between two
-cards, changes nothing.
+**P6** **Drag a tile to pick the window up**, then drop it on another card to
+move it there or in the bin to close it (P12). The window rides under the
+finger; what a release would land on is marked; a release on the card it came
+from, or in the gap between two cards, changes nothing.
 
-The lift is claimed by *time* because there is no axis left to claim it by: the
-list under the tile scrolls vertically, the sheet itself closes rightward, and a
-window has to be able to travel in both of those directions to reach a card. The
-delay is the drawer's 500ms (L1).
+There is no hold. The lift is claimed on the first travel past the drag slop,
+and it takes the rest of that touch: the list does not scroll under a window in
+the air and the sheet does not close out from under one. A drag that starts on a
+tile is the window's on every axis, so there is nothing left to arbitrate —
+which is the only thing a hold buys, and the reason there is none rather than a
+shorter one.
+
+The cost is a tile as a place to start a scroll from, and it is small because a
+card is scrolled from anywhere its tiles are not: one app per workspace (F1)
+leaves three slots of every four empty, beside a card-sized gap and the free
+card at the end.
 → `omarchy-shell overview lift <ws> <index>` then `overview dropOn <ws>` moves
 that window, and `overview move <con_id> <ws>` is the same call without the
 gesture: `overview grid` shows it under the second `ws=` and no longer under the
-first. With a finger, `sudo moarchy-touch drag X1 Y1 X2 Y2 700` — a press, a
-wait, then travel, because a lift is claimed by time and anything that begins by
-moving is a scroll
+first. With a finger, aimed with `overview tileTarget <ws> <index>`:
+`sudo moarchy-touch drag X1 Y1 X2 Y2 0 500` — a 0ms dwell, so a lift that still
+wanted one would not fire — moves the window. And `sudo moarchy-touch hold
+X1 Y1 900` on a tile is a *tap* (P4): `overview state` == `closed` with the
+focus on that window, where a lift would have swallowed the click and left the
+sheet up with nothing moved
 
 **P7** A workspace holding **more than one window is split vertically** — one
 above the other, both on screen. Half of 360 logical px is 180, which no app on
@@ -1320,6 +1218,56 @@ it puts away the drawer and the theme picker beside it and the shade above it
 swipe sweeps it (B3), and an app's window opening leaves none of it behind.
 → with the overview up, one `omarchy-shell gestures back` leaves
 `overview state` == `closed` with the open-window count unchanged
+
+**P12** While a window is in the air a **bin** is drawn across the foot of the
+sheet, and a drop on it closes that window. It is there for the length of the
+lift and at no other time: there is nothing to put in it otherwise, and a
+standing target that destroys something is a target a thumb finds by accident
+(C4).
+
+It is marked in **`urgent`** where a card is marked in the accent. The accent is
+this shell's word for "this is where you would end up" (A4, C2, P4) and the bin
+is not a place you end up — it is the one drop on this sheet that cannot be
+undone, and the theme already keeps one colour for that (`style.md` C1).
+
+A window over the bin is over nothing else: the bin takes the point the moment
+it holds it, so no card is lit underneath and a release can only mean one thing.
+Which it is is arithmetic over the finger's position, like every other drop
+here — the tile holds the exclusive grab while a window is in the air, so the
+bin never sees a touch of its own to answer with (P7a).
+→ `omarchy-shell overview binTarget` reports `drawn=false` and the rect the
+bin will occupy while nothing is lifted, and `drawn=true` after
+`overview lift <ws> <index>`; `overview aim <x> <y>` into that rect leaves
+`overview lifted` ending `over bin`, and a point over a card leaves it ending
+`over <n>`
+
+**P13** A drop in the bin is a **close request** and not a kill: it is
+dispatched as `[con_id=N] kill`, which is sway's name for `xdg_toplevel.close`,
+so an editor with unsaved work prompts rather than dies — which is what makes
+firing it from a drag acceptable at all. By con_id and not through the
+foreign-toplevel handle, because a con_id names one window where the handle is
+matched on app id and title (P5) — and under that, two terminals are one
+window twice.
+
+The tile goes as soon as the window is dropped — a card that waited for the app
+to answer would put the tile back under the finger that had just thrown it away
+— and it is gone from *this* opening of the sheet only: an app that refuses to
+quit is still running and has its tile again the next time the overview comes
+up.
+
+Closing the last window on a card leaves the card. A workspace with nothing on
+it is a home screen (P3), which is a place you can go to and not a dead end.
+→ `overview lift <ws> <index>` then `overview trash` leaves
+`overview tileTarget <ws> <index>` == `no tile` before the app has answered and
+`overview windows` one line shorter once it has, with `overview grid` still
+printing a `ws=` line for the workspace it was on. With a finger, a
+`sudo moarchy-touch drag` from `overview tileTarget` to `overview binTarget`'s
+rect closes the window it started on
+
+**P14** There is no "close everything". Windows go one at a time — into the bin
+(P12), or with the back gesture on the app itself (G4). One control that closed
+every open window is one mis-tap from losing all of them, and like the hold C4
+refuses, it would have no undo.
 
 ---
 
@@ -1492,7 +1440,7 @@ launch` is what runs, so the workspace hop, the splash and the dismissal all
 happen exactly once and in one place (`windows.md` L1-L7) -- a trigger that ran
 `gtk-launch` itself would be a second copy of all three, and the missing splash
 would read as a press the phone had ignored.
-→ firing an app trigger leaves `drawer openApps` one line longer, with the new
+→ firing an app trigger leaves `overview windows` one line longer, with the new
 window alone on a free workspace
 
 **Q10b** The names on the list are the drawer's names. `drawer entryRows`
@@ -1554,7 +1502,7 @@ Not acceptance criteria — the boundaries any implementation works inside.
 - **No window thumbnails.** Quickshell 0.3.1 wires per-*toplevel* capture only
   to `hyprland-toplevel-export-v1`, so a tile for a window that is not on screen
   cannot have a picture -- and sway does not render an invisible workspace, so
-  there would be nothing to capture anyway. Tiles are icon + name (M4).
+  there would be nothing to capture anyway. Tiles are icon + name (P5).
 
   The *focused* window is a different case, and it is worth recording because
   the mechanism still exists and will look like an opportunity again: it is on
@@ -1602,16 +1550,15 @@ went stale the first time a check was added above them and then silently
 reported a different document's ids. Ids are not unique across files, so the
 list it prints is a superset: take from it only what this file defines.
 
-**Written, but nothing runs it** (55). Each has a `→` check that no
+**Written, but nothing runs it** (46). Each has a `→` check that no
 suite executes, so it is as unverified as one with no check at all:
 
 > A3a · A8 · A10 · C1 · C3 · C4 · C5 · G10b · G11 · G12 · G13 · G14a · H1 ·
 > H4 · I1 · I1a · I1b · I2 · I3 · I4 · I5 · I5a · I5b · I5d · I5e · I6 ·
-> I7 · K8 · L8 · M2 · M3 · M4 · M7 · M7a · M8 · M9 · N1 · N2 · N3 · N4 ·
-> P2 · P4 · P5 · P9 · Q2 · Q2a · Q3 · Q3a · Q3b · Q4a · Q5 · Q7 · Q9 ·
-> Q10a · Q11c
+> I7 · K8 · L8 · N1 · N3 · N4 · P2 · P5 · P9 · Q2 · Q2a · Q3 · Q3a · Q3b ·
+> Q4a · Q5 · Q7 · Q9 · Q10a · Q11c
 
-§Q's unrun half divides the way §P's did. Q2, Q2a and Q4a are the geometry --
+§Q's unrun half divides the way §P's does — P2 and P5 are what is left of it. Q2, Q2a and Q4a are the geometry --
 where the sheet travels and what the drag divides by -- and settling any of them
 needs a finger the suite can only synthesise through `/dev/uinput`, which is
 where P2 has sat since it was written. Q3, Q5 and Q7 need a state the suite
@@ -1622,25 +1569,24 @@ says why a suite must not fire the one that installs an agent.
 Q11, Q11a and Q11b are **run, and not by anything the command below greps** --
 `scripts/test-power-press.sh` checks them on the host with `moarchy-screen` and
 `moarchy-trigger` stubbed, because the double press is arithmetic over one
-timestamp file. They are held out of this list by hand for that reason, the way
-M4 is held out of the next one.
+timestamp file. They are held out of this list by hand for that reason, and so
+is K5: `scripts/style-check.sh` settles the glyph half of it by reading a
+declaration, which no suite the command greps can do.
 
 All of §I's assertable half is here too, and that is not deliberate -- I6 is
 covered in substance by A7 (`bin/moarchy-selftest` notes this at the
 `--surfaces` end), but I5a, I5b, I7 and I1's companions are simply unrun.
 
-**Stated, with no check** (24). Behavioural claims with nothing to
+**Stated, with no check** (22). Behavioural claims with nothing to
 settle them from a terminal; several are hand checks on glass by nature:
 
 > B2 · D2 · D3 · D4 · F1 · G1 · G5 · G7 · G8 · G9 · G10a · H3 · H5 · H6 ·
-> H7a · H7b · H8 · K10 · L4 · M10 · M11 · M12 · P7a · P7c
+> H7a · H7b · H8 · K10 · L4 · P7a · P7c · P14
 
-M4 left this list by being split: the accent dot is still a hand check on glass,
-and the glyph beside it is a declaration `scripts/style-check.sh` can read. The
-command above regenerates these lists from `bin/moarchy-selftest` alone, so a
-criterion checked anywhere else has to be moved by hand.
+The command above regenerates these lists from `bin/moarchy-selftest` alone, so
+a criterion checked anywhere else has to be moved by hand.
 
-**Run, with no `→` line here** (6). The suites check these; the doc
+**Run, with no `→` line here** (5). The suites check these; the doc
 understates itself, and each should gain the check it is already being held to:
 
-> G6 · K5 · L7 · L9 · L10 · L13
+> G6 · L7 · L9 · L10 · L13

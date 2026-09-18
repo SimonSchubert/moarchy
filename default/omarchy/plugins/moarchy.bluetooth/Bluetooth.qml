@@ -88,7 +88,7 @@ Item {
   // dismissed in one motion.
   readonly property bool opened: bluetoothWindow.visible
 
-  // How the drawer's shelf and the back gesture find this plugin from its window
+  // How the overview and the back gesture find this plugin from its window
   // (moarchy.common/ShellApps.js).
   readonly property var appWindow: bluetoothWindow
 

@@ -1115,7 +1115,7 @@ Item {
     // (moarchy.wifi, moarchy.bluetooth, moarchy.sim), because this one did not
     // survive being typed: it was committed empty in a116d9a under a comment
     // naming the character, and an empty glyph falls through to an Image whose
-    // source is "" -- so the shelf drew Settings as a blank box while the name
+    // source is "" -- so its tile drew Settings as a blank box while the name
     // beside it was right. A character no editor can render is a character an
     // editor can eat, and this is the spelling that cannot be.
     glyph: "\ue615"

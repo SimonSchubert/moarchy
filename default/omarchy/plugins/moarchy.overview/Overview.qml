@@ -6,12 +6,12 @@
 // ---------------------------------------------------------------------------
 // What this is for
 // ---------------------------------------------------------------------------
-// The sideways swipe steps one workspace at a time (B1) and the drawer lists
-// every window in one flat shelf (M). Neither answers "where is everything",
-// and on a phone where a workspace *is* an app that question is the map. So:
-// one card per workspace, in number order, each holding the windows on it --
-// which is also the only surface on this phone that can say a workspace holds
-// two.
+// The sideways swipe steps one workspace at a time (B1), and on a phone where a
+// workspace *is* an app, stepping cannot answer "where is everything". That
+// question is the map. So: one card per workspace, in number order, each
+// holding the windows on it -- which is also the only surface on this phone
+// that can say a workspace holds two, and the one place a window is closed by
+// hand (P12).
 //
 // ---------------------------------------------------------------------------
 // Why it owns no edge
@@ -200,7 +200,10 @@ Item {
   }
 
   function sheetMove(item, mouse): void {
-    if (root.lifted) return
+    // P6. A tile's drag is the window's from the press, not from the slop: fed
+    // even one move, the tracker latches on the same frame the lift does and
+    // the sheet travels a slop's worth before the cancel puts it back.
+    if (root.lifted || root.pressedWindow) return
     var p = item.mapToItem(null, mouse.x, mouse.y)
     sheetDrag.move(p.x, p.y)
   }
@@ -339,10 +342,10 @@ Item {
 
   // ------------------------------------------- what to draw for a window (P5)
   //
-  // The index is the drawer's, through the same moarchy.common/Apps.js: a tile
-  // here is the shelf's tile, and resolving "which icon is this window" twice
-  // is what left every moarchy-apps plugin on the shelf as `org.quickshell`
-  // with no artwork (K5).
+  // The index is the drawer's, through the same moarchy.common/Apps.js -- which
+  // asks it the narrower question of whether an app is running (L10). Resolving
+  // "which icon is this window" twice is what left every moarchy-apps plugin
+  // drawn as `org.quickshell` with no artwork (K5).
   property var appIdIndex: ({})
 
   function buildIndex(): void { root.appIdIndex = Apps.index(root.shell) }
@@ -364,7 +367,7 @@ Item {
   // are what tell them apart.
   //
   // A handle is what Apps.js needs -- it asks each plugin whether the window is
-  // its own (M4) -- and the tree carries no handle. This is the join, and it is
+  // its own (K9) -- and the tree carries no handle. This is the join, and it is
   // the one place in this file that knows the two lists describe the same
   // windows.
   function toplevelFor(win) {
@@ -419,23 +422,29 @@ Item {
 
   // ------------------------------------------------------------- the lift (P6)
   //
-  // A window is picked up by a press and hold, and that is not a taste
-  // decision: three gestures want a drag that begins on a tile. The list under
-  // it scrolls vertically, the sheet itself closes rightward, and the tile has
-  // to be able to travel in *both* of those directions to reach a card above or
-  // below it. There is no axis left to claim, so the lift is claimed by time
-  // instead -- which is what Android's own overview does with the cards it lets
-  // you drag.
+  // A window is picked up by dragging its tile, from the first travel past the
+  // slop. No hold, and nothing to arbitrate: a drag that begins on a tile is
+  // the window's on every axis, so the list does not scroll under one and the
+  // sheet is not dragged shut from one.
   //
-  // The delay is the drawer's (L1). One number for "hold" on this phone.
-  readonly property int holdDelay: 500
+  // That is what the bin buys (P12). A window used to have to be able to travel
+  // up and down to reach a card and rightward was the sheet's, which left time
+  // as the only axis a lift could be claimed by. A bin is a place instead of a
+  // direction, so the claim is the ordinary one every other gesture here makes:
+  // travel past `dragSlop`.
+  //
+  // The cost is a tile as a place to start a scroll from, and it is small
+  // because a card is scrolled from anywhere its tiles are not: one app per
+  // workspace (F1) leaves three of every four slots empty, beside the gaps
+  // between cards and the free card at the end.
 
-  // The window under the finger while the timer runs, and the window in the air
-  // after it fires. Two properties rather than one flag and a payload, for the
-  // drawer's reason: a Timer has no argument, and a second finger on a second
-  // tile must not be able to lift the first one's window.
-  property var holdWindow: null
-  property int holdFrom: 0
+  // The window under the finger before it is in the air, and the window in the
+  // air after the slop. Two properties rather than one flag and a payload: a
+  // second finger on a second tile must not be able to lift the first one's
+  // window, and the tile that armed it is not always the tile still under the
+  // finger.
+  property var pressedWindow: null
+  property int pressedFrom: 0
   property var lifted: null
   property int liftedFrom: 0
 
@@ -449,6 +458,12 @@ Item {
   // entered would keep its highlight over a finger that had left the sheet.
   property int dropTarget: 0
 
+  // P12. Whether the release would close the window instead. Exclusive with
+  // `dropTarget` by construction rather than by agreement -- both are written
+  // in one place, from one point, so the bin and a card can never both be lit
+  // and a release always means exactly one thing.
+  property bool overBin: false
+
   // P6. True from the moment a lift fires until the next press, so the click Qt
   // delivers after the finger lifts does not also focus the window that was
   // just carried somewhere else -- or, on the card it was dropped on, go to that
@@ -456,52 +471,58 @@ Item {
   property bool liftFired: false
 
   function armLift(win, fromNumber): void {
-    root.holdWindow = win || null
-    root.holdFrom = fromNumber
-    if (root.holdWindow) holdTimer.restart()
+    root.pressedWindow = win || null
+    root.pressedFrom = fromNumber
   }
 
-  function cancelHold(): void {
-    holdTimer.stop()
-    root.holdWindow = null
+  function disarmLift(): void { root.pressedWindow = null }
+
+  // Where the release would land, from one point and in one assignment (P12).
+  function aimLift(sceneX: real, sceneY: real): void {
+    root.liftX = sceneX
+    root.liftY = sceneY
+    root.overBin = root.binHolds(sceneX, sceneY)
+    root.dropTarget = root.overBin ? 0 : root.cardNumberAt(sceneY)
   }
 
-  // Travel cancels the hold, on either axis. The sheet's own tracker cannot do
-  // this job: it latches on rightward travel past the slop and deliberately
-  // ignores everything else, so a finger dragging a tile *upward* would leave
-  // the timer running under a gesture that had plainly become a scroll.
-  function holdMove(item, mouse): void {
+  // P6. The finger, on a tile: past the slop the window is in the air, and from
+  // there every move aims the drop.
+  function liftMove(item, mouse): void {
     var p = item.mapToItem(null, mouse.x, mouse.y)
-    if (root.lifted) {
-      root.liftX = p.x
-      root.liftY = p.y
-      root.dropTarget = root.cardNumberAt(p.y)
-      return
-    }
-    if (!holdTimer.running) return
-    if (Math.abs(p.y - root.sheetPressY) > root.dragSlop
-        || Math.abs(p.x - root.sheetPressX) > root.dragSlop)
-      root.cancelHold()
+    if (root.lifted) { root.aimLift(p.x, p.y); return }
+    if (!root.pressedWindow) return
+    if (Math.abs(p.y - root.sheetPressY) <= root.dragSlop
+        && Math.abs(p.x - root.sheetPressX) <= root.dragSlop) return
+    root.liftNow(root.pressedWindow, root.pressedFrom)
+    root.aimLift(p.x, p.y)
   }
 
-  Timer {
-    id: holdTimer
-    interval: root.holdDelay
-    onTriggered: {
-      if (!root.holdWindow) return
-      root.liftFired = true
-      root.lifted = root.holdWindow
-      root.liftedFrom = root.holdFrom
-      root.holdWindow = null
-      root.liftX = root.sheetPressX
-      root.liftY = root.sheetPressY
-      root.dropTarget = root.cardNumberAt(root.liftY)
-      // The sheet's drag and the lift are one finger, and from here it is the
-      // lift's. Cancelled rather than merely ignored, so the watchdog that
-      // would otherwise fire four seconds later cannot put `progress` back over
-      // whatever is on screen by then (F2, F8).
-      sheetDrag.cancel()
-    }
+  // Both ways in: the slop above, and the IPC below (P10).
+  function liftNow(win, fromNumber): void {
+    if (!win) return
+    root.liftFired = true
+    root.lifted = win
+    root.liftedFrom = fromNumber
+    root.pressedWindow = null
+    root.overBin = false
+    // The sheet's drag and the lift are one finger, and from here it is the
+    // lift's. Cancelled rather than merely ignored, so the watchdog that would
+    // otherwise fire four seconds later cannot put `progress` back over
+    // whatever is on screen by then (F2, F8). It has nothing to cancel on the
+    // finger's path -- `sheetMove` refuses to feed it from a tile at all -- and
+    // the IPC's path is the one where it might.
+    sheetDrag.cancel()
+  }
+
+  // P12. Whether a scene point is over the bin.
+  //
+  // Read off the bin's own frame every time rather than cached: the ghost maps
+  // per frame for the same reason, and a rect taken once is a rect that is
+  // wrong the moment the sheet or the keyboard moves under it.
+  function binHolds(sceneX: real, sceneY: real): bool {
+    if (!root.surfaceUp || !root.lifted) return false
+    var p = bin.mapFromItem(null, sceneX, sceneY)
+    return p.x >= 0 && p.x <= bin.width && p.y >= 0 && p.y <= bin.height
   }
 
   // Which card a scene y falls on, as a workspace number, or 0 for none.
@@ -524,7 +545,7 @@ Item {
     return list[i].number
   }
 
-  // P6. Move the window in the air to the workspace under the finger.
+  // P6, P12. Let the window in the air go: onto a workspace, or into the bin.
   //
   // Nothing happens for a drop on the card it came from, and nothing happens
   // for a drop in a gap: both are the same answer, which is that this gesture
@@ -532,10 +553,68 @@ Item {
   function drop(): bool {
     var win = root.lifted
     var to = root.dropTarget
+    // Not `bin`, which is the item: a local of that name shadows the id this
+    // function's own callee reads through.
+    var toBin = root.overBin
     root.lifted = null
     root.dropTarget = 0
-    if (!win || to <= 0 || to === root.liftedFrom) return false
+    root.overBin = false
+    if (!win) return false
+    if (toBin) return root.closeWindow(win)
+    if (to <= 0 || to === root.liftedFrom) return false
     return root.move(win.conId, to)
+  }
+
+  // P13. One window, closed by con_id.
+  //
+  // `kill` is sway's name for `xdg_toplevel.close`, which is a close *request*:
+  // an editor with unsaved work answers it with a dialog and keeps its window.
+  // That is what makes it acceptable to fire from a drag, and it is why this
+  // must not become anything that ends the process.
+  //
+  // By con_id and not through the foreign-toplevel handle `toplevelFor` would
+  // give: that one is matched on app id and title (P5), which is ambiguous for
+  // two terminals and for every one of this shell's own screens -- and the
+  // window it would pick wrongly is a window somebody loses.
+  function closeWindow(win): bool {
+    if (!win || !(win.conId > 0)) return false
+    if (!ShellApps.dispatch(root.shell, "[con_id=" + win.conId + "] kill"))
+      return false
+    // P13. The tile goes now, not when the app answers. Rebuilt rather than
+    // pushed into: a `var` holding an array notifies on assignment only.
+    var next = root.closing.slice()
+    next.push(win.conId)
+    root.closing = next
+    settle.begin()
+    return true
+  }
+
+  // P13. Windows this opening of the sheet has asked to close. An app that
+  // refuses to quit is still running and has its tile back the next time the
+  // overview comes up -- `open()` is where the list is dropped -- because the
+  // alternative is a card that says a window is there while the phone says it
+  // is not, for as long as the sheet stays up.
+  property var closing: []
+
+  function liveWindows(list) {
+    var all = list || []
+    if (root.closing.length === 0) return all
+    var out = []
+    for (var i = 0; i < all.length; i++)
+      if (root.closing.indexOf(all[i].conId) < 0) out.push(all[i])
+    return out
+  }
+
+  // The two coordinate frames a check needs: scene, which `aim` takes, and
+  // global, which `sudo moarchy-touch` takes. The drawer's `cellTarget` reports
+  // the same pair, and a target reported in one frame only is a check that taps
+  // 26px high and hits nothing (style.md F6).
+  function rectOf(item): string {
+    var p = item.mapToItem(null, 0, 0)
+    var g = item.mapToGlobal(0, 0)
+    return "rect=" + Math.round(p.x) + "," + Math.round(p.y)
+         + " size=" + Math.round(item.width) + "x" + Math.round(item.height)
+         + " global=" + Math.round(g.x) + "," + Math.round(g.y)
   }
 
   // P6, P7. One window, one workspace, by con_id.
@@ -595,9 +674,13 @@ Item {
 
     Sheet.cover(root.shell, root.pluginId, Sheet.TOP)
 
-    root.cancelHold()
+    root.disarmLift()
     root.lifted = null
     root.dropTarget = 0
+    root.overBin = false
+    // P13. A window that refused to close is still running, and this is where
+    // it gets its tile back.
+    if (root.closing.length > 0) root.closing = []
     root.dragging = false
     root.progress = 1
     // The board is read on the way in rather than trusted from last time: the
@@ -612,9 +695,10 @@ Item {
     // no release. A tracker left active is a watchdog that puts `progress` back
     // four seconds later, over whatever is on screen by then.
     sheetDrag.cancel()
-    root.cancelHold()
+    root.disarmLift()
     root.lifted = null
     root.dropTarget = 0
+    root.overBin = false
     root.dragging = false
     root.progress = 0
   }
@@ -632,7 +716,9 @@ Item {
   // P10. Reachable without a finger, which is how the selftest asserts it:
   //   omarchy-shell overview state
   //   omarchy-shell overview grid
+  //   omarchy-shell overview windows
   //   omarchy-shell overview move 1234 3
+  //   omarchy-shell overview lift 2 0 / aim 180 600 / lifted / trash
   IpcHandler {
     target: "overview"
 
@@ -703,19 +789,108 @@ Item {
         if (live[i].number !== Number(ws)) continue
         var win = live[i].windows[Number(index)]
         if (!win) break
-        root.liftFired = true
-        root.lifted = win
-        root.liftedFrom = live[i].number
+        root.liftNow(win, live[i].number)
         root.dropTarget = live[i].number
         return "ok: " + (win.appId || "?") + " from " + live[i].number
       }
       return "error: no such window"
     }
 
+    // K1, K4, K5, K6. One line per open window: the plugin id for one of this
+    // shell's own screens and the app id for anything else, then the title --
+    // which for a shell app is the page it is on, because that is what the
+    // plugin answers with (`Apps.js` titleFor).
+    //
+    // Read from `ToplevelManager` and not from the board, so it answers with
+    // the sheet shut: the board is refreshed only while the surface is up (P9),
+    // and every check that asks what is running asks after a gesture that put
+    // this sheet away.
+    function windows(): string {
+      var list = ToplevelManager.toplevels ? ToplevelManager.toplevels.values : []
+      var out = []
+      for (var i = 0; i < list.length; i++) {
+        var tl = list[i]
+        if (!tl) continue
+        var own = ShellApps.forToplevel(root.shell, tl)
+        out.push((own ? own.pluginId : (tl.appId || "?"))
+                 + " " + Apps.titleFor(root.shell, tl))
+      }
+      return out.join("\n")
+    }
+
+    // P6, P12. What is in the air and what letting go would do with it. `none`
+    // is what says a stationary press lifted nothing, which is the whole of
+    // "there is no hold" from a terminal.
+    function lifted(): string {
+      if (!root.lifted) return "none"
+      return (root.lifted.appId || "?") + " from " + root.liftedFrom
+           + " over " + (root.overBin ? "bin"
+                       : root.dropTarget > 0 ? String(root.dropTarget)
+                                             : "nothing")
+    }
+
+    // The finger's position while a window is in the air, without a finger.
+    // Scene coordinates -- the frame `tileTarget` and `binTarget` report first.
+    function aim(x: string, y: string): string {
+      if (!root.lifted) return "error: nothing lifted"
+      root.aimLift(Number(x), Number(y))
+      return "ok: over " + (root.overBin ? "bin"
+                          : root.dropTarget > 0 ? String(root.dropTarget)
+                                                : "nothing")
+    }
+
+    // P12. The drop a finger makes into the bin. Separate from `dropOn` rather
+    // than a workspace number it would have to encode: a close is not a move to
+    // workspace -1.
+    function trash(): string {
+      if (!root.lifted) return "error: nothing lifted"
+      var was = root.lifted.appId || "?"
+      root.overBin = true
+      if (!root.drop()) return "error: nothing to dispatch through"
+      return "ok: closed " + was
+    }
+
+    // P12. Where the bin is, so a finger can be aimed at it rather than guessed
+    // at, and whether it is drawn -- which is how "only during a lift" is read
+    // from outside.
+    function binTarget(): string {
+      if (root.progress <= 0) return "no sheet"
+      // `drawn` and the rect, not one or the other: the rect is what a finger
+      // has to be aimed at *before* the drag that raises the bin starts, and
+      // `drawn` is the half that says it is raised only by one (P12).
+      return "drawn=" + (bin.visible ? "true" : "false") + " " + root.rectOf(bin)
+    }
+
+    // P6. Where a tile is, indexed the way `grid` prints it: workspace, then
+    // the window's position within that card.
+    //
+    // Through the delegates and not by arithmetic over the card metrics: the
+    // drop is aimed by arithmetic because it has no item to ask (P7a), but a
+    // check that wants the tile's own rect can have it, and a second copy of
+    // the layout is a rect that is confidently wrong.
+    function tileTarget(ws: string, index: string): string {
+      if (root.progress <= 0) return "no sheet"
+      var want = Number(ws)
+      var list = root.cards
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].number !== want) continue
+        var c = cardRepeater.itemAt(i)
+        if (!c || !c.tiles) return "no card"
+        var item = c.tiles.itemAt(Number(index))
+        if (!item) return "no tile"
+        return root.rectOf(item)
+      }
+      return "no card"
+    }
+
     // The other half of `lift`: aim it at a card and let go. Named for what it
     // does to the window rather than for the finger, because there is none.
     function dropOn(ws: string): string {
       if (!root.lifted) return "error: nothing lifted"
+      // A card, explicitly -- so it clears the bin the way aiming at one does.
+      // Without this a `dropOn` after an `aim` into the bin would close the
+      // window it names a workspace for.
+      root.overBin = false
       root.dropTarget = Number(ws)
       var from = root.liftedFrom
       // What the drop actually did, not what it was asked to do. A drop onto
@@ -787,6 +962,10 @@ Item {
   readonly property color cardFill: root.subduedBase
   readonly property color subdued: Theme.readableOn(root.subduedBase,
                                                     Color.menu.text, 0.55, 4.5)
+  // P12. The theme's own red, not a chosen one: `Color.urgent` is what upstream
+  // ships for the one thing that cannot be undone, and the bin is this sheet's
+  // only such thing.
+  readonly property color danger: Color.urgent
 
   // The veil is shared (docs/refactor.md E2); the default ink is this surface's
   // own, which is the half a shared type cannot know (style.md H2).
@@ -887,7 +1066,7 @@ Item {
           color: root.subdued
         }
 
-        // K5, M4. A shell app has no desktop entry to take an icon from -- its
+        // K5, P5. A shell app has no desktop entry to take an icon from -- its
         // app id is the shell process's own -- so it wears the glyph its own
         // card wears, centred on its ink rather than on the box the font
         // reserves (style.md B5).
@@ -1070,16 +1249,26 @@ Item {
             spacing: root.cardGap
 
             Repeater {
+              // How `tileTarget` reaches a tile: an id inside a Component is
+              // scoped to that Component, so a Repeater's own id is the only
+              // handle there is from out here.
+              id: cardRepeater
               model: root.cards
 
               delegate: Rectangle {
                 id: card
                 required property var modelData
 
+                // The same handle, one level in.
+                readonly property var tiles: tileStrip
+
                 readonly property bool fresh: !!card.modelData.fresh
                 readonly property bool isTarget:
                   !!root.lifted && root.dropTarget === card.modelData.number
-                readonly property var wins: card.modelData.windows || []
+                // P13. Minus anything this opening has asked to close, so the
+                // tile leaves with the drop rather than when the app answers.
+                readonly property var wins:
+                  root.liveWindows(card.modelData.windows)
 
                 width: cardColumn.width
                 height: root.cardHeight
@@ -1088,9 +1277,9 @@ Item {
 
                 // P4, P6. Two things a card can be saying, and they are drawn
                 // the same way on purpose: the accent is already this shell's
-                // word for "this is where you would end up" -- the shelf's
-                // running dot, the strip's armed pill, the back edge's
-                // committed arc.
+                // word for "this is where you would end up" -- the strip's
+                // armed pill, the back edge's committed arc. The bin is the one
+                // target that is not, and it is drawn in `urgent` (P12).
                 border.width: card.isTarget || card.modelData.focused ? 2 : 1
                 border.color: card.isTarget ? Color.accent
                             : card.modelData.focused ? Util.alpha(Color.accent, 0.6)
@@ -1173,6 +1362,7 @@ Item {
                       spacing: 0
 
                       Repeater {
+                        id: tileStrip
                         model: root.shownWindows(card.wins)
 
                         delegate: Item {
@@ -1215,12 +1405,23 @@ Item {
                             id: tileArea
                             anchors.fill: parent
 
+                            // P6. The list must not be able to take this
+                            // gesture away. Without it the lift races the
+                            // Flickable's own drag threshold -- two thresholds
+                            // a couple of pixels apart, resolving one way on a
+                            // slow finger and the other on a fast one -- and
+                            // the loser is an app that moved when it was meant
+                            // to be carried. A tile's drag is the window's, so
+                            // the grab is claimed from the press and not
+                            // arbitrated at all.
+                            preventStealing: true
+
                             onGrabbed: (area, mouse) =>
                               root.armLift(tileSlot.modelData, card.modelData.number)
-                            onDragged: (area, mouse) => root.holdMove(area, mouse)
+                            onDragged: (area, mouse) => root.liftMove(area, mouse)
                             onUngrabbed: {
                               if (root.lifted) root.drop()
-                              root.cancelHold()
+                              root.disarmLift()
                             }
 
                             // P4. A tap is a tap only if it was not a drag, not
@@ -1236,7 +1437,7 @@ Item {
 
                       // The windows this card has no slot for. A count and not
                       // a smaller tile: a tile narrower than a slot stops being
-                      // one (M4), and a card that grew would break the
+                      // one (P5), and a card that grew would break the
                       // arithmetic every drop is aimed by.
                       //
                       // Drawn where the icons are and not in the middle of the
@@ -1267,6 +1468,66 @@ Item {
                 }
               }
             }
+          }
+        }
+      }
+
+      // P12. The bin, drawn for the length of a lift and at no other time.
+      //
+      // Across the foot of the sheet, where a thumb already is at the end of a
+      // drag. An overlay and not a row in the Column above: reserving space for
+      // it would relayout the card list on the frame a window leaves the ground,
+      // which moves every card out from under the finger that just picked one
+      // up. What it covers instead is the bottom of that list, and one app per
+      // workspace (F1) is what makes that cheap -- the cards are short and the
+      // band sits below the last of them until the phone has six of them.
+      //
+      // It answers nothing: like the ghost below, the tile holds the exclusive
+      // grab while a window is in the air, so an input region here would take
+      // the release that ends the drag (P7a).
+      Rectangle {
+        id: bin
+        visible: !!root.lifted
+
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.leftMargin: root.sheetMargin
+        anchors.rightMargin: root.sheetMargin
+        // The list's own bottom, which already clears the strip in both
+        // keyboard states -- one number rather than two that have to agree.
+        anchors.bottomMargin: root.gestureStrip
+        height: root.cardHeight
+
+        radius: root.radiusCard
+        // Lit in `urgent` under the window and outlined in it otherwise: the
+        // bin says what it is before a finger reaches it, and says that it is
+        // holding the drop when one does (P12).
+        color: root.overBin ? Util.alpha(root.danger, 0.2) : root.cardFill
+        border.width: root.overBin ? 2 : 1
+        border.color: root.overBin ? root.danger : Util.alpha(root.danger, 0.4)
+
+        Row {
+          anchors.centerIn: parent
+          spacing: Style.space(10)
+
+          Ui.OpticalGlyph {
+            anchors.verticalCenter: parent.verticalCenter
+            width: root.iconSize
+            height: root.iconSize
+            text: "󰩺"
+            fontFamily: Style.font.family
+            fontSize: root.iconSize
+            color: root.danger
+          }
+
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: "Close"
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body
+            font.weight: root.textWeight
+            color: root.danger
           }
         }
       }

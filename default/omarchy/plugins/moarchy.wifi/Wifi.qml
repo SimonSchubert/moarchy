@@ -64,7 +64,7 @@ Item {
   // window has a workspace for.
   readonly property bool opened: wifiWindow.visible
 
-  // How the drawer's shelf and the back gesture find this plugin from its window
+  // How the overview and the back gesture find this plugin from its window
   // (moarchy.common/ShellApps.js).
   readonly property var appWindow: wifiWindow
 

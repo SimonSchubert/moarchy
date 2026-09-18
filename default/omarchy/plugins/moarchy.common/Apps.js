@@ -1,5 +1,5 @@
 // A window, and what to draw for it: icon, name, page title, glyph
-// (docs/refactor.md E7, gestures.md K5/M4).
+// (docs/refactor.md E7, gestures.md K5/P5).
 //
 //     import "../moarchy.common/Apps.js" as Apps
 //
@@ -7,12 +7,12 @@
 //     function buildIndex(): void { root.appIdIndex = Apps.index(root.shell) }
 //     function openIconFor(app) { return Apps.iconFor(root.shell, root.appIdIndex, app) }
 //
-// Two surfaces draw a window as a tile: the drawer's shelf (M4) and the
-// overview's workspace cards (P5). They are the same tile -- the same icon, the
-// same name, the same glyph for a shell app -- because they are answering the
-// same question about the same handle, and a second implementation of that
-// answer is how the shelf came to draw `org.quickshell` with no icon for every
-// plugin that was not in ShellApps.IDS.
+// One surface draws a window as a tile -- the overview's workspace cards (P5)
+// -- and one asks the same index a narrower question: whether an app is already
+// running, which is what decides the drawer's hop to a free workspace (L10).
+// One implementation of "which app is this window", because a second one is how
+// `org.quickshell` with no icon came to be drawn for every plugin that was not
+// in ShellApps.IDS.
 //
 // `.pragma library`, so there is one index-builder rather than a copy per
 // importing component. It reaches nothing: `shell` is handed in, which is what
@@ -27,8 +27,8 @@
 // timing.
 //
 // **Which windows there are.** That is `ToplevelManager` for the drawer and the
-// sway tree for the overview, and they are different questions: the shelf is
-// every window in MRU order, a card is the windows on one workspace.
+// sway tree for the overview, and they are different questions: one is whether
+// an app is running anywhere, a card is the windows on one workspace.
 .pragma library
 
 .import "ShellApps.js" as ShellApps
@@ -75,8 +75,8 @@ function index(shell) {
 }
 
 // The plugin id an entry summons, as a one-element match, or null for an entry
-// that starts a process. Written once: index() keys the shelf's icons off it
-// (K5) and the drawer's launch() asks it whether a window is coming (L10).
+// that starts a process. Written once: index() keys a tile's icons off it (K5)
+// and the drawer's launch() asks it whether a window is coming (L10).
 function pluginSummonedBy(entry) {
   if (!entry) return null
   return /(?:^|\s)shell\s+toggle\s+(\S+)/.exec(String(entry.execString || ""))
@@ -133,7 +133,7 @@ function titleFor(shell, tl) {
 }
 
 // Non-empty for a shell app and empty for anything else, which is what a tile
-// branches on: an Image with an empty source draws nothing at all (M4).
+// branches on: an Image with an empty source draws nothing at all (K5, P5).
 function glyphFor(shell, tl) {
   var own = shellAppFor(shell, tl)
   return own ? String(own.appWindow.glyph || "") : ""

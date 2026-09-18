@@ -1,7 +1,7 @@
 # moarchy
 
 <p align="center">
-  <img src="docs/screenshots/system-drawer-open.png" width="16%" alt="The app drawer at rest, with a shelf of the four open apps along its top, each marked with a running dot">
+  <img src="docs/screenshots/system-drawer-open.png" width="16%" alt="The app drawer at rest: a search field over a grid of app icons">
   <img src="docs/screenshots/system-drawer.png" width="16%" alt="The app drawer, filtered as you type, with the on-screen keyboard up">
   <img src="docs/screenshots/system-center.png" width="16%" alt="The control centre: quick tiles, brightness and volume, the media player and notifications">
   <img src="docs/screenshots/system-settings.png" width="16%" alt="The Settings suite's top level">
@@ -173,30 +173,30 @@ One drag up from the home pill has two stops, the way Android's does:
 
 | Gesture | What it does |
 | --- | --- |
-| Swipe up from the pill, short | The app drawer — which opens with a shelf of what is already running |
+| Swipe up from the pill, short | The app drawer |
 | Swipe up from the pill, further | Home — a workspace with nothing on it |
 | Swipe up **on the wallpaper** | The app drawer, tracking the finger 1:1 |
 | Press and hold the pill | The default coding agent, in a terminal — the picker, with none chosen yet |
 | Swipe left / right | Next / previous workspace, which is next / previous app |
 | Swipe in from the **right edge** | The overview — every workspace as a card, one under the other |
-| Hold a card's app and drag it | Move that app to another workspace. Two on one workspace tile, one above the other |
-| Tap an open-app tile | Switch to that app |
-| Flick an open-app tile up | Close that app |
+| Tap an app on a card | Switch to that app |
+| Drag an app off its card | Move it to another workspace — two on one workspace tile, one above the other — or into the bin to close it |
 | Pull down from the status bar | The shade: quick settings, brightness, media |
 
 Every up-swipe raises the drawer — over an app, over a home screen, over
-nothing (`docs/gestures.md` A5). Until 2026-09-13 the first stop was a separate
-recents carousel and the drawer was reachable only from a blank workspace; the
-drawer now lists the open apps along its own top, so the switcher was deleted
-rather than kept beside a launcher that shows the same thing. Nothing on the
-strip closes a window: apps are closed from the drawer's shelf, one tile at a
-time (C4, M6).
+nothing (`docs/gestures.md` A5). The drawer is a launcher and nothing else:
+what is already running is the overview's subject, and one surface answers
+"where is everything" rather than two that show the same windows in two shapes.
+Nothing on the strip closes a window either: apps are closed by dragging them
+into the overview's bin, one at a time (C4, P12).
 
 The two vertical edges are one gesture each, and the right one is the map. A
 swipe in from it pulls the **overview** across: every workspace as a card, one
 under the other, each showing the windows on it. Tap a card to go there, tap an
-app to go straight to it, or **hold an app and drag it onto another card** to
-move it — which is the one way a workspace comes to hold two.
+app to go straight to it, or **drag an app onto another card** to move it —
+which is the one way a workspace comes to hold two. Drag it into the bin at the
+foot of the sheet and it closes, which is the one place a window is closed by
+hand.
 
 Two windows side by side on a 360px screen get 180px each, which nothing here
 can use — so a workspace that holds more than one is **split vertically**, one
@@ -214,7 +214,7 @@ happening is a gesture nobody finds (C1, C2).
 Everything is reachable without a finger, which is how the selftest asserts it:
 
 ```bash
-omarchy-shell drawer openApps       # one line per open app
+omarchy-shell overview windows      # one line per open window
 omarchy-shell gestures swipe home
 moarchy-selftest --gestures   # drives real synthetic touch via /dev/uinput
 ```

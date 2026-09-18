@@ -431,11 +431,10 @@ Item {
     else Quickshell.execDetached(["swaymsg", cmd])
   }
 
-  // M5, K12. Focus a window. Every caller in this shell lands here, so there is
+  // P4, K12. Focus a window. Every caller in this shell lands here, so there is
   // one answer to "how do you focus something" and one place to change it.
   //
-  // NOT `Toplevel.activate()`, which is what the shelf's tap used to send and
-  // replaced. The foreign-toplevel activate request does nothing on this
+  // NOT `Toplevel.activate()`. The foreign-toplevel activate request does nothing on this
   // compositor: measured 2026-09-08 from inside the running shell, against
   // `foot` on another workspace and against one of this shell's own windows,
   // and in both cases the request was sent, no warning appeared anywhere, and
@@ -443,10 +442,10 @@ Item {
   // this is sway's activate path and not a dead protocol -- sway 1.12 matches
   // the request's seat against its own seats and drops it when nothing matches.
   //
-  // It had been silently broken for as long as a tap on a card was a thing. M5
-  // passed throughout, because it asserted that the workspace the tap landed on
-  // holds a window -- which is also true when the tap changed nothing and you
-  // were already looking at one.
+  // It had been silently broken for as long as a tap on a card was a thing. The
+  // check passed throughout, because it asserted that the workspace the tap
+  // landed on holds a window -- which is also true when the tap changed nothing
+  // and you were already looking at one.
   //
   // Criteria, because a foreign-toplevel handle carries no con_id and there is
   // nothing else to address a window by. Two windows with the same app id *and*
@@ -637,9 +636,9 @@ Item {
   // with a window plainly focused -- the back gesture ran, found nothing, and
   // closed nothing, while `toplevels` was populated the whole time. The
   // per-toplevel `activated` flag is the one that demonstrably tracks focus:
-  // it is what puts the drawer's own shelf in the right order (M1). So
-  // prefer the singleton when it answers and fall back to the flag that
-  // works, rather than depending on a derived property that does not.
+  // it is what the overview's focused card is marked from (P4). So prefer the
+  // singleton when it answers and fall back to the flag that works, rather
+  // than depending on a derived property that does not.
   function focusedToplevel() {
     if (ToplevelManager.activeToplevel) return ToplevelManager.activeToplevel
     var list = ToplevelManager.toplevels ? ToplevelManager.toplevels.values : []
@@ -873,8 +872,8 @@ Item {
     }
     else if (action === "home") {
       // K4. A shell app goes where an app goes: nowhere. It stays mapped on its
-      // own workspace, it keeps its tile on the drawer's shelf, and this
-      // gesture leaves it the way it leaves `foot` -- by going somewhere else.
+      // own workspace, it keeps its tile in the overview, and this gesture
+      // leaves it the way it leaves `foot` -- by going somewhere else.
       //
       // Already on a home screen? Then there is nowhere to go, and going anyway
       // would hop to a *different* empty workspace and churn the numbering for
