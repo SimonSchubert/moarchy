@@ -89,7 +89,7 @@ persist.waydroid.width  = <output logical width>
 persist.waydroid.height = <output + both inset overhangs>   # AC 5, AC 10
 + a sway rule giving the toplevel that size at that offset  # AC 5, AC 10
 + a launcher that replaces `waydroid app launch`            # AC 11
-+ a bar that steps aside for an Android window              # AC 12
++ chrome that swaps behaviour per edge for an Android window # AC 12
 + a density that matches the panel rather than the scale     # AC 13
 + a Back rung in the gestures ladder                        # AC 7
 ```
@@ -282,11 +282,32 @@ It does **not** force-stop first, deliberately: that would kill playback on
 every tap. The cost is that an app already running with the wrong insets keeps
 them until it is stopped once.
 
-**AC 12** The bar is transparent while an Android window is focused, and opaque
-everywhere else.
-→ sample the bar band with `grim`: over a Waydroid window it is the app's own
-pixels, continuous across the bar's bottom edge; on the home screen it is
-`Color.bar.background`. Measured both ways, 2026-09-18.
+**AC 12** Over an Android window the chrome swaps behaviour at each edge: the
+bar goes **transparent** and the strip goes **opaque**. Everywhere else both are
+as they were.
+→ sample both bands with `grim`. Over a Waydroid window the bar band is the
+app's own pixels, continuous across y=78; on the home screen it is
+`Color.bar.background`. The strip band is flat `Color.bar.background` with
+exactly one pill in it — brightest pixel ~70 on this theme, against the 221–235
+of Android's own handle. Measured all four ways, 2026-09-18.
+
+**Why the strip goes the other way.** Android draws its gesture handle *inside
+the app surface* — 108dp wide, 10dp up from the bottom of its own display —
+which at this density lands within three pixels of our pill and reads as one fat
+smudged bar. It cannot be turned off from outside, and three mechanisms were
+tried:
+
+| | |
+|---|---|
+| `settings put secure sysui_nav_bar` | dead in Android 13 — `NavigationBarInflaterView` no longer implements `Tunable` |
+| `cmd statusbar send-disable-flag home` | does not touch the handle (the clock and status icons it does blank — AC 6) |
+| `org.lineageos.overlay.customization.navbar.nohint` | worked once, then silently reverted to `STATE_DISABLED` while still `mIsMutable: true` with a valid idmap. **Unexplained.** It survived until the density changed (AC 13), which regenerates overlay idmaps, and would not re-enable afterwards. LineageOS 20 has no hint setting to drive it either — `force_show_navbar` is the only related key in its provider |
+
+So the strip covers it instead, and what it covers is the app's **nav bar inset
+region** — empty by construction, because Android has already padded the content
+above it. The cost is the app's background no longer bleeding the last 20px; on
+a dark app it is not detectable, and on a light one the bar is transparent over
+it anyway.
 
 This is **not** the `bar.transparent` key `Bar.qml` refuses to read. That was a
 global flag written by `omarchy-bar transparent`, whose config reload takes this

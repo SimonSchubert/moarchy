@@ -647,6 +647,15 @@ Item {
     return null
   }
 
+  // Whether the focused window is an Android app, which is the one case where
+  // our chrome and the app's own insets have to cooperate rather than just
+  // stack: the app draws behind both edges (docs/android.md AC 5) and Android
+  // pads its content clear of them with the insets it reports.
+  readonly property bool androidFocused: {
+    var tl = root.focusedToplevel()
+    return !!tl && String(tl.appId || "").indexOf("waydroid.") === 0
+  }
+
   // F1. The lowest workspace number Sway does not currently have.
   //
   // This used to ask each workspace whether its `representation` was empty,
@@ -1522,7 +1531,22 @@ Item {
     // input region, so touch outside it reaches the app with no `mask` needed.
     anchors { bottom: true; left: true; right: true }
     implicitHeight: root.stripHeight
-    color: "transparent"
+
+    // Transparent over everything except an Android window, and there the bar
+    // does the opposite of this -- docs/android.md AC 12. Android draws its own
+    // gesture handle inside the app surface, 108dp wide and 10dp up from the
+    // bottom of ITS display, which lands within three pixels of this pill and
+    // reads as one fat smudged bar. It cannot be turned off from outside:
+    // `sysui_nav_bar` is dead in Android 13, `send-disable-flag home` does not
+    // touch the handle, and LineageOS's own nohint overlay is mutable with a
+    // valid idmap yet silently reverts to disabled (measured 2026-09-18).
+    //
+    // So cover it. What this paints over is the app's NAV BAR INSET region,
+    // which is empty by construction -- Android has already padded the content
+    // above it -- so the only thing lost is the app's background colour
+    // bleeding the last 20px, and the only thing gained is one pill instead of
+    // two.
+    color: root.androidFocused ? Color.bar.background : "transparent"
 
     WlrLayershell.namespace: "moarchy-gestures"
     WlrLayershell.layer: WlrLayer.Overlay
