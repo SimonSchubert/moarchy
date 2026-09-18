@@ -60,6 +60,94 @@ sheet=$("$UI" get sheet)
 [[ -z $sheet ]] && ok "preset retake drops radius overrides" \
   || no "sheet still $sheet after corners large"
 
+# gestures.md Q1. Which sheet each swipeable edge raises. Words, and the
+# defaults are today's wiring -- a home with no ui.toml is the phone as it
+# shipped, which is the half of this that nobody would notice was broken.
+rm -f "$HOME/.config/omarchy/ui.toml"
+[[ $("$UI" get gesture-bottom) == drawer ]] && ok "gesture-bottom defaults to drawer" \
+  || no "gesture-bottom: $("$UI" get gesture-bottom)"
+[[ $("$UI" get gesture-right) == overview ]] && ok "gesture-right defaults to overview" \
+  || no "gesture-right: $("$UI" get gesture-right)"
+[[ $("$UI" get gesture-bottom-label) == "App drawer" ]] && ok "gesture-bottom-label reads App drawer" \
+  || no "label: $("$UI" get gesture-bottom-label)"
+[[ $("$UI" get gesture-summary) == "App drawer · Overview" ]] && ok "gesture-summary is the pair" \
+  || no "summary: $("$UI" get gesture-summary)"
+
+"$UI" gesture-right shade >/dev/null
+[[ $("$UI" get gesture-right) == shade ]] && ok "gesture-right shade sticks" \
+  || no "after shade: $("$UI" get gesture-right)"
+[[ $("$UI" get gesture-bottom) == drawer ]] && ok "one edge's write leaves the other alone" \
+  || no "bottom moved to: $("$UI" get gesture-bottom)"
+
+# A typo must not switch an edge off. Ui.js normTarget() is the same rule, and
+# both sides falling back to the caller's current value is what makes a
+# hand-edited file safe.
+"$UI" gesture-right nonsense >/dev/null
+[[ $("$UI" get gesture-right) == shade ]] && ok "an unknown word keeps the current value" \
+  || no "nonsense left: $("$UI" get gesture-right)"
+
+"$UI" gesture-bottom none >/dev/null
+[[ $("$UI" get gesture-bottom) == none ]] && ok "none is a value, not a fallback" \
+  || no "after none: $("$UI" get gesture-bottom)"
+[[ $("$UI" get gesture-bottom-label) == Nothing ]] && ok "none reads as Nothing" \
+  || no "label: $("$UI" get gesture-bottom-label)"
+
+# A file written before these keys existed has neither of them, and must come
+# back as the shipped pairing rather than as two dead edges.
+printf 'corners = "modest"\n' >"$HOME/.config/omarchy/ui.toml"
+[[ $("$UI" get gesture-bottom) == drawer && $("$UI" get gesture-right) == overview ]] \
+  && ok "a file with no gesture keys is the shipped pairing" \
+  || no "old file gave: $("$UI" get gesture-bottom)/$("$UI" get gesture-right)"
+
+# The corners verb drops the radii it owns; it must not drop these.
+"$UI" gesture-right shade >/dev/null
+"$UI" corners square >/dev/null
+[[ $("$UI" get gesture-right) == shade ]] && ok "a corners retake keeps the edges" \
+  || no "corners write lost gesture-right: $("$UI" get gesture-right)"
+
+# gestures.md Q10. The two triggers that tap rather than drag take a wider
+# vocabulary: a word, or any desktop entry id. An id cannot be whitelisted, so
+# the rule is the opposite of the edges' -- pass an unknown value through
+# rather than fall back to a default.
+rm -f "$HOME/.config/omarchy/ui.toml"
+[[ $("$UI" get gesture-hold) == agent ]] && ok "gesture-hold ships as the coding agent (C1)" \
+  || no "gesture-hold: $("$UI" get gesture-hold)"
+[[ $("$UI" get gesture-power) == none ]] && ok "gesture-power ships off (Q11c)" \
+  || no "gesture-power: $("$UI" get gesture-power)"
+[[ $("$UI" get gesture-hold-label) == "Coding agent" ]] && ok "agent reads as Coding agent" \
+  || no "hold label: $("$UI" get gesture-hold-label)"
+
+"$UI" gesture-hold org.gnome.Calls >/dev/null
+[[ $("$UI" get gesture-hold) == org.gnome.Calls ]] \
+  && ok "an app id is stored verbatim, case and all" \
+  || no "after an app id: $("$UI" get gesture-hold)"
+
+# The edges fall back on an unknown word; these must not, or every app would
+# be normalised away to the default the moment it was chosen.
+"$UI" gesture-power some.unknown.App >/dev/null
+[[ $("$UI" get gesture-power) == some.unknown.App ]] \
+  && ok "an unknown value passes through rather than falling back" \
+  || no "unknown value became: $("$UI" get gesture-power)"
+
+"$UI" gesture-power shade >/dev/null
+[[ $("$UI" get gesture-power-label) == "Notification shade" ]] \
+  && ok "a sheet word still reads as its name" \
+  || no "power label: $("$UI" get gesture-power-label)"
+
+"$UI" gesture-hold off >/dev/null
+[[ $("$UI" get gesture-hold) == none ]] && ok "off is an alias for none here too" \
+  || no "after off: $("$UI" get gesture-hold)"
+
+# All four keys survive a write to any one of them.
+"$UI" gesture-bottom shade >/dev/null
+[[ $("$UI" get gesture-power) == shade && $("$UI" get gesture-hold) == none ]] \
+  && ok "an edge write leaves both tap triggers alone" \
+  || no "after an edge write: hold=$("$UI" get gesture-hold) power=$("$UI" get gesture-power)"
+"$UI" corners large >/dev/null
+[[ $("$UI" get gesture-hold) == none && $("$UI" get gesture-power) == shade ]] \
+  && ok "a corners retake leaves all four gesture keys alone" \
+  || no "corners write lost a gesture key"
+
 if [[ $fail -gt 0 ]]; then
   echo "$fail failed"
   exit 1

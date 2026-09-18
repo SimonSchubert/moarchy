@@ -11,9 +11,9 @@
 # C4 (no stray hex), D1 (four named radii), H1/H6 (a pressed state on every
 # control, guarded where the control is also a drag handle). Plus three things
 # that are not ACs at all: that every SVG this project ships still parses, the
-# sheet-stacking rule, and the workspace-layout rule the overview drags onto
-# (gestures.md P7) -- both of which decide behaviour and neither of which needs
-# the phone to run.
+# sheet-stacking rule, the edge table (gestures.md Q2), and the workspace-layout
+# rule the overview drags onto (gestures.md P7) -- all of which decide behaviour
+# and none of which needs the phone to run.
 #
 # Does NOT cover E (touch targets) or F (text inputs): a hit area is a runtime
 # rectangle, and the accessors that answer for it -- `omarchy-shell drawer
@@ -287,6 +287,30 @@ else
   skip "the Sheet.js cases need node, which is not installed here (I1a)"
 fi
 
+# gestures.md Q11. The power button's double-press window, with moarchy-screen
+# and moarchy-trigger stubbed. Pure arithmetic over one timestamp file, so the
+# 400ms rule can be run here rather than checked by hand on glass once.
+printf '\npower button (gestures.md Q11, not a style.md section)\n'
+if pp_out=$(bash scripts/test-power-press.sh 2>&1); then
+  ok "one press toggles, two fire the trigger ($(grep -c PASS <<<"$pp_out") cases, Q11)"
+else
+  no "the power button's double press is broken (Q11)" "$pp_out"
+fi
+
+# gestures.md Q2, Q2a. The edge table: which axis a sheet arrives on, which way
+# it opens, and where it sits part-way in. Pure arithmetic with no Qt in it, and
+# the first group of cases is each sheet's own pre-Q formula -- so a wrong row
+# is caught here rather than as a sheet arriving sideways on the phone.
+if command -v node >/dev/null 2>&1; then
+  if edge_out=$(node scripts/edge-test.js 2>&1); then
+    ok "Edge.js puts each sheet where it shipped ($(grep -c 'ok' <<<"$edge_out") cases, Q2)"
+  else
+    no "the edge table is broken (Q2)" "$edge_out"
+  fi
+else
+  skip "the Edge.js cases need node, which is not installed here (Q2)"
+fi
+
 # gestures.md P7. What a workspace holding two windows is arranged as, which is
 # the rule the overview's drag exists on top of. The daemon's own functions with
 # `swaymsg` stubbed, so the command strings are asserted rather than the phone --
@@ -299,8 +323,9 @@ else
   no "the workspace layout rule is broken (P7)" "$ws_out"
 fi
 
-# Chrome file. Corners and shade sizes live in ~/.config/omarchy/ui.toml, and
-# moarchy-ui is the writer the theme switcher, Settings and an agent all use.
+# Chrome file. Corners, shade sizes and which sheet each swipeable edge raises
+# (gestures.md Q1) live in ~/.config/omarchy/ui.toml, and moarchy-ui is the
+# writer the theme switcher, Settings and an agent all use.
 # A parser that disagrees with the writer is a theme switcher that does not
 # stick, so both halves are checked here rather than only on the phone.
 printf '\nchrome (ui.toml)\n'

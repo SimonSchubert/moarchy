@@ -640,6 +640,13 @@ var PAGES = {
 
 // -------------------------------------------------------------------- shell
 "shell": { title: "Shell & plugins", rows: [
+  // gestures.md Q1, Q9. Which sheet each swipeable edge raises. A page of its
+  // own rather than two rows here: the left edge is back and the top is the
+  // shade, and when either becomes settable it belongs beside these two and not
+  // on a page about plugins.
+  { id: "gestures", type: "nav", page: "shell.gestures", glyph: "󰶞",
+    label: "Gestures", detailCmd: "moarchy-ui get gesture-summary",
+    keywords: "swipe edge bottom right up drawer overview shade none off" },
   { id: "plugins", type: "nav", page: "shell.plugins", glyph: "󰐱", label: "Plugins",
     detailCmd: "moarchy-plugins summary",
     covers: { "setup.plugin": "N" } },
@@ -650,6 +657,93 @@ var PAGES = {
   { id: "tmux", type: "action", glyph: "", label: "Reset tmux config",
     run: "omarchy-launch-floating-terminal-with-presentation omarchy-refresh-tmux",
     launch: "none", covers: { "update.config.tmux": "B", "update.config": "N" } }
+]},
+
+"shell.gestures": { title: "Gestures", rows: [
+  { id: "bottom", type: "nav", page: "shell.gestures.bottom", glyph: "󰁝",
+    label: "Swipe up from the bottom",
+    detailCmd: "moarchy-ui get gesture-bottom-label",
+    keywords: "strip wallpaper home launcher" },
+  { id: "right", type: "nav", page: "shell.gestures.right", glyph: "󰁍",
+    label: "Swipe in from the right",
+    detailCmd: "moarchy-ui get gesture-right-label",
+    keywords: "edge workspaces cards" },
+  // Q10. The two that are a tap rather than a drag, so they can name anything
+  // that opens -- including any app. Their detail lines go through
+  // moarchy-trigger rather than moarchy-ui: an app id has to be resolved to
+  // the name the drawer draws, and only the shell has read the desktop entry.
+  { id: "hold", type: "nav", page: "shell.gestures.hold", glyph: "󰭰",
+    label: "Press and hold the strip",
+    detailCmd: "moarchy-trigger label hold",
+    keywords: "long press agent claude app launch" },
+  { id: "power", type: "nav", page: "shell.gestures.power", glyph: "󰐥",
+    label: "Double-click the power button",
+    detailCmd: "moarchy-trigger label power",
+    keywords: "button double press twice app launch screen" }
+]},
+
+// Provider pages, unlike the two edges above, and the reason is the one thing
+// these offer that an edge cannot: every app on the phone. A hand-written list
+// cannot hold 59 rows that change when somebody installs something, and the
+// rows have to carry the drawer's own names or a trigger would offer an app
+// the grid calls something else.
+//
+// The cost is O10 -- provider rows are outside the drawer's search index -- and
+// it is the right way round here. The two nav rows above are static and
+// indexed, so typing "hold" or "power" still finds the screen; what is not
+// indexed is the fifty-nine apps on it, which is exactly what O10 exists to
+// keep out of a search for "e".
+"shell.gestures.hold": { title: "Press and hold the strip",
+  reader: "moarchy-ui get gesture-hold",
+  provider: { json: "moarchy-trigger rows hold", before: true },
+  rows: [] },
+
+"shell.gestures.power": { title: "Double-click the power button",
+  reader: "moarchy-ui get gesture-power",
+  provider: { json: "moarchy-trigger rows power", before: true },
+  rows: [] },
+
+// Static rows and not a `provider`, which is the one place this pair does not
+// copy shell.plugins. The four options are fixed and known, and provider-built
+// rows are outside the drawer's search index (O10) and answer `unknown row` to
+// `settings runRow` -- the wrong trade for the one screen somebody goes looking
+// for by typing "swipe".
+//
+// The values are the words ui.toml holds, never plugin ids: Sheet.js is where
+// an id is written (refactor.md I2) and moarchy-ui speaks the same four words
+// back, so the tick is a string comparison between two files that agree by
+// construction.
+//
+// `none` is a real row with a real value, so it ticks like any other. D2 says
+// an unmatched reader ticks nothing, and an "off" state that showed as no tick
+// anywhere would be indistinguishable from a reader that had broken.
+"shell.gestures.bottom": { title: "Swipe up from the bottom",
+  reader: "moarchy-ui get gesture-bottom", rows: [
+  { id: "b-none", type: "choice", label: "Nothing", value: "none",
+    detail: "Home and workspace swipes still work",
+    write: "moarchy-ui gesture-bottom none" },
+  { id: "b-drawer", type: "choice", label: "App drawer", value: "drawer",
+    detail: "Search and launch", write: "moarchy-ui gesture-bottom drawer" },
+  { id: "b-overview", type: "choice", label: "Overview", value: "overview",
+    detail: "Every workspace as a card",
+    write: "moarchy-ui gesture-bottom overview" },
+  { id: "b-shade", type: "choice", label: "Notification shade", value: "shade",
+    detail: "The status bar still pulls it down",
+    write: "moarchy-ui gesture-bottom shade" }
+]},
+
+"shell.gestures.right": { title: "Swipe in from the right",
+  reader: "moarchy-ui get gesture-right", rows: [
+  { id: "r-none", type: "choice", label: "Nothing", value: "none",
+    detail: "The edge does nothing", write: "moarchy-ui gesture-right none" },
+  { id: "r-drawer", type: "choice", label: "App drawer", value: "drawer",
+    detail: "Search and launch", write: "moarchy-ui gesture-right drawer" },
+  { id: "r-overview", type: "choice", label: "Overview", value: "overview",
+    detail: "Every workspace as a card",
+    write: "moarchy-ui gesture-right overview" },
+  { id: "r-shade", type: "choice", label: "Notification shade", value: "shade",
+    detail: "The status bar still pulls it down",
+    write: "moarchy-ui gesture-right shade" }
 ]},
 
 "shell.plugins": { title: "Plugins",

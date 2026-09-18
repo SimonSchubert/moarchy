@@ -1,0 +1,52 @@
+#!/bin/bash
+# The power button, which on this phone has two meanings (docs/gestures.md Q11).
+#
+#   one press    blank the panel and stop the touchscreen, or undo that
+#                (moarchy-screen toggle) -- unchanged, and still instant
+#   two presses  undo that blank and fire whatever `gesture_power` names
+#
+# **The first press acts immediately and the second undoes it.** The alternative
+# was to hold every press for the double-press window before doing anything,
+# which buys a double press with no blink and costs ~350ms on the one button
+# this device has -- paid on every pocket press, to make a gesture most presses
+# are not. Android makes the same trade for the same reason, and the blink on a
+# double press is the whole of what it costs.
+#
+# A file and not a daemon: the binding is `exec`, so each press is a new process
+# with nothing carried over but what is on disk. Two timestamps in one file
+# would be a race between two presses 200ms apart; one line, written last, is
+# not.
+set -uo pipefail
+
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/moarchy"
+STAMP="$STATE_DIR/power-press"
+
+# Milliseconds between two presses for the second to count as a double. 400 is
+# Android's own double-press window, and comfortably inside the ~700ms a
+# deliberate double takes on a button this size.
+WINDOW_MS=400
+
+now_ms() { echo $(( $(date +%s%N) / 1000000 )); }
+
+mkdir -p "$STATE_DIR"
+now=$(now_ms)
+last=$(cat "$STAMP" 2>/dev/null || echo 0)
+[[ $last =~ ^[0-9]+$ ]] || last=0
+
+# Written before either branch runs, so a third press cannot be read against a
+# stamp the second press never got around to updating.
+printf '%s\n' "$now" >"$STAMP"
+
+if (( last > 0 && now - last <= WINDOW_MS )); then
+  # A double. Clear the stamp so three presses are a double and then a single,
+  # rather than a double and then another double off the same second press.
+  : >"$STAMP"
+  # Undo the blank the first press just did. `unlock` and not `toggle`: the
+  # first press may have been an unlock rather than a lock -- waking the phone
+  # and immediately pressing again -- and toggling here would put the screen
+  # back out from under the thing about to open.
+  moarchy-screen unlock >/dev/null 2>&1
+  exec moarchy-trigger fire power
+fi
+
+exec moarchy-screen toggle

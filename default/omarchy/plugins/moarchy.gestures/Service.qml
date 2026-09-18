@@ -22,10 +22,10 @@
 // ---------------------------------------------------------------------------
 // The four surfaces, and why each sits on the layer it does
 // ---------------------------------------------------------------------------
-//   strip         Overlay, bottom, 20px, exclusive.  The drawer and home (A, B).
+//   strip         Overlay, bottom, 20px, exclusive.  A sheet and home (A, B, Q).
 //                 Overlay because moarchy-keyboard is on Top with an exclusive
 //                 zone, so anything lower loses the bottom edge to the keyboard.
-//   home          Bottom, full screen, no exclusion.  The drawer (D).
+//   home          Bottom, full screen, no exclusion.  The strip's sheet (D).
 //                 *Below* every window, so on a blank workspace it receives the
 //                 touch and on an occupied one the app is over it and it
 //                 receives nothing. The layer does the work -- there is no "is
@@ -33,7 +33,7 @@
 //                 asking that question is what made the drawer open when it
 //                 should not have.
 //   backEdge      Overlay, left, 16px.  Back (G).
-//   overviewEdge  Overlay, right, 16px.  The overview (P).
+//   overviewEdge  Overlay, right, 16px.  The right edge's sheet (P).
 //                 Above windows, because both have to take the touch before the
 //                 app does. They are the two places here that steal input from
 //                 an app, each is bounded to 16px, and like the strip neither
@@ -73,6 +73,7 @@ import qs.Commons
 import qs.Ui as Ui
 import "../moarchy.common/ShellApps.js" as ShellApps
 import "../moarchy.common/Sheet.js" as Sheet
+import "../moarchy.common/Edge.js" as Edge
 import "../moarchy.common" as Shared
 
 Item {
@@ -318,6 +319,13 @@ Item {
       var travel = Number(root.dragTarget.closeTravel)
       if (isFinite(travel) && travel > 1) return travel
     }
+    // Q4a. With no sheet on this edge the drag still has the second stop,
+    // and the screen is what it is measured against -- A4's "a sweep to the
+    // very top". `pullTravel` below is 45% of that, which would put home
+    // inside an ordinary swipe: the very thing A4's stop moved past 1.0 to
+    // get away from.
+    if (root.pendingMode === "home" || root.dragMode === "home")
+      return Math.max(1, strip.screen ? strip.screen.height : 720)
     return root.pullTravel
   }
 
@@ -345,7 +353,7 @@ Item {
   readonly property real openVelocity:
     root.lastDrag ? root.lastDrag.openVelocity : 0
 
-  // Which sheet this gesture has latched onto: "none", "drawer" or "overview".
+  // Which sheet this gesture has latched onto: "none", "home", or an id.
   // Latched on the first clearly-upward movement -- clearly-leftward, on the
   // right edge -- and held for the rest of the gesture, so a swipe that starts
   // along the axis and drifts across it cannot hand the sheet back mid-pull and
@@ -363,6 +371,14 @@ Item {
 
   // What the surface decided on press, before it was known the gesture was
   // even upward.
+  // "none", "home", or the id of the sheet being dragged. It was the word
+  // `drawer` while the drawer was the only thing an edge could raise; with
+  // the target a setting (Q1) the branch means "a sheet is being dragged"
+  // and the id is the more useful thing to carry -- `gestures status` names
+  // which one, where `mode=drawer` could only ever say that it was one.
+  //
+  // "home" is the strip with no sheet on it (Q4): nothing to drag, and the
+  // second stop still there.
   property string pendingMode: "none"
 
   // A direct object reference, resolved once per gesture. The alternative --
@@ -492,9 +508,14 @@ Item {
   //
   // Derived from overlayIds rather than written out again: a second list of
   // ids is exactly how Settings and Themes came to be missing from the back
-  // gesture. Minus the drawer, which a second drag continues into the home
-  // band rather than clears (A6) -- the exemption the carousel used to hold,
-  // moved to the sheet that took its place in the gesture.
+  // gesture. Minus whatever the strip raises, which a second drag continues
+  // into the home band rather than clears (A6).
+  //
+  // Read off the setting and not off an id (Q1). Naming the drawer here is
+  // what would make a second drag clear the overview instead of carrying it
+  // on, the moment somebody put the overview on this edge. With `none` there
+  // is no exemption and A8's sweep is total, which is right: an edge that
+  // raises nothing has nothing to continue.
   //
   // Vendored popups are deliberately not consulted here, unlike in
   // topmostOverlay(). That branch reads the host's openPanelIds, which carries
@@ -505,7 +526,7 @@ Item {
   function coveringSheet(): bool {
     for (var i = 0; i < root.overlayIds.length; i++) {
       var id = root.overlayIds[i]
-      if (id === Sheet.DRAWER) continue
+      if (id === root.bottomTarget) continue
       if (root.isOpen(id)) return true
     }
     return false
@@ -714,7 +735,7 @@ Item {
   }
 
   // ------------------------------------------------------ driving an overlay
-  function resolveTarget(id: string): void {
+  function resolveTarget(id: string, edge: string): void {
     root.dragTarget = null
     root.dragSheet = ""
     root.dragStartPull = 0
@@ -723,6 +744,15 @@ Item {
     if (!loader || !loader.item) return
     root.dragTarget = loader.item
     root.dragSheet = id
+    // Q2, Q3. The sheet is told which edge raised it, and only while it is
+    // at rest shut. A sheet already up keeps the edge it came in on for the
+    // rest of its life on screen: rewriting it here would teleport it across
+    // the screen on the first frame of the drag that meant to continue it
+    // (A6), and half a sheet held to one edge and half to another is not a
+    // state this shell has a name for.
+    if (typeof loader.item.entryEdge !== "undefined"
+        && !loader.item.dragging && (Number(loader.item.progress) || 0) <= 0)
+      loader.item.entryEdge = edge
     // Do not map the sheet here. resolveTarget runs on every strip press, and
     // most of those are a workspace swipe (B1: horizontal wins). Warming on
     // press mapped the full grid, laid it out, and left it composited on Top
@@ -754,7 +784,14 @@ Item {
     // runs over the last homeExtra *before* the stop rather than after it, so
     // the cue arrives while the gesture can still be changed -- reaching full
     // exactly where letting go starts meaning home.
-    if (root.dragSource === "strip") {
+    //
+    // Guarded like `warming` above, and for a sharper reason: assigning a
+    // property a QML object does not declare throws, and a throw here aborts
+    // the handler mid-frame -- so a sheet without the cue would not simply go
+    // uncued, it would stop being moved at all from the first frame past the
+    // ramp's start. The drawer is the only sheet that draws it (Q1).
+    if (root.dragSource === "strip"
+        && typeof root.dragTarget.homeHint !== "undefined") {
       var arms = root.homeThreshold()
       root.dragTarget.homeHint = Math.max(0, Math.min(1,
         (pull - (arms - root.homeExtra)) / root.homeExtra))
@@ -776,7 +813,9 @@ Item {
     //
     // After `dragging = false`, so the Behavior is live and this eases rather
     // than snaps -- which is the whole of F4.
-    if (root.dragSource === "strip") root.dragTarget.homeHint = 0
+    if (root.dragSource === "strip"
+        && typeof root.dragTarget.homeHint !== "undefined")
+      root.dragTarget.homeHint = 0
     // The sheet this gesture resolved, not the drawer by name (P2).
     // `dragSheet` and `dragTarget` are set together or not at all, so reaching
     // here with a target means there is an id to commit through.
@@ -876,18 +915,21 @@ Item {
       // standing over it is a hold that appears to have done nothing at all.
       root.hideCoveringSurfaces()
 
-      // One answer to "the default agent", and it is moarchy-agent's:
-      // with one picked this opens it, with none it opens the picker, and the
-      // drawer's tile is rewritten on the way so the icon and this gesture
-      // cannot come to name different agents (settings.md P12). Reading
-      // ~/.config/omarchy/defaults/agent here instead would be a second copy of
-      // that rule, and two copies of a rule is how the tile came to name Grok
-      // on a phone that had chosen Claude.
+      // Q10. Whatever the hold is set to, which ships as the coding agent and
+      // so still means C1 on a phone nobody has configured. `moarchy-trigger`
+      // is the one place that decides what a value means, because the power
+      // button's double press fires the same vocabulary from a sway binding
+      // and a rule written at both ends is the defect refactor.md B1 records.
+      //
+      // Still the agent's own launcher underneath: with one picked it opens
+      // it, with none it opens the picker, and the drawer's tile is rewritten
+      // on the way so the icon and this gesture cannot come to name different
+      // agents (settings.md P12).
       //
       // execDetached rather than a Process, for the reason hideKeyboard gives:
-      // there is no answer to wait for, and the agent must outlive a shell
-      // restart the way anything else launched from the grid does.
-      Quickshell.execDetached(["moarchy-agent", "launch"])
+      // there is no answer to wait for, and what it starts must outlive a
+      // shell restart the way anything else launched from the grid does.
+      Quickshell.execDetached(["moarchy-trigger", "fire", "hold"])
     }
   }
 
@@ -956,6 +998,18 @@ Item {
   // down. The incantation itself is moarchy.common/Osk.qml, which a tap on a
   // text field also asks (G14a).
   Shared.Osk { id: osk }
+
+  // Q1. Which sheet each of the two configurable edges raises. Watched, so a
+  // change is live on the next gesture with nothing restarted (Q8) -- the
+  // same file and the same watch the corner radii already arrive through.
+  //
+  // "" is `none`, and it needs no branch of its own anywhere below:
+  // resolveTarget() already leaves `dragTarget` null for an id it cannot
+  // find, and every tracker already tests for one before it latches (Q5).
+  Shared.UiFile { id: ui }
+
+  readonly property string bottomTarget: ui.bottomTargetId
+  readonly property string rightTarget: ui.rightTargetId
 
   function hideKeyboard(): void { osk.hide() }
 
@@ -1168,13 +1222,17 @@ Item {
     // C3. A hold that has fired takes the rest of the touch with it: the agent
     // is on its way and the sheets are already swept, so a finger that wanders
     // afterwards must not also arrive at the drawer it just put away.
-    latchable: !root.holdFired && root.dragTarget !== null
-               && root.pendingMode !== "none"
+    // Q4. `pendingMode` already carries the answer: it is "none" when a
+    // sheet is covering the screen, "home" when this edge raises nothing,
+    // and an id when there is something to drag. Testing `dragTarget` here
+    // as well is what would take the second stop away with the sheet.
+    latchable: !root.holdFired && root.pendingMode !== "none"
     startFrom: root.dragStartPull
 
     onBegan: {
       root.dragMode = root.pendingMode
-      if (root.dragMode === "drawer") root.beginSheet()
+      if (root.dragMode !== "none" && root.dragMode !== "home")
+        root.beginSheet()
     }
     onMoved: p => root.setTargetProgress(stripDrag.travelled)
     onFinished: (p, v) => root.releaseStrip()
@@ -1194,7 +1252,7 @@ Item {
     startFrom: root.dragStartPull
 
     onBegan: {
-      root.dragMode = "drawer"
+      root.dragMode = root.dragSheet
       root.beginSheet()
     }
     onMoved: p => root.setTargetProgress(homeDrag.travelled)
@@ -1268,7 +1326,7 @@ Item {
     startFrom: root.dragStartPull
 
     onBegan: {
-      root.dragMode = "overview"
+      root.dragMode = root.dragSheet
       root.beginSheet()
     }
     onMoved: p => root.setTargetProgress(overviewDrag.travelled)
@@ -1306,8 +1364,14 @@ Item {
         // Distance is what picks the second stop (A4) and an IPC verb has no
         // distance, so this one always means the first. `swipe home` is the
         // other one, and it is already here.
-        Sheet.summon(root.shell, Sheet.DRAWER)
-        return "ok: drawer"
+        //
+        // Q1: the sheet the strip raises, because this verb exists to make
+        // the same choice a real strip swipe makes. `gestures overview` is
+        // the other kind of verb -- it is named after a plugin and summons
+        // that plugin, whatever any edge is set to.
+        if (root.bottomTarget === "") return "ok: nothing on the bottom edge"
+        Sheet.summon(root.shell, root.bottomTarget)
+        return "ok: " + root.bottomTarget
       }
       return "usage: swipe left|right|up|home"
     }
@@ -1330,6 +1394,26 @@ Item {
     function overview(): string {
       Sheet.summon(root.shell, Sheet.OVERVIEW)
       return "ok: overview"
+    }
+
+    // Q1. What each configurable edge is set to, as ids. The words live in
+    // ui.toml and the ids live in Sheet.js; this is the one place outside
+    // the shell that the two are seen to have met.
+    function targets(): string {
+      return "bottom=" + (root.bottomTarget || "none")
+             + " right=" + (root.rightTarget || "none")
+    }
+
+    // Q1, Q9. The summon an edge performs, named by the edge rather than by
+    // the plugin -- so a check can exercise the configurable path without
+    // knowing what it is configured to.
+    function edge(which: string): string {
+      var id = which === "bottom" ? root.bottomTarget
+             : which === "right" ? root.rightTarget : null
+      if (id === null) return "usage: edge bottom|right"
+      if (id === "") return "ok: nothing on the " + which + " edge"
+      Sheet.summon(root.shell, id)
+      return "ok: " + id
     }
 
     // G. Reachable without a finger, and the only way to test the priority
@@ -1417,6 +1501,12 @@ Item {
                   + " hold=" + (root.holdFired ? "fired"
                                 : root.holdShaking ? "shaking"
                                 : holdTimer.running ? "armed" : "idle")
+                  // Q1. Which sheet each configurable edge raises, so a
+                  // check that is about to drag one can say what it expected
+                  // -- and so "the edge did nothing" can be told from "the
+                  // edge is set to nothing" without reading the file.
+                  + " bottom=" + (root.bottomTarget || "none")
+                  + " right=" + (root.rightTarget || "none")
       if (!root.tracking) return "idle" + focus
       return "tracking mode=" + root.dragMode
              + " pull=" + Math.round(root.pull * 100)
@@ -1536,24 +1626,30 @@ Item {
         root.dragMode = "none"
         root.dragTarget = null
 
-        // The whole decision, and it is now two lines:
+        // The whole decision, and it is now three lines:
         //
         //   a sheet covering the screen -> the release clears it (A8)
-        //   anything else               -> the drawer (A1-A4)
+        //   a sheet set on this edge    -> drag it (A1-A4, Q1)
+        //   neither                     -> home, and nothing else (Q4)
         //
-        // Four cases became two when the carousel went. "The carousel is
-        // already up" is gone because the drawer is not a special case of
-        // itself -- coveringSheet() exempts it, so a second drag continues
-        // into the home band (A6). "Is anything open at all" is gone with A9:
-        // the drawer opens over an app, over a home screen and over nothing,
-        // so there is no state left to ask the compositor about.
+        // Four cases became two when the carousel went. "The sheet is
+        // already up" is gone because this edge's own sheet is not a special
+        // case of itself -- coveringSheet() exempts it, so a second drag
+        // continues into the home band (A6). "Is anything open at all" is
+        // gone with A9: the sheet opens over an app, over a home screen and
+        // over nothing, so there is no state left to ask the compositor about.
         //
         // What survives from the old note is why the first line is a
         // *derived* list: it used to name the shade and the drawer by hand,
         // which left Settings and the theme picker falling through it.
         root.dragSource = "strip"
-        root.pendingMode = root.coveringSheet() ? "none" : "drawer"
-        if (root.pendingMode === "drawer") root.resolveTarget(Sheet.DRAWER)
+        // Q4, Q5. A target that did not resolve -- `none`, or a plugin that
+        // is not loaded -- is the same answer as no target at all, and both
+        // still leave the second stop, because home is not a sheet.
+        var covered = root.coveringSheet()
+        root.resolveTarget(covered ? "" : root.bottomTarget, Edge.BOTTOM)
+        root.pendingMode = covered ? "none"
+                         : (root.dragTarget ? root.dragSheet : "home")
 
         // C1. And the clock, which is the only thing on this strip that starts
         // anything without being told which way the finger went. It is armed on
@@ -1677,11 +1773,17 @@ Item {
       onPressed: pts => {
         if (pts.length === 0) return
         root.dragMode = "none"
-        root.pendingMode = "drawer"
         // Set before resolveTarget, which reads it to decide where this drag
         // starts from.
         root.dragSource = "home"
-        root.resolveTarget(Sheet.DRAWER)
+        // Q1. The strip's sheet, because the wallpaper is the strip's drag
+        // without the second stop (D1) and not a gesture with a destination
+        // of its own. With no sheet on that edge there is nothing here to
+        // reach -- a home screen is already home -- so this one does not get
+        // the "home" mode the strip does, and `latchable` below still tests
+        // for a target.
+        root.resolveTarget(root.bottomTarget, Edge.BOTTOM)
+        root.pendingMode = root.dragTarget ? root.dragSheet : "none"
 
         root.lastDrag = homeDrag
         homeDrag.press(pts[0].sceneX, pts[0].sceneY)
@@ -1879,8 +1981,8 @@ Item {
         // it: the tracker has to know on its first frame whether there is
         // anything to drag and where it already stands. Mapping the sheet is
         // the part that waits -- beginSheet() runs from onBegan (P8).
-        root.dragSource = "overview"
-        root.resolveTarget(Sheet.OVERVIEW)
+        root.dragSource = "rightEdge"
+        root.resolveTarget(root.rightTarget, Edge.RIGHT)
         overviewDrag.press(pts[0].sceneX, pts[0].sceneY)
       }
 

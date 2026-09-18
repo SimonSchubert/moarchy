@@ -39,7 +39,7 @@ Settings
 ├─ Sound & notifications Output device · Input device · Crash capture
 ├─ Appearance           Theme · Wallpaper · Font · Status bar · Get more
 ├─ Apps & defaults      Default apps · Web apps · Terminal apps · Packages
-├─ Shell & plugins      Plugins · Restart shell · Reset tmux config
+├─ Shell & plugins      Gestures · Plugins · Restart shell · Reset tmux config
 ├─ Security             Remote access · Authorize SSH keys · Passwordless sudo · Change password
 ├─ Tools                Screenshot · Screen record · Emoji · Reminders · Speed tests
 ├─ System               Date & time · Restart hardware · Update system · Power
@@ -1076,6 +1076,77 @@ is `1.0.25`, auto-update is off (`GROK_DISABLE_AUTOUPDATER` and
 not the `grok` symlink the npm launcher would follow into 1.0.30.
 → after `moarchy-agent shim grok`, `~/.local/bin/grok` names `1.0.25` and
 `GROK_DISABLE_AUTOUPDATER`, and no line in it begins with `mise use -g`
+
+## Q. What the triggers open
+
+`gestures.md` §Q is the behaviour; this is the screens that set it. Four
+triggers: two edges that drag a sheet, and two taps that open anything at all
+(`gestures.md` Q10). All of them are choice pages (§D), and most of what
+follows is §D applied rather than a mechanism of its own. Two things are not:
+`none`, which would otherwise be written as an absence, and the tap pages'
+provider, which is where O10's cost is paid on purpose.
+
+**Q1** Shell & plugins carries a **Gestures** row, and its detail line is the
+two edges. Not all four triggers: four names do not fit one row, and the two
+swipes are the ones a thumb meets without being told they exist.
+→ the `gestures` row on `shell` has a detail matching `^.+ · .+$`, equal to
+`moarchy-ui get gesture-summary`
+
+**Q2** It opens a page of four rows, one per settable trigger, each showing
+what that trigger is set to (D5). The two edges read their detail from
+`moarchy-ui`; the two taps read theirs from `moarchy-trigger label`, because
+a tap may name an app and only the shell has read the desktop entry that
+says what it is called.
+→ `settings rowsOn shell.gestures` is four `nav` rows; the first two details
+equal `moarchy-ui get gesture-{bottom,right}-label` and the last two equal
+`moarchy-trigger label {hold,power}`
+
+**Q3** Each edge's page is four choices with exactly one ticked, and the tick
+follows the file (D1).
+→ `settings rowsOn shell.gestures.bottom | grep -c 'checked=1'` == `1`, and
+that row's value == `$(moarchy-ui get gesture-bottom)`; the same for `.right`
+
+**Q4** **Nothing is a row, not an untick.** It carries the value `none`, the
+reader prints `none`, and it ticks like any other choice. D2 makes an unmatched
+reader tick nothing at all, so an edge that was off would otherwise look
+exactly like a reader that had broken -- and the one state a person most wants
+confirmed is the one where the gesture has stopped answering.
+→ after `settings set shell.gestures.bottom none`, exactly one row on that
+page is ticked and it is `b-none`
+
+**Q5** Setting an edge moves the tick without the page being reopened (D4), and
+leaves Settings where it is: nothing here opens a terminal.
+→ `settings set shell.gestures.bottom overview; settings value
+shell.gestures.bottom` == `overview`, and `settings state` == `open`
+
+**Q6** The two edge pages are static, so their rows are in the drawer's
+search index. A page built by a provider is not (O10), and an edge has four
+possible answers -- there is nothing here to be generated.
+→ `omarchy-shell drawer type swipe` lists both nav rows
+
+**Q7** The two edge pages offer the words the shell accepts and no others.
+Two files agree on four strings by construction -- `Ui.js`'s table and
+`moarchy-ui`'s `norm_target` -- and this is what keeps a fifth from being
+added to one of them.
+→ every `value` on both edge pages is one of `none|drawer|overview|shade`,
+and `omarchy-shell gestures targets` resolves the two current ones to plugin
+ids
+
+**Q8** The two tap pages are **provider** pages, and are the one place in
+this tree where O10's cost is worth paying: they list every app on the phone
+(`gestures.md` Q10), which is fifty-nine rows that change when somebody
+installs something. The four nav rows above them stay static and indexed, so
+typing `hold` or `power` still finds the screen -- what is not indexed is the
+fifty-nine apps, which is what O10 exists to keep out of a search for `e`.
+→ `settings rowsOn shell.gestures.hold` has one row per line of
+`moarchy-trigger rows hold`, and `drawer type power` lists the nav row
+
+**Q9** A tap row's detail is its desktop id, not a repeated word. Fifty-nine
+rows reading `App` say nothing, and two apps may share a name where the id is
+what is stored -- which is the reason `shell.plugins` shows an id too (M1).
+→ every app row on `shell.gestures.hold` has a detail equal to its `value`
+
+---
 
 ## The IPC surface
 

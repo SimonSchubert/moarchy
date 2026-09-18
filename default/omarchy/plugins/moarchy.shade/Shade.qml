@@ -59,6 +59,7 @@ import qs.Commons
 import qs.Ui as Ui
 import "../moarchy.common/Theme.js" as Theme
 import "../moarchy.common/ShellApps.js" as ShellApps
+import "../moarchy.common/Edge.js" as Edge
 import "../moarchy.common" as Shared
 
 Item {
@@ -86,12 +87,15 @@ Item {
   // case would be much worse than one that leaves 20px unused.
   readonly property int gestureStrip: Style.space(20)
 
-  // Likewise moarchy.gestures' backEdgeWidth. The shade is on Overlay
-  // and maps when it opens, so it lands *above* the always-mapped back-edge
-  // surface and would otherwise swallow every left-edge swipe -- which is
-  // exactly what it did: back closed the drawer and the carousel and left the
-  // shade untouched, because those two are on Top and this one is not.
-  readonly property int backEdge: Style.space(16)
+  // Likewise moarchy.gestures' backEdgeWidth -- and its overviewEdgeWidth,
+  // which is the same number for the same reason (gestures.md G8, P1). The
+  // shade is on Overlay and maps when it opens, so it lands *above* the
+  // always-mapped edge surfaces and would otherwise swallow every swipe in
+  // from either side -- which is exactly what it did on the left: back closed
+  // the drawer and the carousel and left the shade untouched, because those
+  // two are on Top and this one is not. The right band had the same fault and
+  // nothing to show it until that edge was worth reaching over an open shade.
+  readonly property int edgeBand: Style.space(16)
 
   readonly property int screenHeight: shadeWindow.screen ? shadeWindow.screen.height : 720
 
@@ -141,7 +145,16 @@ Item {
   // is the interpolated value; freezing at the target would snap the sheet at
   // the instant of the press, which is the jump this exists to prevent.
   property int sheetFrozen: 0
-  property int sheetHeight: root.dragging ? root.sheetFrozen : root.sheetTarget
+  // The fallback is load-bearing, not belt and braces. `dragging` is set by
+  // whoever is driving -- and since Q1 that includes moarchy.gestures, which
+  // writes it straight from setTargetProgress and has no way to call
+  // beginDrag(). Without the `> 0` this read `sheetFrozen` at 0 for the whole
+  // of an edge drag: a sheet of zero height behind a live scrim, and a
+  // `closeTravel` of 1 that targetTravel() rejects -- so the drag divided by
+  // 45% of the screen instead, ran half again too fast, and an ordinary pull
+  // landed past the home stop and went home.
+  property int sheetHeight: (root.dragging && root.sheetFrozen > 0)
+                            ? root.sheetFrozen : root.sheetTarget
 
   // Both drag entry points go through this. The latch is written *before*
   // `dragging` flips, so there is no frame in which the binding above can read a
@@ -150,6 +163,12 @@ Item {
     root.sheetFrozen = root.sheetHeight
     root.dragging = true
   }
+
+  // The third entry point, and the one that is not this file's. An edge drag
+  // latches through `warming`, which moarchy.gestures sets at the latch and
+  // before the first progress (N3) -- so the freeze happens on the same frame
+  // it would for a drag that started here.
+  onWarmingChanged: if (root.warming) root.beginDrag()
 
   // -------------------------------------------------------------- type
   //
@@ -221,9 +240,36 @@ Item {
 
 
   // ---------------------------------------------------------- drag state
+  // gestures.md Q2. Which screen edge raised this sheet. Written by
+  // moarchy.gestures on a press, and only while the sheet is at rest shut
+  // (Q3). The top is where this sheet has always come from, where its own
+  // grab band still is whatever this says (Q7), and what it falls back to.
+  property string entryEdge: Edge.TOP
+  readonly property bool sideways: Edge.horizontal(root.entryEdge)
+
   property real progress: 0        // 0 shut .. 1 open
   property bool dragging: false
   property bool expanded: false    // the surface is full-screen right now
+
+  // What moarchy.gestures sets when an edge drag latches, so the surface is
+  // full-screen on the frame the sheet starts moving rather than one frame
+  // later. onProgressChanged below already expands, but it runs *after* the
+  // first progress is written -- which was fine while the only way in was
+  // this sheet's own band, and a visible first-frame stutter once an edge
+  // drives it.
+  property bool warming: false
+
+  // D2a, Q2. What one full sheet of travel is worth on the axis the finger
+  // moves. Published because moarchy.gestures divides by it: without it
+  // targetTravel() falls back to 45% of the screen and this sheet does not
+  // follow the finger at all.
+  //
+  // Sideways it is the sheet's width, which is the screen's: this sheet is
+  // as tall as its content (shade.md S21), and a mirrored width would be a
+  // relayout of every tile on it rather than a different path in (Q2a).
+  readonly property real closeTravel: Math.max(1, root.sideways
+    ? (shadeWindow.screen ? shadeWindow.screen.width : 360)
+    : root.sheetHeight)
 
   // shell.isPluginOpen() reads this. Mid-drag is neither open nor shut, and
   // reporting "open" there would let a swipe on the home pill try to close a
@@ -257,14 +303,16 @@ Item {
   readonly property int holdInterval: 500
 
   // H2, on the tracker every sheet in this shell now shares
-  // (docs/refactor.md F1). Upward closes, so `openDirection` is +1: travelling
-  // *down* is what would raise progress, and this sheet is already up.
+  // (docs/refactor.md F1). The way out is the way back in, reversed:
+  // travelling *toward* the entry edge is what closes, and this sheet is
+  // already up. From the top that reads `openDirection` +1 and `latchSign`
+  // -1, which is what it always was.
   Shared.DragTracker {
     id: sheetDrag
-    travel: root.sheetHeight
-    openDirection: 1
-    // Upward only, which on Y is a negative delta.
-    latchSign: -1
+    axis: Edge.axis(root.entryEdge)
+    travel: root.closeTravel
+    openDirection: Edge.openDirection(root.entryEdge)
+    latchSign: Edge.closeLatchSign(root.entryEdge)
     slop: root.dragSlop
     startFrom: root.progress
 
@@ -306,6 +354,15 @@ Item {
   //
   // Shut, the slop applies; open, it does not, because the gesture is already
   // in flight as far as the finger is concerned.
+  // Q7, Q3a. The band is the shade's own way in, and it *says so*: a drag
+  // that starts here sets `entryEdge` to the top before it moves anything,
+  // so the sheet comes down from the status bar the finger is on.
+  //
+  // Pinning the tracker to the top and leaving `entryEdge` alone was the
+  // first version and it was wrong in the hand: with the strip set to raise
+  // this sheet, `entryEdge` was left at `bottom` by the last strip press and
+  // a pull *down* from the status bar slid the sheet up from the floor. The
+  // edge belongs to the gesture doing the raising, not to the setting.
   Shared.DragTracker {
     id: bandDrag
     travel: root.sheetHeight
@@ -315,7 +372,13 @@ Item {
     slop: root.progress > 0 ? 0 : root.slop
     startFrom: root.progress
 
-    onBegan: root.beginDrag()
+    onBegan: {
+      // Only from shut. Part-way up the sheet is already travelling on an
+      // axis and this drag is finishing or reversing it -- re-anchoring
+      // under the finger is Q3's own rule, read from the other end.
+      if (root.progress <= 0) root.entryEdge = Edge.TOP
+      root.beginDrag()
+    }
     onMoved: p => root.progress = p
 
     onFinished: (p, v) => {
@@ -372,6 +435,12 @@ Item {
     // Not symmetrical, and Drawer.open() keeps hiding *this* for the same
     // reason read the other way: a drawer raised under a live shade would map
     // invisibly underneath it.
+    // Q3a. A summon carries no direction, so it uses this sheet's own edge --
+    // but only from rest. `releaseTarget()` commits an edge drag *through*
+    // this function with the sheet part-way in, and resetting there would
+    // teleport it across the screen on the frame it was let go.
+    if (root.progress <= 0 && !root.dragging) root.entryEdge = Edge.TOP
+
     root.expanded = true
     root.progress = 1
 
@@ -405,6 +474,7 @@ Item {
     sheetDrag.cancel()
     bandDrag.cancel()
     root.dragging = false
+    root.warming = false
     root.progress = 0
   }
 
@@ -443,7 +513,10 @@ Item {
     // Give the surface back as soon as it is not needed. Until this runs the
     // shade owns the whole screen's input, so leaving it expanded after a
     // snap-back would silently eat the next tap on the app underneath.
-    if (root.progress <= 0 && !root.dragging) root.expanded = false
+    if (root.progress <= 0 && !root.dragging) {
+      root.expanded = false
+      root.warming = false
+    }
     if (root.progress > 0 && !root.expanded) root.expanded = true
 
     // One integer per frame while a drag is in flight, cleared on the next
@@ -1573,7 +1646,11 @@ Item {
     // Top/left/right only. Anchoring the bottom too would make the surface
     // full-height permanently and implicitHeight would stop meaning anything.
     anchors { top: true; left: true; right: true }
-    implicitHeight: root.expanded ? root.screenHeight : root.stripHeight
+    // `warming` as well as `expanded`: an edge drag latches before it writes
+    // a progress, and the surface has to be there for the first frame the
+    // sheet is drawn on rather than the one after it.
+    implicitHeight: (root.expanded || root.warming) ? root.screenHeight
+                                                    : root.stripHeight
     color: "transparent"
     surfaceFormat.opaque: false
 
@@ -1589,14 +1666,14 @@ Item {
     exclusionMode: ExclusionMode.Ignore
 
     // Cut the two edges that belong to other surfaces out of this one's input
-    // region: the home pill along the bottom, and the back edge down the left.
-    // A masked-out band falls through to the next surface in the layer, which
-    // is what lets both of those keep working with the shade down.
+    // region: the home pill along the bottom, and the 16px band down each
+    // side. A masked-out band falls through to the next surface in the layer,
+    // which is what lets all three keep working with the shade down.
     Region {
       id: openRegion
-      x: root.backEdge
+      x: root.edgeBand
       y: 0
-      width: Math.max(1, shadeWindow.width - root.backEdge)
+      width: Math.max(1, shadeWindow.width - 2 * root.edgeBand)
       height: Math.max(1, shadeWindow.height - root.gestureStrip)
     }
 
@@ -1649,9 +1726,20 @@ Item {
     // ------------------------------------------------------------- sheet
     Item {
       id: sheet
+      // Q2a. The size this sheet has always had, on both axes: as wide as
+      // the screen and as tall as its content (shade.md S21). Only the path
+      // in changes with the edge -- a mirrored width would be a relayout of
+      // every tile on it.
       width: parent.width
       height: root.sheetHeight
-      y: -root.sheetHeight * (1 - root.progress)
+
+      // Q2. Slides in from whichever edge raised it; from the top that is
+      // the -sheetHeight * (1 - progress) it always was.
+      readonly property var at: Edge.offset(root.entryEdge, root.progress,
+                                            parent.width, parent.height,
+                                            sheet.width, sheet.height)
+      x: sheet.at.x
+      y: sheet.at.y
       visible: root.progress > 0
 
       // The height animates and the content's does not -- the Column's
@@ -1665,18 +1753,18 @@ Item {
       // off-screen pass.
       clip: true
 
-      // Rounded at the bottom only: the sheet slides out from under the top
-      // edge, so its top corners are never on screen and rounding them would
-      // just cut two notches out of the status bar area during the drag.
+      // Rounded on the leading edge only: the sheet slides out from under
+      // whichever edge raised it, so the two corners against that edge are
+      // never on screen and rounding them would just cut two notches out of
+      // whatever is behind during the drag.
       Rectangle {
         anchors.fill: parent
         color: root.surface
         radius: root.radiusSheet
       }
-      Rectangle {
-        anchors.top: parent.top
-        width: parent.width
-        height: root.radiusSheet
+      Shared.TrailingSquare {
+        edge: root.entryEdge
+        depth: root.radiusSheet
         color: root.surface
       }
 

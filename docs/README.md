@@ -169,6 +169,8 @@ Twelve plugins and one directory that is not a plugin, all under
 | `Probe.qml` | a `Process` that hands back what the command printed |
 | `Osk.qml` | the one place the on-screen keyboard is asked to show or hide |
 | `Sheet.js` | the one list of sheets, how they stack, and what every `open()` does identically |
+| `Edge.js` | which axis an edge is, which way it opens, and where a sheet sits part-way in. The one place a sheet's entry edge is arithmetic rather than an `if` |
+| `TrailingSquare.qml` | the rectangle that squares off a sheet's trailing corners, on whichever edge is trailing |
 | `Apps.js` | a window → its icon, its name, its glyph. The drawer's shelf and the overview's cards draw the same tile from it |
 | `ShellApps.js` | which of our screens are windows, and the compositor helpers |
 | `Theme.js` | the colour arithmetic: luminance, contrast, mix, readableOn |
@@ -209,7 +211,7 @@ Two consequences that are easy to get wrong, and have been:
 | Term | Meaning |
 | --- | --- |
 | **strip** | the 20px band along the bottom edge that `moarchy.gestures` reserves off every window, permanently |
-| **edge** | one of the two 16px bands `moarchy.gestures` takes touch in ahead of an app: the left one is back, the right one raises the overview |
+| **edge** | one of the two 16px bands `moarchy.gestures` takes touch in ahead of an app: the left one is back, the right one raises whichever sheet is set for it ([`gestures.md`](gestures.md) Q1) |
 | **sheet** | a full-screen surface that is dismissed rather than left running: the shade, the drawer, the overview, the theme picker |
 | **shell app** | a screen this shell draws and maps as an ordinary window: Settings, Wi-Fi, Bluetooth, SIM |
 | **overlay / panel / bar** | the three plugin *kinds* the host knows. A "sheet" is our word; `kind` is the host's |
@@ -221,6 +223,7 @@ Two consequences that are easy to get wrong, and have been:
 | If you are changing… | …the file is |
 | --- | --- |
 | what a swipe does | `moarchy.gestures/Service.qml`, and `gestures.md` first |
+| which sheet an edge raises | nothing in the shell — it is `~/.config/omarchy/ui.toml`, written by Settings ([`gestures.md`](gestures.md) Q1) |
 | how a drag feels — thresholds, flings, slop | the *surface's* own properties. `DragTracker` deliberately owns no threshold |
 | what a sheet covers when it opens | `moarchy.common/Sheet.js`, nowhere else |
 | a settings row | `moarchy.settings/Pages.js` — the tree is data |

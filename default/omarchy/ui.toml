@@ -2,7 +2,8 @@
 #
 # Colours live in ~/.local/state/omarchy/current/theme/colors.toml and
 # change with omarchy-theme-set. This file reshapes the UI: how round
-# cards are, how tall the shade's sliders and tiles are.
+# cards are, how tall the shade's sliders and tiles are, and which
+# sheet each swipeable edge raises.
 #
 # This packaged copy is the documented default. The file the shell and
 # the apps actually read is:
@@ -22,9 +23,38 @@
 #   roomy    tiles 62, sliders 48, header buttons 36
 #   compact  tiles 48, sliders 36, header buttons 32
 #
+# gesture_bottom, gesture_right: none | drawer | overview | shade
+#   Which sheet a swipe up from the bottom strip, and a swipe in from
+#   the right edge, raises (docs/gestures.md Q1). The wallpaper's own
+#   up-drag follows gesture_bottom -- it is the strip's drag without
+#   the second stop, not a gesture with a destination of its own.
+#
+#   `none` takes the sheet off that edge and nothing else: the strip
+#   still changes workspace, still holds for the agent, and a sweep up
+#   still goes home.
+#
+#   Words, not plugin ids. The theme picker is not among them: it has
+#   no drag contract, so an edge set to it would follow no finger.
+#
+# gesture_hold, gesture_power: the same, plus `agent`, plus any app
+#   What a press and hold on the bottom strip opens, and what two
+#   presses of the power button inside 400ms open (docs/gestures.md
+#   Q10, Q11). These are taps rather than drags, so they can name
+#   anything that opens -- including a desktop entry id, which is what
+#   `omarchy-shell drawer entries` lists.
+#
+#   The hold ships as `agent`, which is what it has always done (C1).
+#   The power double press ships as `none`: one press still blanks the
+#   screen and always has, and a phone that opened something the first
+#   time you double-pressed out of habit would have surprised you.
+#
 # Optional numbers (logical px, then scaled like Style.space) override
 # the preset for that one key:
 #   sheet, tile, card, shade_tile, shade_slider, shade_round
 
 corners = "large"
 shade = "roomy"
+gesture_bottom = "drawer"
+gesture_right = "overview"
+gesture_hold = "agent"
+gesture_power = "none"

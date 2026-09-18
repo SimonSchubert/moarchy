@@ -6,10 +6,9 @@ What the phone's touch gestures must do. Written to the rule in
 `bin/moarchy-selftest --gestures` and `--surfaces` cite these ids. A criterion
 is in one of three states, and the difference matters: **run** — it has a `→`
 check and a suite executes it; **written** — it has a `→` check that nothing
-runs; **stated** — it has no check at all. 58 of the 124 below are run. The
-other 66, and the six the suites run without a `→` line here, are listed under
-[Coverage](#coverage) at the foot — where the two lists currently name 56 of
-those 66 and are due a regeneration by the command they carry.
+runs; **stated** — it has no check at all. 66 of the 145 below are run. The
+other 79, and the six the suites run without a `→` line here, are listed under
+[Coverage](#coverage) at the foot.
 
 ## Vocabulary
 
@@ -19,10 +18,13 @@ those 66 and are due a regeneration by the command they carry.
 | **home screen** | A sway workspace with no windows on it: wallpaper, bar, pill. One app per workspace, so an empty workspace *is* the home screen. |
 | **app** | A workspace with a window on it, or Settings, which is treated as one (K). |
 | **shell app** | A screen this shell draws itself and maps as an ordinary window, so every criterion about apps applies to it. Four of them: Settings, Wi-Fi, Bluetooth and SIM (K). |
-| **drawer** | The searchable app grid, with a shelf of open apps along its top (`moarchy.drawer`). Every up-swipe raises this. |
-| **overview** | The vertical list of workspace cards (`moarchy.overview`). The right edge raises it, and it is the one surface that can put two apps on one workspace. |
+| **drawer** | The searchable app grid, with a shelf of open apps along its top (`moarchy.drawer`). The strip's sheet as shipped. |
+| **overview** | The vertical list of workspace cards (`moarchy.overview`). The right edge's sheet as shipped, and it is the one surface that can put two apps on one workspace. |
 | **shade** | The pull-down from the top edge (`moarchy.shade`). |
-| **travel** | Drag distance as a fraction of the sheet being dragged — the drawer's own height, ~694 logical px. One pixel of finger is one pixel of sheet, on every surface that drags it (D2a). |
+| **the strip's sheet** | What an up-swipe from the strip raises. Named by a setting (Q1), so §A says *the drawer* where it means *this*, and its checks run against the pairing that ships. |
+| **the edge's sheet** | What a swipe in from the right edge raises. Named by the same setting, and §P reads the same way. |
+| **trigger** | Any of the four things a setting can point at something: the two edges, the strip's hold (C), and the power button's double press (Q11). |
+| **travel** | Drag distance as a fraction of the sheet being dragged, along the axis it arrives on — the drawer's own height, ~694 logical px. One pixel of finger is one pixel of sheet, on every surface that drags it (D2a). |
 
 ---
 
@@ -54,7 +56,8 @@ leaves `omarchy-shell drawer state` == `open` and a 2000ms drag leaves it
 is not being read at all
 
 **A3a** The strip's drag is the home screen's drag: same 1:1 ratio against the
-sheet's own height, same halfway commit, same fling rule in both directions.
+sheet's own travel on the axis it entered from (Q2), same halfway commit, same
+fling rule in both directions.
 The only thing the strip adds is the second stop.
 → a drag of *n* logical px from the strip leaves `drawer dragTrace` ending
 within a few percent of *n* / 694, the same figure D2a asserts for the
@@ -81,8 +84,8 @@ the launcher" from "go home": measured on the device, an unremarkable flick up
 from the strip runs to **92% of the sheet at 2.5 px/ms**.
 → focused workspace `representation` is empty; `drawer state` == `closed`
 
-**A5** The drawer is the only thing the strip opens — from an app, from a home
-screen, with nothing open anywhere. The one exception is a sheet already
+**A5** One sheet is all the strip opens — the one Q1 names — from an app, from a
+home screen, with nothing open anywhere. The one exception is a sheet already
 covering the screen, which the same swipe clears instead of opening anything
 over it (A8).
 → `drawer state` goes `closed` → `open` across a strip up-gesture, from an app
@@ -106,15 +109,20 @@ before the finger moves, so every touch on the strip would go home.
 
 **A8** With the shade down, an up-swipe from the strip puts the shade away and
 does nothing else. Whatever is covering the screen, this gesture clears it —
-every sheet this shell can put over an app *except the drawer*, which a second
-drag continues rather than clears (A6). Settings is out of it: it is an app
-(K), so the strip raises the drawer over it and leaves it running on its
+every sheet this shell can put over an app *except the strip's own*, which a
+second drag continues rather than clears (A6). Settings is out of it: it is an
+app (K), so the strip raises its sheet over it and leaves it running on its
 workspace when the drag goes home (K4).
 
 The list is derived from the one the back gesture already walks, minus the
-drawer and minus the shell apps — which are excluded by being windows rather
-than by being named (K1). Three hand-kept lists of overlay ids is how Settings
-and Themes came to be missing from the back gesture.
+strip's own sheet and minus the shell apps — which are excluded by being
+windows rather than by being named (K1). Three hand-kept lists of overlay ids
+is how Settings and Themes came to be missing from the back gesture.
+
+The exemption is read off the setting (Q1) and not off an id. Naming the
+drawer here is what would make a second drag clear the overview instead of
+carrying it on into the home band, the moment somebody put the overview on
+this edge.
 → `omarchy-shell shade state` == `closed`; nothing else opened, and a drawer
 that was open under the shade is still open
 
@@ -152,21 +160,22 @@ swipe back to.
 ## C. Strip — press and hold
 
 The hold is the one press on this strip that nothing else wants, and every
-phone spends it on the thing its owner reaches for most. Here that is the
-coding agent: it already has exactly one definition (`settings.md` P1), and
-otherwise it is reachable only by finding its tile in a 64-entry grid. The
-asymmetry is what makes it safe to spend — a hold that fires by accident opens
-a window, and the back gesture closes it (G4).
+phone spends it on the thing its owner reaches for most. What that is is a
+setting (Q10), and it ships as the coding agent: that already has exactly one
+definition (`settings.md` P1), and is otherwise reachable only by finding its
+tile in a 64-entry grid. The asymmetry is what makes the hold safe to spend —
+it opens a window, and the back gesture closes it (G4).
 
 **C1** A press that stays on the strip for **500ms** without travelling past
-the drag slop starts the **default coding agent**: the agent the drawer's one
-tile names, in a terminal, on its own workspace like any other app. With no
-agent picked yet it opens the picker instead — the same two states as that
-tile, read from the same one answer (`settings.md` P12), so the gesture and the
-icon can never name different agents. 500ms is L1's number, because a phone has
-one hold and not two.
-→ with `codex` picked, `moarchy-agent launch` execs `omarchy-default-agent
-codex`; with nothing picked it execs `omarchy-shell settings openAt
+the drag slop fires the hold's trigger (Q10). Shipped that is the **default
+coding agent**: the agent the drawer's one tile names, in a terminal, on its
+own workspace like any other app. With no agent picked yet it opens the picker
+instead — the same two states as that tile, read from the same one answer
+(`settings.md` P12), so the gesture and the icon can never name different
+agents. 500ms is L1's number, because a phone has one hold and not two.
+→ `moarchy-trigger fire hold` with `gesture_hold` == `agent` runs
+`moarchy-agent launch`, which with `codex` picked execs `omarchy-default-agent
+codex` and with nothing picked execs `omarchy-shell settings openAt
 apps.default.agent` and installs nothing
 
 **C2** The pill **shakes** while the hold is counting, and stops the moment it
@@ -215,7 +224,9 @@ glass.
 ## D. Home screen — the workspace itself
 
 **D1** On a home screen, dragging up **on the workspace** — the wallpaper, not
-the strip — opens the drawer, following the finger.
+the strip — opens the strip's sheet, following the finger. One setting answers
+for both surfaces (Q1): the wallpaper is the strip's drag without the second
+stop, not a gesture with a destination of its own.
 → `omarchy-shell drawer state` == `open`, `drawer dragTrace` ≥ 8 samples
 
 **D2** Released below halfway the drawer animates back down; above halfway it
@@ -223,7 +234,8 @@ animates up and stays (A2, A3). One rule, both surfaces, and a fling in either
 direction overrides it.
 
 **D2a** The open drag is 1:1 with the finger: one pixel of travel is one pixel
-of sheet, measured against the drawer's own height. Both drags measure against
+of sheet, measured against the sheet's own extent along the axis it arrives on
+(Q2) — from this edge, its height. Both drags measure against
 the sheet, as the close drag always has — its handle *is* the sheet it moves
 (H1) — and as Android's launcher tracks in both directions.
 → a drag of *n* logical px leaves `drawer dragTrace` ending within a few
@@ -1170,8 +1182,9 @@ window in one flat shelf (M). Neither answers "where is everything", and on a
 phone where a workspace *is* an app that question is the map. §P is that map,
 and the one place a workspace can be given a second app.
 
-**P1** Swiping in from the **right edge** raises the overview: every workspace as
-a card, newest number last, scrolling vertically. The band is **16 logical px**,
+**P1** Swiping in from the **right edge** raises the edge's sheet — the overview
+as shipped (Q1), and §P is written about it: every workspace as a card, newest
+number last, scrolling vertically. The band is **16 logical px**,
 the same width and for the same reason as the back edge (G8), and like it the
 surface never grows.
 
@@ -1277,8 +1290,9 @@ behind each other. Tiled is the ordinary case and a label on every multi-window
 card would be a word that never varies; what a glance at the phone cannot tell
 you is that a workspace holds two apps and shows one.
 
-**P8** The surface is never unmapped: shut it is a one-pixel column along the
-right edge, grown when the drag latches and not on press. The drawer's
+**P8** The surface is never unmapped: shut it is a one-pixel band along the edge
+it enters from — a column on this one — grown when the drag latches and not on
+press. The drawer's
 measurement, on the other axis — a layer-shell window that goes invisible is
 deleted, so every open would rebuild a scene graph while the finger was already
 moving (N3).
@@ -1306,6 +1320,217 @@ it puts away the drawer and the theme picker beside it and the shade above it
 swipe sweeps it (B3), and an app's window opening leaves none of it behind.
 → with the overview up, one `omarchy-shell gestures back` leaves
 `overview state` == `closed` with the open-window count unchanged
+
+---
+
+## Q. Choosing what a trigger opens
+
+Four things point somewhere, and until this section all four pointed at a name
+written in the code: the strip raised `moarchy.drawer`, the right edge raised
+`moarchy.overview`, the hold started the coding agent, and the power button had
+no second meaning at all. Everything else about a drag was already general --
+the travel comes off the target, the progress is written onto it frame by
+frame, the commit goes through the host -- so what was missing was where the id
+comes from.
+
+Two of the four drag a sheet and two are a tap, and the difference decides what
+each may name. An edge has to follow a finger, so it may only name something
+that can be dragged. A tap has nothing to follow, so it may name anything that
+opens.
+
+### The two edges
+
+**Q1** Each of the two edges opens the sheet a setting names: `gesture_bottom`
+for the strip and the wallpaper under it, `gesture_right` for the right edge.
+The values are words -- `none`, `drawer`, `overview`, `shade` -- and not plugin
+ids, so `ui.toml`, `bin/moarchy-ui` and the Settings rows never spell one and
+`Sheet.js` stays the only place the ids live. Shipped they are the drawer and
+the overview, so a phone nobody has touched behaves exactly as §A and §P
+describe.
+→ with no `ui.toml`, `moarchy-ui get gesture-bottom` == `drawer` and
+`moarchy-ui get gesture-right` == `overview`; `omarchy-shell gestures status`
+reports `bottom=moarchy.drawer right=moarchy.overview`
+
+**Q2** A sheet arrives from the edge that raised it, and its own close drag runs
+back along the same axis. The overview on the strip rises from the bottom rather
+than sliding in from the right, and one pixel of finger is one pixel of sheet on
+whichever axis that is (D2a) -- measured against the sheet's own extent along
+it, which is what makes the divisor right on both.
+→ with `gesture_right` == `drawer`, a drag in from the right edge leaves
+`omarchy-shell drawer dragTrace` with ≥ 8 samples rising monotonically, and
+`drawer geometry` reports a `travel` of the screen's width where the same sheet
+on the strip reports its height
+
+**Q2a** Only the entry axis moves. A sheet keeps the size it has and the anchor
+it keeps on the cross axis, and comes to rest against the edge it entered from.
+The shade is what this is for: it is as tall as its content (`shade.md` S21) and
+a mirrored width would be a relayout of every tile on it, where a full-width
+sheet arriving from the right is the same sheet on a different path.
+→ with `gesture_right` == `shade`, `omarchy-shell shade geometry` reports the
+same `height` it reports on the top edge
+
+**Q3** A sheet's edge is fixed for as long as it is up. It is taken when the
+sheet is at rest shut and never while it is moving, so a setting changed with a
+sheet on screen reaches it on the next open rather than re-anchoring it
+mid-flight. Half a sheet held to one edge and half to another is not a state
+this shell has a name for.
+→ with the drawer open, `moarchy-ui gesture-bottom overview` leaves
+`omarchy-shell drawer geometry` unchanged; the next strip drag raises the
+overview
+
+**Q3a** The edge belongs to **whatever raises the sheet**, not to the
+setting. An edge gesture sets its own edge; a sheet's own handle sets the
+sheet's own -- the shade's grab band means *down from the status bar* whatever
+the strip is pointed at; and a summon that carries no direction at all (an IPC
+verb, the shade's gear, a tap trigger) uses the sheet's natural edge. All
+three only from rest, which is Q3.
+
+Reading the edge off the setting alone is what the first implementation did,
+and it is wrong in the hand rather than on paper: with the strip set to raise
+the shade, `entryEdge` was left at `bottom` by the last strip press, so a pull
+*down* from the status bar slid the sheet up off the floor and left the top
+two thirds of the screen empty.
+→ with `gesture_bottom` == `shade`, a pull down from the status bar leaves the
+sheet's top edge at the top of the screen, and a swipe up from the strip
+leaves it against the bottom
+
+**Q3b** A sheet dragged from an edge is dragged against **its own** travel,
+whatever is driving it. A sheet that measures itself only when its own handle
+starts a drag measures nothing when an edge does, and this is not a scaling
+error that degrades gracefully: the shade froze its height on `beginDrag()`,
+which an edge drag never calls, so `closeTravel` fell to 1, `targetTravel()`
+rejected it as unset and divided by 45% of the screen instead. The sheet drew
+at zero height behind a live scrim and an ordinary pull landed past the home
+stop -- so the gesture showed a dim screen and then went home.
+→ with `gesture_bottom` == `shade`, an up-swipe from the strip at 400ms, 900ms
+and 1500ms each leave `omarchy-shell shade state` == `open`, and
+`shade dragTrace` rises to ≈ 100
+
+**Q4** `none` takes the sheet off that edge and nothing else. The swipe raises
+nothing, and everything on that edge that is not a sheet is untouched: the strip
+still changes workspace (B1), still holds for its trigger (C1), and **a sweep up
+still goes home** (A4).
+
+Home is not a sheet, so an edge that raises no sheet still has the stop. It is
+not free -- `commit()`'s vertical branch is `clear` and never `home`, so the
+gesture reaches `releaseStrip()` only through a latch, and a latch today needs a
+target. Without the clause a user who quiets the bottom edge loses the only
+route to the wallpaper there is.
+→ with `gesture_bottom` == `none`, a full strip sweep up leaves the focused
+workspace's `representation` empty and every sheet `closed`; a short one opens
+nothing; a sideways swipe still changes workspace
+
+**Q4a** That sweep is measured against the screen, not against the startup
+fallback. `pullTravel` is 45% of the screen and would put home inside an
+ordinary swipe -- the very thing A4's stop was moved past 1.0 to avoid.
+→ with `gesture_bottom` == `none`, `omarchy-shell gestures geometry` reports
+`travel` equal to the screen's height
+
+**Q5** A target the shell has not loaded behaves as `none` rather than as an
+error. A plugin turned off on `shell.plugins`, or a word the file does not
+know, resolves to no target, and every tracker already tests for one before it
+latches.
+→ with the overview disabled and `gesture_right` == `overview`, a drag in from
+the right edge opens nothing and leaves nothing in the shell's journal
+
+**Q6** Both edges may name one sheet. Whichever edge raised it, the other finds
+it already open and does nothing -- the rule P8 already relies on, where a
+second right-edge drag on an open overview has nowhere further to go. The strip
+stays the exception it already is: a second drag there runs on into the home
+band (A6).
+→ with both keys == `drawer` and the drawer open, a right-edge drag leaves
+`drawer dragTrace` empty and `drawer state` == `open`; a strip drag from there
+leaves `representation` empty
+
+**Q7** The shade keeps its own way in. Its grab band across the status bar
+(`shade.md` H2) raises it whatever edge it is configured on, and raises it
+*from the top* (Q3a) -- so a shade set on an edge has two ways up, each
+arriving from the edge the finger started on, and a setting meant to add one
+takes none away.
+→ with `gesture_bottom` == `shade`, a pull-down on the status bar leaves
+`omarchy-shell shade state` == `open`
+
+**Q8** A changed setting is live on the next gesture, with nothing restarted.
+`ui.toml` is watched -- the same file and the same watch the corner radii
+already arrive through.
+→ `moarchy-ui gesture-right shade`, then with no restart a right-edge drag
+leaves `omarchy-shell shade state` == `open`
+
+**Q9** Every trigger is a row in Settings, not a file anyone is expected to
+edit, and what the rows offer is what the shell accepts. `settings.md` §Q is
+the other half of this criterion.
+→ `omarchy-shell settings openAt shell.gestures` lists four rows; each edge
+page has exactly one ticked row, whose value is one of the four
+`omarchy-shell gestures targets` resolves
+
+### The two taps
+
+Two triggers are a press rather than a pull: the strip's hold (C1) and the
+power button's double press. Nothing about either follows a finger, so the
+sheet contract Q2 is built on does not apply to them -- and that frees them to
+name things an edge cannot.
+
+**Q10** A tap trigger opens anything that opens: `none`, a sheet, the coding
+agent, or **any app the drawer lists**. The value is a word for the first
+three and a desktop entry id for the fourth, and `moarchy-trigger` is the one
+place that decides which it is -- the hold fires from QML and the power button
+from a sway binding, and a rule written at both ends is the defect B1 records
+with the ids of the sheets.
+
+The list cannot be a table the way an edge's is, because the fourth kind is
+every app on the phone and it changes when somebody installs one. So an unknown
+value is passed through as an id rather than replaced by a default, which is
+the opposite of Q1's rule and for the opposite reason: an edge has four possible
+values and a typo in one is a mistake, where a tap has sixty and a word this
+file has not heard of is the ordinary case.
+→ `moarchy-trigger rows hold` is `none`, `agent`, the three sheets and one row
+per line of `omarchy-shell drawer entryRows`; with `gesture_hold` == `overview`,
+`moarchy-trigger fire hold` leaves `omarchy-shell overview state` == `open`
+
+**Q10a** An app opens the way the drawer opens it. `omarchy-shell drawer
+launch` is what runs, so the workspace hop, the splash and the dismissal all
+happen exactly once and in one place (`windows.md` L1-L7) -- a trigger that ran
+`gtk-launch` itself would be a second copy of all three, and the missing splash
+would read as a press the phone had ignored.
+→ firing an app trigger leaves `drawer openApps` one line longer, with the new
+window alone on a free workspace
+
+**Q10b** The names on the list are the drawer's names. `drawer entryRows`
+answers id and name together from the same walk `drawer entries` makes, so a
+trigger can neither offer an app the grid hides nor call one something the grid
+does not.
+→ `omarchy-shell drawer entryRows | cut -f1` equals `omarchy-shell drawer
+entries`
+
+**Q11** **Two presses of the power button** inside **400ms** fire the power
+trigger. One press still blanks the panel and stops the touchscreen, or undoes
+that (`moarchy-screen toggle`), and it still does so the instant it lands.
+
+The first press acts and the second undoes it, rather than every press waiting
+to see whether a second is coming. The waiting version buys a double press with
+no blink and costs ~350ms on the only button this device has, paid on every
+press including the pocket ones -- and a button that hesitates is worse than a
+screen that blinks. Android makes the same trade.
+→ `scripts/test-power-press.sh`: one `moarchy-power-press` calls
+`moarchy-screen toggle` and fires nothing; two inside 400ms call `unlock` and
+then `moarchy-trigger fire power`
+
+**Q11a** The second press unlocks rather than toggles. The first may have been
+an unlock -- waking the phone and pressing again -- and a toggle there would put
+the screen back out from under the thing that is about to open.
+→ the same script: across a double press `moarchy-screen toggle` is called
+exactly once
+
+**Q11b** Three presses are a double and then a single, not two overlapping
+doubles. The stamp is cleared when a double fires, so the third press is
+measured from nothing.
+→ the same script: three calls inside 400ms fire the trigger once
+
+**Q11c** The power trigger ships as `none`. It is a gesture nobody has asked
+for yet on a button everybody already knows the meaning of, and a phone that
+opened something the first time its owner double-pressed out of habit would
+have surprised them with it.
+→ `moarchy-ui get gesture-power` == `none` on a home with no `ui.toml`
 
 ---
 
@@ -1359,7 +1584,6 @@ Not acceptance criteria — the boundaries any implementation works inside.
   G10b stops the band below the header bar, the same lever G10 already used for
   the keyboard. What is left is a narrower claim rather than a softer one — a
   control in the leftmost 16px *between* the two insets is still dead.
-- **The right edge stays unclaimed.**
 
 ---
 
@@ -1378,37 +1602,45 @@ went stale the first time a check was added above them and then silently
 reported a different document's ids. Ids are not unique across files, so the
 list it prints is a superset: take from it only what this file defines.
 
-**Written, but nothing runs it** (32). Each has a `→` check that no suite
-executes, so it is as unverified as one with no check at all:
+**Written, but nothing runs it** (55). Each has a `→` check that no
+suite executes, so it is as unverified as one with no check at all:
 
-> A3a · A8 · A10 · C1 · C3 · C4 · C5 · G10b · G11 · G12 · G13 · H1 · H4 ·
-> I5a · I5b · I6 · I7 · K8 · L8 · M2 · M3 · M7 · M7a · M8 · M9 · N1 · N2 · N3 ·
-> P2 · P4 · P5 · P9
+> A3a · A8 · A10 · C1 · C3 · C4 · C5 · G10b · G11 · G12 · G13 · G14a · H1 ·
+> H4 · I1 · I1a · I1b · I2 · I3 · I4 · I5 · I5a · I5b · I5d · I5e · I6 ·
+> I7 · K8 · L8 · M2 · M3 · M4 · M7 · M7a · M8 · M9 · N1 · N2 · N3 · N4 ·
+> P2 · P4 · P5 · P9 · Q2 · Q2a · Q3 · Q3a · Q3b · Q4a · Q5 · Q7 · Q9 ·
+> Q10a · Q11c
 
-§P arrives with four of them. P2 is the one that matters: it is the drag itself,
-and the trace that would settle it (`overview dragTrace`) needs a finger the
-suite can only synthesise through `/dev/uinput` — the same gate every other
-`→` line in §A sits behind, and the reason G12 has been on this list since it
-was written.
+§Q's unrun half divides the way §P's did. Q2, Q2a and Q4a are the geometry --
+where the sheet travels and what the drag divides by -- and settling any of them
+needs a finger the suite can only synthesise through `/dev/uinput`, which is
+where P2 has sat since it was written. Q3, Q5 and Q7 need a state the suite
+would have to manufacture: a sheet open across a setting change, a plugin turned
+off, a pull on the status bar. C1 and Q10a both end in a launch, and §C's note
+says why a suite must not fire the one that installs an agent.
 
-All of §C is here: the hold cannot be fired by a suite without installing an
-agent, which is C's own note. All of §I's assertable half is here too, and that
-is not deliberate — I6 is covered in substance by A7 (`bin/moarchy-selftest`
-notes this at the `--surfaces` end), but I5a, I5b, I7 and I1's companions are
-simply unrun.
+Q11, Q11a and Q11b are **run, and not by anything the command below greps** --
+`scripts/test-power-press.sh` checks them on the host with `moarchy-screen` and
+`moarchy-trigger` stubbed, because the double press is arithmetic over one
+timestamp file. They are held out of this list by hand for that reason, the way
+M4 is held out of the next one.
 
-**Stated, with no check** (24). Behavioural claims with nothing to settle them
-from a terminal; several are hand checks on glass by nature:
+All of §I's assertable half is here too, and that is not deliberate -- I6 is
+covered in substance by A7 (`bin/moarchy-selftest` notes this at the
+`--surfaces` end), but I5a, I5b, I7 and I1's companions are simply unrun.
 
-> B2 · D2 · D3 · D4 · F1 · G1 · G5 · G7 · G8 · G9 · G10a · H3 · H5 · H6 · H7a ·
-> H7b · H8 · K10 · L4 · M10 · M11 · M12 · P7a · P7c
+**Stated, with no check** (24). Behavioural claims with nothing to
+settle them from a terminal; several are hand checks on glass by nature:
+
+> B2 · D2 · D3 · D4 · F1 · G1 · G5 · G7 · G8 · G9 · G10a · H3 · H5 · H6 ·
+> H7a · H7b · H8 · K10 · L4 · M10 · M11 · M12 · P7a · P7c
 
 M4 left this list by being split: the accent dot is still a hand check on glass,
 and the glyph beside it is a declaration `scripts/style-check.sh` can read. The
-command above regenerates the three lists from `bin/moarchy-selftest` alone, so
-a criterion checked anywhere else has to be moved by hand.
+command above regenerates these lists from `bin/moarchy-selftest` alone, so a
+criterion checked anywhere else has to be moved by hand.
 
-**Run, with no `→` line here** (6). The suites check these; the doc understates
-itself, and each should gain the check it is already being held to:
+**Run, with no `→` line here** (6). The suites check these; the doc
+understates itself, and each should gain the check it is already being held to:
 
 > G6 · K5 · L7 · L9 · L10 · L13

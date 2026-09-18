@@ -1,0 +1,127 @@
+#!/bin/bash
+# What a tap trigger opens -- the strip's hold and the power button's double
+# press (docs/gestures.md C1, Q10, Q11).
+#
+#   moarchy-trigger fire hold        do whatever `gesture_hold` names
+#   moarchy-trigger fire power       ... and `gesture_power`
+#   moarchy-trigger label hold       the name a row shows, app ids resolved
+#   moarchy-trigger rows hold        the Settings page, as JSON choice rows
+#
+# **One place decides what a value means**, and that is the whole reason this
+# exists as a script rather than as a branch in the gestures plugin. The hold
+# fires from QML and the power button fires from a sway binding; a rule written
+# in both would be the fourth instance of the defect docs/refactor.md B1
+# records, where four copies of "which sheets are there" gave three answers.
+#
+# An edge names a sheet and has to drag it, so its vocabulary is four words
+# (Ui.js GESTURE_TARGETS). A tap opens rather than drags, so it can name
+# anything that opens: `none`, `agent`, a sheet, or any desktop entry.
+set -uo pipefail
+
+AGENT_GLYPH=$'\U000f06a9'   # the robot apps.default.agent wears
+SHEET_GLYPH=$'\U000f0431'   # the puzzle piece shell.plugins wears
+NONE_GLYPH=$'\U000f0159'    # a crossed circle
+APP_GLYPH=$'\U000f003b'     # the grid the root's Apps row wears
+
+shell_ipc() { timeout 8 omarchy-shell "$@" 2>/dev/null; }
+
+value_for() { moarchy-ui get "gesture-$1" 2>/dev/null; }
+
+# The sheets a tap may summon. Their plugin ids live in Sheet.js and this is the
+# one place outside the shell that needs them, so the mapping is here rather
+# than a fifth list: a word in, a plugin id out, empty for anything else.
+sheet_id() {
+  case "$1" in
+    drawer)   echo moarchy.drawer ;;
+    overview) echo moarchy.overview ;;
+    shade)    echo moarchy.shade ;;
+    themes)   echo moarchy.themes ;;
+    *)        echo "" ;;
+  esac
+}
+
+fire() {
+  local v id
+  v=$(value_for "$1")
+  [[ -n $v && $v != none ]] || { echo "nothing on the $1 trigger"; return 0; }
+
+  if [[ $v == agent ]]; then
+    # C1's original meaning, and still one answer to "the default agent":
+    # with one picked this opens it, with none it opens the picker, and the
+    # drawer's tile is rewritten on the way (settings.md P12).
+    moarchy-agent launch
+    echo "agent"
+    return 0
+  fi
+
+  id=$(sheet_id "$v")
+  if [[ -n $id ]]; then
+    # Through the host, so openPanelIds and the plugin cannot drift apart --
+    # the same call releaseTarget() makes at the end of an edge drag.
+    shell_ipc shell summon "$id" '{}' >/dev/null
+    echo "$id"
+    return 0
+  fi
+
+  # An app. Down the drawer's own launch verb rather than gtk-launch here: that
+  # path hops to a free workspace first, draws the splash, and dismisses the
+  # sheet (windows.md L1-L7). Launching it from this script would be a second
+  # implementation of all three, and the splash is the half nobody would notice
+  # was missing until the phone looked like it had ignored the press.
+  shell_ipc drawer launch "$v" >/dev/null
+  echo "$v"
+}
+
+# The name for a row's detail line. A word answers from moarchy-ui; an app id
+# has to be resolved against the entry list, because the name lives in a
+# desktop file only the shell has read.
+label() {
+  local v
+  v=$(value_for "$1")
+  case "$v" in
+    none|agent|drawer|overview|shade|themes) moarchy-ui get "gesture-$1-label" ;;
+    "") echo Nothing ;;
+    *)
+      # Its name if the shell knows the id, the id itself if it does not --
+      # an app that has been uninstalled since it was chosen is still what the
+      # setting says, and a blank detail line would say nothing at all.
+      shell_ipc drawer entryRows \
+        | awk -F'\t' -v id="$v" '$1 == id { print $2; found = 1 } END { if (!found) print id }' \
+        | head -1
+      ;;
+  esac
+}
+
+rows() {
+  local which=$1 current
+  current=$(value_for "$which")
+  {
+    printf 'none\t%s\tNothing\tThe trigger does nothing\n' "$NONE_GLYPH"
+    printf 'agent\t%s\tCoding agent\tThe one the drawer names\n' "$AGENT_GLYPH"
+    printf 'drawer\t%s\tApp drawer\tSearch and launch\n' "$SHEET_GLYPH"
+    printf 'overview\t%s\tOverview\tEvery workspace as a card\n' "$SHEET_GLYPH"
+    printf 'shade\t%s\tNotification shade\tQuick settings\n' "$SHEET_GLYPH"
+    # Every app the drawer lists, in the drawer's own order and under the
+    # drawer's own names -- so a trigger can never offer something the grid does
+    # not, or call it something the grid does not call it.
+    shell_ipc drawer entryRows \
+      | awk -F'\t' -v g="$APP_GLYPH" 'NF >= 2 { print $1 "\t" g "\t" $2 "\t" $1 }'
+  } | jq -R -s --arg which "$which" --arg current "$current" '
+      split("\n") | map(select(length > 0)) | to_entries
+      | map((.value | split("\t")) as $f | {
+          id:     ("t" + (.key | tostring)),
+          type:   "choice",
+          glyph:  $f[1],
+          label:  $f[2],
+          detail: $f[3],
+          value:  $f[0],
+          write:  ("moarchy-ui gesture-" + $which + " " + ($f[0] | @sh))
+        })'
+}
+
+case "${1:-}" in
+  fire)  [[ $# -eq 2 ]] || { echo "usage: moarchy-trigger fire hold|power" >&2; exit 2; }; fire "$2" ;;
+  label) [[ $# -eq 2 ]] || { echo "usage: moarchy-trigger label hold|power" >&2; exit 2; }; label "$2" ;;
+  rows)  [[ $# -eq 2 ]] || { echo "usage: moarchy-trigger rows hold|power" >&2; exit 2; }; rows "$2" ;;
+  *)     echo "usage: moarchy-trigger {fire|label|rows} hold|power" >&2; exit 2 ;;
+esac

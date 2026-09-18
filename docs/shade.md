@@ -1,11 +1,19 @@
 # Notification shade — specification
 
-What the pull-down from the top edge shows and what each control does. Present
-tense, normative. The archaeology lives in `docs/build-log.md`.
+What the shade shows and what each control does. Present tense, normative.
+The archaeology lives in `docs/build-log.md`.
 
 **How the shade opens, closes and is dismissed is not here** — it is a gesture,
 and it belongs to `docs/gestures.md` (A8, G1–G3, H2, H5). Restating those
 would give us two specs to disagree with each other. This file is the contents.
+
+The grab band across the status bar is the shade's own way in and is always
+there (`gestures.md` Q7). It is no longer the only one: a swipeable edge can
+be set to raise this sheet (Q1), and then it arrives from that edge instead.
+Everything below is about the sheet and holds whichever way it was raised —
+including S21 and S22, which size it against the screen's height on every
+edge, because the sheet keeps the shape it has and only its path in changes
+(Q2a).
 
 Lines marked **?** are my reading of the code, not your decision. Read those
 first — the rest is a description of what is already there.

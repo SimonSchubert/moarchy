@@ -72,6 +72,7 @@ import "../moarchy.common/Apps.js" as Apps
 import "../moarchy.common/Theme.js" as Theme
 import "../moarchy.common/ShellApps.js" as ShellApps
 import "../moarchy.common/Sheet.js" as Sheet
+import "../moarchy.common/Edge.js" as Edge
 import "../moarchy.common" as Shared
 
 Item {
@@ -96,6 +97,13 @@ Item {
   // touch -- and drives this property from its own MultiPointTouchArea while
   // the finger moves. That is what makes the drawer follow the finger rather
   // than appear at a threshold.
+  // gestures.md Q2. Which screen edge raised this sheet. Written by
+  // moarchy.gestures on a press, and only while the sheet is at rest shut
+  // (Q3) -- so it never changes under a finger. Bottom is where this sheet
+  // has always come from and is what it falls back to.
+  property string entryEdge: Edge.BOTTOM
+  readonly property bool sideways: Edge.horizontal(root.entryEdge)
+
   property real progress: 0
 
   // Set by the gestures plugin for the length of the drag. It turns the
@@ -178,9 +186,20 @@ Item {
   // forever and silently wrong on a device with a different bar.
   property real sheetHeight: 0
 
-  readonly property real closeTravel: Math.max(1,
-    root.sheetHeight > 0 ? root.sheetHeight
-                         : (drawerWindow.screen ? drawerWindow.screen.height : 720))
+  // The same trap on the other axis, for the same reason: on a right edge
+  // the shut surface is a one-pixel *column*, and a drag divided by it moves
+  // the sheet hundreds of times finger speed until it grows.
+  property real sheetWidth: 0
+
+  // D2a, Q2. The sheet's own extent along the axis the finger travels on.
+  // Reading the height for a sheet that arrives sideways is D2b's defect
+  // with the axes swapped -- a first drag of the session at half speed,
+  // which only ever shows on a cold shell.
+  readonly property real closeTravel: Math.max(1, root.sideways
+    ? (root.sheetWidth > 0 ? root.sheetWidth
+                           : (drawerWindow.screen ? drawerWindow.screen.width : 360))
+    : (root.sheetHeight > 0 ? root.sheetHeight
+                            : (drawerWindow.screen ? drawerWindow.screen.height : 720)))
   readonly property real closeCommit: 0.7
 
   // H1. Travel past which a touch on the sheet stops being a tap and starts
@@ -191,9 +210,10 @@ Item {
   // matched to a speed reading that swung by 5x between identical gestures.
   readonly property real sheetFling: 0.3
 
-  // H1, on the shared tracker (docs/refactor.md F1). Downward closes, so
-  // `openDirection` is -1: travelling up is what would raise progress, and
-  // this sheet is already up.
+  // H1, on the shared tracker (docs/refactor.md F1). The way out is the way
+  // back in, reversed: travelling *away* from the entry edge is what raises
+  // progress, and this sheet is already up (Q2). From the bottom that reads
+  // `openDirection` -1 and `latchSign` +1, which is what it always was.
   //
   // Scene coordinates are the tracker's whole input convention, and the reason
   // is this surface's: every input item here is a child of the sheet, so its
@@ -201,10 +221,18 @@ Item {
   // itself.
   Shared.DragTracker {
     id: sheetDrag
+    axis: Edge.axis(root.entryEdge)
     travel: root.closeTravel
-    openDirection: -1
-    // Downward only -- this sheet is open, and down is the way out of it.
-    latchSign: 1
+    openDirection: Edge.openDirection(root.entryEdge)
+    // Back toward the entry edge only -- this sheet is open, and that is the
+    // way out of it.
+    latchSign: Edge.closeLatchSign(root.entryEdge)
+    // P6's rule, reached here by the same route: on a sideways edge the
+    // close drag crosses the grid's own scroll axis, and a grid that shut
+    // the sheet whenever a thumb's arc wandered would be a grid nobody could
+    // scroll. On the bottom edge the two share an axis and H5 settles it, so
+    // this stays off there rather than changing a gesture that works.
+    axisDominant: root.sideways
     slop: root.dragSlop
     startFrom: root.progress
 
@@ -522,6 +550,10 @@ Item {
   // N3. Whether the window is sheet-sized rather than the band. Warming grows
   // it; it goes back to the band once the sheet is all the way down.
   readonly property bool surfaceUp: root.progress > 0 || root.warming
+
+  // N3, Q2. The four booleans the surface binds: shut, every side but the one
+  // opposite the entry edge, which is what makes the band a band.
+  readonly property var bandAnchors: Edge.anchors(root.entryEdge, root.surfaceUp)
 
   Connections {
     target: root.shell ? root.shell.appLibrary : null
@@ -1076,6 +1108,12 @@ Item {
     // Which sheets those are is Sheet.js' single list, read from the rank rather
     // than named here (I2): five screens named their own pair and gave three
     // different answers.
+    // Q3a. A summon carries no direction, so it uses this sheet's own edge --
+    // but only from rest. `releaseTarget()` commits an edge drag *through*
+    // this function with the sheet part-way in, and resetting there would
+    // teleport it across the screen on the frame it was let go.
+    if (root.progress <= 0 && !root.dragging) root.entryEdge = Edge.BOTTOM
+
     Sheet.cover(root.shell, root.pluginId, Sheet.TOP)
 
     root.query = ""
@@ -1359,6 +1397,36 @@ Item {
       return out.join("\n")
     }
 
+    // The same list with the name beside the id, for a caller that has to draw
+    // it rather than launch from it -- `moarchy-trigger rows`, which offers
+    // every app as something a hold or the power button can open
+    // (gestures.md Q10).
+    //
+    // A second verb rather than a wider `entries`: that one's output is a bare
+    // id per line and two documents asserting against it say so (apps.md T5,
+    // T9), so widening it would be a format change to a published answer for
+    // the sake of a caller that can have its own.
+    //
+    // The name comes from appLibrary rather than from the entry, because the
+    // library is what resolves a blank or duplicated Name= the way the grid
+    // draws it -- two lists that disagree about what an app is called is how a
+    // trigger comes to name something the drawer does not.
+    function entryRows(): string {
+      if (!root.shell || !root.shell.appLibrary) return ""
+      var out = []
+      var rows = root.shell.appLibrary.sortedEntries("") || []
+      for (var i = 0; i < rows.length; i++) {
+        var entry = rows[i] && rows[i].entry
+        if (!entry) continue
+        var name = String(root.shell.appLibrary.entryName(entry) || entry.id)
+        // Tab-separated, so a name with spaces in it stays one field. A tab in
+        // a Name= would break it; nothing on this phone has one, and a desktop
+        // entry that did would be a desktop entry to fix.
+        out.push(String(entry.id) + "\t" + name.replace(/\t/g, " "))
+      }
+      return out.join("\n")
+    }
+
     // ------------------------------------------------------ app detail (L)
     //
     // The card, without a finger. A hold can be driven for real --
@@ -1575,6 +1643,7 @@ Item {
     // The one place `sheetHeight` is written. Guarded on a number that could
     // only be the band (N3), and no phone this runs on has a 200px-tall sheet.
     onHeightChanged: if (drawerWindow.height > 200) root.sheetHeight = drawerWindow.height
+    onWidthChanged: if (drawerWindow.width > 200) root.sheetWidth = drawerWindow.width
 
     // gestures.md N3. Never unmapped: shut, a one-pixel band along the bottom
     // edge; grown to the sheet when an upward drag latches, not on press.
@@ -1603,8 +1672,17 @@ Item {
     // failed to load. Latch is 8px up, still inside the slop of a real open,
     // and a press that never latches never grows.
     visible: true
-    anchors { top: root.surfaceUp; bottom: true; left: true; right: true }
+    // N3, Q2. Shut, a one-pixel band along the entry edge; grown, all four.
+    // Both implicit sizes are declared because only the unanchored axis
+    // reads one, and which axis that is is now a setting.
+    anchors {
+      top: root.bandAnchors.top
+      bottom: root.bandAnchors.bottom
+      left: root.bandAnchors.left
+      right: root.bandAnchors.right
+    }
     implicitHeight: 1
+    implicitWidth: 1
     color: "transparent"
 
     // N3. Grown is not live. While warming this surface is full-screen, on Top,
@@ -1700,24 +1778,45 @@ Item {
 
     Rectangle {
       id: sheet
-      width: parent.width
-      // The last sheet height, not the window's: on the band the window is one
-      // pixel tall, and a sheet that followed it would lay the grid out again at
-      // one pixel on every close and at full height on every open. The screen
-      // until the window has been up once (`sheetHeight` above).
-      height: root.sheetHeight > 0 ? root.sheetHeight
-            : (drawerWindow.screen ? drawerWindow.screen.height : parent.height)
-      // Rides up from below the bottom edge. Translation only: this is a
-      // Mali-400 at GLES 2.0, so there are no shaders to spend, and a `scale`
-      // on a full-screen item costs a re-raster where a `y` costs nothing.
+      // On the entry axis, the last sheet size rather than the window's: on
+      // the band the window is one pixel across there, and a sheet that
+      // followed it would lay the grid out again at one pixel on every close
+      // and at full size on every open. The screen until the window has been
+      // up once (`sheetHeight`/`sheetWidth` above).
       //
+      // The cross axis takes the parent, because the cross axis never
+      // collapses -- a band is one pixel on one axis and full on the other,
+      // which is the whole reason the latch exists.
+      width: root.sideways
+           ? (root.sheetWidth > 0 ? root.sheetWidth
+              : (drawerWindow.screen ? drawerWindow.screen.width : parent.width))
+           : parent.width
+      height: root.sideways ? parent.height
+            : (root.sheetHeight > 0 ? root.sheetHeight
+               : (drawerWindow.screen ? drawerWindow.screen.height : parent.height))
+
+      // Q2. Rides in from whichever edge raised it. Translation only: this is
+      // a Mali-400 at GLES 2.0, so there are no shaders to spend, and a
+      // `scale` on a full-screen item costs a re-raster where an `x` or a `y`
+      // costs nothing.
+      readonly property var at: Edge.offset(root.entryEdge, root.progress,
+                                            parent.width, parent.height,
+                                            sheet.width, sheet.height)
+
       // And keeps going, by up to 80px, as the finger approaches the home stop
       // (A4) -- the same cheap cue, on the same drag, that the carousel gave.
-      y: parent.height * (1 - root.progress) - Style.space(80) * root.homeHint
+      // Signed toward open, so it lifts away from the entry edge whichever one
+      // that is; only the strip ever sets `homeHint` (Q4).
+      readonly property real lift:
+        Edge.openDirection(root.entryEdge) * Style.space(80) * root.homeHint
+
+      x: sheet.at.x + (root.sideways ? sheet.lift : 0)
+      y: sheet.at.y + (root.sideways ? 0 : sheet.lift)
       color: root.surface
 
-      // Rounded at the top only -- the edge it comes in from. The bottom
-      // corners sit against the home pill and are never seen.
+      // Rounded on the leading edge only -- the one that comes in first. The
+      // two corners against the screen edge it arrived from are never seen,
+      // and TrailingSquare below squares them back off.
       radius: root.radiusSheet
 
       // Through goBack() rather than straight to dismiss, so a keyboard walks
@@ -1726,12 +1825,11 @@ Item {
       // be the one way out of this screen that skips a level.
       Keys.onEscapePressed: if (!root.goBack()) root.dismiss()
 
-      // The radius rounds all four corners, so square the bottom two back off
-      // rather than leave two notches over the gesture strip.
-      Rectangle {
-        anchors.bottom: parent.bottom
-        width: parent.width
-        height: root.radiusSheet
+      // The radius rounds all four corners, so square the trailing two back
+      // off rather than leave two notches over whatever is behind.
+      Shared.TrailingSquare {
+        edge: root.entryEdge
+        depth: root.radiusSheet
         color: root.surface
       }
 

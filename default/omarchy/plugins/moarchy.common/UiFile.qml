@@ -22,6 +22,14 @@ FileView {
   readonly property string corners: file.chrome.corners
   readonly property string shade: file.chrome.shade
 
+  // gestures.md Q1. Which sheet each swipeable edge raises. The words are what
+  // the file holds; the ids are what moarchy.gestures resolves against, and ""
+  // is `none` -- which resolveTarget() already reads as nothing to drag (Q5).
+  readonly property string gestureBottom: file.chrome.gestureBottom
+  readonly property string gestureRight: file.chrome.gestureRight
+  readonly property string bottomTargetId: Ui.targetId(file.chrome.gestureBottom)
+  readonly property string rightTargetId: Ui.targetId(file.chrome.gestureRight)
+
   // Scaled like every other length on this shell. Zero stays zero: Style.space
   // floors at 1, which would make "square" a 1px radius nobody asked for.
   readonly property int radiusSheet: file.px(file.chrome.sheet)

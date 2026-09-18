@@ -12,8 +12,15 @@
 #   moarchy-ui get corners-label       Large | Modest | Square
 #   moarchy-ui get shade               roomy | compact
 #   moarchy-ui get shade-label         Roomy | Compact
+#   moarchy-ui get gesture-bottom      none | drawer | overview | shade
+#   moarchy-ui get gesture-right       the same four
+#   moarchy-ui get gesture-summary     "App drawer · Overview"
+#   moarchy-ui get gesture-hold        none | agent | a sheet | an app id
+#   moarchy-ui get gesture-power       the same
 #   moarchy-ui corners modest
 #   moarchy-ui shade compact
+#   moarchy-ui gesture-bottom overview
+#   moarchy-ui gesture-hold org.gnome.Calls
 #   moarchy-ui set sheet 16            numeric override (logical px)
 
 set -euo pipefail
@@ -37,6 +44,60 @@ norm_shade() {
   esac
 }
 
+# gestures.md Q1. Words, never plugin ids: Sheet.js is where an id is
+# written and this script has no business knowing one. An unreadable value
+# is the caller's default rather than `none`, so a typo cannot switch an
+# edge off -- Ui.js normTarget() is the same rule on the QML side.
+norm_target() {
+  case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
+    none|off|nothing) echo none ;;
+    drawer|moarchy.drawer) echo drawer ;;
+    overview|moarchy.overview) echo overview ;;
+    shade|moarchy.shade) echo shade ;;
+    *) echo "$2" ;;
+  esac
+}
+
+# gestures.md Q10. The tap triggers take a wider vocabulary than an edge:
+# `none`, `agent`, a sheet word, or any desktop entry id. An id cannot be
+# whitelisted -- the set is every app on the phone -- so anything that is not
+# one of the known words is passed through untouched, case and all. What a
+# value *means* is `moarchy-trigger`'s to decide; this only stores it.
+norm_tap() {
+  local raw="$1" low
+  low=$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]')
+  case "$low" in
+    "") printf '%s' "$2" ;;
+    none|off|nothing) echo none ;;
+    agent) echo agent ;;
+    drawer|overview|shade|themes) printf '%s' "$low" ;;
+    *) printf '%s' "$raw" ;;
+  esac
+}
+
+# The word a row shows. An id stays an id here: the name behind it is in a
+# desktop entry that only the shell has read, and `moarchy-trigger label` is
+# what asks it.
+label_tap() {
+  case "$1" in
+    none) echo Nothing ;;
+    agent) echo "Coding agent" ;;
+    drawer|overview|shade|themes) label_target "$1" ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+
+label_target() {
+  case "$1" in
+    none) echo Nothing ;;
+    drawer) echo "App drawer" ;;
+    overview) echo Overview ;;
+    shade) echo "Notification shade" ;;
+    themes) echo Themes ;;
+    *) echo Nothing ;;
+  esac
+}
+
 label_corners() {
   case "$(norm_corners "$1")" in
     modest) echo Modest ;;
@@ -55,6 +116,10 @@ label_shade() {
 # Defaults match Ui.js fallback().
 corners=large
 shade=roomy
+gesture_bottom=drawer
+gesture_right=overview
+gesture_hold=agent
+gesture_power=none
 sheet=""
 tile=""
 card=""
@@ -87,6 +152,10 @@ read_file() {
       shade_tile|shadeTile) shade_tile=$raw ;;
       shade_slider|shadeSlider) shade_slider=$raw ;;
       shade_round|shadeRound) shade_round=$raw ;;
+      gesture_bottom|gestureBottom) gesture_bottom=$(norm_target "$raw" drawer) ;;
+      gesture_right|gestureRight) gesture_right=$(norm_target "$raw" overview) ;;
+      gesture_hold|gestureHold) gesture_hold=$(norm_tap "$raw" agent) ;;
+      gesture_power|gesturePower) gesture_power=$(norm_tap "$raw" none) ;;
     esac
   done <"$FILE"
 }
@@ -102,12 +171,20 @@ write_file() {
 # corners: large | modest | square
 # shade:   roomy | compact
 #
+# Which sheet each swipeable edge raises:
+#   gesture_bottom, gesture_right: none | drawer | overview | shade
+#   gesture_hold, gesture_power:   the same, plus agent or an app id
+#
 # Optional numbers (logical px) override the preset for that key:
 #   sheet, tile, card, shade_tile, shade_slider, shade_round
 
 EOF
     printf 'corners = "%s"\n' "$corners"
     printf 'shade = "%s"\n' "$shade"
+    printf 'gesture_bottom = "%s"\n' "$gesture_bottom"
+    printf 'gesture_right = "%s"\n' "$gesture_right"
+    printf 'gesture_hold = "%s"\n' "$gesture_hold"
+    printf 'gesture_power = "%s"\n' "$gesture_power"
     if [[ -n $sheet ]]; then printf 'sheet = %s\n' "$sheet"; fi
     if [[ -n $tile ]]; then printf 'tile = %s\n' "$tile"; fi
     if [[ -n $card ]]; then printf 'card = %s\n' "$card"; fi
@@ -118,10 +195,17 @@ EOF
 }
 
 usage() {
-  echo "Usage: moarchy-ui [get KEY | corners VALUE | shade VALUE | set KEY NUMBER]" >&2
-  echo "  KEY: corners, corners-label, shade, shade-label" >&2
+  echo "Usage: moarchy-ui [get KEY | corners VALUE | shade VALUE |" >&2
+  echo "                   gesture-bottom VALUE | gesture-right VALUE |" >&2
+  echo "                   gesture-hold VALUE | gesture-power VALUE | set KEY NUMBER]" >&2
+  echo "  KEY: corners, corners-label, shade, shade-label," >&2
+  echo "       gesture-bottom, gesture-bottom-label, gesture-right," >&2
+  echo "       gesture-right-label, gesture-summary, gesture-hold," >&2
+  echo "       gesture-hold-label, gesture-power, gesture-power-label" >&2
   echo "  corners: large | modest | square" >&2
   echo "  shade:   roomy | compact" >&2
+  echo "  gesture: none | drawer | overview | shade" >&2
+  echo "  hold/power also take: agent, or a desktop entry id" >&2
   exit 1
 }
 
@@ -130,6 +214,10 @@ read_file
 if (($# == 0)); then
   printf 'corners=%s\n' "$corners"
   printf 'shade=%s\n' "$shade"
+  printf 'gesture_bottom=%s\n' "$gesture_bottom"
+  printf 'gesture_right=%s\n' "$gesture_right"
+  printf 'gesture_hold=%s\n' "$gesture_hold"
+  printf 'gesture_power=%s\n' "$gesture_power"
   if [[ -n $sheet ]]; then printf 'sheet=%s\n' "$sheet"; fi
   if [[ -n $tile ]]; then printf 'tile=%s\n' "$tile"; fi
   if [[ -n $card ]]; then printf 'card=%s\n' "$card"; fi
@@ -147,6 +235,20 @@ get)
     corners-label) label_corners "$corners" ;;
     shade|density) echo "$shade" ;;
     shade-label|density-label) label_shade "$shade" ;;
+    gesture-bottom) echo "$gesture_bottom" ;;
+    gesture-right) echo "$gesture_right" ;;
+    gesture-bottom-label) label_target "$gesture_bottom" ;;
+    gesture-hold) printf '%s\n' "$gesture_hold" ;;
+    gesture-power) printf '%s\n' "$gesture_power" ;;
+    gesture-hold-label) label_tap "$gesture_hold" ;;
+    gesture-power-label) label_tap "$gesture_power" ;;
+    gesture-right-label) label_target "$gesture_right" ;;
+    # The detail line on the row that opens the pair (settings.md D5).
+    gesture-summary)
+      # A literal middle dot and not $'\u00b7': bash expands that against the
+      # locale, and this runs from a shell with no LANG as often as not.
+      printf '%s · %s\n' "$(label_target "$gesture_bottom")" \
+                        "$(label_target "$gesture_right")" ;;
     sheet|tile|card|shade_tile|shade_slider|shade_round)
       eval "val=\${$2}"
       echo "$val"
@@ -169,6 +271,32 @@ shade)
   shade_tile=""; shade_slider=""; shade_round=""
   write_file
   echo "$shade"
+  ;;
+gesture-bottom)
+  [[ $# -eq 2 ]] || usage
+  # No companion overrides to drop: unlike `corners` and `shade`, these two
+  # presets own no numeric keys.
+  gesture_bottom=$(norm_target "$2" "$gesture_bottom")
+  write_file
+  echo "$gesture_bottom"
+  ;;
+gesture-right)
+  [[ $# -eq 2 ]] || usage
+  gesture_right=$(norm_target "$2" "$gesture_right")
+  write_file
+  echo "$gesture_right"
+  ;;
+gesture-hold)
+  [[ $# -eq 2 ]] || usage
+  gesture_hold=$(norm_tap "$2" "$gesture_hold")
+  write_file
+  printf '%s\n' "$gesture_hold"
+  ;;
+gesture-power)
+  [[ $# -eq 2 ]] || usage
+  gesture_power=$(norm_tap "$2" "$gesture_power")
+  write_file
+  printf '%s\n' "$gesture_power"
   ;;
 set)
   [[ $# -eq 3 ]] || usage

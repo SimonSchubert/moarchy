@@ -1155,6 +1155,59 @@ print(found[0] if found else "")'; }
   okac()  { ac "$1"; shift; ok "$@"; }
   noac()  { ac "$1"; shift; no "$@"; }
 
+  # --- pin what the edges raise, for the length of the suite ----------------
+  #
+  # gestures.md Q1 made the strip's sheet and the right edge's sheet settings,
+  # and every check in §A, §D and §P below reads `drawer state` or
+  # `overview state` by name. Unpinned, the whole suite's verdict depends on
+  # a file in the user's home: a phone with the overview on the strip would
+  # fail A1 through A7 and blame the drag.
+  #
+  # So the defaults are asserted for the run and the user's own values put
+  # back afterwards, restored on any exit rather than at the foot of the
+  # suite -- a check that dies half way through must not leave the phone
+  # configured the way a test wanted it. §Q's own checks set and restore
+  # inside this, which is why they are written to leave the pin as they
+  # found it.
+  pinned_bottom=$(moarchy-ui get gesture-bottom 2>/dev/null || echo drawer)
+  pinned_right=$(moarchy-ui get gesture-right 2>/dev/null || echo overview)
+  pinned_hold=$(moarchy-ui get gesture-hold 2>/dev/null || echo agent)
+  pinned_power=$(moarchy-ui get gesture-power 2>/dev/null || echo none)
+  # Two of them, and the difference matters: `pin_edges` is what every check
+  # below runs against, `restore_edges` is what the phone is handed back as.
+  # §Q moves the setting on purpose and has to re-pin afterwards, not
+  # restore -- restoring there would leave every later check reading the
+  # user's own file again, which is the thing this pin exists to stop.
+  pin_edges() {
+    moarchy-ui gesture-bottom drawer >/dev/null 2>&1 || true
+    moarchy-ui gesture-right overview >/dev/null 2>&1 || true
+    # The hold is pinned to `none` and NOT to its shipped `agent`. §C's own
+    # note is why: firing the hold on a phone that has picked an agent it has
+    # never installed downloads it through mise, and a suite that installs a
+    # package to prove a gesture works has changed the phone it was measuring.
+    # Nothing below fires it; this is so that nothing below *can*.
+    moarchy-ui gesture-hold none >/dev/null 2>&1 || true
+    moarchy-ui gesture-power none >/dev/null 2>&1 || true
+  }
+  restore_edges() {
+    moarchy-ui gesture-bottom "$pinned_bottom" >/dev/null 2>&1 || true
+    moarchy-ui gesture-right "$pinned_right" >/dev/null 2>&1 || true
+    moarchy-ui gesture-hold "$pinned_hold" >/dev/null 2>&1 || true
+    moarchy-ui gesture-power "$pinned_power" >/dev/null 2>&1 || true
+  }
+  trap restore_edges EXIT
+  pin_edges
+  # The file is watched, not polled on a timer, but the shell still has to
+  # see the inotify before the first drag divides by the wrong sheet.
+  sleep 1
+  edge_now=$(timeout 8 omarchy-shell gestures targets 2>/dev/null)
+  if [[ $edge_now == "bottom=moarchy.drawer right=moarchy.overview" ]]; then
+    okac Q1 "the edges are pinned to the shipped pairing for this run"
+  else
+    noac Q1 "the shell reports '${edge_now:-nothing}' after pinning both edges" \
+            "every check below that names the drawer or the overview is now suspect"
+  fi
+
   # --- G10. the back edge stops short of the bottom -------------------------
   # Deliberately above the uinput gate: this is a geometry read and needs
   # neither root nor a finger. It also cannot be driven by one -- a tap below
@@ -2632,6 +2685,107 @@ walk(tree)' 2>/dev/null
             "a control pressed a tracker and returned without releasing or cancelling it"
   fi
 
+  # --- Q. what the edges open ----------------------------------------------
+  #
+  # The half of §Q a terminal can settle. Q2 and Q4's finger halves are not
+  # here for the reason P2 is not: they need a drag the suite can only
+  # synthesise through /dev/uinput, and what they are about is where the sheet
+  # travels rather than whether it ends up open.
+  #
+  # These set the pinned values and put them back, so the trap above stays
+  # correct whether or not this block finishes.
+  if ipc_present gestures targets; then
+    # Q8. A changed setting is live on the next gesture, with nothing restarted.
+    # The shade, because it is the one target that was never on either edge --
+    # so an `open` here cannot be the old wiring answering.
+    moarchy-ui gesture-right shade >/dev/null 2>&1
+    sleep 1
+    q_tgt=$(timeout 8 omarchy-shell gestures targets 2>/dev/null)
+    timeout 8 omarchy-shell gestures edge right >/dev/null 2>&1
+    sleep 1
+    q_shade=$(shell_state shade)
+    timeout 8 omarchy-shell shade close >/dev/null 2>&1
+    if [[ $q_tgt == *"right=moarchy.shade"* && $q_shade == open ]]; then
+      okac Q8 "the right edge raised the shade one second after the file changed, with no restart"
+    else
+      noac Q8 "targets said '${q_tgt:-nothing}' and the shade was ${q_shade:-unanswered}" \
+              "either the watch did not fire or the edge is still resolving its old target"
+    fi
+
+    # Q4, the half without a finger: `none` resolves nothing and summons
+    # nothing. The finger half -- that a sweep up still goes home -- is in the
+    # list below.
+    moarchy-ui gesture-right none >/dev/null 2>&1
+    sleep 1
+    q_none=$(timeout 8 omarchy-shell gestures edge right 2>/dev/null)
+    q_after=$(shell_state shade)
+    if [[ $q_none == *"nothing on the right edge"* && $q_after != open ]]; then
+      okac Q4 "an edge set to none summons nothing and says so"
+    else
+      noac Q4 "edge right answered '${q_none:-nothing}', shade ${q_after:-unanswered}" \
+              "none has to be a state the edge reports, not a target it tries to raise"
+    fi
+
+    # Q6. Both edges may name one sheet, and the shell resolves both.
+    moarchy-ui gesture-bottom drawer >/dev/null 2>&1
+    moarchy-ui gesture-right drawer >/dev/null 2>&1
+    sleep 1
+    q_both=$(timeout 8 omarchy-shell gestures targets 2>/dev/null)
+    if [[ $q_both == "bottom=moarchy.drawer right=moarchy.drawer" ]]; then
+      okac Q6 "one sheet on both edges is resolved on both"
+    else
+      noac Q6 "targets said '${q_both:-nothing}' with both keys set to drawer"
+    fi
+
+    # --- Q10. the tap triggers, which open rather than drag -------------------
+    if ipc_present drawer entryRows; then
+      # Q10b. One walk, two verbs: the id column of entryRows has to be exactly
+      # what `entries` answers, or a trigger could offer an app the grid hides.
+      q_ids=$(timeout 10 omarchy-shell drawer entryRows 2>/dev/null | cut -f1)
+      q_entries=$(timeout 10 omarchy-shell drawer entries 2>/dev/null)
+      if [[ -n $q_entries && $q_ids == "$q_entries" ]]; then
+        okac Q10b "entryRows and entries name the same $(grep -c . <<<"$q_entries") apps, in the same order"
+      else
+        noac Q10b "entryRows' ids and entries differ" \
+                "a trigger would offer an app the drawer does not, or call it something else"
+      fi
+
+      # Q10. The list is none, the agent, the sheets, and one row per app.
+      q_apps=$(grep -c . <<<"$q_entries")
+      q_rows=$(moarchy-trigger rows hold 2>/dev/null | jq 'length' 2>/dev/null)
+      q_named=$(moarchy-trigger rows hold 2>/dev/null \
+                | jq -r '.[].value' 2>/dev/null | head -5 | tr '\n' ' ')
+      if [[ ${q_rows:-0} -eq $((q_apps + 5)) && $q_named == "none agent drawer overview shade " ]]; then
+        okac Q10 "the hold offers none, the agent, three sheets and all $q_apps apps"
+      else
+        noac Q10 "rows=${q_rows:-nothing} for $q_apps apps, leading with '$q_named'" \
+                "expected $((q_apps + 5)) rows led by none/agent/drawer/overview/shade"
+      fi
+
+      # Q10, the other half: a value that names a sheet is summoned. An app is
+      # not fired here -- that opens a window on somebody's phone, and M6
+      # already proves the launch path this verb reuses.
+      moarchy-ui gesture-hold overview >/dev/null 2>&1
+      sleep 1
+      q_fire=$(moarchy-trigger fire hold 2>/dev/null)
+      sleep 2
+      q_ov=$(shell_state overview)
+      timeout 8 omarchy-shell overview close >/dev/null 2>&1
+      if [[ $q_fire == "moarchy.overview" && $q_ov == open ]]; then
+        okac Q10 "a sheet named by the hold is summoned by it"
+      else
+        noac Q10 "fire said '${q_fire:-nothing}', overview ${q_ov:-unanswered}"
+      fi
+    else
+      printf '  \033[90m%-4s\033[0m   \033[90mQ10 skipped: this shell has no `drawer entryRows`\033[0m\n' ""
+    fi
+
+    pin_edges
+    sleep 1
+  else
+    printf '  \033[90m%-4s\033[0m   \033[90mQ skipped: this shell has no `gestures targets`\033[0m\n' ""
+  fi
+
   # An AC with no check here is a gap, and a gap nobody can see is the same as
   # a gap nobody fixed. These are the ones this suite does not prove:
   #
@@ -3012,6 +3166,81 @@ F8PY
   [[ $(s rows | awk -F'\t' '$1=="dns"{print $6}') == "$current" ]] \
     && ok "D5 the parent row shows the current value" \
     || no "D5 the DNS row's detail is not the current value" "expected $current"
+
+  # --- Q. what the edges open (docs/settings.md Q) --------------------------
+  #
+  # Two choice pages, so most of this is §D applied. What is worth its own
+  # check is Q4: `none` is a ticked row and not an untick, which is the one
+  # state §D's own rules would otherwise render identically to a broken reader.
+  #
+  # The file is put back at the end. These pages write `~/.config/omarchy/
+  # ui.toml`, which is the user's, and a suite that leaves the bottom edge on
+  # `none` has taken the launcher off the phone it was measuring.
+  q_was_b=$(moarchy-ui get gesture-bottom 2>/dev/null)
+  q_was_r=$(moarchy-ui get gesture-right 2>/dev/null)
+
+  for q_side in bottom right; do
+    s openAt "shell.gestures.$q_side" >/dev/null; sleep 2
+    q_ticked=$(s rows | awk -F'\t' '$5=="1"' | wc -l)
+    q_file=$(moarchy-ui get "gesture-$q_side" 2>/dev/null)
+    q_row=$(s rows | awk -F'\t' '$5=="1"{print $1}')
+    if (( q_ticked == 1 )) && [[ $q_row == "${q_side:0:1}-$q_file" ]]; then
+      ok "Q3 shell.gestures.$q_side ticks one row and it is $q_file"
+    else
+      no "Q3 shell.gestures.$q_side: $q_ticked ticked, row '$q_row', file '$q_file'" \
+         "the page reader and the rows have to name the same thing"
+    fi
+
+    # Q7. The four words the page offers are the four the shell accepts. Two
+    # files agree by construction; this is what notices a fifth in one of them.
+    q_vals=$(s rows | awk -F'\t' '{print $1}' | sed "s/^${q_side:0:1}-//" | sort | tr '\n' ' ')
+    [[ $q_vals == "drawer none overview shade " ]] \
+      && ok "Q7 shell.gestures.$q_side offers exactly the words the shell takes" \
+      || no "Q7 shell.gestures.$q_side offers '$q_vals'" \
+           "expected drawer none overview shade -- Ui.js and moarchy-ui know four"
+  done
+
+  # Q4. Nothing is a row. Set it, and the tick lands on it rather than nowhere.
+  s openAt shell.gestures.right >/dev/null; sleep 2
+  # Retried rather than slept at once: the write is execDetached and the
+  # re-read is a Qt.callLater, so on this SoC the refresh can beat moarchy-ui
+  # to the file by a frame. Three seconds is "without reopening the page",
+  # which is what D4 is about; a tick that needs the page reopened is a fail.
+  # The page form, not the row form: `set` takes two arguments and a choice
+  # row ignores the second, so setting the *page* to a value and letting
+  # rowByValue() find the row is the call that has both (D4's own shape).
+  s set shell.gestures.right none >/dev/null
+  for _ in 1 2 3; do
+    sleep 1
+    q_n_row=$(s rows | awk -F'\t' '$5=="1"{print $1}')
+    [[ $q_n_row == r-none ]] && break
+  done
+  q_n_ticked=$(s rows | awk -F'\t' '$5=="1"' | wc -l)
+  if (( q_n_ticked == 1 )) && [[ $q_n_row == r-none ]] && [[ $(s state) == open ]]; then
+    ok "Q4/Q5 none ticks like any other choice, and Settings stayed up"
+  else
+    no "Q4/Q5 $q_n_ticked ticked ('$q_n_row'), settings $(s state)" \
+       "an edge that is off must read as a chosen row, not as a reader that failed"
+  fi
+
+  # Q1, Q2. The parent rows carry what each edge is set to, and the row above
+  # them carries both.
+  s openAt shell.gestures >/dev/null; sleep 2
+  q_d_b=$(s rows | awk -F'\t' '$1=="bottom"{print $6}')
+  q_d_r=$(s rows | awk -F'\t' '$1=="right"{print $6}')
+  s openAt shell >/dev/null; sleep 2
+  q_d_sum=$(s rows | awk -F'\t' '$1=="gestures"{print $6}')
+  if [[ $q_d_b == "$(moarchy-ui get gesture-bottom-label)"
+        && $q_d_r == "$(moarchy-ui get gesture-right-label)"
+        && $q_d_sum == "$(moarchy-ui get gesture-summary)" ]]; then
+    ok "Q1/Q2 both edge rows and the Gestures row show what is set ($q_d_sum)"
+  else
+    no "Q1/Q2 details were '$q_d_b' / '$q_d_r' / '$q_d_sum'" \
+       "each has to be the label moarchy-ui prints for that edge"
+  fi
+
+  moarchy-ui gesture-bottom "${q_was_b:-drawer}" >/dev/null 2>&1 || true
+  moarchy-ui gesture-right "${q_was_r:-overview}" >/dev/null 2>&1 || true
 
   # --- D8. a choice whose write opens a terminal changes nothing here -------
   # The annulment, checked as an absence. `hides: true` took Settings off screen
