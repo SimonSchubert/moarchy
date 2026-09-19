@@ -37,7 +37,14 @@ _ver=$(manifest_get moarchy version) || return 1
 
 pkgname=moarchy-waydroid
 pkgver=$_ver
-pkgrel=2
+# 2: moarchy-android-launch replaced moarchy-waydroid-immersive, and the
+# launcher gained the fabricated RRO that zeroes Android's gesture handle.
+# Never built under that number; it ships as 0.5.0-1, below.
+#
+# 1 for 0.5.0: pkgver moved, and 0.5.0-1 is newer than the 0.4.0-1 [moarchy]
+# serves, so a phone holding it stops being handed immersive.full=* -- which is
+# what was destroying the insets every Android app pads its content against.
+pkgrel=1
 pkgdesc="Android apps on moarchy: Waydroid configured for a phone screen"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'

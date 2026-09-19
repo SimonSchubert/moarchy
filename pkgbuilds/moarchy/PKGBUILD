@@ -131,7 +131,16 @@ pkgver=$_ver
 # 4: ships moarchy-loudness.service, the generic half of the speaker loudness
 # stage. The tuning that unit reads is a hardware value and lives in the device
 # package, which is also what enables it (devices.md D34).
-pkgrel=4
+#    2, 3 and 4 were all built and none was ever published: [moarchy] serves
+#    0.4.0-1, so everything they carry reaches a phone as 0.5.0-1 instead.
+#
+# 1 for 0.5.0. pkgver moved, and 0.5.0-1 is newer than the 0.4.0-1 [moarchy]
+# serves today, so nothing the four bumps above added is hidden from a phone
+# holding it: the loudness unit, the volume panel and moarchy-volume behind it,
+# moarchy-trigger and the four configurable gestures, the overview's bin, and
+# the drawer's launch hop reading occupancy from focus rather than from sway's
+# workspace representation.
+pkgrel=1
 pkgdesc="Omarchy's look, keybindings and theming on a phone, under Sway"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'

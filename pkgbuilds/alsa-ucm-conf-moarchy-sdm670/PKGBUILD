@@ -63,7 +63,11 @@ pkgver=$_ver
 # 2: the Speakers verb gained the two csets that enable the CS35L36 boost
 # converters. The upstream profile leaves them bypassed, which costs the phone
 # most of its volume (devices.md D34).
-pkgrel=2
+#
+# 1 for 0.5.0: pkgver moved before 2 was ever built, and 0.5.0-1 is newer than
+# the 0.4.0-1 in the field, so the boost converters ship under this number
+# instead. The package is otherwise unchanged.
+pkgrel=1
 pkgdesc="ALSA use-case configuration for SDM670 (Google Pixel 3a)"
 arch=('any')
 url="$_url"

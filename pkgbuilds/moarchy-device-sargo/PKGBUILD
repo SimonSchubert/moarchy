@@ -40,7 +40,12 @@ pkgver=$_ver
 # 20260915 image carries. Nothing in the package changed for it.
 # 2: gained the speaker loudness stage -- swh-plugins, the tuning the filter
 #    graph reads, and the symlink that enables moarchy-loudness.service (D34).
-pkgrel=2
+#    Never built under that number; it ships as 0.5.0-1, below.
+#
+# 1 for 0.5.0: pkgver moved, and 0.5.0-1 is newer than the 0.4.0-1 [moarchy]
+# serves, so the loudness stage reaches a phone holding it rather than waiting
+# on a pkgrel nobody published.
+pkgrel=1
 pkgdesc="Google Pixel 3a (sargo) hardware support for moarchy"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
