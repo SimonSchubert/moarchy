@@ -8,7 +8,7 @@ It is the same app. The stars are
 `upcoming.json` — the files the GTK app writes — so a launch starred here is
 starred over there.
 
-Chrome comes from [`shared/qs_ui`](../../shared/qs_ui), copied into this
+Chrome comes from [`qs_ui`](../../qs_ui), copied into this
 plugin as `ui/` at install time: a third-party plugin cannot import
 `moarchy.common`, and vendoring is what Python's `moarchy_ui` already does.
 

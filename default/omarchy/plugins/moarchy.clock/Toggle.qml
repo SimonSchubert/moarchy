@@ -7,7 +7,7 @@
 // thumb already knows.
 //
 // One control in one app, which is why it lives here rather than in
-// shared/qs_ui. If a second plugin needs a switch it should move, and that is
+// qs_ui. If a second plugin needs a switch it should move, and that is
 // what the kit's README means by "the half that is genuinely the same".
 import QtQuick
 import "ui/Metrics.js" as Metrics

@@ -7,7 +7,7 @@
 # than one a package installed. It needs python3 and nothing else from it.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-KIT="$(cd "$ROOT/../../shared/qs_ui" && pwd)"
+KIT="$(cd "$ROOT/../../qs_ui" && pwd)"
 
 rm -rf "$ROOT/ui"
 mkdir -p "$ROOT/ui"

@@ -47,7 +47,7 @@ has Quickshell and none of omarchy:
 plugins/moarchy.keep/run-local.sh     # vendors ui/, then quickshell -p
 ```
 
-This did not work until the chrome moved to `shared/qs_ui`. Keep was written
+This did not work until the chrome moved to `qs_ui`. Keep was written
 against `qs.Commons` and `qs.Ui`, so it could only ever run inside the shell --
 which meant no check could start it, no screenshot could be taken of it, and a
 laptop could not open it at all. Four files went with those imports:

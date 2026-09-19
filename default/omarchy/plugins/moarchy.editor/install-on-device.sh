@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copy Text Editor onto the phone, with shared/qs_ui vendored as ui/.
+# Copy Text Editor onto the phone, with qs_ui vendored as ui/.
 #
 #   plugins/moarchy.editor/install-on-device.sh
 #
@@ -12,7 +12,7 @@
 # moarchy-editor` does that on an image whose moarchy package knows the name.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-KIT="$(cd "$ROOT/../../shared/qs_ui" && pwd)"
+KIT="$(cd "$ROOT/../../qs_ui" && pwd)"
 # moarchy.local and not an address: the phone's systemd-resolved answers mDNS
 # (+mDNS is on by default and avahi is not installed), so this follows it from
 # one lease to the next.

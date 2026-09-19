@@ -2,7 +2,7 @@
 //
 // The QML half of apps/coins. The files are the GTK app's own
 // (~/.local/share/moarchy-coins), so a coin starred here is starred there.
-// Chrome comes from shared/qs_ui, vendored into this plugin as ui/.
+// Chrome comes from qs_ui, vendored into this plugin as ui/.
 //
 // The clock stops when the window leaves the screen. A coin tracker polling a
 // price API from inside a pocket is a battery bug and a data bill wearing a

@@ -4,7 +4,7 @@
 #   plugins/moarchy.contacts/run-local.sh
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-KIT="$(cd "$ROOT/../../shared/qs_ui" && pwd)"
+KIT="$(cd "$ROOT/../../qs_ui" && pwd)"
 
 rm -rf "$ROOT/ui"
 mkdir -p "$ROOT/ui"

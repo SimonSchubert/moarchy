@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copy Mail onto the phone, with shared/qs_ui vendored as ui/.
+# Copy Mail onto the phone, with qs_ui vendored as ui/.
 #
 #   plugins/moarchy.mail/install-on-device.sh
 #
@@ -8,7 +8,7 @@
 # the package installed runs this checkout's copy until the file is removed.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-KIT="$(cd "$ROOT/../../shared/qs_ui" && pwd)"
+KIT="$(cd "$ROOT/../../qs_ui" && pwd)"
 PHONE="${PHONE:-moarchy@moarchy.local}"
 ID="moarchy.mail"
 DEST=".config/omarchy/plugins/$ID"

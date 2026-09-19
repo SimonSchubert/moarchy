@@ -2,7 +2,7 @@
 //
 // The QML half of apps/habits. The file is the GTK app's own
 // (~/.local/share/moarchy-habits/habits.json), so a day ticked here is ticked
-// there. Chrome comes from shared/qs_ui, vendored into this plugin as ui/.
+// there. Chrome comes from qs_ui, vendored into this plugin as ui/.
 //
 // A habit is kept on a local calendar day, so "today" is read off the phone's
 // clock and then carried as a bare ISO label -- the same reason habits.py

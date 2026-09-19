@@ -2,7 +2,7 @@
 //
 // The QML half of apps/launches. The files are the GTK app's own
 // (~/.local/share/moarchy-launches), so a star tapped here is a star there.
-// Chrome comes from shared/qs_ui, vendored into this plugin as ui/.
+// Chrome comes from qs_ui, vendored into this plugin as ui/.
 //
 // The clock stops when the window leaves the screen: an app that keeps
 // pulling the pad after the phone is in a pocket is a battery bug and a data

@@ -308,7 +308,7 @@ Quickshell plugin cannot read. So the three tab icons are drawn here as a set �
 all three, including the alarm, because a tab bar whose icons come from two
 different hands looks wrong without anybody being able to say why.
 
-Getting them on screen took one small change to `shared/qs_ui/Icon.qml`: a
+Getting them on screen took one small change to `qs_ui/Icon.qml`: a
 `direct()` that returns a name which is already a path —
 `Qt.resolvedUrl("glyph-stopwatch.svg")`, `file://…`, or anything starting with
 a slash — and one changed line in `candidate()` to prefer it over the map. The
@@ -434,7 +434,7 @@ three covers another.
 plugins/moarchy.clock/install-on-device.sh
 ```
 
-Copies the plugin with `shared/qs_ui` vendored as `ui/`, lays the icon and the
+Copies the plugin with `qs_ui` vendored as `ui/`, lays the icon and the
 desktop entry down, adds the id to `~/.config/omarchy/shell.json`, and
 restarts the shell. Then tap Clock in the app drawer, or:
 

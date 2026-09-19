@@ -15,12 +15,23 @@ import "ui/Theme.js" as Theme
 import "ui/Metrics.js" as Metrics
 ```
 
-`plugins/moarchy.ui.catalog` is the review surface: every control on one
-window, and a second page that draws the box system itself -- the elevation
-ramp, the radius scale and the nesting rule -- so a change to any of them is
-looked at rather than reasoned about. Install it with that plugin's
-`install-on-device.sh`, which copies this tree into `ui/` on the phone, or run
-it on a laptop with that plugin's `run-local.sh`.
+**There is no review surface in this tree.** The catalog -- every control on
+one window, plus a page that draws the box system itself -- is
+`plugins/org.moarchy.ui.catalog` in `moarchy-apps`, and `structure.md` B6 did
+not bring it across. Its `run-local.sh` vendors *that* repo's
+`shared/qs_ui`, so what it draws is the other copy of this kit, and the two
+have already diverged: `Plugin.js`, `Ui.js`, `UiFile.qml` and three of the four
+tests differ. Reviewing a change made here by running it there shows the wrong
+kit. `structure.md` B7 is where that gets settled.
+
+What this directory has instead is `tests/` -- four QtTest files over
+`Json.js`, `Metrics.js`, `Plugin.js` and `Theme.js` -- and, beside it, fifteen
+`shots.sh` files that name the screens each app should be photographed in, in
+the theme and in two fetched palettes. **Neither runs here.** `qml-check.sh`,
+`qml-shot.sh` and `fetch-themes.sh` are all still in `moarchy-apps/scripts`,
+which is `structure.md` B8: the tests came across with the apps and the runners
+did not. Until they do, a change to this kit is checked by
+`scripts/style-check.sh` and by reading it.
 
 ## Everything is in a box
 
