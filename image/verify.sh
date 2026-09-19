@@ -221,13 +221,12 @@ fi
 
 # Counted from the repo rather than hardcoded. The literal 9 here failed the
 # build that added a tenth plugin, which is a check reporting on itself.
-# qml-apps/ is the other half: the org.moarchy.* plugins ship in
-# moarchy-qml-apps, not in the moarchy package, and a check that only counted
+# One tree since docs/structure.md B6: the apps live in the same directory as
+# the shell's own plugins and ship in the same package, so one count covers
+# both. It used to be two, because a check that only counted
 # default/omarchy/plugins would pass an image that had the phone UI and no
 # calculator.
-want_shell=$(ls -1d /repo/default/omarchy/plugins/*/ 2>/dev/null | wc -l | tr -d ' ')
-want_apps=$(ls -1d /repo/qml-apps/org.moarchy.*/ 2>/dev/null | wc -l | tr -d ' ')
-want=$((want_shell + want_apps))
+want=$(ls -1d /repo/default/omarchy/plugins/*/ 2>/dev/null | wc -l | tr -d ' ')
 n=$(ls -1d "$R"/usr/share/moarchy/plugins/*/ 2>/dev/null | wc -l | tr -d ' ')
 [ "$n" = "$want" ] && ok "$n shell plugins (all of the repo's)" \
                    || no "repo has $want plugins, image has $n"
@@ -304,7 +303,7 @@ have /usr/share/moarchy/plugins/org.moarchy.calculator/ui/qmldir
 grep -q '"id": "org.moarchy.calculator"' "$R/usr/share/omarchy/config/omarchy/shell.json" \
   && ok "packaged shell.json enables org.moarchy.calculator" \
   || no "shell.json does not enable the calculator plugin"
-# Every snapshotted plugin must be in that list. A directory in qml-apps/
+# Every app must be in that list. A directory under default/omarchy/plugins/
 # that shell.json does not name is a tile that does nothing, which is how
 # a plugin can land in the package and never load.
 #
@@ -314,7 +313,7 @@ grep -q '"id": "org.moarchy.calculator"' "$R/usr/share/omarchy/config/omarchy/sh
 # could reach them. A tile is an entry that toggles the plugin and is not
 # hidden: the editor's and Mail's second entries summon, and do not count.
 _shelljson="$R/usr/share/omarchy/config/omarchy/shell.json"
-for _pdir in /repo/qml-apps/org.moarchy.*/; do
+for _pdir in /repo/default/omarchy/plugins/org.moarchy.*/; do
   _pid=$(basename "$_pdir")
   grep -q "\"id\": \"$_pid\"" "$_shelljson" \
     && ok "shell.json enables $_pid" \

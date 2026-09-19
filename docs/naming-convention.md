@@ -43,6 +43,21 @@ of the same set: which file draws each one.
 | up from the strip — the drawer | `moarchy.drawer` | [`gestures.md`](gestures.md) §A, §N |
 | the workspace, and the window on it | the compositor | [`windows.md`](windows.md) |
 
+A part's short name here is not always the words the phone shows. Both are
+fixed, and neither is a mistake for the other — the short name is what an id, a
+document and an IPC verb use, the label is what a thumb reads:
+
+| part | this document | what Settings shows |
+| --- | --- | --- |
+| the shade | the shade | **Notification shade** |
+| the drawer | the drawer | **App drawer** |
+| the overview | the overview | **Overview** |
+| status bar | the status bar | **Status bar** |
+| the strip | the strip | no label of its own — *Press and hold the strip* |
+
+Changing one does not change the other. `moarchy.shade` presents as
+"Notification shade" the way `moarchy.editor` presents as "Text Editor".
+
 Two of the four swipes are a setting rather than a fact: what the strip raises
 and what the right-edge swipe raises are each named by `gesture_bottom` and
 `gesture_right` in `~/.config/omarchy/ui.toml`, and either can be `none`,

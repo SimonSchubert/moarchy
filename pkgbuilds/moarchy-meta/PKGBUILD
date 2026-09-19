@@ -89,15 +89,15 @@ pkgver=$_ver
 # same /proc reader) and two tiles for one job is the thing this list has
 # been deleting since kclock. A removal under an unchanged version is the
 # invisible case the paragraphs above exist for: the phone would keep all
-# seven forever. moarchy-qml-apps is the one name that replaces them.
+# seven forever. The plugin tree in moarchy is what replaces them.
 #
-# 5: kweather leaves too. The Weather plugin is already in moarchy-qml-apps,
+# 5: kweather leaves too. The Weather plugin is already in moarchy,
 # and two weather tiles is the clocks cut again. The phone holds 0.2.2-4, so
 # a removal under that number would never be offered.
 #
 # 6 was never built under that number; it ships as 0.3.0-1, below.
 # gnome-text-editor leaves. The org.moarchy.editor plugin in
-# moarchy-qml-apps is the editor now -- both what opens a tapped text file and
+# moarchy is the editor now -- both what opens a tapped text file and
 # $EDITOR, through moarchy-editor --wait -- and a phone holding 0.2.2-5 would
 # keep GNOME Text Editor as a second tile for the same job, for ever.
 # gnome-calls, chatty and mmsd-tng leave in the same unbuilt release, for
@@ -322,7 +322,7 @@ depends=(
   'man-db'
   # No neovim, and this one is not just a name leaving a list -- it was the
   # default editor, so removing it is a change of behaviour that took four files
-  # with it. The Text Editor plugin (org.moarchy.editor, in moarchy-qml-apps
+  # with it. The Text Editor plugin (org.moarchy.editor, in moarchy
   # further down) is the editor now: it is the GUI answer to "the system wants
   # me to edit something", which on a phone with no keyboard attached is the
   # only answer that is any use. It was gnome-text-editor until 2026-09-16.
@@ -375,7 +375,7 @@ depends=(
   # --- Telephony -------------------------------------------------------------
   # Calls and SMS. The modem's own power and audio profile are the device
   # package's (moarchy-device-*); these are the layer above. The apps are the
-  # org.moarchy.phone and org.moarchy.messages plugins in moarchy-qml-apps,
+  # org.moarchy.phone and org.moarchy.messages plugins in moarchy,
   # further down, and they reach the modem through processes rather than a
   # library, because Quickshell has no D-Bus module:
   #   modemmanager  mmcli, and the system bus signals a gdbus monitor waits on
@@ -401,7 +401,7 @@ depends=(
   # launchable entries, six of which are terminals, and pulling the drawer up
   # gives you an app grid with nothing in it. A phone with no clock, no file
   # manager and no browser is not finished -- and those three are now the
-  # Quickshell plugins in moarchy-qml-apps, not a GTK/KDE process apiece.
+  # Quickshell plugins in moarchy, not a GTK/KDE process apiece.
   #
   # These were hand-installed for the docs/apps.md screenshots and never recorded
   # in any list the installer reads, so the first unattended provision wiped them
@@ -419,10 +419,10 @@ depends=(
   # the GTK Keep / Vitals packages that used to sit on this line,
   # gnome-calls and chatty from the Telephony block above, and geary.
   #
-  # Packaged by pkgbuilds/moarchy-qml-apps from the snapshot in qml-apps/,
-  # enabled by the packaged shell.json. ui.catalog is a kit review window
-  # and is not in that package.
-  'moarchy-qml-apps'
+  # Packaged by pkgbuilds/moarchy with the rest of the plugin tree since the
+  # moarchy-apps snapshot was absorbed (docs/structure.md B6), and enabled by
+  # the packaged shell.json. They arrive with 'moarchy' below; ui.catalog is a
+  # kit review window and stays in moarchy-apps.
 
   # gnome-text-editor left 2026-09-16 for org.moarchy.editor, the same cut as
   # the clocks below. It installs from the store for anybody who wants tabs,
@@ -474,7 +474,7 @@ depends=(
   # Messages read Contacts' file, so the gap closed with them rather than by
   # putting a 2.3 MB GTK app back on the image.
 
-  # Email is org.moarchy.mail, in moarchy-qml-apps, and has been since
+  # Email is org.moarchy.mail, in moarchy, and has been since
   # 2026-09-16. geary was here until then. moarchy-store's sweep had already
   # rejected it for this screen -- "desktop-shaped three-pane mail client.
   # Also wants an unlocked keyring" -- and where no keyring was unlocked, its
@@ -487,7 +487,7 @@ depends=(
   #
   # Mail keeps its password in a 0600 file rather than the keyring, for the
   # keyring's reason above, and talks to the server through moarchy-mail, which
-  # is Python's standard library and nothing else. python is moarchy-qml-apps'
+  # is Python's standard library and nothing else. python is moarchy's
   # dependency, not a line here.
 
   # No RSS reader. alligator was here -- Kirigami, 0.9 MB, chosen over newsflash

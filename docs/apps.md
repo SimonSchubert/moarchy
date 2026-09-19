@@ -24,7 +24,8 @@ seen one run and taken a screenshot.
 
 The phone UI is a set of Quickshell plugins the shell already holds, so
 summoning one is a window becoming visible rather than a process starting.
-They ship as `moarchy-qml-apps` and are enabled by the packaged `shell.json`.
+They ship in `moarchy`, in the same plugin tree as the shell's own surfaces
+(`docs/structure.md` B6), and are enabled by the packaged `shell.json`.
 `ui.catalog` is a kit review window and is not in that package.
 
 | App | Plugin | What it is |

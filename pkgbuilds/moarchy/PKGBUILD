@@ -200,7 +200,12 @@ license=('MIT')
 # makes that a fact rather than a coincidence. The Phone and Messages plugins
 # ring through its fbcli as well, and gnome-calls, which used to be the second
 # thing pulling it in, has left the set.
-depends=('bash' 'sway' 'hyprland' 'omarchy-config' 'foot' 'polkit-gnome' 'upower' 'feedbackd')
+# qt6-5compat is what the kit's Icon.qml tints through
+# (Qt5Compat.GraphicalEffects), and python is Mail's: bin/moarchy-mail is
+# Python's standard library and nothing else. Both arrived with the apps when
+# moarchy-qml-apps was folded in (docs/structure.md B6).
+depends=('bash' 'sway' 'hyprland' 'omarchy-config' 'foot' 'polkit-gnome' 'upower' 'feedbackd'
+         'qt6-5compat' 'python')
 source=()
 
 package() {
@@ -270,18 +275,67 @@ package() {
   # is keyed on the manifest, which is verified on the device rather than
   # assumed. It ships with the rest because `cp -a` takes the tree, and it has
   # to: a plugin whose import target did not ship would fail to load.
-  install -d "$pkgdir/usr/share/moarchy/plugins"
-  cp -a "$_repo"/default/omarchy/plugins/. "$pkgdir/usr/share/moarchy/plugins/"
+  # Runtime files only, per directory, rather than `cp -a` of the tree. The
+  # apps arrived with their own tests, docs, README and dev scripts when
+  # moarchy-apps was absorbed (docs/structure.md B6), and none of that belongs
+  # on a phone. The filter is the one scripts/sync-qml-apps.sh used to apply at
+  # snapshot time, moved here where it belongs: the repo holds everything, the
+  # package ships the subset. shell.qml is excluded by name -- it is the
+  # standalone Quickshell process for running a plugin on a desktop, and the
+  # entry point this shell loads is the one named in manifest.json.
+  local plugdir="$pkgdir/usr/share/moarchy/plugins"
+  local appdir="$pkgdir/usr/share/applications"
+  local icondir="$pkgdir/usr/share/icons/hicolor/scalable/apps"
+  install -d "$plugdir" "$appdir" "$icondir"
 
-  # A plugin that ships a .desktop wants to be launchable like an app: the
-  # drawer lists desktop entries, not plugins. Moved out of the plugin
-  # directory rather than copied, so the shell does not also scan it there.
-  install -d "$pkgdir/usr/share/applications"
-  find "$pkgdir/usr/share/moarchy/plugins" -name '*.desktop' -type f |
-    while read -r entry; do
-      install -Dm644 "$entry" "$pkgdir/usr/share/applications/$(basename "$entry")"
-      rm -f "$entry"
+  local dir id dest entry icon exe
+  for dir in "$_repo"/default/omarchy/plugins/*/; do
+    [[ -d $dir ]] || continue
+    id=$(basename "$dir")
+    dest="$plugdir/$id"
+    install -d "$dest"
+    find "$dir" -maxdepth 1 \( \
+        -name '*.qml' -o -name '*.js' -o -name '*.svg' \
+        -o -name 'manifest.json' -o -name '*.desktop' \
+      \) ! -name 'shell.qml' -exec cp -a {} "$dest/" \;
+
+    # The kit, vendored as ui/ for the plugins that import it that way. The
+    # apps do; the shell's own plugins import ../moarchy.common instead. One
+    # kit reconciled into the other is docs/refactor.md E10, not done: the six
+    # overlapping files are two implementations, not two copies.
+    if grep -rqs 'import "ui' "$dir"*.qml; then
+      install -d "$dest/ui"
+      cp -a "$_repo"/default/omarchy/qs_ui/. "$dest/ui/"
+      rm -rf "$dest/ui/tests" "$dest/ui/README.md"
+    fi
+
+    # A command a plugin ships outside the shell. There are two: the editor's
+    # moarchy-editor, because $EDITOR has to be a process that waits and a
+    # plugin is not one, and Mail's moarchy-mail, because a plugin cannot open
+    # a TLS socket.
+    for exe in "$dir"bin/*; do
+      [[ -f $exe ]] || continue
+      install -Dm755 "$exe" "$pkgdir/usr/bin/$(basename "$exe")"
     done
+
+    # A plugin that ships a .desktop wants to be launchable like an app: the
+    # drawer lists desktop entries, not plugins. Moved out of the plugin
+    # directory rather than copied, so the shell does not also scan one sitting
+    # next to the manifest. Every entry, not the first -- the editor has two,
+    # the drawer's and a hidden one for xdg-open.
+    for entry in "$dir"*.desktop; do
+      [[ -f $entry ]] || continue
+      install -m644 "$entry" "$appdir/$(basename "$entry")"
+      rm -f "$dest/$(basename "$entry")"
+      # A themed Icon= name needs the file in the icon theme; an absolute one
+      # is already pointing at the copy beside the plugin (moarchy.device says
+      # why in its own entry).
+      icon=$(awk -F= '/^Icon=/{print $2; exit}' "$entry")
+      if [[ -n $icon && $icon != /* && -f $dir/icon.svg ]]; then
+        install -m644 "$dir/icon.svg" "$icondir/$icon.svg"
+      fi
+    done
+  done
 
   # --- the web apps ---------------------------------------------------------
   # Two of upstream's own entries, each with the StartupWMClass upstream has no

@@ -131,6 +131,31 @@ tooling, the image builder, the device docs, and the dev loop.
 `moarchy` under `repo/` and `image/`. They do not get their own repo until
 one of them has CI worth isolating.
 
+**B6** `moarchy-apps` is absorbed. Its 18 `org.moarchy.*` plugins live in
+`default/omarchy/plugins/` beside the shell's own, `qml-apps/` and
+`scripts/sync-qml-apps.sh` are deleted, and no PKGBUILD builds from a snapshot
+of another repo's working tree. It is the exception B2 never covered: six of
+those plugins are uncommitted upstream, which is why `moarchy-qml-apps` carries
+"when those plugins are tagged, this package should grow a proper source" — and
+why the pin B1 relies on could never be taken.
+→ `test ! -e qml-apps && test ! -e scripts/sync-qml-apps.sh`, and
+`ls default/omarchy/plugins | wc -l` == 32, of which 31 carry a `manifest.json`
+
+**B7** There is exactly one editable copy of each app. `moarchy-apps` stops
+being a source: it keeps only what this repo does not take — its tests,
+`ui.catalog`, `install-on-device.sh` — or it is archived. **?** Which of the two
+is yours to decide; the criterion is that no file is editable in both places,
+because the snapshot's own README had to warn that "a change made to this
+snapshot is undone by the next sync".
+→ `grep -rn "moarchy-apps" --exclude-dir=.git .` matches prose only: no path,
+no clone, no `source=`
+
+**B8** Whatever `moarchy-apps` ran against those plugins runs here, or §12 says
+it does not. The sync deliberately left tests, screenshots and the device
+installer behind, so absorbing the plugins without them loses checks that
+currently exist.
+→ `scripts/` names the app test runner, or §12 carries the entry
+
 **B5** No component repo depends on `moarchy` at build time. The keyboard
 builds from a clean checkout with `cd packaging && makepkg`, as it does today;
 the store likewise. If either needs something from here, that thing is wrong.
@@ -610,11 +635,50 @@ across 80 files, 35 renamed paths, and a one-release migration in
 `install/config.sh` for phones already carrying the old name. After M3 it would
 have been that plus every installed device.
 
+**N4** One plugin id namespace: **`moarchy.<name>`**, for all 31 plugins. The
+18 `org.moarchy.*` ids are renamed with B6. The id shares one registry keyspace
+with upstream's 37 first-party plugins — `omarchy.bar`, `omarchy.media`,
+`omarchy.workspaces` — every one of which is bare `<vendor>.<name>`, so
+reverse-DNS there is a convention nothing else in the map follows.
+→ every `default/omarchy/plugins/*/manifest.json` has an `id` matching
+`^moarchy\.[a-z][a-z0-9-]*$`
+
+**N5** Reverse-DNS stays where the namespace is system-wide. A `.desktop` file
+lands in `/usr/share/applications` alongside every other application on the
+machine, and its `Icon=` resolves in a shared theme, so both keep the
+`org.moarchy.<Name>` form; only `Exec=` and `X-Moarchy-Plugin=` carry the
+plugin id. This is not an inconsistency with N4 — it is two namespaces with
+different collision risks, each following its own convention.
+→ every installed desktop entry naming moarchy begins `org.moarchy.`;
+`moarchy.device.desktop` and `moarchy.sim.desktop`, which break this today, are
+renamed with the rest
+
+**N6** A plugin's directory name is its id. The registry keys on the manifest's
+`id` and treats the directory only as the source path for `entryPoints`, so the
+two *may* diverge; they do not, so that a path in this repo, a path on the
+phone and a string in `shell.json` are one string.
+→ for each `default/omarchy/plugins/*/manifest.json`, the parent directory's
+name equals its `.id`
+
+**N7** The trust boundary narrows to the one namespace. `pluginIsTrusted` in
+`port-4x.patch` returns true for `moarchy.` alone, and its comment is rewritten
+rather than left describing two prefixes.
+→ no `org.moarchy` in that function or its comment — **and**
+`pkgbuilds/omarchy-config/PKGBUILD` carries both a regenerated `sha256sums` for
+the patch and a bumped `pkgrel`. Either alone masks the other, and that pair has
+shipped broken twice.
+
+**N8** Nothing is migrated. Existing phones are reflashed, not upgraded through
+the rename, so `~/.config/omarchy/shell.json` on a device already in the field
+may name ids that no longer exist. Decided 2026-09-19.
+→ no migration step in `bin/moarchy-user-setup`, and no rename table anywhere
+in `bin/`
+
 ---
 
 ## 11. Sequencing
 
-Four milestones. Each is independently useful; each is a prerequisite for the
+Five milestones. Each is independently useful; each is a prerequisite for the
 next.
 
 **M1 — Pins. Done 2026-09-06.** V1–V3. No new infrastructure, no restructuring;
@@ -792,6 +856,20 @@ is then mostly partition arithmetic.
 > The split is worth noting. The first four were found by *building*, and a
 > container caught them. The last two needed the hardware, and both were cases
 > where every file was individually correct.
+
+**M5 — One tree. Not started.** B6–B8, N4–N8, and `refactor.md` E10–E11. The
+two source trees become one, the id namespace becomes one, and the kit that
+exists twice becomes one. Nothing here is user-visible: the phone comes up with
+the same 31 plugins drawing the same surfaces, which is exactly what makes it
+checkable.
+→ the shell loads 31 plugins, `bin/moarchy-selftest --surfaces` passes, and the
+drawer lists the same entries it lists today
+
+> Sequenced after M4 and not before it because it moves every install path at
+> once. The order within it matters: B6 first (one tree), then E10 (one kit,
+> which B6 is what makes possible), then N4–N7 (one namespace). Doing the
+> namespace first would rename 18 ids in a tree that is about to move, and
+> `git log -S` would lose both.
 
 Naming (§10) was not a milestone. It happened before M3 — 2026-09-05, ahead of
 M1 — which is the only reason it cost 80 files rather than every phone.

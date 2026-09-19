@@ -26,6 +26,29 @@ set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 PLUGINS=default/omarchy/plugins
 
+# The apps absorbed from moarchy-apps (docs/structure.md B6) live in the same
+# directory as the shell's own plugins and are built on the other kit: they
+# import it as ui/, and it carries its own Theme.js, its own token names and
+# its own radii. style.md does not describe them yet, so the rules that are
+# about the shell's token API skip them -- A1-A3, B/C/D, and the shell-app
+# glyph, which keys on an `AppWindow` the kit also defines.
+#
+# They join the contract by themselves. refactor.md E10 reconciles the two kits
+# into one, and at that point nothing imports "ui", this list is empty by
+# construction, and every plugin is checked -- without anyone remembering to
+# come back here and delete an exemption.
+KIT_APPS=$(grep -rl 'import "ui' "$PLUGINS"/*/*.qml 2>/dev/null \
+             | xargs -n1 dirname 2>/dev/null | xargs -n1 basename 2>/dev/null \
+             | sort -u)
+export KIT_APPS
+shell_dirs() {
+  local d n
+  for d in "$PLUGINS"/*/; do
+    n=$(basename "$d")
+    printf '%s\n' "$KIT_APPS" | grep -qx "$n" || printf '%s ' "$d"
+  done
+}
+
 pass=0
 fail=0
 ok() { printf '  \033[32mPASS\033[0m  %s\n' "$1"; pass=$((pass + 1)); }
@@ -39,7 +62,7 @@ skip() { printf '  \033[33mSKIP\033[0m  %s\n' "$1"; skipped=$((skipped + 1)); }
 # `|| true` on purpose: a grep that matches nothing exits 1, and that would
 # otherwise be read as a failure of the check rather than as a clean result.
 printf '\nA. tokens\n'
-hits=$(grep -rn 'pixelSize: [0-9]\|margins: [0-9]\|Margin: [0-9]\|spacing: [1-9]\|radius: [0-9]' "$PLUGINS" || true)
+hits=$(grep -rn 'pixelSize: [0-9]\|margins: [0-9]\|Margin: [0-9]\|spacing: [1-9]\|radius: [0-9]' $(shell_dirs) || true)
 if [[ -z $hits ]]; then
   ok "no literal sizes, margins, spacings or radii (A1-A3)"
 else
@@ -49,7 +72,7 @@ fi
 # --- B, C4, D1: need to know where a block starts and ends ------------------
 printf '\nB. type / C. colour / D. shape\n'
 report=$(python3 - "$PLUGINS" <<'PY'
-import pathlib, re, sys
+import os, pathlib, re, sys
 
 RADII = ("radiusSheet", "radiusTile", "radiusCard", "radiusOn")
 HEX = re.compile(r'"#[0-9a-fA-F]{3,8}"')
@@ -76,7 +99,10 @@ def blocks(lines, opener):
         yield i + 1, m.group(1), "\n".join(body)
         i = j
 
+SKIP = set(os.environ.get("KIT_APPS", "").split())
 for path in sorted(pathlib.Path(sys.argv[1]).glob("*/*.qml")):
+    if path.parent.name in SKIP:
+        continue
     lines = path.read_text().splitlines()
 
     for start, kind, block in blocks(lines, r"Text|Ui\.OpticalGlyph"):
@@ -338,7 +364,7 @@ fi
 # The apps cannot import moarchy.common, so Ui.js exists twice. The tables have
 # to be the same tables or a corners pick in the shell would not match the apps.
 ui_a=$(grep -A3 'var CORNERS' "$PLUGINS/moarchy.common/Ui.js")
-ui_b=$(grep -A3 'var CORNERS' qml-apps/qs_ui/Ui.js)
+ui_b=$(grep -A3 'var CORNERS' default/omarchy/qs_ui/Ui.js)
 if [[ $ui_a == "$ui_b" ]]; then
   ok "plugin and app Ui.js share the same corner table"
 else
@@ -346,7 +372,7 @@ else
 fi
 
 rad_a=$(grep -A8 'function radiusOn' "$PLUGINS/moarchy.common/Ui.js")
-rad_b=$(grep -A8 'function radiusOn' qml-apps/qs_ui/Ui.js)
+rad_b=$(grep -A8 'function radiusOn' default/omarchy/qs_ui/Ui.js)
 if [[ $rad_a == "$rad_b" ]]; then
   ok "plugin and app Ui.js share radiusOn"
 else
@@ -404,11 +430,12 @@ fi
 # The declaration and not the rendering, which is the half a terminal can see.
 printf '\nshell apps (gestures.md K5, not a style.md section)\n'
 glyphs=$(python3 - "$PLUGINS" <<'GLYPHPY'
-import pathlib, re, sys
+import os, pathlib, re, sys
 
 problems, seen = [], 0
+SKIP = set(os.environ.get("KIT_APPS", "").split())
 for path in sorted(pathlib.Path(sys.argv[1]).glob("*/*.qml")):
-    if path.parent.name == "moarchy.common":
+    if path.parent.name == "moarchy.common" or path.parent.name in SKIP:
         continue
     lines = path.read_text().splitlines()
     for i, line in enumerate(lines):

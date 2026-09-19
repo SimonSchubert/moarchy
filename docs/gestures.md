@@ -962,7 +962,7 @@ what matters is the failure `structure.md` P5 exists to prevent.
 
 **L11** **The shell will not uninstall itself.** No package whose name begins
 `moarchy` or `omarchy` can be removed from this card, whatever pacman says
-about it. That is `moarchy`, `moarchy-meta`, `moarchy-qml-apps`, `moarchy-store-git`
+about it. That is `moarchy`, `moarchy-meta`, `moarchy-store-git`
 and `omarchy-config` today, and it is whatever else this project ships later
 without anyone remembering to come back here.
 → a hold on `moarchy.device` reports `info.protected=1`, `drawer uninstall` ==

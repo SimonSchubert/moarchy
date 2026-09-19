@@ -353,6 +353,32 @@ surface. It needs the device to itself.
 → `sudo /usr/lib/moarchy/bin/moarchy-touch hold 130 330 5000` over an open
 shade, `grim` mid-hold, and the Silent tile lifts by 12% of its own ink
 
+**E10** One kit. `qs_ui/` and `moarchy.common/` are one directory and `Ui.js`
+exists once. The apps could not import the common dir only because they shipped
+from a different tree; E1 already settled that a sibling import works on the
+device, and `structure.md` B6 removes the other tree. The vendoring step in
+`pkgbuilds/moarchy` that copies `default/omarchy/qs_ui/` into each plugin as
+`ui/` goes with it.
+→ `find . -name Ui.js -not -path './.git/*'` returns one path, and no PKGBUILD
+copies a kit into a plugin
+
+**E10a** The two checks that exist only to police that duplication are
+**deleted, not left green.** `scripts/style-check.sh` currently compares the
+corner table and `radiusOn` between the two copies, under a comment that says
+"The apps cannot import `moarchy.common`, so `Ui.js` exists twice" — a check
+that can pass while measuring nothing is worse than no check.
+→ `grep -c 'exists twice' scripts/style-check.sh` == 0, and the suite's count
+drops by two rather than staying at 17
+
+**E11** A widget is not a plugin. A reusable widget — the shade's media card is
+the one that exists — lives in the kit, carries no `manifest.json` and no id,
+and is imported by relative path like everything else there. It never appears
+in the plugins directory, so the registry never sees it and
+`naming-convention.md`'s four kinds stay three-plus-one rather than four
+directories.
+→ nothing under the kit's `widgets/` carries a `manifest.json`, and
+`naming-convention.md`'s **widget** row names that directory
+
 ---
 
 ## F. One drag tracker
@@ -940,6 +966,11 @@ Ordered by value over risk, not by section number.
 13. The code map in `docs/README.md`, and the durable content §B6 is holding.
     Before this file can be deleted, not after: `refactor.md` is the only record
     of the layer rule, and this file has an end. *Done 2026-09-15.*
+14. **§E10, E10a, E11** — one kit, and where a widget lives. *Not started, and
+    not orderable from here:* both are gated on `structure.md` B6 absorbing
+    `moarchy-apps`, because the second copy of `Ui.js` exists only while the
+    apps ship from another tree. They belong to that milestone (`structure.md`
+    M5), and this file's end moves out by exactly that much.
 
 **None of the second pass has been on hardware.** Every criterion above was
 settled statically -- `scripts/style-check.sh` (11 checks, 0 failures),

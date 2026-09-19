@@ -256,8 +256,8 @@ month apart produce the same image. The package build produces the
 components (`moarchy-keyboard`, `moarchy-store-git`, `moarchy-keep`,
 `moarchy-vitals`), the AUR rebuilds (`yay`, `xdg-terminal-exec`,
 `ttf-ia-writer`, `cbonsai`, `lcl-gui-bin`, `mise-bin`), and `pkgbuilds/`
-(`moarchy`, `omarchy-config`, `moarchy-meta`, `moarchy-qml-apps`,
-`moarchy-keyring`, and a `moarchy-device-*` per phone).
+(`moarchy`, `omarchy-config`, `moarchy-meta`, `moarchy-keyring`, and a
+`moarchy-device-*` per phone).
 
 For a debug image that joins your wifi on first boot and enables sshd:
 
