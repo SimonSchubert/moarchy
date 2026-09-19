@@ -153,9 +153,9 @@ Item {
   // light theme that is white, and white on a pale accent is a date nobody
   // can find.
   readonly property string accentInk: {
-    var level = root.shade(root.colours.accent)
-    return Math.abs(level - root.shade(root.colours.background))
-         > Math.abs(level - root.shade(root.colours.foreground))
+    var level = root.controlCenter(root.colours.accent)
+    return Math.abs(level - root.controlCenter(root.colours.background))
+         > Math.abs(level - root.controlCenter(root.colours.foreground))
       ? root.colours.background : root.colours.foreground
   }
 
@@ -706,7 +706,7 @@ Item {
                 // jumps the nine hundred months from the start of its model to
                 // this one, instantiating and throwing away a grid per month
                 // on the way. On a phone that is a core at 99% during startup,
-                // and the shell never finishes starting: no bar, no drawer, no
+                // and the shell never finishes starting: no bar, no app drawer, no
                 // IPC, wallpaper only. A plugin the shell holds open has to
                 // cost nothing until it is opened.
                 readonly property bool live: dayWindow.visible && pager.width > 0

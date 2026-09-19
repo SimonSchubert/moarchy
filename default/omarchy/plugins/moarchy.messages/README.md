@@ -23,7 +23,7 @@ from Contacts, or a number).
 | hearing a text | `gdbus monitor --system --dest org.freedesktop.ModemManager1` |
 | reading texts | `mmcli -m any --messaging-list-sms`, then `mmcli -s <sms> -J` for each |
 | sending | the text on stdin to `mmcli --messaging-create-sms-with-text=/dev/stdin`, then `--send`, then delete |
-| a new text | `fbcli -E message-new-sms`, and a line in the shade through `omarchy-notification-send` |
+| a new text | `fbcli -E message-new-sms`, and a line in the control center through `omarchy-notification-send` |
 
 The text goes in on stdin because mmcli's `text='…'` option has no escaping,
 so a message with both kinds of quote in it cannot be said that way at all.
@@ -40,7 +40,7 @@ the modem and deletes it, so while it runs nothing arrives here. `systemctl
 --user unmask sm.puri.Chatty-daemon.service` undoes it. Chatty's own history
 stays where it was, in `~/.local/share/chatty/`; it is not imported.
 
-Then tap **Messages** in the drawer, or:
+Then tap **Messages** in the app drawer, or:
 
 ```sh
 omarchy-shell shell toggle moarchy.messages

@@ -2,13 +2,13 @@
 <!-- A handset.
 
      The receiver of a desk phone is still what "call" looks like on every
-     phone that has never had one, and it is the one shape in the drawer that
+     phone that has never had one, and it is the one shape in the appDrawer that
      cannot be mistaken for Contacts' person or Messages' bubble. Green, because
      the button that starts a call is green on this phone too.
 
      Adwaita's own call-start glyph, drawn at eight times its 16px canvas so
      the icon and the button inside the app are the same object. No plate
-     behind it (the drawer paints icons bare) and no clip path. -->
+     behind it (the appDrawer paints icons bare) and no clip path. -->
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
   <path transform="scale(8)" fill="#33d17a" d="m 10.996094 2 c -0.554688 0 -1 0.445312 -1 1 v 3 c 0 0.554688 0.445312 1 1 1 h 0.710937 c -0.671875 2.265625 -2.445312 4.042969 -4.710937 4.710938 v -0.710938 c 0 -0.554688 -0.449219 -1 -1 -1 h -3 c -0.554688 0 -1 0.445312 -1 1 v 1.5 c 0 1.378906 1.117187 2.5 2.5 2.5 h 0.5 c 5.503906 0 10 -4.496094 10 -10 v -0.5 c 0 -1.378906 -1.121094 -2.5 -2.5 -2.5 z"/>
 </svg>

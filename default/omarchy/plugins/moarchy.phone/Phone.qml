@@ -175,7 +175,7 @@ Item {
   }
 
   // `close()` has to take the window down (Clock.qml says why). The one thing
-  // it will not do is hide a call that is ringing: a stray tap on the drawer
+  // it will not do is hide a call that is ringing: a stray tap on the app drawer
   // icon must not be how somebody misses a call.
   function close(): void {
     root.menuEntry = null

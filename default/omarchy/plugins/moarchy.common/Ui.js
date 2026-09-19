@@ -1,8 +1,8 @@
-// Phone chrome: corners and shade control sizes, from one user file.
+// Phone chrome: corners and control center control sizes, from one user file.
 //
 // Colours stay in colors.toml -- omarchy-theme-set already stages those, and
 // every surface already follows them. What this file owns is the half that
-// used to be hardcoded per plugin: D1's three radii, and the shade's tile /
+// used to be hardcoded per plugin: D1's three radii, and the control center's tile /
 // slider / round-button heights. Those are a preference, not a theme, so they
 // live in ~/.config/omarchy/ui.toml and survive a palette swap.
 //
@@ -19,9 +19,9 @@ var CORNERS = {
   square: { sheet: 0,  tile: 0,  card: 0  }
 }
 
-var SHADE = {
-  roomy:   { shadeTile: 62, shadeSlider: 48, shadeRound: 36 },
-  compact: { shadeTile: 48, shadeSlider: 36, shadeRound: 32 }
+var CONTROL_CENTER = {
+  roomy:   { controlCenterTile: 62, controlCenterSlider: 48, controlCenterRound: 36 },
+  compact: { controlCenterTile: 48, controlCenterSlider: 36, controlCenterRound: 32 }
 }
 
 // gestures.md Q1. What the two configurable edges may raise, as words. The
@@ -33,17 +33,17 @@ var SHADE = {
 // no drag contract at all -- no `progress`, no `dragging` -- so an edge set
 // to it would follow no finger. Adding one is what would put it here.
 var GESTURE_TARGETS = {
-  none:     "",
-  drawer:   Sheet.DRAWER,
-  overview: Sheet.OVERVIEW,
-  shade:    Sheet.SHADE
+  none:                   "",
+  "app-drawer":           Sheet.APP_DRAWER,
+  "workspace-overview":   Sheet.WORKSPACE_OVERVIEW,
+  "control-center":       Sheet.CONTROL_CENTER
 }
 
 var GESTURE_LABELS = {
-  none:     "Nothing",
-  drawer:   "App drawer",
-  overview: "Overview",
-  shade:    "Notification shade"
+  none:                   "Nothing",
+  "app-drawer":           "App drawer",
+  "workspace-overview":   "Workspace overview",
+  "control-center":       "Control Center"
 }
 
 // gestures.md Q10. The triggers that are a tap rather than a drag -- the
@@ -54,7 +54,7 @@ var GESTURE_LABELS = {
 //   none                 the trigger does nothing
 //   a word from above    that sheet is summoned, not dragged
 //   agent                the default coding agent (C1's original meaning)
-//   anything else        a desktop entry id, opened the way the drawer
+//   anything else        a desktop entry id, opened the way the app drawer
 //                        opens it
 //
 // The third is why these cannot be normalised against a table the way an
@@ -104,7 +104,7 @@ function normShade(s) {
   var n = String(s || "roomy").toLowerCase().trim()
   if (n === "comfortable" || n === "large" || n === "big" || n === "huge") return "roomy"
   if (n === "small" || n === "dense" || n === "tight") return "compact"
-  return SHADE[n] ? n : "roomy"
+  return CONTROL_CENTER[n] ? n : "roomy"
 }
 
 // A word, or the caller's default. A full plugin id is accepted too, so a
@@ -147,22 +147,22 @@ function num(data, names, fallbackValue) {
 function fromData(data) {
   data = data || {}
   var corners = normCorners(data.corners)
-  var shade = normShade(data.shade || data.density)
+  var controlCenter = normShade(data.controlCenter || data.density)
   var c = CORNERS[corners]
-  var s = SHADE[shade]
+  var s = CONTROL_CENTER[controlCenter]
   return {
     corners: corners,
-    shade: shade,
+    controlCenter: controlCenter,
     sheet: num(data, ["sheet"], c.sheet),
     tile: num(data, ["tile"], c.tile),
     card: num(data, ["card"], c.card),
-    shadeTile: num(data, ["shade_tile", "shadeTile"], s.shadeTile),
-    shadeSlider: num(data, ["shade_slider", "shadeSlider"], s.shadeSlider),
-    shadeRound: num(data, ["shade_round", "shadeRound"], s.shadeRound),
+    controlCenterTile: num(data, ["control_center_tile", "controlCenterTile"], s.controlCenterTile),
+    controlCenterSlider: num(data, ["control_center_slider", "controlCenterSlider"], s.controlCenterSlider),
+    controlCenterRound: num(data, ["control_center_round", "controlCenterRound"], s.controlCenterRound),
     // Q1. The defaults are today's wiring, so a home with no ui.toml is the
     // phone as it shipped -- themed by presence, never broken by absence.
-    gestureBottom: normTarget(data.gesture_bottom || data.gestureBottom, "drawer"),
-    gestureRight: normTarget(data.gesture_right || data.gestureRight, "overview"),
+    gestureBottom: normTarget(data.gesture_bottom || data.gestureBottom, "app-drawer"),
+    gestureRight: normTarget(data.gesture_right || data.gestureRight, "workspace-overview"),
     // Q10. The hold keeps C1's meaning as its default, so a phone nobody has
     // touched still opens the coding agent. The power button's double press
     // is new and starts off.
@@ -200,26 +200,26 @@ function differs(chrome, key, presetValue) {
 function serialize(chrome) {
   var c = chrome || fallback()
   var presetC = CORNERS[c.corners] || CORNERS.large
-  var presetS = SHADE[c.shade] || SHADE.roomy
+  var presetS = CONTROL_CENTER[c.controlCenter] || CONTROL_CENTER.roomy
   var lines = [
     "# Phone chrome. Independent of the colour theme.",
     "# Colours live in ~/.local/state/omarchy/current/theme/colors.toml",
     "# and change with omarchy-theme-set. This file reshapes the UI.",
     "#",
     "# corners: large | modest | square",
-    "# shade:   roomy | compact",
+    "# control_center:  roomy | compact",
     "#",
     "# Which sheet each swipeable edge raises:",
-    "#   gesture_bottom, gesture_right: none | drawer | overview | shade",
+    "#   gesture_bottom, gesture_right: none | app-drawer | workspace-overview | control-center",
     "#   gesture_hold, gesture_power:   the same, plus agent or an app id",
     "#",
     "# Optional numbers (logical px) override the preset for that key:",
-    "#   sheet, tile, card, shade_tile, shade_slider, shade_round",
+    "#   sheet, tile, card, control_center_tile, control_center_slider, control_center_round",
     "",
     "corners = \"" + c.corners + "\"",
-    "shade = \"" + c.shade + "\"",
+    "control_center = \"" + c.controlCenter + "\"",
     // Written every time and not gated on differs(): these are presets like
-    // corners and shade, not overrides of one, so there is nothing to omit.
+    // corners and control center, not overrides of one, so there is nothing to omit.
     "gesture_bottom = \"" + c.gestureBottom + "\"",
     "gesture_right = \"" + c.gestureRight + "\"",
     "gesture_hold = \"" + c.gestureHold + "\"",
@@ -228,9 +228,9 @@ function serialize(chrome) {
   if (differs(c, "sheet", presetC.sheet)) lines.push("sheet = " + c.sheet)
   if (differs(c, "tile", presetC.tile)) lines.push("tile = " + c.tile)
   if (differs(c, "card", presetC.card)) lines.push("card = " + c.card)
-  if (differs(c, "shadeTile", presetS.shadeTile)) lines.push("shade_tile = " + c.shadeTile)
-  if (differs(c, "shadeSlider", presetS.shadeSlider)) lines.push("shade_slider = " + c.shadeSlider)
-  if (differs(c, "shadeRound", presetS.shadeRound)) lines.push("shade_round = " + c.shadeRound)
+  if (differs(c, "controlCenterTile", presetS.controlCenterTile)) lines.push("control_center_tile = " + c.controlCenterTile)
+  if (differs(c, "controlCenterSlider", presetS.controlCenterSlider)) lines.push("control_center_slider = " + c.controlCenterSlider)
+  if (differs(c, "controlCenterRound", presetS.controlCenterRound)) lines.push("control_center_round = " + c.controlCenterRound)
   lines.push("")
   return lines.join("\n")
 }
@@ -240,7 +240,7 @@ function merge(chrome, patch) {
   // Every key the file owns, not the two this used to name: `merge` feeds
   // `fromData`, so a key left out here is a key reset to its default for as
   // long as the optimistic value is on screen (Themes.qml's chip tap).
-  var data = { corners: cur.corners, shade: cur.shade,
+  var data = { corners: cur.corners, controlCenter: cur.controlCenter,
                gesture_bottom: cur.gestureBottom,
                gesture_right: cur.gestureRight,
                gesture_hold: cur.gestureHold,

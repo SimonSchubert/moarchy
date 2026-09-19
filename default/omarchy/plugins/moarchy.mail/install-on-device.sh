@@ -82,4 +82,4 @@ fi
 sleep 4
 pgrep -x quickshell >/dev/null && echo "    restarted omarchy-shell" || echo "    shell failed to start, see ~/.local/state/moarchy/shell.log"
 ENDSSH
-echo "==> done. tap Mail in the drawer, or: omarchy-shell shell toggle $ID"
+echo "==> done. tap Mail in the appDrawer, or: omarchy-shell shell toggle $ID"

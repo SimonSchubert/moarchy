@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "id": "moarchy.overview",
+  "id": "moarchy.workspace-overview",
   "name": "Overview",
   "version": "1.0.0",
   "author": "moarchy",
@@ -10,6 +10,6 @@
   ],
   "keepLoaded": true,
   "entryPoints": {
-    "overlay": "Overview.qml"
+    "overlay": "WorkspaceOverview.qml"
   }
 }

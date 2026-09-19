@@ -1,11 +1,11 @@
-# What xdg-open runs for a mailto: link. Hidden from the drawer, for the
-# editor's reason (org.moarchy.Editor.open.desktop): the drawer's entry
+# What xdg-open runs for a mailto: link. Hidden from the appDrawer, for the
+# editor's reason (org.moarchy.Editor.open.desktop): the appDrawer's entry
 # toggles, and a toggle with a link in it hides a Mail that is already open
 # instead of starting the message. `summon` shows, and Mail reads the bare
 # mailto: URI the shell hands it where %u was.
 #
-# The drawer finds a plugin's window by `shell toggle <id>` in an entry's Exec,
-# so this Exec cannot be the drawer's as well.
+# The appDrawer finds a plugin's window by `shell toggle <id>` in an entry's Exec,
+# so this Exec cannot be the appDrawer's as well.
 [Desktop Entry]
 Type=Application
 Name=Mail

@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
   <!-- See moarchy.device/icon.svg for why every one of these is a file and not
        a theme name. Here there is a second reason: no agent has an icon in
-       Adwaita, breeze or hicolor at all, which is what left the drawer entry on
+       Adwaita, breeze or hicolor at all, which is what left the appDrawer entry on
        `system-run`, a stock glyph the grid already draws twice.
        (No em dashes in here: XML forbids a double hyphen inside a comment, and
        xmllint rejects the file rather than the comment.) -->

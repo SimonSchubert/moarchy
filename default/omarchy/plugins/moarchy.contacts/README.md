@@ -16,7 +16,7 @@ Two screens: the list (searchable, lettered), and the editor.
 plugins/moarchy.contacts/install-on-device.sh
 ```
 
-Then tap **Contacts** in the drawer, or:
+Then tap **Contacts** in the app drawer, or:
 
 ```sh
 omarchy-shell shell toggle moarchy.contacts

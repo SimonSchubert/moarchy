@@ -28,9 +28,9 @@ plugins/moarchy.keep/install-on-device.sh
 
 That copies the plugin into `~/.config/omarchy/plugins/moarchy.keep`,
 asks the shell to validate and enable it, writes a `.desktop` entry so the
-drawer can summon it, and restarts the shell.
+app drawer can summon it, and restarts the shell.
 
-Then tap **Keep** in the drawer. Time it against the GTK Keep: the GTK one
+Then tap **Keep** in the app drawer. Time it against the GTK Keep: the GTK one
 starts a process, this one does not.
 
 ```sh

@@ -33,7 +33,7 @@
 // **`OpticalGlyph`, not `anchors.centerIn`** -- centred on its ink rather than
 // on its advance, for the reason the row chevron is: `centerIn` centres the box
 // the font reserves, and a Nerd Font glyph is rarely centred inside that box.
-// Measured, the gear in the shade's matching button sat 4 device pixels right
+// Measured, the gear in the control center's matching button sat 4 device pixels right
 // of centre.
 //
 // ---------------------------------------------------------------------------
@@ -88,7 +88,7 @@ Item {
     anchors.verticalCenter: parent.verticalCenter
     width: Style.space(38)
     height: width
-    // D1: same tile radius as the shade's icon buttons, capped at a half-side
+    // D1: same tile radius as the control center's icon buttons, capped at a half-side
     // so Large stays a circle and Square goes to 0.
     radius: UiSpec.radiusOn(header.radiusTile < 0 ? width : header.radiusTile, width)
     color: header.fill

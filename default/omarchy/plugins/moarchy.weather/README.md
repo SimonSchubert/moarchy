@@ -177,8 +177,8 @@ plugins/moarchy.weather/install-on-device.sh
 
 That copies the plugin into `~/.config/omarchy/plugins/moarchy.weather`,
 asks the shell to validate and enable it, writes a `.desktop` entry so the
-drawer can summon it, and restarts the shell. Then tap **Weather** in the
-drawer.
+app drawer can summon it, and restarts the shell. Then tap **Weather** in the
+app drawer.
 
 ```sh
 omarchy-shell shell toggle moarchy.weather

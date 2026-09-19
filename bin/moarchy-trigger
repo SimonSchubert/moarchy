@@ -32,9 +32,9 @@ value_for() { moarchy-ui get "gesture-$1" 2>/dev/null; }
 # than a fifth list: a word in, a plugin id out, empty for anything else.
 sheet_id() {
   case "$1" in
-    drawer)   echo moarchy.drawer ;;
-    overview) echo moarchy.overview ;;
-    shade)    echo moarchy.shade ;;
+    app-drawer)         echo moarchy.app-drawer ;;
+    workspace-overview) echo moarchy.workspace-overview ;;
+    control-center)     echo moarchy.control-center ;;
     themes)   echo moarchy.themes ;;
     *)        echo "" ;;
   esac
@@ -48,7 +48,7 @@ fire() {
   if [[ $v == agent ]]; then
     # C1's original meaning, and still one answer to "the default agent":
     # with one picked this opens it, with none it opens the picker, and the
-    # drawer's tile is rewritten on the way (settings.md P12).
+    # app drawer's tile is rewritten on the way (settings.md P12).
     moarchy-agent launch
     echo "agent"
     return 0
@@ -63,12 +63,12 @@ fire() {
     return 0
   fi
 
-  # An app. Down the drawer's own launch verb rather than gtk-launch here: that
+  # An app. Down the app drawer's own launch verb rather than gtk-launch here: that
   # path hops to a free workspace first, draws the splash, and dismisses the
   # sheet (windows.md L1-L7). Launching it from this script would be a second
   # implementation of all three, and the splash is the half nobody would notice
   # was missing until the phone looked like it had ignored the press.
-  shell_ipc drawer launch "$v" >/dev/null
+  shell_ipc appDrawer launch "$v" >/dev/null
   echo "$v"
 }
 
@@ -79,13 +79,13 @@ label() {
   local v
   v=$(value_for "$1")
   case "$v" in
-    none|agent|drawer|overview|shade|themes) moarchy-ui get "gesture-$1-label" ;;
+    none|agent|appDrawer|workspaceOverview|controlCenter|themes) moarchy-ui get "gesture-$1-label" ;;
     "") echo Nothing ;;
     *)
       # Its name if the shell knows the id, the id itself if it does not --
       # an app that has been uninstalled since it was chosen is still what the
       # setting says, and a blank detail line would say nothing at all.
-      shell_ipc drawer entryRows \
+      shell_ipc appDrawer entryRows \
         | awk -F'\t' -v id="$v" '$1 == id { print $2; found = 1 } END { if (!found) print id }' \
         | head -1
       ;;
@@ -97,14 +97,14 @@ rows() {
   current=$(value_for "$which")
   {
     printf 'none\t%s\tNothing\tThe trigger does nothing\n' "$NONE_GLYPH"
-    printf 'agent\t%s\tCoding agent\tThe one the drawer names\n' "$AGENT_GLYPH"
-    printf 'drawer\t%s\tApp drawer\tSearch and launch\n' "$SHEET_GLYPH"
-    printf 'overview\t%s\tOverview\tEvery workspace as a card\n' "$SHEET_GLYPH"
-    printf 'shade\t%s\tNotification shade\tQuick settings\n' "$SHEET_GLYPH"
-    # Every app the drawer lists, in the drawer's own order and under the
-    # drawer's own names -- so a trigger can never offer something the grid does
+    printf 'agent\t%s\tCoding agent\tThe one the appDrawer names\n' "$AGENT_GLYPH"
+    printf 'appDrawer\t%s\tApp appDrawer\tSearch and launch\n' "$SHEET_GLYPH"
+    printf 'workspaceOverview\t%s\tOverview\tEvery workspace as a card\n' "$SHEET_GLYPH"
+    printf 'controlCenter\t%s\tNotification controlCenter\tQuick settings\n' "$SHEET_GLYPH"
+    # Every app the app drawer lists, in the app drawer's own order and under the
+    # app drawer's own names -- so a trigger can never offer something the grid does
     # not, or call it something the grid does not call it.
-    shell_ipc drawer entryRows \
+    shell_ipc appDrawer entryRows \
       | awk -F'\t' -v g="$APP_GLYPH" 'NF >= 2 { print $1 "\t" g "\t" $2 "\t" $1 }'
   } | jq -R -s --arg which "$which" --arg current "$current" '
       split("\n") | map(select(length > 0)) | to_entries

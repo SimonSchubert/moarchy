@@ -53,7 +53,7 @@
 // Any row may carry `when`, copied verbatim from omarchy-menu.jsonc so the
 // guard that upstream uses is the guard we use.
 //
-// Any row may also carry `keywords`: extra words the drawer's search matches on
+// Any row may also carry `keywords`: extra words the app drawer's search matches on
 // (docs/settings.md section O), for the cases where the word a person types is
 // not in the label -- "timer" for Reminders, "capture" for Screenshot. It is a
 // handful of rows and not a discipline; a label that says what it is needs none.
@@ -74,14 +74,14 @@
 
 // Ids satisfied outside this stack. `apps` is the app drawer, which already is
 // upstream's apps provider; repeating it inside Settings would be the mistake
-// the drawer's own comment warns about.
+// the app drawer's own comment warns about.
 var EXTERNAL = {
-    "apps": { cls: "N", where: "moarchy.drawer" }
+    "apps": { cls: "N", where: "moarchy.app-drawer" }
 };
 
-// Already a shade control. Recorded so coverage is complete, never rendered.
-var SHADE = {
-    "trigger.toggle.notifications": "shade > Silent tile"
+// Already a control center control. Recorded so coverage is complete, never rendered.
+var CONTROL_CENTER = {
+    "trigger.toggle.notifications": "Control Center > Silent tile"
 };
 
 var PAGES = {
@@ -112,11 +112,11 @@ var PAGES = {
 "net": { title: "Network & internet", rows: [
   { id: "dns", type: "nav", page: "net.dns", glyph: "󰇖", label: "Private DNS",
     detailCmd: "omarchy-dns", covers: { "setup.network.dns": "N" } },
-  // The shade toggles the radios. Neither of these has an upstream id because
+  // The control center toggles the radios. Neither of these has an upstream id because
   // upstream has no equivalent: a desktop joins a network from a bar applet.
   //
-  // Wi-Fi opens moarchy.wifi, the same screen the shade's tile opens on a long
-  // press (docs/shade.md S6b). It used to run nmtui-connect in a TUI terminal,
+  // Wi-Fi opens moarchy.wifi, the same screen the control center's tile opens on a long
+  // press (docs/control-center.md S6b). It used to run nmtui-connect in a TUI terminal,
   // which fits the screen and could not be operated -- but for a narrower
   // reason than "a TUI cannot be touched". foot turns a tap into a left click,
   // and nmtui simply never asks for mouse reporting, so the click went
@@ -125,10 +125,10 @@ var PAGES = {
   //
   // returnTo brings Back here rather than dropping you on the home screen.
   { id: "wifi", type: "action", glyph: "󱚾", label: "Wi-Fi networks",
-    // `passphrase` came off the drawer entry this row replaced (docs/apps.md):
+    // `passphrase` came off the app drawer entry this row replaced (docs/apps.md):
     // deleting moarchy.wifi.desktop deleted its Keywords= line too, and every
     // word in it that this row does not carry is a word that used to find
-    // Wi-Fi from the drawer's field and now finds nothing.
+    // Wi-Fi from the app drawer's field and now finds nothing.
     keywords: "wlan wireless internet connect passphrase",
     // One field of omarchy-network-status, which answers a whole record (I6).
     // A script and not an inline pipeline: E3 resolves the first word of every
@@ -137,7 +137,7 @@ var PAGES = {
     run: "omarchy-shell shell summon moarchy.wifi '{\"returnTo\":\"moarchy.settings\",\"page\":\"net\"}'",
     launch: "none" },
   // Bluetooth is a screen too now, the same pairing as Wi-Fi: this row and the
-  // shade's long press open moarchy.bluetooth (docs/shade.md S6c, S6d).
+  // control center's long press open moarchy.bluetooth (docs/control-center.md S6c, S6d).
   //
   // It was `bluetui`, and bluetui was never the failure nmtui was -- it enables
   // mouse reporting, so foot's tap-to-click reaches it, and its own bindings
@@ -209,9 +209,9 @@ var PAGES = {
   // panel mapped its window and drew nothing but a truncated tab strip -- no
   // device list, no sliders -- and it was the only audio UI the phone had.
   //
-  // Routing only. Volume, like brightness and the radios, belongs to the shade
+  // Routing only. Volume, like brightness and the radios, belongs to the control center
   // (H1), and a slider here would be the repetition that section exists to stop.
-  // What the shade has no room for is *which* device, and on a phone that is the
+  // What the control center has no room for is *which* device, and on a phone that is the
   // earpiece against the speaker against a headset against a paired sink.
   { id: "output", type: "nav", page: "sound.output", glyph: "󰓃",
     label: "Output device", detailCmd: "moarchy-audio output-name" },
@@ -245,7 +245,7 @@ var PAGES = {
 "appearance": { title: "Appearance", rows: [
   { id: "theme", type: "plugin", plugin: "moarchy.themes", glyph: "󰸌",
     label: "Theme", detailCmd: "omarchy-theme-current",
-    keywords: "rounded corners radius square modest shade fade slider tiles compact roomy size",
+    keywords: "rounded corners radius square modest controlCenter fade slider tiles compact roomy size",
     covers: { "style.theme": "N" } },
   { id: "background", type: "nav", page: "appearance.background", glyph: "",
     label: "Wallpaper", detailCmd: "basename \"$(omarchy-theme-bg-current)\"",
@@ -303,7 +303,7 @@ var PAGES = {
     covers: { "trigger.toggle.battery-percentage": "N" } }
   // There is deliberately no "Show status bar" row. It had the same dead IPC
   // call as the row above, and unlike that one it was not worth the repair: the
-  // shade's grab strip owns the top 26px whether or not the bar draws, so a
+  // control center's grab strip owns the top 26px whether or not the bar draws, so a
   // hidden bar leaves the edge still swallowing drags with nothing on screen to
   // explain it -- and the switch that undid it lived inside the screen it had
   // just made harder to reach. Removed on 2026-09-08 along with the flag read,
@@ -451,7 +451,7 @@ var PAGES = {
 // helix from the store should still be able to choose it.
 //
 // `Text Editor` for the plugin: that is the name on its desktop entry and under
-// its icon in the drawer, and a settings row that calls an app something the
+// its icon in the app drawer, and a settings row that calls an app something the
 // rest of the phone does not is a row people read twice. GNOME's keeps its
 // full name for the same reason in reverse -- two rows both called Text Editor
 // would be a choice nobody could make. It is guarded like the terminal editors,
@@ -490,7 +490,7 @@ var PAGES = {
 // absent is the one row that does something.
 //
 // The write is `moarchy-agent open <name>` rather than `omarchy-default-agent
-// <name>` for one reason: it writes the drawer tile first. An agent reachable
+// <name>` for one reason: it writes the app drawer tile first. An agent reachable
 // only from here is four taps deep and invisible in the app grid; after this it
 // is an icon like any other app, and the icon runs this same command.
 //
@@ -626,7 +626,7 @@ var PAGES = {
   // hidden one -- they used to be hidden together, on the reading that the
   // phone came with both. Neither row changed; the package set did
   // (docs/apps.md T4). Foot stays listed because it is exactly the row that
-  // should reappear if someone ever removes the terminal, which the drawer
+  // should reappear if someone ever removes the terminal, which the app drawer
   // refuses (T5) but pacman does not.
   { id: "alacritty", type: "action", glyph: "", label: "Install Alacritty",
     when: "! omarchy-pkg-present alacritty",
@@ -642,16 +642,16 @@ var PAGES = {
 "shell": { title: "Shell & plugins", rows: [
   // gestures.md Q1, Q9. Which sheet each swipeable edge raises. A page of its
   // own rather than two rows here: the left edge is back and the top is the
-  // shade, and when either becomes settable it belongs beside these two and not
+  // control center, and when either becomes settable it belongs beside these two and not
   // on a page about plugins.
   { id: "gestures", type: "nav", page: "shell.gestures", glyph: "󰶞",
     label: "Gestures", detailCmd: "moarchy-ui get gesture-summary",
-    keywords: "swipe edge bottom right up drawer overview shade none off" },
+    keywords: "swipe edge bottom right up appDrawer workspaceOverview controlCenter none off" },
   { id: "plugins", type: "nav", page: "shell.plugins", glyph: "󰐱", label: "Plugins",
     detailCmd: "moarchy-plugins summary",
     covers: { "setup.plugin": "N" } },
   { id: "restart", type: "action", glyph: "󰍜", label: "Restart shell",
-    detail: "Bar, drawer, shade and gestures",
+    detail: "Bar, app drawer, control center and gestures",
     run: "moarchy-restart-shell", launch: "none",
     covers: { "update.process.shell": "N", "update.process": "N" } },
   { id: "tmux", type: "action", glyph: "", label: "Reset tmux config",
@@ -671,7 +671,7 @@ var PAGES = {
   // Q10. The two that are a tap rather than a drag, so they can name anything
   // that opens -- including any app. Their detail lines go through
   // moarchy-trigger rather than moarchy-ui: an app id has to be resolved to
-  // the name the drawer draws, and only the shell has read the desktop entry.
+  // the name the app drawer draws, and only the shell has read the desktop entry.
   { id: "hold", type: "nav", page: "shell.gestures.hold", glyph: "󰭰",
     label: "Press and hold the strip",
     detailCmd: "moarchy-trigger label hold",
@@ -685,10 +685,10 @@ var PAGES = {
 // Provider pages, unlike the two edges above, and the reason is the one thing
 // these offer that an edge cannot: every app on the phone. A hand-written list
 // cannot hold 59 rows that change when somebody installs something, and the
-// rows have to carry the drawer's own names or a trigger would offer an app
+// rows have to carry the app drawer's own names or a trigger would offer an app
 // the grid calls something else.
 //
-// The cost is O10 -- provider rows are outside the drawer's search index -- and
+// The cost is O10 -- provider rows are outside the app drawer's search index -- and
 // it is the right way round here. The two nav rows above are static and
 // indexed, so typing "hold" or "power" still finds the screen; what is not
 // indexed is the fifty-nine apps on it, which is exactly what O10 exists to
@@ -705,7 +705,7 @@ var PAGES = {
 
 // Static rows and not a `provider`, which is the one place this pair does not
 // copy shell.plugins. The four options are fixed and known, and provider-built
-// rows are outside the drawer's search index (O10) and answer `unknown row` to
+// rows are outside the app drawer's search index (O10) and answer `unknown row` to
 // `settings runRow` -- the wrong trade for the one screen somebody goes looking
 // for by typing "swipe".
 //
@@ -722,28 +722,28 @@ var PAGES = {
   { id: "b-none", type: "choice", label: "Nothing", value: "none",
     detail: "Home and workspace swipes still work",
     write: "moarchy-ui gesture-bottom none" },
-  { id: "b-drawer", type: "choice", label: "App drawer", value: "drawer",
-    detail: "Search and launch", write: "moarchy-ui gesture-bottom drawer" },
-  { id: "b-overview", type: "choice", label: "Overview", value: "overview",
+  { id: "b-app-drawer", type: "choice", label: "App drawer", value: "app-drawer",
+    detail: "Search and launch", write: "moarchy-ui gesture-bottom app-drawer" },
+  { id: "b-workspace-overview", type: "choice", label: "Overview", value: "workspace-overview",
     detail: "Every workspace as a card",
-    write: "moarchy-ui gesture-bottom overview" },
-  { id: "b-shade", type: "choice", label: "Notification shade", value: "shade",
+    write: "moarchy-ui gesture-bottom workspace-overview" },
+  { id: "b-control-center", type: "choice", label: "Control Center", value: "control-center",
     detail: "The status bar still pulls it down",
-    write: "moarchy-ui gesture-bottom shade" }
+    write: "moarchy-ui gesture-bottom control-center" }
 ]},
 
 "shell.gestures.right": { title: "Swipe in from the right",
   reader: "moarchy-ui get gesture-right", rows: [
   { id: "r-none", type: "choice", label: "Nothing", value: "none",
     detail: "The edge does nothing", write: "moarchy-ui gesture-right none" },
-  { id: "r-drawer", type: "choice", label: "App drawer", value: "drawer",
-    detail: "Search and launch", write: "moarchy-ui gesture-right drawer" },
-  { id: "r-overview", type: "choice", label: "Overview", value: "overview",
+  { id: "r-app-drawer", type: "choice", label: "App drawer", value: "app-drawer",
+    detail: "Search and launch", write: "moarchy-ui gesture-right app-drawer" },
+  { id: "r-workspace-overview", type: "choice", label: "Overview", value: "workspace-overview",
     detail: "Every workspace as a card",
-    write: "moarchy-ui gesture-right overview" },
-  { id: "r-shade", type: "choice", label: "Notification shade", value: "shade",
+    write: "moarchy-ui gesture-right workspace-overview" },
+  { id: "r-control-center", type: "choice", label: "Control Center", value: "control-center",
     detail: "The status bar still pulls it down",
-    write: "moarchy-ui gesture-right shade" }
+    write: "moarchy-ui gesture-right control-center" }
 ]},
 
 "shell.plugins": { title: "Plugins",
@@ -1073,7 +1073,7 @@ var TZ_REGIONS = ["Africa", "America", "Antarctica", "Arctic", "Asia", "Atlantic
 for (var _t = 0; _t < TZ_REGIONS.length; _t++) {
     var _region = TZ_REGIONS[_t];
     PAGES["system.time.zone"].rows.push(
-        // `unlisted`, so the drawer's search does not answer "a" with Asia,
+        // `unlisted`, so the app drawer's search does not answer "a" with Asia,
         // Africa, Arctic and America. The page each of these opens is built by
         // the provider below, and provider rows are not in the search index by
         // design (Search.js, O10) -- so these lead only where search cannot
@@ -1112,6 +1112,6 @@ function coverage() {
         }
     }
     for (var e in EXTERNAL) out.push([e, EXTERNAL[e].cls, EXTERNAL[e].where, ""]);
-    for (var s in SHADE) out.push([s, "S", SHADE[s], ""]);
+    for (var s in CONTROL_CENTER) out.push([s, "S", CONTROL_CENTER[s], ""]);
     return out;
 }

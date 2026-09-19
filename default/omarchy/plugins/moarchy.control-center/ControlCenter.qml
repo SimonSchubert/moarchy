@@ -14,11 +14,11 @@
 // implicitHeight decides how tall it is, and it is only as tall as the bar
 // until a finger starts moving. One resize, at the top of the gesture, and from
 // then on the drag is a child item's `y` -- no further Wayland traffic, and
-// nothing composited while the shade is shut but a 360x26 band.
+// nothing composited while the control center is shut but a 360x26 band.
 //
 // The gestures plugin's rule about never widening a surface applies to the idle
 // state, not to this: widening steals *new* touches from the app underneath,
-// and here the finger is already down and the shade is what should be catching
+// and here the finger is already down and the control center is what should be catching
 // everything for the rest of the gesture. The in-flight touch is unaffected
 // either way, because Wayland's implicit grab is per-surface, not per-geometry.
 //
@@ -36,7 +36,7 @@
 // ---------------------------------------------------------------------------
 // Two Overlay surfaces stack by map order, and map order here comes from
 // iterating a JS object of installed plugins -- not something to build a
-// gesture on. Rather than hope the gestures strip lands on top, the shade cuts
+// gesture on. Rather than hope the gestures strip lands on top, the control center cuts
 // the home pill's band out of its own input region, so the pill keeps working
 // whichever way the stacking falls.
 //
@@ -66,10 +66,10 @@ Item {
   id: root
 
   // Injected by the host after construction, and not `readonly` or `required` --
-  // see the drawer, which also says why this is the only one declared (J8).
+  // see the app drawer, which also says why this is the only one declared (J8).
   property var shell: null
 
-  readonly property string pluginId: "moarchy.shade"
+  readonly property string pluginId: "moarchy.control-center"
   readonly property string historyDir:
     Quickshell.env("HOME") + "/.local/state/omarchy/notifications/history"
 
@@ -82,30 +82,30 @@ Item {
     ? root.shell.bar.barSize : Style.space(26)
 
   // Must match moarchy.gestures' own stripHeight. Duplicated rather than
-  // read across plugins because the shade has to know it even when the gestures
-  // plugin failed to load, and a shade that swallowed the bottom edge in that
+  // read across plugins because the control center has to know it even when the gestures
+  // plugin failed to load, and a control center that swallowed the bottom edge in that
   // case would be much worse than one that leaves 20px unused.
   readonly property int gestureStrip: Style.space(20)
 
-  // Likewise moarchy.gestures' backEdgeWidth -- and its overviewEdgeWidth,
+  // Likewise moarchy.gestures' backEdgeWidth -- and its workspaceOverviewEdgeWidth,
   // which is the same number for the same reason (gestures.md G8, P1). The
-  // shade is on Overlay and maps when it opens, so it lands *above* the
+  // control center is on Overlay and maps when it opens, so it lands *above* the
   // always-mapped edge surfaces and would otherwise swallow every swipe in
   // from either side -- which is exactly what it did on the left: back closed
-  // the drawer and the carousel and left the shade untouched, because those
+  // the app drawer and the carousel and left the control center untouched, because those
   // two are on Top and this one is not. The right band had the same fault and
-  // nothing to show it until that edge was worth reaching over an open shade.
+  // nothing to show it until that edge was worth reaching over an open control center.
   readonly property int edgeBand: Style.space(16)
 
-  readonly property int screenHeight: shadeWindow.screen ? shadeWindow.screen.height : 720
+  readonly property int screenHeight: controlCenterWindow.screen ? controlCenterWindow.screen.height : 720
 
   // Deliberately short of the full screen -- and a cap now, not the height.
   // The band of scrim left underneath is the tap-to-dismiss target, and it is
   // the only workable one: the drag handle is the status bar, so an upward drag
   // to close would start within 26px of the top of the screen and have nowhere
-  // to travel. The home swipe closes the shade too, but a phone should not have
+  // to travel. The home swipe closes the control center too, but a phone should not have
   // exactly one way out of a full-screen panel. A sheet shorter than the cap
-  // hands back more of that band, never less (docs/shade.md S22).
+  // hands back more of that band, never less (docs/control-center.md S22).
   readonly property real sheetFraction: 0.9
   readonly property int sheetMax:
     Math.max(1, Math.round((root.screenHeight - root.gestureStrip) * root.sheetFraction))
@@ -173,7 +173,7 @@ Item {
   // -------------------------------------------------------------- type
   //
   // The same weight the bar runs at. Light text on a dark surface reads thinner
-  // than it measures, and a shade whose clock was Regular under a bar whose
+  // than it measures, and a control center whose clock was Regular under a bar whose
   // clock was DemiBold read as two different phones stacked on top of each
   // other. moarchy.bar's textWeight carries the ink measurements.
   readonly property int textWeight: Font.DemiBold
@@ -209,7 +209,7 @@ Item {
   // ------------------------------------------------------------ colours
   //
   // Mapped onto the theme's popup role rather than invented, so every Omarchy
-  // theme restyles the shade for free. `container` is the tonal fill that most
+  // theme restyles the control center for free. `container` is the tonal fill that most
   // of this is built out of; `textOnAccent` is what has to sit on top of a
   // filled accent surface, and reads off the theme background rather than
   // assuming the accent is dark.
@@ -265,24 +265,24 @@ Item {
   // follow the finger at all.
   //
   // Sideways it is the sheet's width, which is the screen's: this sheet is
-  // as tall as its content (shade.md S21), and a mirrored width would be a
+  // as tall as its content (control-center.md S21), and a mirrored width would be a
   // relayout of every tile on it rather than a different path in (Q2a).
   readonly property real closeTravel: Math.max(1, root.sideways
-    ? (shadeWindow.screen ? shadeWindow.screen.width : 360)
+    ? (controlCenterWindow.screen ? controlCenterWindow.screen.width : 360)
     : root.sheetHeight)
 
   // shell.isPluginOpen() reads this. Mid-drag is neither open nor shut, and
   // reporting "open" there would let a swipe on the home pill try to close a
-  // shade the user is still pulling out.
+  // control center the user is still pulling out.
   readonly property bool opened: root.progress >= 1 && !root.dragging
 
   // Travel that commits a pull-down, as a fraction of the sheet. Deliberately
-  // less than half: a shade is cheap to close and annoying to have to drag all
+  // less than half: a control center is cheap to close and annoying to have to drag all
   // the way.
   readonly property real openFraction: 0.35
   readonly property real closeFraction: 0.75
   // Speed that commits regardless of travel, logical px per ms. The strip's
-  // `fling` and the drawer's `sheetFling` are the same number for the same
+  // `fling` and the app drawer's `sheetFling` are the same number for the same
   // reason: it is matched to what DragTracker's "measuring speed" now reads,
   // and 0.6 was matched to a reading that swung by 5x between identical
   // gestures.
@@ -294,7 +294,7 @@ Item {
   // The 26px grab band at the top is the affordance, not the whole gesture.
   // Dragging up anywhere on the sheet has to close it, and that cannot live on
   // an area behind the content: every tile here is a MouseArea and holds the
-  // exclusive grab for the gesture, exactly as the drawer's app icons do. So
+  // exclusive grab for the gesture, exactly as the app drawer's app icons do. So
   // the tiles do both jobs -- a touch that never travels activates, one that
   // goes up past the slop drags the sheet.
   readonly property int dragSlop: Style.space(10)
@@ -324,7 +324,7 @@ Item {
     // not 25% of the sheet left above the finger to travel.
     //
     // `v` is signed toward open. This sheet opens *downward*, so that happens
-    // to be the scene sign as well -- unlike the drawer's, which reads the
+    // to be the scene sign as well -- unlike the app drawer's, which reads the
     // other way round for the same rule.
     onFinished: (p, v) => {
       root.dragging = false
@@ -337,7 +337,7 @@ Item {
     onStranded: root.markTrace(-2)
     onCanceled: from => {
       // -1 for a real cancel, against -2 for a stranded one (H5). Only the
-      // drawer's handle marked this, so "a real cancel ends -1" was a check
+      // app drawer's handle marked this, so "a real cancel ends -1" was a check
       // three of the four trackers could not fail.
       root.markTrace(-1)
       root.dragging = false
@@ -354,7 +354,7 @@ Item {
   //
   // Shut, the slop applies; open, it does not, because the gesture is already
   // in flight as far as the finger is concerned.
-  // Q7, Q3a. The band is the shade's own way in, and it *says so*: a drag
+  // Q7, Q3a. The band is the control center's own way in, and it *says so*: a drag
   // that starts here sets `entryEdge` to the top before it moves anything,
   // so the sheet comes down from the status bar the finger is on.
   //
@@ -427,13 +427,13 @@ Item {
   function sheetCancel(): void { sheetDrag.cancel() }
 
   function open(payloadJson) {
-    // S28. The drawer is deliberately left alone, where this used to dismiss
+    // S28. The app drawer is deliberately left alone, where this used to dismiss
     // it. Layer order already does the work: this surface is Overlay and the
-    // drawer is Top, so the shade has always drawn above it and the only thing
+    // app drawer is Top, so the control center has always drawn above it and the only thing
     // the hide added was losing what you were looking at.
     //
-    // Not symmetrical, and Drawer.open() keeps hiding *this* for the same
-    // reason read the other way: a drawer raised under a live shade would map
+    // Not symmetrical, and the app drawer's open() keeps hiding *this* for the same
+    // reason read the other way: a app drawer raised under a live control center would map
     // invisibly underneath it.
     // Q3a. A summon carries no direction, so it uses this sheet's own edge --
     // but only from rest. `releaseTarget()` commits an edge drag *through*
@@ -464,11 +464,11 @@ Item {
 
   function close() {
     // F8. A touch can outlive this surface: a long press on a tile opens the
-    // Wi-Fi or Bluetooth picker, which hides the shade from under the finger
+    // Wi-Fi or Bluetooth picker, which hides the control center from under the finger
     // that is still down, and the unmap means the MouseArea never reports a
     // release. The tracker would then sit active until its watchdog fired and
-    // put `progress` back -- reopening a shade the picker had just replaced.
-    // Measured as S6c: "the picker opened but the shade is open".
+    // put `progress` back -- reopening a control center the picker had just replaced.
+    // Measured as S6c: "the picker opened but the control center is open".
     //
     // No-ops on every ordinary path, where release() has already ended it.
     sheetDrag.cancel()
@@ -484,7 +484,7 @@ Item {
   }
 
   // Everything that cannot be bound reactively, pulled once per open rather
-  // than on a timer: none of it changes while the shade is shut, and a phone
+  // than on a timer: none of it changes while the control center is shut, and a phone
   // that forks rfkill every ten seconds for a panel nobody is looking at is
   // just a slower phone.
   function refresh(): void {
@@ -502,7 +502,7 @@ Item {
     //
     // Deferred as well: clearPopups() archives through the service's own
     // serialised file-job queue, so reading the directory in the same tick shows
-    // the list as it was a moment before the shade opened. The immediate read
+    // the list as it was a moment before the control center opened. The immediate read
     // gets the height approximately right; the deferred one gets the contents
     // exactly right.
     if (!historyRead.running) historyRead.running = true
@@ -511,7 +511,7 @@ Item {
 
   onProgressChanged: {
     // Give the surface back as soon as it is not needed. Until this runs the
-    // shade owns the whole screen's input, so leaving it expanded after a
+    // control center owns the whole screen's input, so leaving it expanded after a
     // snap-back would silently eat the next tap on the app underneath.
     if (root.progress <= 0 && !root.dragging) {
       root.expanded = false
@@ -520,7 +520,7 @@ Item {
     if (root.progress > 0 && !root.expanded) root.expanded = true
 
     // One integer per frame while a drag is in flight, cleared on the next
-    // press. The same diagnostic the drawer carries, and for the same reason:
+    // press. The same diagnostic the app drawer carries, and for the same reason:
     // "does it follow the finger" is a question about the *number of samples*,
     // and polling `state` over IPC answers it at a tenth of the frame rate --
     // which is how a gesture that followed nothing reads as one that tracked.
@@ -531,7 +531,7 @@ Item {
     // the previous gesture's trace. And gated on `dragging`, so the 220ms fall
     // after release is not recorded -- that animation runs whether or not the
     // finger ever drove anything, and counting it reports ~14 samples for a
-    // shade that jumped shut.
+    // control center that jumped shut.
     if (!root.dragging) return
     var next = root.dragTrace.slice()
     if (next.length < 200) next.push(Math.round(root.progress * 100))
@@ -551,7 +551,7 @@ Item {
   // animated property on top of it buys nothing anyone can see. `opened` is
   // exactly `progress >= 1 && !dragging`, which is both halves of that.
   //
-  // 180 rather than the 220 the shade opens with: a list filling in is not a
+  // 180 rather than the 220 the control center opens with: a list filling in is not a
   // second open, and at 220 it reads as one.
   Behavior on sheetHeight {
     enabled: root.opened
@@ -559,13 +559,13 @@ Item {
   }
 
   // The watchdog against a stranded touch is DragTracker's now (F2), which is
-  // how the drawer finally got one. Left stranded mid-drag this surface stays
+  // how the app drawer finally got one. Left stranded mid-drag this surface stays
   // full-screen and the phone stops responding to touch at all, so it was
   // never optional here -- it was simply written twice and omitted twice.
   //
   // One difference, deliberate: the tracker's timeout springs back to where
   // the drag started rather than to 0. A stranded pull-down used to slam the
-  // shade shut even when it had been open before the touch.
+  // control center shut even when it had been open before the touch.
   function markTrace(marker): void {
     var next = root.dragTrace.slice()
     next.push(marker)
@@ -573,14 +573,14 @@ Item {
   }
 
   IpcHandler {
-    target: "shade"
+    target: "control-center"
 
     function state(): string {
       if (root.dragging) return "dragging " + Math.round(root.progress * 100) + "%"
       return root.opened ? "open" : "closed"
     }
 
-    // The samples the last drag actually produced, as the drawer reports them.
+    // The samples the last drag actually produced, as the app drawer reports them.
     function dragTrace(): string { return root.dragTrace.join(" ") }
 
     // S21/S22. The sheet is as tall as its content and no taller, and the list
@@ -598,7 +598,7 @@ Item {
     //                      height > wanted; one truncating its own chrome would
     //                      show wanted > max.
     //   listy/listmax      where the list starts and what it may have. A listmax
-    //                      at or near 0 is a shade whose chrome no longer fits
+    //                      at or near 0 is a control center whose chrome no longer fits
     //                      its own cap -- invisible now that the sheet clips.
     //   list/content       the overflow itself, and the only direct evidence
     //                      that there is more history than is being shown.
@@ -802,8 +802,8 @@ Item {
   // S29d. Mobile data, the one tile whose whole state comes out of a moarchy
   // script. Quickshell.Networking knows about wifi devices and nothing else,
   // and the two writes need root -- NetworkManager's settings.modify.system is
-  // auth_admin, and a polkit prompt raised from the shade would land on top of
-  // the shade that asked for it.
+  // auth_admin, and a polkit prompt raised from the control center would land on top of
+  // the control center that asked for it.
   property bool dataPresent: false
   // Latched, and the latch is the point. Switching data on can make
   // ModemManager re-enumerate -- one off/on took this modem from Modem/1 to
@@ -942,9 +942,9 @@ Item {
   // asks for, in a window carrying its own workspace, its own carousel card
   // and foot's palette instead of the shell's. moarchy.wifi and
   // moarchy.bluetooth are the same two lists with tap targets
-  // (docs/shade.md S6b, S6c, S6d).
+  // (docs/control-center.md S6b, S6c, S6d).
 
-  // Set by `shade dryRun 1`, the way Settings does it. What the tile decided is
+  // Set by `control-center dryRun 1`, the way Settings does it. What the tile decided is
   // recorded either way; only the effect that cannot be taken back -- the radio
   // write -- is held back. Without this a check of S6a would have to switch the
   // radio off on a phone reached over that radio.
@@ -982,7 +982,7 @@ Item {
   // a process, so lastLaunch carries the plugin id -- not a command -- and
   // lastAction records the same "picker" the tile checks assert.
   function openScreen(id) {
-    // The shade goes away first -- the same order the gear uses (S2). It is a
+    // The control center goes away first -- the same order the gear uses (S2). It is a
     // sheet over whatever workspace this is, and the screen it summons is a
     // window on another one (docs/gestures.md K1), so leaving it up would put
     // the sheet over the workspace the summon just left.
@@ -1100,7 +1100,7 @@ Item {
   // Read here rather than through the service's showRecentHistory(): that
   // replays history back into popupModel, and the service's own toast surface
   // is visible whenever popupModel is non-empty -- so asking for history would
-  // spray toasts over the top of the shade that is displaying it.
+  // spray toasts over the top of the control center that is displaying it.
   property var historyRows: []
 
   Shared.Probe {
@@ -1147,7 +1147,7 @@ Item {
   }
 
   // The desktop entry a notification's app name belongs to. Through
-  // sortedEntries, which is the list the drawer's grid is built from -- rows,
+  // sortedEntries, which is the list the app drawer's grid is built from -- rows,
   // not entries, so `.entry` is unwrapped here rather than read straight off.
   function entryFor(app) {
     var want = String(app || "").toLowerCase()
@@ -1232,7 +1232,7 @@ Item {
   }
 
   // The notification is done with once acted on, as on Android: the card goes
-  // and the shade with it, so what the tap opened is what is on screen. The
+  // and the control center with it, so what the tap opened is what is on screen. The
   // row is dropped last -- that destroys the delegate this was called from.
   function runRow(row): void {
     var kind = root.actionFor(row)
@@ -1250,7 +1250,7 @@ Item {
     } else {
       var entry = root.entryFor(row.app)
       // Through appLibrary, so a card's launch draws the same splash a tap in
-      // the drawer draws (windows.md L1).
+      // the app drawer draws (windows.md L1).
       root.shell.appLibrary.launch(entry.id, root.shell.appLibrary.entryName(entry))
     }
     root.close()
@@ -1269,7 +1269,7 @@ Item {
     // underlying object on each access, so `!==` was true for the very row that
     // had just been tapped and nothing was ever removed. The file was already
     // gone by then, so the card sat there looking dead and the notification was
-    // simply absent the next time the shade opened.
+    // simply absent the next time the control center opened.
     var next = []
     for (var i = 0; i < root.historyRows.length; i++)
       if (root.rowStem(root.historyRows[i]) !== stem) next.push(root.historyRows[i])
@@ -1310,7 +1310,7 @@ Item {
     // when the click lands and the tile fires both actions).
     property bool heldFired: false
 
-    height: ui.shadeTile
+    height: ui.controlCenterTile
     radius: root.radiusTile
     color: tile.on ? root.accent : root.container
     Behavior on color { ColorAnimation { duration: 140 } }
@@ -1405,7 +1405,7 @@ Item {
     property bool on: false
     signal activated()
 
-    height: ui.shadeTile
+    height: ui.controlCenterTile
     radius: root.radiusTile
     color: small.on ? root.accent : root.container
     Behavior on color { ColorAnimation { duration: 140 } }
@@ -1463,7 +1463,7 @@ Item {
     property bool live: false
     signal committed(real value)
 
-    height: ui.shadeSlider
+    height: ui.controlCenterSlider
     readonly property int vGrow: Math.min(Style.space(4),
       Math.max(0, Math.round((Style.space(44) - height) / 2)))
     readonly property real clamped: Math.max(0, Math.min(1, slider.value))
@@ -1597,12 +1597,12 @@ Item {
     id: rb
     property string glyph: ""
     signal activated()
-    width: ui.shadeRound
+    width: ui.controlCenterRound
     height: width
     radius: ui.radiusOn(width)
     color: root.container
 
-    // Drawn at shadeRound, answering at 44 where the neighbours allow it
+    // Drawn at controlCenterRound, answering at 44 where the neighbours allow it
     // (docs/style.md E1-E3). The pair sits 8px apart, so 4 each is the most
     // either may take without the later one eating the earlier one's edge.
     readonly property int grow:
@@ -1637,7 +1637,7 @@ Item {
       color: root.textOnSurface
     }
 
-    // Drawn at shadeRound, answering toward 44 (docs/style.md E1-E3). The two
+    // Drawn at controlCenterRound, answering toward 44 (docs/style.md E1-E3). The two
     // buttons sit 8px apart, so 4 each is the most either may take without
     // the later one eating the earlier one's edge (E3). Compact's 32 therefore
     // answers over 40, not 44 -- the same E4 trade the transport buttons make.
@@ -1652,7 +1652,7 @@ Item {
   // ============================================================== surface
 
   PanelWindow {
-    id: shadeWindow
+    id: controlCenterWindow
 
     // Top/left/right only. Anchoring the bottom too would make the surface
     // full-height permanently and implicitHeight would stop meaning anything.
@@ -1665,10 +1665,10 @@ Item {
     color: "transparent"
     surfaceFormat.opaque: false
 
-    WlrLayershell.namespace: "moarchy-shade"
+    WlrLayershell.namespace: "moarchy-control-center"
     WlrLayershell.layer: WlrLayer.Overlay
     // No text input anywhere in here, and None makes it structurally impossible
-    // for the shade to steal focus from the app underneath -- so a pull-down,
+    // for the control center to steal focus from the app underneath -- so a pull-down,
     // a tap on a tile and a flick back up leaves you exactly where you were.
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
@@ -1679,13 +1679,13 @@ Item {
     // Cut the two edges that belong to other surfaces out of this one's input
     // region: the home pill along the bottom, and the 16px band down each
     // side. A masked-out band falls through to the next surface in the layer,
-    // which is what lets all three keep working with the shade down.
+    // which is what lets all three keep working with the control center down.
     Region {
       id: openRegion
       x: root.edgeBand
       y: 0
-      width: Math.max(1, shadeWindow.width - 2 * root.edgeBand)
-      height: Math.max(1, shadeWindow.height - root.gestureStrip)
+      width: Math.max(1, controlCenterWindow.width - 2 * root.edgeBand)
+      height: Math.max(1, controlCenterWindow.height - root.gestureStrip)
     }
 
     // Only masked once fully open. During the drag the whole surface should
@@ -1709,25 +1709,25 @@ Item {
       // Tap-to-dismiss *and* the close drag (H2), because the band of scrim
       // left below the sheet is where a thumb starts an up-swipe. That band is
       // no longer a fixed ~70px: the sheet is as tall as its content, so the
-      // band is ~70px with the shade full and several hundred with it near
+      // band is ~70px with the control center full and several hundred with it near
       // empty. Never less -- that is what the cap is for (S22).
       //
       // Wired to the same trio as the sheet rather than to `clicked` alone: a
       // MouseArea that only answers `clicked` still consumes the whole gesture,
       // so an up-drag begun here moved nothing at all and then dismissed the
-      // shade outright on release. The shade appeared to have no close
+      // control center outright on release. The control center appeared to have no close
       // animation, and it had none -- it was being closed by a tap that
       // happened to have travelled 250px.
       //
       // Gated on `progress`, NOT on `opened`, and that is the same trap the
-      // drawer's keyboardFocus documents. `opened` goes false on the first
+      // app drawer's keyboardFocus documents. `opened` goes false on the first
       // frame of the drag; an area that disables mid-gesture delivers
       // `canceled`, which snapped the sheet back to fully open and then dropped
       // it on a canned 220ms ramp. Holding it live until the sheet is all the
       // way down keeps the gesture intact.
       SheetArea {
         // no press state (style.md H7): a dismiss scrim. Lighting the whole
-        // screen is not feedback, and the shade leaving is what answers.
+        // screen is not feedback, and the control center leaving is what answers.
         anchors.fill: parent
         enabled: root.progress > 0
         onClicked: if (!root.sheetWasDrag) root.dismiss()
@@ -1738,7 +1738,7 @@ Item {
     Item {
       id: sheet
       // Q2a. The size this sheet has always had, on both axes: as wide as
-      // the screen and as tall as its content (shade.md S21). Only the path
+      // the screen and as tall as its content (control-center.md S21). Only the path
       // in changes with the edge -- a mirrored width would be a relayout of
       // every tile on it.
       width: parent.width
@@ -1820,16 +1820,16 @@ Item {
 
             Text {
               // The sheet covers the status bar, so the time has to reappear
-              // here or pulling the shade down loses the one thing a phone
+              // here or pulling the control center down loses the one thing a phone
               // user checks most.
-              text: Qt.formatDateTime(shadeClock.date, "H:mm")
+              text: Qt.formatDateTime(controlCenterClock.date, "H:mm")
               font.family: Style.font.family
               font.pixelSize: Style.font.heading
               font.weight: root.textWeight
               color: root.textOnSurface
             }
             Text {
-              text: Qt.formatDateTime(shadeClock.date, "dddd d MMMM")
+              text: Qt.formatDateTime(controlCenterClock.date, "dddd d MMMM")
               font.family: Style.font.family
               font.pixelSize: Style.font.caption
               font.weight: root.textWeight
@@ -2168,11 +2168,11 @@ Item {
           // and their spacing alone -- Flickable's margins sit outside it and
           // extend the scrollable range -- so a list that fits becomes scrollable
           // by exactly the margin, interactive where it was not, swallowing the
-          // close drag the cap exists to protect. The drawer's grid carries the
+          // close drag the cap exists to protect. The app drawer's grid carries the
           // same note for the same reason.
           height: Math.min(notificationList.listMax, contentHeight + bottomMargin)
           // H5: while it can scroll, the list owns vertical drags. Closing the
-          // shade out from under someone reading their notifications is
+          // control center out from under someone reading their notifications is
           // exactly the conflict this gesture is not allowed to create.
           interactive: contentHeight > height
           // The house default in every other list in this shell, and missing
@@ -2211,7 +2211,7 @@ Item {
             // S25/S27, resolved once per card rather than per binding read.
             // `action` re-evaluates when the window list changes, which is
             // what makes a card whose app has just opened go from launch to
-            // focus without the shade being reopened.
+            // focus without the control center being reopened.
             readonly property var icon: root.iconFor(card.modelData)
             readonly property string action: root.actionFor(card.modelData)
 
@@ -2234,7 +2234,7 @@ Item {
               // a glyph is self-evident, so per-card dismissal is now something
               // you have to know about. Clear-all stays as the tap-reachable
               // path, which is what keeps this from being the only way to empty
-              // the shade.
+              // the control center.
               //
               // Horizontal only, and preventStealing stays false, so the list
               // still takes any drag that turns out to be a scroll (H5). That
@@ -2342,7 +2342,7 @@ Item {
                 text: card.modelData.summary || ""
                 font.family: Style.font.family
                 font.pixelSize: Style.font.bodySmall
-                // A step above the rest of the shade rather than a step above
+                // A step above the rest of the control center rather than a step above
                 // Regular: with everything else at DemiBold, `font.bold` is
                 // what still separates the summary from its own body text.
                 font.weight: Font.Bold
@@ -2414,7 +2414,7 @@ Item {
   }
 
   SystemClock {
-    id: shadeClock
+    id: controlCenterClock
     precision: SystemClock.Minutes
   }
 }

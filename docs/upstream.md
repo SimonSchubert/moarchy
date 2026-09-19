@@ -234,8 +234,8 @@ all 11 members still present; `Commons/` has an identical file set;
 commits. The low-coupling bet is paying, and E2 is why.
 
 **E4** `refactor.md` §F still applies and is still the largest slimming win
-inside our own layer — four surfaces carry their own drag tracker (`shade` 62
-lines of drag vocabulary, `drawer` 48, `gestures` 32). It is not
+inside our own layer — four surfaces carry their own drag tracker (`control center` 62
+lines of drag vocabulary, `app drawer` 48, `gestures` 32). It is not
 restated here; it is not an upstream-boundary problem.
 
 ---

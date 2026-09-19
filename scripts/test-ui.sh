@@ -21,7 +21,7 @@ ok() { printf '  PASS  %s\n' "$1"; }
 no() { printf '  FAIL  %s\n' "$1"; fail=$((fail + 1)); }
 
 out=$("$UI")
-[[ $out == *'corners=large'* && $out == *'shade=roomy'* ]] \
+[[ $out == *'corners=large'* && $out == *'control_center=roomy'* ]] \
   && ok "missing file is large/roomy" \
   || no "missing file should be large/roomy, got: $out"
 
@@ -42,11 +42,11 @@ out=$("$UI")
 [[ $("$UI" get corners-label) == Square ]] && ok "corners-label Square" \
   || no "label: $("$UI" get corners-label)"
 
-"$UI" shade compact >/dev/null
-[[ $("$UI" get shade) == compact ]] && ok "shade compact sticks" \
-  || no "after compact: $("$UI" get shade)"
-[[ $("$UI" get corners) == square ]] && ok "shade write keeps corners" \
-  || no "corners lost after shade write: $("$UI" get corners)"
+"$UI" control-center compact >/dev/null
+[[ $("$UI" get control-center) == compact ]] && ok "control-center compact sticks" \
+  || no "after compact: $("$UI" get control-center)"
+[[ $("$UI" get corners) == square ]] && ok "control-center write keeps corners" \
+  || no "corners lost after control-center write: $("$UI" get corners)"
 
 "$UI" set sheet 16 >/dev/null
 [[ $("$UI" get sheet) == 16 ]] && ok "numeric sheet override" \
@@ -64,26 +64,26 @@ sheet=$("$UI" get sheet)
 # defaults are today's wiring -- a home with no ui.toml is the phone as it
 # shipped, which is the half of this that nobody would notice was broken.
 rm -f "$HOME/.config/omarchy/ui.toml"
-[[ $("$UI" get gesture-bottom) == drawer ]] && ok "gesture-bottom defaults to drawer" \
+[[ $("$UI" get gesture-bottom) == app-drawer ]] && ok "gesture-bottom defaults to app-drawer" \
   || no "gesture-bottom: $("$UI" get gesture-bottom)"
-[[ $("$UI" get gesture-right) == overview ]] && ok "gesture-right defaults to overview" \
+[[ $("$UI" get gesture-right) == workspace-overview ]] && ok "gesture-right defaults to workspace-overview" \
   || no "gesture-right: $("$UI" get gesture-right)"
 [[ $("$UI" get gesture-bottom-label) == "App drawer" ]] && ok "gesture-bottom-label reads App drawer" \
   || no "label: $("$UI" get gesture-bottom-label)"
-[[ $("$UI" get gesture-summary) == "App drawer · Overview" ]] && ok "gesture-summary is the pair" \
+[[ $("$UI" get gesture-summary) == "App drawer · Workspace overview" ]] && ok "gesture-summary is the pair" \
   || no "summary: $("$UI" get gesture-summary)"
 
-"$UI" gesture-right shade >/dev/null
-[[ $("$UI" get gesture-right) == shade ]] && ok "gesture-right shade sticks" \
-  || no "after shade: $("$UI" get gesture-right)"
-[[ $("$UI" get gesture-bottom) == drawer ]] && ok "one edge's write leaves the other alone" \
+"$UI" gesture-right control-center >/dev/null
+[[ $("$UI" get gesture-right) == control-center ]] && ok "gesture-right control-center sticks" \
+  || no "after control-center: $("$UI" get gesture-right)"
+[[ $("$UI" get gesture-bottom) == app-drawer ]] && ok "one edge's write leaves the other alone" \
   || no "bottom moved to: $("$UI" get gesture-bottom)"
 
 # A typo must not switch an edge off. Ui.js normTarget() is the same rule, and
 # both sides falling back to the caller's current value is what makes a
 # hand-edited file safe.
 "$UI" gesture-right nonsense >/dev/null
-[[ $("$UI" get gesture-right) == shade ]] && ok "an unknown word keeps the current value" \
+[[ $("$UI" get gesture-right) == control-center ]] && ok "an unknown word keeps the current value" \
   || no "nonsense left: $("$UI" get gesture-right)"
 
 "$UI" gesture-bottom none >/dev/null
@@ -95,14 +95,14 @@ rm -f "$HOME/.config/omarchy/ui.toml"
 # A file written before these keys existed has neither of them, and must come
 # back as the shipped pairing rather than as two dead edges.
 printf 'corners = "modest"\n' >"$HOME/.config/omarchy/ui.toml"
-[[ $("$UI" get gesture-bottom) == drawer && $("$UI" get gesture-right) == overview ]] \
+[[ $("$UI" get gesture-bottom) == app-drawer && $("$UI" get gesture-right) == workspace-overview ]] \
   && ok "a file with no gesture keys is the shipped pairing" \
   || no "old file gave: $("$UI" get gesture-bottom)/$("$UI" get gesture-right)"
 
 # The corners verb drops the radii it owns; it must not drop these.
-"$UI" gesture-right shade >/dev/null
+"$UI" gesture-right control-center >/dev/null
 "$UI" corners square >/dev/null
-[[ $("$UI" get gesture-right) == shade ]] && ok "a corners retake keeps the edges" \
+[[ $("$UI" get gesture-right) == control-center ]] && ok "a corners retake keeps the edges" \
   || no "corners write lost gesture-right: $("$UI" get gesture-right)"
 
 # gestures.md Q10. The two triggers that tap rather than drag take a wider
@@ -129,8 +129,8 @@ rm -f "$HOME/.config/omarchy/ui.toml"
   && ok "an unknown value passes through rather than falling back" \
   || no "unknown value became: $("$UI" get gesture-power)"
 
-"$UI" gesture-power shade >/dev/null
-[[ $("$UI" get gesture-power-label) == "Notification shade" ]] \
+"$UI" gesture-power control-center >/dev/null
+[[ $("$UI" get gesture-power-label) == "Control Center" ]] \
   && ok "a sheet word still reads as its name" \
   || no "power label: $("$UI" get gesture-power-label)"
 
@@ -139,12 +139,12 @@ rm -f "$HOME/.config/omarchy/ui.toml"
   || no "after off: $("$UI" get gesture-hold)"
 
 # All four keys survive a write to any one of them.
-"$UI" gesture-bottom shade >/dev/null
-[[ $("$UI" get gesture-power) == shade && $("$UI" get gesture-hold) == none ]] \
+"$UI" gesture-bottom control-center >/dev/null
+[[ $("$UI" get gesture-power) == control-center && $("$UI" get gesture-hold) == none ]] \
   && ok "an edge write leaves both tap triggers alone" \
   || no "after an edge write: hold=$("$UI" get gesture-hold) power=$("$UI" get gesture-power)"
 "$UI" corners large >/dev/null
-[[ $("$UI" get gesture-hold) == none && $("$UI" get gesture-power) == shade ]] \
+[[ $("$UI" get gesture-hold) == none && $("$UI" get gesture-power) == control-center ]] \
   && ok "a corners retake leaves all four gesture keys alone" \
   || no "corners write lost a gesture key"
 

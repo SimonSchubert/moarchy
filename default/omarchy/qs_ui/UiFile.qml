@@ -14,14 +14,14 @@ FileView {
   property var chrome: Ui.fallback()
 
   readonly property string corners: file.chrome.corners
-  readonly property string shade: file.chrome.shade
+  readonly property string controlCenter: file.chrome.controlCenter
 
   readonly property int radiusSheet: file.px(file.chrome.sheet)
   readonly property int radiusTile: file.px(file.chrome.tile)
   readonly property int radiusCard: file.px(file.chrome.card)
-  readonly property int shadeTile: file.px(file.chrome.shadeTile)
-  readonly property int shadeSlider: file.px(file.chrome.shadeSlider)
-  readonly property int shadeRound: file.px(file.chrome.shadeRound)
+  readonly property int controlCenterTile: file.px(file.chrome.controlCenterTile)
+  readonly property int controlCenterSlider: file.px(file.chrome.controlCenterSlider)
+  readonly property int controlCenterRound: file.px(file.chrome.controlCenterRound)
 
   function radiusOn(size) {
     return Ui.radiusOn(file.radiusTile, size)

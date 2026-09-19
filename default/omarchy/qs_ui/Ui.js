@@ -1,4 +1,4 @@
-// Phone chrome: corners and shade control sizes, from one user file.
+// Phone chrome: corners and control center control sizes, from one user file.
 //
 // Keep in step with default/omarchy/plugins/moarchy.common/Ui.js -- the
 // plugins cannot import qs_ui, and the apps cannot import moarchy.common,
@@ -12,9 +12,9 @@ var CORNERS = {
   square: { sheet: 0,  tile: 0,  card: 0  }
 }
 
-var SHADE = {
-  roomy:   { shadeTile: 62, shadeSlider: 48, shadeRound: 36 },
-  compact: { shadeTile: 48, shadeSlider: 36, shadeRound: 32 }
+var CONTROL_CENTER = {
+  roomy:   { controlCenterTile: 62, controlCenterSlider: 48, controlCenterRound: 36 },
+  compact: { controlCenterTile: 48, controlCenterSlider: 36, controlCenterRound: 32 }
 }
 
 function fallback() {
@@ -33,7 +33,7 @@ function normShade(s) {
   var n = String(s || "roomy").toLowerCase().trim()
   if (n === "comfortable" || n === "large" || n === "big" || n === "huge") return "roomy"
   if (n === "small" || n === "dense" || n === "tight") return "compact"
-  return SHADE[n] ? n : "roomy"
+  return CONTROL_CENTER[n] ? n : "roomy"
 }
 
 function num(data, names, fallbackValue) {
@@ -49,18 +49,18 @@ function num(data, names, fallbackValue) {
 function fromData(data) {
   data = data || {}
   var corners = normCorners(data.corners)
-  var shade = normShade(data.shade || data.density)
+  var controlCenter = normShade(data.controlCenter || data.density)
   var c = CORNERS[corners]
-  var s = SHADE[shade]
+  var s = CONTROL_CENTER[controlCenter]
   return {
     corners: corners,
-    shade: shade,
+    controlCenter: controlCenter,
     sheet: num(data, ["sheet"], c.sheet),
     tile: num(data, ["tile"], c.tile),
     card: num(data, ["card"], c.card),
-    shadeTile: num(data, ["shade_tile", "shadeTile"], s.shadeTile),
-    shadeSlider: num(data, ["shade_slider", "shadeSlider"], s.shadeSlider),
-    shadeRound: num(data, ["shade_round", "shadeRound"], s.shadeRound)
+    controlCenterTile: num(data, ["control_center_tile", "controlCenterTile"], s.controlCenterTile),
+    controlCenterSlider: num(data, ["control_center_slider", "controlCenterSlider"], s.controlCenterSlider),
+    controlCenterRound: num(data, ["control_center_round", "controlCenterRound"], s.controlCenterRound)
   }
 }
 
@@ -93,34 +93,34 @@ function differs(chrome, key, presetValue) {
 function serialize(chrome) {
   var c = chrome || fallback()
   var presetC = CORNERS[c.corners] || CORNERS.large
-  var presetS = SHADE[c.shade] || SHADE.roomy
+  var presetS = CONTROL_CENTER[c.controlCenter] || CONTROL_CENTER.roomy
   var lines = [
     "# Phone chrome. Independent of the colour theme.",
     "# Colours live in ~/.local/state/omarchy/current/theme/colors.toml",
     "# and change with omarchy-theme-set. This file reshapes the UI.",
     "#",
     "# corners: large | modest | square",
-    "# shade:   roomy | compact",
+    "# control_center:  roomy | compact",
     "#",
     "# Optional numbers (logical px) override the preset for that key:",
-    "#   sheet, tile, card, shade_tile, shade_slider, shade_round",
+    "#   sheet, tile, card, control_center_tile, control_center_slider, control_center_round",
     "",
     "corners = \"" + c.corners + "\"",
-    "shade = \"" + c.shade + "\""
+    "control_center = \"" + c.controlCenter + "\""
   ]
   if (differs(c, "sheet", presetC.sheet)) lines.push("sheet = " + c.sheet)
   if (differs(c, "tile", presetC.tile)) lines.push("tile = " + c.tile)
   if (differs(c, "card", presetC.card)) lines.push("card = " + c.card)
-  if (differs(c, "shadeTile", presetS.shadeTile)) lines.push("shade_tile = " + c.shadeTile)
-  if (differs(c, "shadeSlider", presetS.shadeSlider)) lines.push("shade_slider = " + c.shadeSlider)
-  if (differs(c, "shadeRound", presetS.shadeRound)) lines.push("shade_round = " + c.shadeRound)
+  if (differs(c, "controlCenterTile", presetS.controlCenterTile)) lines.push("control_center_tile = " + c.controlCenterTile)
+  if (differs(c, "controlCenterSlider", presetS.controlCenterSlider)) lines.push("control_center_slider = " + c.controlCenterSlider)
+  if (differs(c, "controlCenterRound", presetS.controlCenterRound)) lines.push("control_center_round = " + c.controlCenterRound)
   lines.push("")
   return lines.join("\n")
 }
 
 function merge(chrome, patch) {
   var cur = chrome || fallback()
-  var data = { corners: cur.corners, shade: cur.shade }
+  var data = { corners: cur.corners, controlCenter: cur.controlCenter }
   for (var k in (patch || {})) data[k] = patch[k]
   return fromData(data)
 }

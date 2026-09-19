@@ -10,7 +10,7 @@
 // in, and it should be an icon grid you recognise rather than a list you read.
 //
 // The palette is not lost. Everything it could reach lives in
-// moarchy.settings, behind the shade's gear -- which is where system
+// moarchy.settings, behind the control center's gear -- which is where system
 // administration belongs on a phone, rather than one mis-tap from an app icon
 // on the launcher. $mod+Alt+Space still opens the menu at its root for anyone
 // with a keyboard attached.
@@ -31,7 +31,7 @@
 // This is not the palette coming back and it is not a second copy of the tree.
 // The index is a walk of moarchy.settings' own PAGES, the tap goes through
 // moarchy.settings' own activate(), and there is no list of actions here to
-// fall out of date. What the drawer owns is the field and the rows it draws.
+// fall out of date. What the app drawer owns is the field and the rows it draws.
 //
 // The two imports below are the price: this plugin will not load without
 // moarchy.settings beside it. They ship in one package to one directory, so
@@ -44,7 +44,7 @@
 // moarchy.gestures already owns the bottom strip, and two exclusive
 // layer surfaces cannot share an edge -- the second one is arranged above the
 // first rather than on top of it. So the gesture plugin keeps the input and
-// toggles this plugin through the shell. The drawer itself is only ever a
+// toggles this plugin through the shell. The app drawer itself is only ever a
 // destination.
 //
 // ---------------------------------------------------------------------------
@@ -53,7 +53,7 @@
 // The search field needs the on-screen keyboard, and moarchy-keyboard sits on Top
 // with an exclusive zone. A surface that reserves nothing is arranged into
 // whatever area is left after the exclusive ones are placed -- so on Top with
-// zone 0 the drawer is laid out below the bar, above the home pill, and above
+// zone 0 the app drawer is laid out below the bar, above the home pill, and above
 // the keyboard when it rises, without a single line of geometry maths here.
 // Overlay would put it over all three and leave the grid buried under the
 // keyboard, which is the one arrangement that makes search useless.
@@ -89,13 +89,13 @@ Item {
   // `service`, each behind an `if ("x" in target)` -- so a plugin that does not
   // declare one is simply skipped, and not one of the eleven read any of them.
   // A service is reached through `shell.serviceFor()`, which is the supported
-  // way in and the way the bar and the shade have always done it.
+  // way in and the way the bar and the control center have always done it.
   property var shell: null
 
   // 0 shut .. 1 open, and the drag writes it directly. The gestures plugin owns
   // the bottom edge -- it cannot be shared, so this surface never sees the
   // touch -- and drives this property from its own MultiPointTouchArea while
-  // the finger moves. That is what makes the drawer follow the finger rather
+  // the finger moves. That is what makes the app drawer follow the finger rather
   // than appear at a threshold.
   // gestures.md Q2. Which screen edge raised this sheet. Written by
   // moarchy.gestures on a press, and only while the sheet is at rest shut
@@ -112,11 +112,11 @@ Item {
 
   // G14a. The search pill slides under the opening finger as the sheet comes
   // up, and a press there must not read as a request. Armed only once the
-  // drawer is sitting still, so the swipe that opened it cannot raise the
+  // app drawer is sitting still, so the swipe that opened it cannot raise the
   // keyboard.
   //
   // Armed off `opened`, not off the end of a drag. A drag released part-way
-  // hands the last stretch to the progress animation, and `drawer open` never
+  // hands the last stretch to the progress animation, and `app-drawer open` never
   // drags at all -- so arming when `dragging` fell with the sheet already at 1
   // armed only a finger dragged the whole way up, and the field was dead after
   // every flick.
@@ -152,7 +152,7 @@ Item {
   //
   // Retired on the same terms as `progress`, and for the same reason the
   // carousel's was: zeroed instantly while the sheet is still animating out,
-  // it drops 80px on the way down, which reads as the drawer flinching.
+  // it drops 80px on the way down, which reads as the app drawer flinching.
   property real homeHint: 0
 
   Behavior on homeHint {
@@ -164,15 +164,15 @@ Item {
   // handle is *on* the sheet it moves. Any other ratio and the handle races
   // out from under the thumb -- at a third of this it moved about 3.7x finger
   // speed, the touch ended up above the strip it started on, and the gesture
-  // came back as a cancel often enough to leave the drawer open on a full
+  // came back as a cancel often enough to leave the app drawer open on a full
   // drag. Matching the travel to the sheet height keeps the bar exactly where
   // it was grabbed, which is also how a real bottom sheet behaves.
   //
   // The open drag can use a shorter travel because it is driven from the
   // gesture strip, which does not move.
-  // Not `drawerWindow.height`, and that is the whole of this note: shut, this
-  // window is a one-pixel band (N3). `drawer geometry` answers `w=360 h=1` with
-  // the drawer down and `w=360 h=694` with it up -- and the drag that *opens*
+  // Not `appDrawerWindow.height`, and that is the whole of this note: shut, this
+  // window is a one-pixel band (N3). `app-drawer geometry` answers `w=360 h=1` with
+  // the app drawer down and `w=360 h=694` with it up -- and the drag that *opens*
   // this sheet necessarily starts while it is down. Dividing a drag by the band
   // moves the sheet hundreds of times finger speed until the surface grows,
   // which is a jump on the first frames and then a visible retreat as the
@@ -197,9 +197,9 @@ Item {
   // which only ever shows on a cold shell.
   readonly property real closeTravel: Math.max(1, root.sideways
     ? (root.sheetWidth > 0 ? root.sheetWidth
-                           : (drawerWindow.screen ? drawerWindow.screen.width : 360))
+                           : (appDrawerWindow.screen ? appDrawerWindow.screen.width : 360))
     : (root.sheetHeight > 0 ? root.sheetHeight
-                            : (drawerWindow.screen ? drawerWindow.screen.height : 720)))
+                            : (appDrawerWindow.screen ? appDrawerWindow.screen.height : 720)))
   readonly property real closeCommit: 0.7
 
   // H1. Travel past which a touch on the sheet stops being a tap and starts
@@ -245,7 +245,7 @@ Item {
     // sheet left to travel.
     // `v` is signed toward open, so a fling *shut* is the negative one. This
     // sheet opens upward, which is why the two read the other way round from
-    // the shade's.
+    // the control center's.
     onFinished: (p, v) => {
       root.dragging = false
       if (v <= -root.sheetFling) root.dismiss()
@@ -399,7 +399,7 @@ Item {
   }
 
   // A failed drag says *which* way it ended: a cancel and a stranded touch both
-  // leave the drawer where the finger did, and they want opposite fixes.
+  // leave the app drawer where the finger did, and they want opposite fixes.
   function markTrace(marker): void {
     var next = root.dragTrace.slice()
     next.push(marker)
@@ -407,13 +407,13 @@ Item {
   }
 
   property string query: ""
-  readonly property string pluginId: "moarchy.drawer"
+  readonly property string pluginId: "moarchy.app-drawer"
 
   readonly property int columns: 4
   readonly property int iconSize: Style.space(42)
 
   // Must match moarchy.gestures' own stripHeight. Duplicated rather than
-  // read across plugins for the same reason the shade duplicates it: this
+  // read across plugins for the same reason the control center duplicates it: this
   // surface has to know the number even when the gestures plugin failed to
   // load, and a sheet that ran off the bottom of the screen in that case would
   // be worse than one that leaves the band unused.
@@ -440,7 +440,7 @@ Item {
   // wallpaper under the pill (I1). Gated on a height only a real sheet has, the
   // same guard `sheetHeight` is written under, so the grow is one configure.
   readonly property bool keyboardUp:
-    root.surfaceUp && drawerWindow.height > 200 && osk.reserving(drawerWindow)
+    root.surfaceUp && appDrawerWindow.height > 200 && osk.reserving(appDrawerWindow)
 
 
   // The weight the bar and every other surface runs at (docs/style.md B3).
@@ -448,7 +448,7 @@ Item {
   // screen left at Regular reads as a different phone.
   readonly property int textWeight: Font.DemiBold
 
-  // The sheet radius, the same one the shade's sheet uses (docs/style.md
+  // The sheet radius, the same one the control center's sheet uses (docs/style.md
   // D1). Named rather than written twice: it is also the height of the
   // rectangle that squares the bottom corners back off, and those two
   // numbers are the same number rather than two that happen to match.
@@ -487,7 +487,7 @@ Item {
   // on a dark tile while the properties either side of them are fine.
   readonly property color textOnSurface: Color.menu.text
   readonly property color container: Util.alpha(Color.menu.text, 0.08)
-  // The fifth of C2's six roles, and the drawer had never needed one: at rest
+  // The fifth of C2's six roles, and the app drawer had never needed one: at rest
   // this screen is a search pill and bare icons, and a second tone with nothing
   // to distinguish from would be a colour nobody chose. The detail card is what
   // gave it something -- the card is `container`, and Remove has to read as a
@@ -524,7 +524,7 @@ Item {
   component SheetArea: Shared.SheetDragArea { sheet: root }
 
   // G14a. The keyboard, asked to show when a finger taps the search field.
-  // Hide is not this surface's: G2 is the one way down, and a drawer that put
+  // Hide is not this surface's: G2 is the one way down, and a app drawer that put
   // the keyboard away on close is what made it flap when launching an app.
   Shared.Osk { id: osk }
 
@@ -571,12 +571,12 @@ Item {
   // (windows.md L10).
   //
   // Answered through moarchy.common/Apps.js, which is the same appId index the
-  // overview resolves its tiles through (gestures.md P5). One index, because
+  // workspace overview resolves its tiles through (gestures.md P5). One index, because
   // two implementations of "which app is this window" is how every moarchy-apps
   // plugin came to be drawn as `org.quickshell` with no artwork at all (K5).
   //
   // The index is held here rather than there because the *timing* is this
-  // sheet's: rebuilt on `appsChanged` below, where the overview rebuilds when
+  // sheet's: rebuilt on `appsChanged` below, where the workspace overview rebuilds when
   // its own sheet comes up. Separate from `appRows` on purpose -- that one is
   // the query's answer and re-sorts on every keystroke, and what is running
   // must not depend on what is in the search field.
@@ -716,7 +716,7 @@ Item {
     }
   }
 
-  // A tap on a settings result. The drawer decides *where* to send it and
+  // A tap on a settings result. The app drawer decides *where* to send it and
   // moarchy.settings decides what that means -- which is the whole reason there
   // is no command line anywhere in this file.
   //
@@ -742,7 +742,7 @@ Item {
     else
       payload = { page: hit.pageId }
 
-    // Settings' own open() hides this surface, the same as the shade's gear
+    // Settings' own open() hides this surface, the same as the control center's gear
     // does. Dismissing first anyway is the belt to those braces: a quiet open
     // never reaches the branch that hides anything.
     root.dismiss()
@@ -909,7 +909,7 @@ Item {
   readonly property bool detailProtected: String(root.detailInfo["protected"] || "") === "1"
 
   // G3. The card is a screen inside this surface, so back leaves it before it
-  // leaves the drawer -- and from the plan it steps back to the detail rather
+  // leaves the app drawer -- and from the plan it steps back to the detail rather
   // than out, because that is the step that was taken to get there. Returning
   // false is what tells the gestures plugin to close the whole overlay.
   function goBack(): bool {
@@ -960,9 +960,9 @@ Item {
   function open(payloadJson) {
     // A sheet opening puts away every sheet on its own layer or above it, and
     // none of the ones below it (docs/refactor.md B6). This one is Top, so
-    // that is the shade above it and the theme picker beside it -- not a
-    // preference for one sheet at a time, which is why the shade keeps this
-    // one standing (shade.md S28) while this keeps hiding the shade.
+    // that is the control center above it and the theme picker beside it -- not a
+    // preference for one sheet at a time, which is why the control center keeps this
+    // one standing (control-center.md S28) while this keeps hiding the control center.
     //
     // Themes was missing and the omission was invisible: it is Top and
     // Exclusive like this surface, so which of the two drew on top was decided
@@ -986,7 +986,7 @@ Item {
     root.query = ""
     searchField.text = ""
 
-    // L5. The drawer opens on the grid, never on somebody's half-read card.
+    // L5. The app drawer opens on the grid, never on somebody's half-read card.
     root.closeDetail()
     // A4. A drag that armed home and was then abandoned must not leave the
     // next opening sitting 80px high.
@@ -1027,7 +1027,7 @@ Item {
   }
 
   function close() {
-    // F8, and the shade's reason applies here too: a tile tap that launches,
+    // F8, and the control center's reason applies here too: a tile tap that launches,
     // or a hold that opens a card, can take this surface away under a finger
     // that is still down, and an unmapped MouseArea reports no release. A
     // tracker left active is a watchdog that puts `progress` back four seconds
@@ -1038,7 +1038,7 @@ Item {
 
     // Move focus off the search field BEFORE the surface goes away. An unmap
     // is not a text-input-v3 deactivate, so a field that still holds active
-    // focus keeps receiving commits after the drawer is gone. `focus = false`
+    // focus keeps receiving commits after the app drawer is gone. `focus = false`
     // is not enough -- it releases the focus *scope*, not the active focus.
     // Handing active focus to a plain Item is what actually sends the disable.
     // The keyboard itself stays up (G14); this only stops typing into a field
@@ -1047,7 +1047,7 @@ Item {
 
     root.query = ""
     // The card goes with the surface. Left standing it would be the first thing
-    // on screen the next time the drawer came up, about an app that may not be
+    // on screen the next time the app drawer came up, about an app that may not be
     // installed any more.
     root.closeDetail()
     root.cancelHold()
@@ -1119,10 +1119,10 @@ Item {
     root.dismiss()
   }
 
-  // Lets the drawer be driven without a finger, which is how the selftest
-  // asserts it: omarchy-shell drawer state
+  // Lets the app drawer be driven without a finger, which is how the selftest
+  // asserts it: omarchy-shell app drawer state
   IpcHandler {
-    target: "drawer"
+    target: "app-drawer"
 
     function state(): string { return root.opened ? "open" : "closed" }
     // How far up the sheet is, so a drag can be measured rather than
@@ -1154,7 +1154,7 @@ Item {
     // pixels bin/moarchy-touch takes are these doubled. `focused` closes the
     // loop: tap a corner, read it back.
     //
-    // Meaningless while the drawer is closed or mid-slide, the same as
+    // Meaningless while the app drawer is closed or mid-slide, the same as
     // geometry(): open it first.
     function searchTarget(): string {
       var box = it => {
@@ -1199,18 +1199,18 @@ Item {
       // while the last result sits under the home pill.
       var last = settingsSection.visible ? settingsSection : grid
       var pad = settingsSection.visible ? 0 : grid.bottomMargin
-      var gap = Math.round(drawerWindow.height - last.mapToItem(null, 0, last.height).y + pad)
-      return "w=" + drawerWindow.width
-           + " h=" + drawerWindow.height
+      var gap = Math.round(appDrawerWindow.height - last.mapToItem(null, 0, last.height).y + pad)
+      return "w=" + appDrawerWindow.width
+           + " h=" + appDrawerWindow.height
            // What a drag on this sheet divides by (D2a). Unlike `h` it is
-           // meaningful while the drawer is closed -- which is the state it
+           // meaningful while the app drawer is closed -- which is the state it
            // has to be right in, because that is where an opening drag starts.
            + " travel=" + Math.round(root.closeTravel)
-           + " margin=" + drawerWindow.margins.bottom
+           + " margin=" + appDrawerWindow.margins.bottom
            + " strip=" + root.gestureStrip
            + " gap=" + gap
-           + " screen=" + (drawerWindow.screen
-               ? drawerWindow.screen.width + "x" + drawerWindow.screen.height : "?")
+           + " screen=" + (appDrawerWindow.screen
+               ? appDrawerWindow.screen.width + "x" + appDrawerWindow.screen.height : "?")
            // refactor.md F8. Whether a touch is still open on either tracker.
            // It must read `idle` whenever no finger is down, and a control that
            // presses without ending is the only way it does not -- which is
@@ -1231,7 +1231,7 @@ Item {
     // this rather than launching the entry itself, so that installing something
     // and opening it puts its icon on the wallpaper like every other launch
     // (L9). That makes this a contract with a consumer outside this repo:
-    // renaming it, or moving it off the drawer, breaks Open in the store.
+    // renaming it, or moving it off the app drawer, breaks Open in the store.
     // Callers pass the bare id -- no .desktop suffix -- or the lookup below
     // misses and the splash falls back to a generic icon.
     //
@@ -1283,7 +1283,7 @@ Item {
     // The name comes from appLibrary rather than from the entry, because the
     // library is what resolves a blank or duplicated Name= the way the grid
     // draws it -- two lists that disagree about what an app is called is how a
-    // trigger comes to name something the drawer does not.
+    // trigger comes to name something the app drawer does not.
     function entryRows(): string {
       if (!root.shell || !root.shell.appLibrary) return ""
       var out = []
@@ -1462,19 +1462,19 @@ Item {
   }
 
   PanelWindow {
-    id: drawerWindow
+    id: appDrawerWindow
 
     // The one place `sheetHeight` is written. Guarded on a number that could
     // only be the band (N3), and no phone this runs on has a 200px-tall sheet.
-    onHeightChanged: if (drawerWindow.height > 200) root.sheetHeight = drawerWindow.height
-    onWidthChanged: if (drawerWindow.width > 200) root.sheetWidth = drawerWindow.width
+    onHeightChanged: if (appDrawerWindow.height > 200) root.sheetHeight = appDrawerWindow.height
+    onWidthChanged: if (appDrawerWindow.width > 200) root.sheetWidth = appDrawerWindow.width
 
     // gestures.md N3. Never unmapped: shut, a one-pixel band along the bottom
     // edge; grown to the sheet when an upward drag latches, not on press.
     //
     // It used to be `visible` only while drawn, and that cost ~200ms on every
     // open, measured on the Pixel 3a (omarchy-test,
-    // docs/drawer-open-stall-results.md). Quickshell deletes a layer-shell
+    // docs/app drawer-open-stall-results.md). Quickshell deletes a layer-shell
     // window that goes invisible, so each open built a new QQuickWindow -- a
     // render thread, a GL context, a swapchain, the whole scene graph and a
     // first layout -- and the first frame took polish 75-114ms, sync 38-51,
@@ -1483,7 +1483,7 @@ Item {
     // two frames that allocate buffers, measured at 27-35ms for the longest
     // frame against ~225.
     //
-    // The shade is the model: shut, it is a bar-height band across the top, so
+    // The control center is the model: shut, it is a bar-height band across the top, so
     // a pull-down costs a resize. Not left full-screen and transparent, which
     // is a full-screen blend in every frame on a Mali-400 (build-log 6b); a
     // band blends one row. It is not free: it still redraws when what is on the
@@ -1523,7 +1523,7 @@ Item {
     mask: root.progress > 0 ? null : warmRegion
 
 
-    WlrLayershell.namespace: "moarchy-drawer"
+    WlrLayershell.namespace: "moarchy-app-drawer"
     WlrLayershell.layer: WlrLayer.Top
 
     // Reserve nothing, but be arranged into what the exclusive surfaces left.
@@ -1553,10 +1553,10 @@ Item {
     // reserving. With the keyboard down that is the strip, which is on Overlay
     // and draws over us: exactly what is wanted. With the keyboard up it is the
     // keyboard, which is on Top like this surface and mapped earlier, so the
-    // drawer wins the overlap and paints over it.
+    // app drawer wins the overlap and paints over it.
     //
     // Measured, not reasoned about: unconditional, with the keyboard up, the
-    // drawer's last 20px covered the whole top key row -- `qwertyuiop` reduced
+    // app drawer's last 20px covered the whole top key row -- `qwertyuiop` reduced
     // to a sliver under the app labels. Content compensation does not help,
     // because the grid's bottomMargin moves the last *row* and not the surface.
     //
@@ -1574,7 +1574,7 @@ Item {
 
     // Plain Exclusive rather than the prime-then-OnDemand dance in
     // Ui/KeyboardPanel.qml: that exists so clicks can still reach the bar
-    // underneath, and this drawer deliberately owns the whole screen while it
+    // underneath, and this app drawer deliberately owns the whole screen while it
     // is up. Every other full-screen overlay in the shell -- menu, emojis,
     // clipboard, image picker -- does exactly this.
     //
@@ -1589,7 +1589,7 @@ Item {
     WlrLayershell.keyboardFocus: root.progress > 0 ? WlrKeyboardFocus.Exclusive
                                                    : WlrKeyboardFocus.None
 
-    // The scrim is what makes a half-open drawer read as half-open rather than
+    // The scrim is what makes a half-open app drawer read as half-open rather than
     // as a window that has not finished drawing. One blended quad, its alpha
     // bound straight to the drag -- no opacity on a subtree, which would make
     // the renderer composite the whole sheet off-screen first on a GPU that
@@ -1612,11 +1612,11 @@ Item {
       // which is the whole reason the latch exists.
       width: root.sideways
            ? (root.sheetWidth > 0 ? root.sheetWidth
-              : (drawerWindow.screen ? drawerWindow.screen.width : parent.width))
+              : (appDrawerWindow.screen ? appDrawerWindow.screen.width : parent.width))
            : parent.width
       height: root.sideways ? parent.height
             : (root.sheetHeight > 0 ? root.sheetHeight
-               : (drawerWindow.screen ? drawerWindow.screen.height : parent.height))
+               : (appDrawerWindow.screen ? appDrawerWindow.screen.height : parent.height))
 
       // Q2. Rides in from whichever edge raised it. Translation only: this is
       // a Mali-400 at GLES 2.0, so there are no shaders to spend, and a
@@ -1644,7 +1644,7 @@ Item {
 
       // Through goBack() rather than straight to dismiss, so a keyboard walks
       // the same ladder the back gesture does (L5): the plan, then the card,
-      // then the drawer. Escape closing the whole sheet from an open card would
+      // then the app drawer. Escape closing the whole sheet from an open card would
       // be the one way out of this screen that skips a level.
       Keys.onEscapePressed: if (!root.goBack()) root.dismiss()
 
@@ -1683,7 +1683,7 @@ Item {
       // never drags and never overscrolls.
       //
       // A MultiPointTouchArea on a strip of its own has neither problem, and
-      // it is what the gestures plugin and the shade already use: the surface
+      // it is what the gestures plugin and the control center already use: the surface
       // it covers *is* its input region, Wayland's implicit grab keeps the
       // whole gesture on it however far the finger travels, and it cannot
       // compete with a tap on an app icon because it does not overlap one.
@@ -1730,7 +1730,7 @@ Item {
             else root.progress = 1
           }
 
-          // A stranded touch must not leave the drawer parked half-open, and
+          // A stranded touch must not leave the app drawer parked half-open, and
           // until F2 nothing here stopped it: this area handled cancel and not
           // the touch that never ends. The watchdog arrives with the tracker.
           onStranded: root.markTrace(-2)
@@ -1838,7 +1838,7 @@ Item {
             onTextChanged: queryDebounce.restart()
 
             // G14a. A press that *starts* on this field, and only once the
-            // drawer is sitting still. ClickFocus keeps Exclusive from parking
+            // app drawer is sitting still. ClickFocus keeps Exclusive from parking
             // here on map. onPressed rather than a TapHandler: the pill slides
             // under the opening finger, and onTapped fires on that release.
             focusPolicy: Qt.ClickFocus
@@ -1857,7 +1857,7 @@ Item {
           // Clear (F6). A field a thumb can fill is a field a thumb has to be
           // able to empty: backspacing a wrong query out is 20 taps on a phone
           // keyboard, and the alternative people actually use -- close the
-          // drawer and swipe it up again -- throws away the scroll position.
+          // app drawer and swipe it up again -- throws away the scroll position.
           //
           // Only when there is something to clear. Drawn unconditionally it is
           // a control that does nothing for as long as the field is empty,
@@ -2055,7 +2055,7 @@ Item {
         // glyph in a grid of app icons reads as an app.
         //
         // Not in `appRows` either, and that is not a layout decision: that
-        // property feeds `drawer entries` and `drawer launch`, which
+        // property feeds `app-drawer entries` and `app-drawer launch`, which
         // moarchy-store calls and the selftest asserts (L9). A settings row in
         // there would be an id the store could be handed and would try to
         // gtk-launch.
@@ -2176,7 +2176,7 @@ Item {
 
       // ------------------------------------------------ the app detail (L)
       //
-      // A card over the sheet and not a surface of its own (L5). The drawer
+      // A card over the sheet and not a surface of its own (L5). The app drawer
       // keeps its keyboard focus, its scroll position and its progress, so
       // closing this leaves the grid exactly where the hold found it -- and a
       // second layer-shell surface for a card would have to be arranged,
@@ -2428,7 +2428,7 @@ Item {
               // condition this control can actually meet: the scrim above
               // covers the grid and the handle, so nothing can be dragging the
               // sheet while this button exists. Spelled anyway, because "on
-              // the drawer, no press lights during a sheet drag" is the rule,
+              // the app drawer, no press lights during a sheet drag" is the rule,
               // and a control exempt by accident of layout is one that stops
               // being exempt the day the layout moves.
               PressVeil {
@@ -2528,7 +2528,7 @@ Item {
       }
     }
 
-    // Somewhere for active focus to go when the drawer closes (N4). It has to
+    // Somewhere for active focus to go when the app drawer closes (N4). It has to
     // be a real item *inside this window*, and for a long time it was not: it
     // sat out at plugin root, a child of an Item that belongs to no window at
     // all. An item with no window cannot be given active focus, so
@@ -2537,7 +2537,7 @@ Item {
     // the unmap and had it handed straight back the moment sway re-activated
     // the surface on the next open.
     //
-    // The symptom was the drawer re-opening with its query and its focus from
+    // The symptom was the app drawer re-opening with its query and its focus from
     // last time: the field kept its `focus` across the unmap and took
     // activeFocus straight back on the next map (N4).
     //

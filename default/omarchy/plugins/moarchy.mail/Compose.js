@@ -205,7 +205,7 @@ function fromMailto(uri, at) {
   return d
 }
 
-// What omarchy-shell hands open(): a JSON object from the drawer or another
+// What omarchy-shell hands open(): a JSON object from the app drawer or another
 // plugin, or the bare mailto: URI xdg-open put where %u was.
 function parsePayload(payload, at) {
   var out = { returnTo: "", draft: null }

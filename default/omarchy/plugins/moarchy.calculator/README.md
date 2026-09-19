@@ -181,8 +181,8 @@ plugins/moarchy.calculator/install-on-device.sh
 
 That copies the plugin into `~/.config/omarchy/plugins/moarchy.calculator`,
 asks the shell to validate and enable it, writes a `.desktop` entry so the
-drawer can summon it, and restarts the shell. Then tap **Calculator** in the
-drawer.
+app drawer can summon it, and restarts the shell. Then tap **Calculator** in the
+app drawer.
 
 ```sh
 omarchy-shell shell toggle moarchy.calculator

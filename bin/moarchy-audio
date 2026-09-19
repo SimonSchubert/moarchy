@@ -1,9 +1,9 @@
 #!/bin/bash
 # Audio routing for the Settings screen: which device plays, which one records.
 #
-# Not volume. The shade owns volume, brightness and the radios (docs/settings.md
+# Not volume. The control center owns volume, brightness and the radios (docs/settings.md
 # H1), and repeating a slider here would be the mistake that section exists to
-# stop. This is the half the shade has no room for -- picking between the
+# stop. This is the half the control center has no room for -- picking between the
 # earpiece, the speaker, a headset and a paired Bluetooth sink.
 #
 # It replaces `wiremix` in a terminal, which mapped its window on this panel and

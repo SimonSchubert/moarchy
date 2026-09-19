@@ -93,7 +93,7 @@ function anchors(edge, grown) {
 
 // Q2a. Where the sheet sits at `progress`, given the surface it is in and its
 // own size. Only the entry axis moves: on the cross axis a sheet keeps the
-// position it has, because the shade is as tall as its content (shade.md S21)
+// position it has, because the control center is as tall as its content (control-center.md S21)
 // and mirroring that into a width would be a relayout of every tile on it
 // rather than a different path in.
 //
@@ -106,7 +106,7 @@ function offset(edge, progress, boxW, boxH, sheetW, sheetH) {
   var box = sideways ? boxW : boxH
   // Clamped to the surface, because a sheet bigger than the box cannot rest
   // inside it: it rests flush against the entry edge and overflows the far
-  // one. The drawer does exactly that for one drag per session -- its size
+  // one. The app drawer does exactly that for one drag per session -- its size
   // falls back to the *screen* until the surface has been up once (D2b), and
   // the screen is taller than the surface by the bar's exclusive zone. Without
   // the clamp that first sheet sits a few pixels high and loses the top of its

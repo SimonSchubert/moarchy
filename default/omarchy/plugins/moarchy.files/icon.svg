@@ -3,7 +3,7 @@
 
      A file manager's icon is the one glyph on this phone that everybody
      already knows, so the job here is not invention: it is drawing the known
-     shape as an object rather than as a tile. The drawer paints a .desktop
+     shape as an object rather than as a tile. The appDrawer paints a .desktop
      icon bare, with no plate behind it, so anything that fills its own square
      reads as a tile with a picture on it instead of as a thing. The tab and
      the sheet are what give this an outline that is not a rectangle.

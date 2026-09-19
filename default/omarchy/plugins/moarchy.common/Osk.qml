@@ -9,7 +9,7 @@
 // `moarchy-keyboard` owns `sm.puri.OSK0` and the only way in is DBus, so this is
 // the one place the incantation is written. It stood in `moarchy.gestures` and in
 // `bin/moarchy-toggle-keyboard`, and a third copy was about to be written for the
-// drawer's search field.
+// app drawer's search field.
 //
 // Visibility is sticky. Show is a person tapping a field or the restore handle;
 // hide is the back swipe (G2). Overlay open/close and app switches write
@@ -53,8 +53,8 @@ Item {
   // What the keyboard reserves at the bottom, in logical px.
   //
   // Measured, not chosen: it is moarchy-keyboard's panel and this shell does
-  // not set it. The same figure `gestures.md` I5b pins the drawer's reflow to
-  // -- at 176 the drawer settles over the top key row -- and G10 cuts the back
+  // not set it. The same figure `gestures.md` I5b pins the app drawer's reflow to
+  // -- at 176 the app drawer settles over the top key row -- and G10 cuts the back
   // edge short by.
   //
   // Deliberately *not* through Style.space, which every other length in the
@@ -71,7 +71,7 @@ Item {
   // does not, and cannot ask this.
   //
   // Half a panel is the threshold rather than an exact height. Measured on the
-  // drawer, the granted height is 694 or 674 with the keyboard down and 494 or
+  // app drawer, the granted height is 694 or 674 with the keyboard down and 494 or
   // 474 with it up -- each pair being a surface's own strip inset on and off --
   // so the clusters are 180px apart and the 20px an inset moves cannot walk the
   // answer across the line. It has to be nowhere near either cluster, not exact.

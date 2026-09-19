@@ -11,9 +11,9 @@ The workspace then becomes the unit a swipe moves through
 "next app".
 
 That is what a *launch* does. Deliberately putting two windows on one workspace
-is a different act with a different answer, and the overview is where it is
+is a different act with a different answer, and the workspace overview is where it is
 asked for: drag a card's app onto another card
-(default/omarchy/plugins/moarchy.overview, docs/gestures.md P6). A move is not a
+(default/omarchy/plugins/moarchy.workspace-overview, docs/gestures.md P6). A move is not a
 new window, so nothing above touches it -- but *how* the two are arranged still
 has to be decided, and a workspace holding more than one window is reconciled to
 **splitv** here: one above the other, both on screen.
@@ -31,7 +31,7 @@ portrait output is `splitv` and the check was asking for `splith`.
 Reconciled on sway's own event stream and not from the sheet that asked, which
 is what makes a keyboard user's `$mod+Shift+2` land the same way as the drag.
 One rule, one owner: "what happens when a workspace would hold two" is this
-file's question, and the overview only moves the window.
+file's question, and the workspace overview only moves the window.
 
 Deliberately NOT handled, because both should stay with their parent:
 

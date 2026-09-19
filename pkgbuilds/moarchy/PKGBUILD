@@ -66,8 +66,8 @@ pkgver=$_ver
 # moarchy-0.2.2-1 -- so a phone in the field holds these exact bytes, and this
 # build has different ones: bin/omarchy-theme-set-gnome, the two GTK templates
 # it points at, the web app entries and the schema override (docs/style.md
-# I1a/I5, docs/apps.md B1-B4), and the shade and back-edge changes in the
-# plugins (docs/shade.md S24-S27, gestures.md G10b). Under an unchanged version
+# I1a/I5, docs/apps.md B1-B4), and the controlCenter and back-edge changes in the
+# plugins (docs/control-center.md S24-S27, gestures.md G10b). Under an unchanged version
 # pacman would compare 0.2.2-1 to 0.2.2-1 and offer nothing, and every one of
 # those would sit in a package nobody ever receives.
 #
@@ -91,7 +91,7 @@ pkgver=$_ver
 # package, and pkgver comes from manifest.toml -- without the bump the builder
 # keeps the existing artifact and the new screen reaches no phone.
 # 5: 73-moarchy-torch.rules, which is the whole reason the Torch tile appears
-#    on a device that has a flash LED (docs/shade.md S10a). A phone holding
+#    on a device that has a flash LED (docs/control-center.md S10a). A phone holding
 #    0.2.2-4 shows three tiles and nothing anywhere says why, so this is a
 #    bump a field upgrade has to carry.
 # 6: bin/moarchy-launch-files opens the Files plugin. $mod+f is the binding,
@@ -122,11 +122,11 @@ pkgver=$_ver
 #    files this package ships, so a phone holding 0.3.0-1 has a modem that
 #    registers, carries calls and SMS, and cannot raise a data bearer at all --
 #    with nothing on screen to say why, because the tile is absent without the
-#    script (docs/devices.md D33, docs/shade.md S29).
+#    script (docs/devices.md D33, docs/control-center.md S29).
 #
 # 1 for 0.4.0. pkgver moved, and 0.4.0-1 is newer than the 0.3.0-1 [moarchy]
 # serves today, so mobile data reaches a phone holding it -- as does the rest
-# of what this build has over that one: the overview plugin on the right edge,
+# of what this build has over that one: the workspaceOverview plugin on the right edge,
 # two apps on one workspace, and moarchy-selftest's checks for both.
 # 4: ships moarchy-loudness.service, the generic half of the speaker loudness
 # stage. The tuning that unit reads is a hardware value and lives in the device
@@ -137,8 +137,8 @@ pkgver=$_ver
 # 1 for 0.5.0. pkgver moved, and 0.5.0-1 is newer than the 0.4.0-1 [moarchy]
 # serves today, so nothing the four bumps above added is hidden from a phone
 # holding it: the loudness unit, the volume panel and moarchy-volume behind it,
-# moarchy-trigger and the four configurable gestures, the overview's bin, and
-# the drawer's launch hop reading occupancy from focus rather than from sway's
+# moarchy-trigger and the four configurable gestures, the workspaceOverview's bin, and
+# the appDrawer's launch hop reading occupancy from focus rather than from sway's
 # workspace representation.
 #
 # 2: the PinePhone is gone, and Hyprland arrives. 0.5.0-1 IS published, so a
@@ -175,11 +175,11 @@ license=('MIT')
 # here. upower is not even in moarchy-meta: it is on the phone only as a
 # transitive dependency of KWeather.
 #
-# The drawer's uninstall (docs/gestures.md L12) is what made the difference
+# The appDrawer's uninstall (docs/gestures.md L12) is what made the difference
 # visible. It refuses to remove a package another package needs, and treats
 # moarchy-meta -- a depends line with no files, which every app on the phone is
 # under -- as the record of the set rather than as a need. Measured on the
-# device against all 34 entries the drawer lists, before this line changed:
+# device against all 34 entries the appDrawer lists, before this line changed:
 #
 #   foot      "Removes 2 packages" -- the terminal, offered for removal
 #   kweather  "Removes 40 packages", upower among them, because `pacman -Rs`
@@ -189,7 +189,7 @@ license=('MIT')
 # So the protection is metadata being right rather than a second list of what
 # matters (docs/structure.md P5). grim is in the same position --
 # bin/moarchy-capture-screenshot execs it -- and is left out here only because it
-# ships no .desktop file and cannot be reached from the drawer; it is worth
+# ships no .desktop file and cannot be reached from the appDrawer; it is worth
 # declaring on its own merits. A browser is deliberately NOT in this list:
 # bin/moarchy-launch-browser is a fallback chain over four of them and says so.
 # feedbackd is here for its GROUP, not for its daemon: 73-moarchy-torch.rules
@@ -242,7 +242,7 @@ package() {
 
   # --- the coding-agent tile icons ------------------------------------------
   # Not in an icon theme, and that is the point. moarchy-agent writes the
-  # drawer tile with `Icon=` set to one of these ABSOLUTE paths, because
+  # appDrawer tile with `Icon=` set to one of these ABSOLUTE paths, because
   # AppLibrary.iconSource() returns a file URL for anything starting with "/"
   # and never consults the theme -- the same reason moarchy.device's entry does
   # it, given at length in moarchy.device/icon.svg.
@@ -319,10 +319,10 @@ package() {
     done
 
     # A plugin that ships a .desktop wants to be launchable like an app: the
-    # drawer lists desktop entries, not plugins. Moved out of the plugin
+    # appDrawer lists desktop entries, not plugins. Moved out of the plugin
     # directory rather than copied, so the shell does not also scan one sitting
     # next to the manifest. Every entry, not the first -- the editor has two,
-    # the drawer's and a hidden one for xdg-open.
+    # the appDrawer's and a hidden one for xdg-open.
     for entry in "$dir"*.desktop; do
       [[ -f $entry ]] || continue
       install -m644 "$entry" "$appdir/$(basename "$entry")"
@@ -407,7 +407,7 @@ package() {
 
   # The torch tile's permission. 73 so it runs after feedbackd's 72, which
   # tries to do this and cannot on Arch -- the rule's own header has the whole
-  # story, and docs/shade.md S10a is the criterion. /usr/lib, not /etc, for the
+  # story, and docs/control-center.md S10a is the criterion. /usr/lib, not /etc, for the
   # same reason as the polkit rule above: this is the package's, and the
   # override path stays free.
   install -Dm644 "$_repo/default/udev/73-moarchy-torch.rules" \

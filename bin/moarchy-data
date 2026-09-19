@@ -7,9 +7,9 @@
 #     Error: Failed to modify connection 'Mobile data': Insufficient privileges
 #
 # because NetworkManager's settings.modify.system action is auth_admin, and a
-# polkit prompt raised from the shade would land on top of the shade that asked
+# polkit prompt raised from the control center would land on top of the control center that asked
 # for it. So this is the privileged half, with sudo -n (passwordless by design
-# on this phone -- docs/structure.md), and docs/shade.md S29 is the tile that
+# on this phone -- docs/structure.md), and docs/control-center.md S29 is the tile that
 # calls it. Reads need no privilege and do not get sudo.
 #
 # Splitting it this way is the same trade as bin/moarchy-sim: QML cannot be
@@ -72,7 +72,7 @@ _gsm_device() {
 # `enabled` and `connected` are two questions and the tile asks the first,
 # deliberately. A tile keyed on `connected` goes dark in a tunnel and lights up
 # again at the other end, which reads as the setting flipping by itself; the
-# Wi-Fi tile has the same split and answers the same way (docs/shade.md S4).
+# Wi-Fi tile has the same split and answers the same way (docs/control-center.md S4).
 status() {
   local dev uuid state enabled connected locked sim operator kv
 
@@ -93,7 +93,7 @@ status() {
   # modem: bringing the connection up can make ModemManager re-enumerate, which
   # renumbers the modem (Modem/1 became Modem/0 across one off/on) and takes
   # NetworkManager's gsm device away with it for as long as 20 seconds.
-  # docs/shade.md S29 latches the tile for exactly this reason, and everything
+  # docs/control-center.md S29 latches the tile for exactly this reason, and everything
   # below answers "unknown" rather than inventing a value for it.
   dev=$(_gsm_device)
   if [ -z "$dev" ]; then
@@ -157,7 +157,7 @@ status() {
 #
 # --wait 0 on the up, and that is not impatience. `nmcli c up` on a locked SIM
 # blocks for the full 90s secrets timeout, and this is called from a tile: the
-# shade re-reads the state on a timer (S29d) rather than waiting for an answer
+# control center re-reads the state on a timer (S29d) rather than waiting for an answer
 # nobody is holding still for.
 on() {
   local uuid

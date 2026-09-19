@@ -150,7 +150,7 @@ Audited against the tree at `d258680`, not guessed. This is the whole list.
 | 3 | modem daemon | was `bin/moarchy-firstboot:71` — `eg25-manager`, now `DEVICE_SERVICES` in `device.conf` | **device package** — *done* |
 | 4 | boot artifact + partitioning | `image/build.sh:287`–end | **boot backend** |
 | 5 | battery sysfs path | `moarchy.device/Device.qml:166-167` — `axp20x-battery` | **probe**, no key |
-| 6 | output name | `moarchy.shade/Shade.qml:825` — `DSI-1` | **probe**, no key |
+| 6 | output name | `moarchy.control-center/ControlCenter.qml:825` — `DSI-1` | **probe**, no key |
 | 7 | typeable-keyboard test | `bin/moarchy-has-keyboard` | **already generic** — fix comment only |
 
 Everything else in `default/` and `bin/` is already device-independent: the QML
@@ -319,7 +319,7 @@ Measured on the device (serial `987AY139XT`), not read off a wiki.
 The scale number is the whole reason row 2 of §4 is a key and not a probe:
 1080×2220 at scale 3 is 360×740 logical, and **360 logical pixels wide is what
 every layout constant in the shell was tuned against** — the bar height, the
-drawer grid, the keyboard's exclusive zone, the home strip. Nothing in sysfs
+app drawer grid, the keyboard's exclusive zone, the home strip. Nothing in sysfs
 could have worked that out; it is a judgement about thumbs.
 
 ### 8.1 What was proven on the device, 2026-09-13
@@ -621,7 +621,7 @@ ships the PCM numbers it needs.
 packaged file, and NetworkManager refuses it at 0644.** The `moarchy` package
 ships `/usr/lib/NetworkManager/system-connections/moarchy-mobile-data.nmconnection`
 at **mode 0600**, carrying `[gsm] auto-config=true` and nothing else.
-`docs/shade.md` S29 is the tile that switches it.
+`docs/control-center.md` S29 is the tile that switches it.
 
 > **Nothing was missing below the profile, which is why this is a file and not
 > a stack.** Read off the phone before anything was written: NetworkManager
@@ -703,7 +703,7 @@ at **mode 0600**, carrying `[gsm] auto-config=true` and nothing else.
 > **The modem re-enumerates on reconnect.** One `moarchy-data off; on` took it
 > from `Modem/1` to `Modem/0`, and NetworkManager had no gsm device at all for
 > several seconds around it — long enough that the tile, bound to "is there a
-> modem now", hid itself immediately after being switched on. `docs/shade.md`
+> modem now", hid itself immediately after being switched on. `docs/control-center.md`
 > S29 latches it; `moarchy-data status` answers `sim=` rather than
 > `sim=missing` in that window, because a device NetworkManager has lost says
 > nothing about the tray.
@@ -722,7 +722,7 @@ on `swh-plugins` and carries the filter graph it runs.
 >
 > **1. Android has its own volume, and nothing on this phone can reach it.**
 > `STREAM_MUSIC` was at **13 of 15** — about -6.5 dB on Android's curve. The
-> volume rocker (`default/sway/bindings.conf`) and the shade's slider both
+> volume rocker (`default/sway/bindings.conf`) and the control center's slider both
 > drive the PipeWire sink, which had no headroom left, so turning the volume up
 > was a no-op that looked like a broken rocker. `cmd media_session volume
 > --stream 3 --set 15` sets it; `media volume` is not a command in this image.

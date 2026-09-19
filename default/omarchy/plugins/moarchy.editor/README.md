@@ -122,13 +122,13 @@ The list of files and the wrap setting live in
 
 ## Two desktop entries
 
-`org.moarchy.Editor.plugin.desktop` is the drawer's, and toggles the window.
-`org.moarchy.Editor.open.desktop` is hidden from the drawer and is what xdg-open
+`org.moarchy.Editor.plugin.desktop` is the app drawer's, and toggles the window.
+`org.moarchy.Editor.open.desktop` is hidden from the app drawer and is what xdg-open
 runs for a text file: `omarchy-shell shell summon moarchy.editor %f`.
 
 They cannot be one entry. A toggle with a path in it hides an editor that is
-already open instead of opening the file, and the drawer finds a plugin's
-window by `shell toggle <id>` in an entry's Exec, so the drawer's entry cannot
+already open instead of opening the file, and the app drawer finds a plugin's
+window by `shell toggle <id>` in an entry's Exec, so the app drawer's entry cannot
 summon instead.
 
 ## What it does not do

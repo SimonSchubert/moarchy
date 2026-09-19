@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "id": "moarchy.shade",
-  "name": "Notification shade",
+  "id": "moarchy.control-center",
+  "name": "Control Center",
   "version": "1.0.0",
   "author": "moarchy",
   "description": "Pull down from the status bar for quick settings, brightness, volume, media and notifications.",
@@ -10,6 +10,6 @@
   ],
   "keepLoaded": true,
   "entryPoints": {
-    "overlay": "Shade.qml"
+    "overlay": "ControlCenter.qml"
   }
 }

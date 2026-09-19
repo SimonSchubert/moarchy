@@ -15,7 +15,7 @@ produces the raw touch the plugin actually listens for.
 
 Coordinates are PANEL pixels (720x1440), not Sway's 360x720 logical space,
 because /dev/uinput is below the compositor and never sees the scale. So the
-home drawer sits at roughly y=1420, not y=710.
+home appDrawer sits at roughly y=1420, not y=710.
 
 Needs root, because /dev/uinput is root-only:
 
@@ -131,10 +131,10 @@ def hold(x, y, ms):
 
 
 def drag(x1, y1, x2, y2, hold_ms, ms):
-    """Press, optionally wait, then drag -- the gesture the overview moves a
+    """Press, optionally wait, then drag -- the gesture the workspaceOverview moves a
     window with (docs/gestures.md P6).
 
-    `hold_ms` may be 0, and for the overview it is: the lift is claimed by
+    `hold_ms` may be 0, and for the workspaceOverview it is: the lift is claimed by
     travel past the slop, so a dwell before it proves nothing the travel does
     not. It is kept as an argument because a dwell is what tells a lift apart
     from a hold that has to *not* fire (P6, L1), and the wait jitters by a pixel

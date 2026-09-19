@@ -1,25 +1,25 @@
 #!/bin/bash
-# A coding agent as an app in the drawer, not only a row in Settings.
+# A coding agent as an app in the app drawer, not only a row in Settings.
 #
 # Upstream reaches an agent two ways, and neither puts it in an app grid: the
 # Default Agent menu (SUPER+SPACE, a dmenu) and a keybinding. A phone has
 # neither, so an installed agent was reachable only by walking
 # Settings > Apps & defaults > Default apps > AI agent -- four taps to open the
-# thing you use every day, and nothing in the drawer to say it is there at all.
+# thing you use every day, and nothing in the app drawer to say it is there at all.
 #
-# So there is a .desktop file. The drawer is upstream's apps provider over the
+# So there is a .desktop file. The app drawer is upstream's apps provider over the
 # XDG dirs, ~/.local/share/applications included, so an entry appearing there is
-# an icon in the grid with no drawer change at all.
+# an icon in the grid with no app drawer change at all.
 #
 #   moarchy-agent list           print the agents this script knows
 #   moarchy-agent shim  <name>   write ~/.local/bin/<name>, download nothing
-#   moarchy-agent entry [name]   write the drawer tile, install nothing
+#   moarchy-agent entry [name]   write the app drawer tile, install nothing
 #   moarchy-agent seed           shim all of them, and write the tile once
 #   moarchy-agent open  <name>   shim, tile, then install and launch through
 #                                omarchy-default-agent
 #   moarchy-agent launch         open the agent already chosen, choosing none
 #
-# `open` is what both the Settings row and the drawer tile run, and it is
+# `open` is what both the Settings row and the app drawer tile run, and it is
 # idempotent on purpose: the first tap installs, every tap after it launches,
 # and the tile is rewritten either way so a hand-edited or half-written file
 # heals itself.
@@ -229,13 +229,13 @@ write_entry() {
   # grid as a third identical icon with a different word under it.
   # applications-development came up EMPTY -- it exists, at
   # breeze/categories/{22,32}/applications-development.svg, and a categories/
-  # icon is not one the drawer's lookup finds. accessories-dictionary and
+  # icon is not one the app drawer's lookup finds. accessories-dictionary and
   # text-x-script came up blank as well. A blank tile is worse than a duplicate
   # one, and a duplicate one is worse than a picture.
   icon="$ICONS/$agent.svg"
   [[ -f $icon ]] || icon=system-run
 
-  # Written to a temporary file and moved, because the drawer is watching this
+  # Written to a temporary file and moved, because the app drawer is watching this
   # directory: Quickshell's DesktopEntries reloads on the write, and a truncated
   # file is a tile that vanishes and comes back.
   cat >"$ENTRY.tmp" <<EOF
@@ -269,7 +269,7 @@ finish_entry() {
 
   # What omarchy-refresh-applications ends with, for the same reason: the
   # mimeinfo cache in that directory is stale the moment a .desktop lands in it.
-  # The drawer does not need it -- Quickshell's DesktopEntries watches the
+  # The app drawer does not need it -- Quickshell's DesktopEntries watches the
   # directory and the tile updates within seconds -- but everything else that
   # resolves a handler does.
   update-desktop-database "$APPS" 2>/dev/null || true
@@ -283,7 +283,7 @@ finish_entry() {
 # `omarchy-shell settings openAt apps.default.agent` answers `ok` and leaves
 # `settings page` == apps.default.agent with all nine rows drawn.
 #
-# Keywords carries all nine agent names, so a new user who opens the drawer and
+# Keywords carries all nine agent names, so a new user who opens the app drawer and
 # types "claude" finds the screen that installs Claude. Before this there was
 # nothing in the grid to find.
 write_setup_entry() {
@@ -315,7 +315,7 @@ EOF
 open_agent() {
   local agent=$1
   write_shim "$agent"  || echo "moarchy-agent: could not write the wrapper" >&2
-  write_entry "$agent" || echo "moarchy-agent: could not write the drawer tile" >&2
+  write_entry "$agent" || echo "moarchy-agent: could not write the appDrawer tile" >&2
   # omarchy-default-agent installs through mise when it has to, writes
   # ~/.config/omarchy/defaults/agent, and execs omarchy-agent. exec, so this
   # script is not left holding a process for the life of the session.
@@ -377,7 +377,7 @@ case "${1:-}" in
     # The tile is rewritten on the way for the reason `open` rewrites it: it is
     # the one moment the answer is known to be fresh, and a tile left naming an
     # agent the defaults file no longer holds heals here.
-    write_setup_entry || echo "moarchy-agent: could not write the drawer tile" >&2
+    write_setup_entry || echo "moarchy-agent: could not write the appDrawer tile" >&2
     exec omarchy-shell settings openAt apps.default.agent
     ;;
   *)

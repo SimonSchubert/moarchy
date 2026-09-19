@@ -7,9 +7,9 @@
 //     function buildIndex(): void { root.appIdIndex = Apps.index(root.shell) }
 //     function openIconFor(app) { return Apps.iconFor(root.shell, root.appIdIndex, app) }
 //
-// One surface draws a window as a tile -- the overview's workspace cards (P5)
+// One surface draws a window as a tile -- the workspace overview's workspace cards (P5)
 // -- and one asks the same index a narrower question: whether an app is already
-// running, which is what decides the drawer's hop to a free workspace (L10).
+// running, which is what decides the app drawer's hop to a free workspace (L10).
 // One implementation of "which app is this window", because a second one is how
 // `org.quickshell` with no icon came to be drawn for every plugin that was not
 // in ShellApps.IDS.
@@ -22,12 +22,12 @@
 // What it does not own
 // ---------------------------------------------------------------------------
 // **The index itself.** `index()` builds a map and hands it back; the surface
-// holds it and decides when to rebuild. The drawer rebuilds on `appsChanged`
-// and the overview when its sheet comes up, and neither wants the other's
+// holds it and decides when to rebuild. The app drawer rebuilds on `appsChanged`
+// and the workspace overview when its sheet comes up, and neither wants the other's
 // timing.
 //
-// **Which windows there are.** That is `ToplevelManager` for the drawer and the
-// sway tree for the overview, and they are different questions: one is whether
+// **Which windows there are.** That is `ToplevelManager` for the app drawer and the
+// sway tree for the workspace overview, and they are different questions: one is whether
 // an app is running anywhere, a card is the windows on one workspace.
 .pragma library
 
@@ -76,7 +76,7 @@ function index(shell) {
 
 // The plugin id an entry summons, as a one-element match, or null for an entry
 // that starts a process. Written once: index() keys a tile's icons off it (K5)
-// and the drawer's launch() asks it whether a window is coming (L10).
+// and the app drawer's launch() asks it whether a window is coming (L10).
 function pluginSummonedBy(entry) {
   if (!entry) return null
   return /(?:^|\s)shell\s+toggle\s+(\S+)/.exec(String(entry.execString || ""))

@@ -22,7 +22,7 @@
 // ---------------------------------------------------------------------------
 // omarchy-theme-set ends by calling `omarchy-shell shell applyTheme` with the
 // new palette, and the shell's Color singleton reloads in place. So the bar,
-// the drawer, the shade and this screen all recolour without a restart, and
+// the app drawer, the control center and this screen all recolour without a restart, and
 // without this plugin doing anything about it -- including while this screen is
 // the thing on top. What it does have to handle is the seven seconds that
 // regenerating every app's template takes on an A53: that is far too long to
@@ -42,7 +42,7 @@ Item {
   id: root
 
   // Injected by the host after construction, and not `readonly` or `required` --
-  // see the drawer, which also says why this is the only one declared (J8).
+  // see the app drawer, which also says why this is the only one declared (J8).
   property var shell: null
 
   readonly property string pluginId: "moarchy.themes"
@@ -64,7 +64,7 @@ Item {
   property string returnPage: ""
 
   // Must match moarchy.gestures' own stripHeight. Duplicated rather than
-  // read across plugins for the same reason the shade duplicates it: this
+  // read across plugins for the same reason the control center duplicates it: this
   // surface has to know the number even when the gestures plugin failed to
   // load, and a sheet that ran off the bottom of the screen in that case would
   // be worse than one that leaves the band unused.
@@ -115,7 +115,7 @@ Item {
     onBack: root.dismiss()
   }
 
-  // A row of exclusive chips. Used twice: corners, then shade size. The chip
+  // A row of exclusive chips. Used twice: corners, then control center size. The chip
   // radius follows the current corners pick, so tapping Square squares these
   // too -- the control is the preview.
   component ChoiceRow: Column {
@@ -280,8 +280,8 @@ Item {
 
   function setShade(name) {
     var next = UiSpec.normShade(name)
-    ui.chrome = UiSpec.merge(ui.chrome, { shade: next })
-    applyUi.command = ["moarchy-ui", "shade", next]
+    ui.chrome = UiSpec.merge(ui.chrome, { controlCenter: next })
+    applyUi.command = ["moarchy-ui", "control-center", next]
     applyUi.running = true
   }
 
@@ -364,10 +364,10 @@ Item {
       root.setCorners(name)
       return ui.corners
     }
-    function shade(): string { return ui.shade }
+    function controlCenter(): string { return ui.controlCenter }
     function setShade(name: string): string {
       root.setShade(name)
-      return ui.shade
+      return ui.controlCenter
     }
   }
 
@@ -383,7 +383,7 @@ Item {
 
     // Reserve nothing, but be arranged into what the exclusive surfaces left,
     // so the status bar stays visible and the home pill keeps working. Same
-    // arrangement as the drawer, and for the same reason.
+    // arrangement as the app drawer, and for the same reason.
     exclusionMode: ExclusionMode.Normal
     exclusiveZone: 0
 
@@ -448,8 +448,8 @@ Item {
         }
 
         ChoiceRow {
-          title: "Shade controls"
-          current: ui.shade
+          title: "Control Center controls"
+          current: ui.controlCenter
           options: [
             { key: "roomy", label: "Roomy" },
             { key: "compact", label: "Compact" }

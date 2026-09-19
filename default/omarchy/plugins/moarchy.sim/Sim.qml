@@ -35,7 +35,7 @@ Item {
   id: root
 
   // Injected by the host after construction, and not `readonly` or `required` --
-  // see the drawer, which also says why this is the only one declared (J8).
+  // see the app drawer, which also says why this is the only one declared (J8).
   property var shell: null
 
   readonly property string pluginId: "moarchy.sim"
@@ -124,7 +124,7 @@ Item {
   // The two the host calls, and the reason `summon` answered "ok" while
   // nothing appeared: a plugin that declares an overlay is still only reachable
   // through these. Same shape as moarchy.bluetooth's, including standing the
-  // sheets down first -- opening a screen underneath the shade is how you get a
+  // sheets down first -- opening a screen underneath the control center is how you get a
   // keypad you cannot see but can still type into.
   function open(payloadJson) {
     Sheet.cover(root.shell, root.pluginId, Sheet.WINDOW)

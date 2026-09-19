@@ -3,7 +3,7 @@
 //
 //   node scripts/edge-test.js
 //
-// The table this file checks is the one thing standing between "the overview
+// The table this file checks is the one thing standing between "the workspace overview
 // rises from the bottom" and every sheet on the phone arriving sideways. It is
 // pure arithmetic with no host and no Qt in it, so it runs here rather than on
 // a Mali-400 over ssh -- and the first group is a regression guard rather than
@@ -33,32 +33,32 @@ const check = (ok, what, detail) => {
 }
 const near = (a, b) => Math.abs(a - b) < 0.001
 
-// A phone-shaped surface: 360x720 logical, the drawer's latched 694, and the
-// shade's content height on a quiet day.
+// A phone-shaped surface: 360x720 logical, the app drawer's latched 694, and the
+// control center's content height on a quiet day.
 const W = 360, H = 720, FULL_H = 694, SHADE_H = 300
 
 console.log("offset(): each sheet's shipped formula, from the general one")
-// Drawer, y: parent.height * (1 - progress) -- a sheet as tall as its surface.
+// App drawer, y: parent.height * (1 - progress) -- a sheet as tall as its surface.
 for (const p of [0, 0.25, 0.5, 0.91, 1]) {
   const got = edge.offset(BOTTOM, p, W, FULL_H, W, FULL_H)
   check(near(got.y, FULL_H * (1 - p)) && got.x === 0,
-        `drawer at ${p}`, `y=${got.y} want ${FULL_H * (1 - p)}`)
+        `appDrawer at ${p}`, `y=${got.y} want ${FULL_H * (1 - p)}`)
 }
-// Overview, x: parent.width - sheet.width * progress.
+// Workspace overview, x: parent.width - sheet.width * progress.
 for (const p of [0, 0.5, 1]) {
   const got = edge.offset(RIGHT, p, W, H, W, H)
   check(near(got.x, W - W * p) && got.y === 0,
-        `overview at ${p}`, `x=${got.x} want ${W - W * p}`)
+        `workspaceOverview at ${p}`, `x=${got.x} want ${W - W * p}`)
 }
-// Shade, y: -sheetHeight * (1 - progress) -- content-height, not surface-height.
+// Control center, y: -sheetHeight * (1 - progress) -- content-height, not surface-height.
 for (const p of [0, 0.35, 1]) {
   const got = edge.offset(TOP, p, W, H, W, SHADE_H)
   check(near(got.y, -SHADE_H * (1 - p)) && got.x === 0,
-        `shade at ${p}`, `y=${got.y} want ${-SHADE_H * (1 - p)}`)
+        `controlCenter at ${p}`, `y=${got.y} want ${-SHADE_H * (1 - p)}`)
 }
 
 console.log("offset(): a sheet bigger than the box rests flush and overflows (D2b)")
-// The drawer's first drag of a session: its size falls back to the screen,
+// The app drawer's first drag of a session: its size falls back to the screen,
 // which is taller than the surface by the bar's zone. Open, its top must be at
 // 0 -- an over-tall sheet held to the bottom would cut off its search field.
 for (const [name, box, size, want] of [

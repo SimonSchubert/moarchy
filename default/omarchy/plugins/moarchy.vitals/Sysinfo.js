@@ -539,7 +539,7 @@ function hasProcesses(files) {
 // reading, so the first one after launch reports its average since it started
 // rather than nothing.
 // `cores` is not decoration: a share is of the whole machine, the way the
-// overview reports it, so one process pegging one core of eight is 12.5% and
+// workspace overview reports it, so one process pegging one core of eight is 12.5% and
 // not 100%. Leaving it out put the collector's own `sh` at the top of the list
 // at 100% on every tick, which is how this was found.
 //

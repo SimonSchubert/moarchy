@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- A sun with a cloud across it.
 
-     The object rather than a symbol of the app: the drawer is a grid of
+     The object rather than a symbol of the app: the appDrawer is a grid of
      things, and this is the one thing everybody has already agreed means
      weather. The sun sits high and left so that the disc and three rays stay
-     clear of the cloud at 42px, which is the size the drawer actually draws.
+     clear of the cloud at 42px, which is the size the appDrawer actually draws.
 
      No clip path anywhere. QtSvg ignores clip-path and paints a clipPath that
      is declared outside defs, which is how another icon in this repository

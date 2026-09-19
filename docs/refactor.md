@@ -20,7 +20,7 @@ Two of the duplicates have already drifted, and one of those is a defect
 | **copy** | The same code written out in two files. Not a call to shared code — a second text of it. |
 | **canonical list** | A list of surface ids written once and read everywhere. `gestures.md` A8 already says why: "Three hand-kept lists of overlay ids is how Settings and Themes came to be missing from the back gesture." |
 | **shell app** | `gestures.md` K10: a screen this shell draws and maps as an ordinary window. Four of them — Settings, Wi-Fi, Bluetooth and SIM. |
-| **sheet** | A full-screen surface that is dismissed rather than left running: shade, drawer, themes. |
+| **sheet** | A full-screen surface that is dismissed rather than left running: control center, app drawer, themes. |
 | **the common dir** | `default/omarchy/plugins/moarchy.common/`, proposed in §E. It has no `manifest.json` and is not a plugin. |
 
 ---
@@ -82,9 +82,9 @@ it was read back, which is what the citation rule in `docs/README.md` is about.
 
 | Plugin | What it puts away |
 | --- | --- |
-| `Device.qml:94`, `Wifi.qml:369`, `Themes.qml:158`, `Bluetooth.qml:522`, `Recents.qml:731` | shade, drawer |
-| `Drawer.qml:463` | shade |
-| `Settings.qml:373` | shade, drawer, recents, themes |
+| `Device.qml:94`, `Wifi.qml:369`, `Themes.qml:158`, `Bluetooth.qml:522`, `Recents.qml:731` | control center, app drawer |
+| `AppDrawer.qml:463` | control center |
+| `Settings.qml:373` | control center, app drawer, recents, themes |
 
 **B3** No file answers "is this a shell app" from a list of its own.
 
@@ -137,20 +137,20 @@ which window is focused, and hands the gesture to that window's plugin. The
 same `goBack()`-then-close pair, keyed on something the compositor knows.
 
 **B6** A sheet opening puts away every sheet on **its own layer or above it**,
-and none of the ones below it. The shade is the only sheet on Overlay, so it
-puts nothing away; the drawer and the theme picker are both Top, so each puts
-away the other and the shade above them.
+and none of the ones below it. The control center is the only sheet on Overlay, so it
+puts nothing away; the app drawer and the theme picker are both Top, so each puts
+away the other and the control center above them.
 
 *Done, 2026-09-15.* B2's table asked which ids each `open()` should name and
 took the answer to be one list. It is not a list — it is the layer the sheet
 sits on — and reading it as a list produced a defect in each direction. The
-shade dismissed the drawer it was about to draw over, which cost you the sheet
-you were reading; the drawer did not dismiss the theme picker, so two Top
+control center dismissed the app drawer it was about to draw over, which cost you the sheet
+you were reading; the app drawer did not dismiss the theme picker, so two Top
 surfaces with `Exclusive` keyboard focus stacked in map order, the same fault
 `gestures.md` G10b records for two Overlay surfaces contesting a corner.
-→ `grep -n 'hide("moarchy' moarchy.shade/Shade.qml` matches nothing; the same
-grep matches `moarchy.shade` and `moarchy.themes` in `Drawer.qml`, and
-`moarchy.shade` and `moarchy.drawer` in `Themes.qml`
+→ `grep -n 'hide("moarchy' moarchy.control-center/ControlCenter.qml` matches nothing; the same
+grep matches `moarchy.control-center` and `moarchy.themes` in `AppDrawer.qml`, and
+`moarchy.control-center` and `moarchy.app-drawer` in `Themes.qml`
 
 ---
 
@@ -270,8 +270,8 @@ external call sites now read `Theme.readableOn(…)` / `Theme.mix(…)`.
 
 `.pragma library`, so there is one instance rather than a copy per importing
 component. That was the risk in this AC: a library script has no QML component
-scope, and `mix()` returns `Qt.rgba(…)`. **Verified on the device** — the shade
-and the drawer both draw their `subdued` greys legibly, and a `mix()` that threw
+scope, and `mix()` returns `Qt.rgba(…)`. **Verified on the device** — the control center
+and the app drawer both draw their `subdued` greys legibly, and a `mix()` that threw
 would leave `subdued` undefined, which paints black on a dark surface rather
 than failing loudly.
 
@@ -283,7 +283,7 @@ than failing loudly.
 
 **E4** *Not done, and not by omission.* The strip height is one number. Seven
 declarations of `Style.space(20)`
-— `stripHeight` in `moarchy.gestures`, `gestureStrip` in the shade, the drawer
+— `stripHeight` in `moarchy.gestures`, `gestureStrip` in the control center, the app drawer
 and the theme picker — each carrying a comment saying it must match the others.
 The comments are right, which is the problem: a constraint stated four times is
 not enforced once.
@@ -308,7 +308,7 @@ not enforced once.
 
 > **Amended 2026-09-15: two, not five, and then neither.** Three of the five
 > named here are shell apps now and have no margin to write. The two that are
-> left are one line each and are not the same line -- the drawer drops the inset
+> left are one line each and are not the same line -- the app drawer drops the inset
 > while the keyboard is up and the theme picker has no keyboard -- so there is no
 > copy to remove. Five copies of a shared expression was the premise; it was
 > true when it was written and stopped being true without anyone doing the
@@ -351,7 +351,7 @@ PATH, so `sudo moarchy-touch` was never found, and the error went into a
 another session had the phone with an app focused, so the touch went into their
 surface. It needs the device to itself.
 → `sudo /usr/lib/moarchy/bin/moarchy-touch hold 130 330 5000` over an open
-shade, `grim` mid-hold, and the Silent tile lifts by 12% of its own ink
+control center, `grim` mid-hold, and the Silent tile lifts by 12% of its own ink
 
 **E10** One kit. `qs_ui/` and `moarchy.common/` are one directory and `Ui.js`
 exists once. The apps could not import the common dir only because they shipped
@@ -370,7 +370,7 @@ that can pass while measuring nothing is worse than no check.
 → `grep -c 'exists twice' scripts/style-check.sh` == 0, and the suite's count
 drops by two rather than staying at 17
 
-**E11** A widget is not a plugin. A reusable widget — the shade's media card is
+**E11** A widget is not a plugin. A reusable widget — the control center's media card is
 the one that exists — lives in the kit, carries no `manifest.json` and no id,
 and is imported by relative path like everything else there. It never appears
 in the plugins directory, so the registry never sees it and
@@ -385,7 +385,7 @@ directories.
 
 **Done, 2026-09-15**, across six input areas on four surfaces: the strip and
 the wallpaper in `moarchy.gestures`, the sheet and the handle strip in
-`moarchy.drawer`, the sheet and the status-bar band in `moarchy.shade`. The
+`moarchy.app-drawer`, the sheet and the status-bar band in `moarchy.control-center`. The
 component is `moarchy.common/DragTracker.qml`.
 
 **F1** There is one component that turns a touch sequence into `progress`,
@@ -395,8 +395,8 @@ is the tracker
 
 **F2** The watchdog comes with it, so a stranded touch cannot park a sheet
 half-open on any of them.
-→ a touch held on the drawer's handle past the watchdog leaves
-`omarchy-shell drawer state` == `open` and `drawer dragTrace` ending `-2`; a
+→ a touch held on the app drawer's handle past the watchdog leaves
+`omarchy-shell app-drawer state` == `open` and `app-drawer dragTrace` ending `-2`; a
 real cancel ends `-1`
 
 **F3** Thresholds stay with the surface, not the tracker. `homeCommit`,
@@ -406,7 +406,7 @@ hands back two numbers and says nothing about what they mean.
 → `grep -nE 'Commit|Fraction|fling|homeExtra'` over `DragTracker.qml` matches
 only comments, which `scripts/style-check.sh` asserts
 
-**F4** `targetTravel()` survives unchanged in meaning: the drawer divides by
+**F4** `targetTravel()` survives unchanged in meaning: the app drawer divides by
 its own `closeTravel` and the strip by `pullTravel`, and the tracker takes the
 travel as an input rather than choosing it.
 → `grep -nE 'closeTravel|sheetHeight|pullTravel|screen\.height'` over
@@ -421,7 +421,7 @@ rather than by a check.
 finger is past a full sheet
 
 **F6** The tracker publishes; it never assigns another surface's `progress` and
-never reaches for the host. The gestures plugin drives the drawer through a
+never reaches for the host. The gestures plugin drives the app drawer through a
 direct object reference frame by frame, and a shared component that went
 through `shell.callIfLoaded` would marshal a string per touch event on the one
 path that cannot afford it.
@@ -434,33 +434,33 @@ without ending leaves it running — and four seconds later the tracker conclude
 the touch was stranded and puts `progress` back, which lands on whatever
 gesture comes *next*.
 
-The shade's brightness slider did exactly this and had done for as long as it
+The control center's brightness slider did exactly this and had done for as long as it
 existed: it returned early on its own branch. It cost nothing before F2,
 because there was no watchdog to strand — which is why the imbalance survived
 to be found.
-→ with no finger on the screen, `omarchy-shell drawer geometry` and
-`omarchy-shell shade sheet` both report `drag=idle`; `bin/moarchy-selftest
+→ with no finger on the screen, `omarchy-shell app-drawer geometry` and
+`omarchy-shell control-center sheet` both report `drag=idle`; `bin/moarchy-selftest
 --gestures` asserts it after every gesture it drives
 
 **F7** Latching and moving are separate. A surface whose whole area is a
-handle — the drawer's grab bar, the shade's band — claims the gesture on the
-press, because `dragging` from the touch is what keeps the shade's input mask
-off and the drawer's `opened` honest for the length of the pull; it still
+handle — the app drawer's grab bar, the control center's band — claims the gesture on the
+press, because `dragging` from the touch is what keeps the control center's input mask
+off and the app drawer's `opened` honest for the length of the pull; it still
 crosses a slop before anything moves. Collapsing the two lets a 2px wobble on
-the status bar start opening the shade.
+the status bar start opening the control center.
 
 ### Still open
 
-The drawer's handle commits on distance alone where its sheet also takes a
+The app drawer's handle commits on distance alone where its sheet also takes a
 fling (`gestures.md` A3). The two are separate tracker instances, which is what
 lets them differ; whether the handle *should* differ is a real question and
 not one a refactor may answer (G4).
 
 The four-line quartet each control on a sheet opts into —
 `onPressed`/`onPositionChanged`/`onReleased`/`onCanceled` — is written out
-eight times in `Shade.qml` and four in `Drawer.qml`. A control that omits it
+eight times in `ControlCenter.qml` and four in `AppDrawer.qml`. A control that omits it
 silently cannot be dragged, which is a live failure mode and not a tidiness
-question. A sheet-wide handler cannot replace it: `Drawer.qml` and `Shade.qml`
+question. A sheet-wide handler cannot replace it: `AppDrawer.qml` and `ControlCenter.qml`
 both record, from measurement, that a `DragHandler` over the content gets one
 translation event per gesture because every content `MouseArea` holds the
 exclusive grab. **Taken up as §H3**, which keeps the twelve areas and shares
@@ -519,8 +519,8 @@ and takes the same reduction rather than a second implementation.
 input and its comments, and nothing that assumes Y
 
 **H3** A control that presses a tracker declares it, rather than writing out the
-four handlers. The quartet stands twelve times — eight in `Shade.qml`, four in
-`Drawer.qml` — and a control that omits one of the four silently cannot be
+four handlers. The quartet stands twelve times — eight in `ControlCenter.qml`, four in
+`AppDrawer.qml` — and a control that omits one of the four silently cannot be
 dragged, or strands the watchdog §F2 added (§F8).
 → `grep -rn 'onPressed: mouse => root.sheetPress' default/omarchy/plugins/`
 matches nothing, and `scripts/style-check.sh` fails when a `SheetArea` instance
@@ -528,8 +528,8 @@ declares one of the four handlers the shared component forwards -- which
 replaces it rather than adding to it, and is the one way back to the failure
 above
 
-**H4** *Not done, and the measurement is the reason.* The shade's brightness
-slider and the overview's tile lift each carry their own slop test against the
+**H4** *Not done, and the measurement is the reason.* The control center's brightness
+slider and the workspace overview's tile lift each carry their own slop test against the
 sheet tracker's sampled origin, and neither becomes a tracker instance for less
 than it costs.
 
@@ -548,17 +548,17 @@ than it costs.
 > rules, and the honest reading is that H4 mistook them for copies of the latch
 > because they are spelled like it. What remains true, and is H5, is that the
 > *trace* had to be marked on every surface; that landed.
-→ `grep -n dyScene moarchy.shade/Shade.qml` matches the slider's hand-over, and
-`grep -n dragSlop moarchy.overview/Overview.qml` matches the sheet tracker's own
+→ `grep -n dyScene moarchy.control-center/ControlCenter.qml` matches the slider's hand-over, and
+`grep -n dragSlop moarchy.workspace-overview/WorkspaceOverview.qml` matches the sheet tracker's own
 `slop:` and the lift's one comparison and nothing else
 
 **H5** A cancel marks the trace on every surface that has one. §F2's evidence
-sentence — "a real cancel ends `-1`" — is true of the drawer's handle and of
-nothing else: the drawer's sheet and both of the shade's trackers leave the
+sentence — "a real cancel ends `-1`" — is true of the app drawer's handle and of
+nothing else: the app drawer's sheet and both of the control center's trackers leave the
 trace unmarked, so that check passes today for three surfaces that cannot fail
 it (`green-is-not-verified`).
-→ after a cancel on either surface, `omarchy-shell drawer dragTrace` and
-`omarchy-shell shade sheet` both end `-1`
+→ after a cancel on either surface, `omarchy-shell app-drawer dragTrace` and
+`omarchy-shell control-center sheet` both end `-1`
 
 ---
 
@@ -588,30 +588,30 @@ nothing, and `Sheet.cover` appears once in each of the seven screens
 
 **I1a** *The list is unit-tested, which is new for this repo.* `Sheet.js` is
 plain JS with `shell` handed in, so `node` runs it: seven stacking cases
-including the shade covering nothing and a window covering all three, a half-built
+including the control center covering nothing and a window covering all three, a half-built
 host, and six payloads. B6's rule was argued in prose and implemented four times;
 it is now implemented once and the argument is executable.
 → `node scripts/sheet-test.js` is green, and `scripts/style-check.sh` runs it
 when node is there and prints SKIP when it is not. The failing branch was run:
-dropping the rank term makes the shade cover the two sheets below it, and the
+dropping the rank term makes the control center cover the two sheets below it, and the
 first case says so
 
 **I2** No plugin spells another sheet's id at all. §B2's table was four
 spellings of one rule and §B1 asked for one list; both are closed by deriving the
 answer from the caller's rank. The ids themselves are named in `Sheet.js` too, so
-the strip's swipe up says `Sheet.DRAWER` rather than spelling it a sixth time.
+the strip's swipe up says `Sheet.APP_DRAWER` rather than spelling it a sixth time.
 → `scripts/style-check.sh` fails when a plugin outside `Sheet.js` names a sheet
-id, and `omarchy-shell themes open` with the drawer up leaves `drawer state` ==
-`closed` while `shade open` over the drawer leaves it `open` (§B6, both
+id, and `omarchy-shell themes open` with the app drawer up leaves `app-drawer state` ==
+`closed` while `control-center open` over the app drawer leaves it `open` (§B6, both
 directions)
 
 **I2a — a behaviour change, and the fourth instance of §B6's defect.** A shell
-app opening now puts the theme picker away, where it put away only the shade and
-the drawer. Wi-Fi, Bluetooth, SIM and `moarchy.device` each named the same two
+app opening now puts the theme picker away, where it put away only the control center and
+the app drawer. Wi-Fi, Bluetooth, SIM and `moarchy.device` each named the same two
 ids; Settings named three. Settings was right: the theme picker is a Top layer
 surface with `Exclusive` keyboard focus, so a window opening under it is a window
-nobody can see — the same fault §B6 found in both directions between the drawer
-and the shade, and §B4 before that. Naming it here because §G4 requires a
+nobody can see — the same fault §B6 found in both directions between the app drawer
+and the control center, and §B4 before that. Naming it here because §G4 requires a
 behaviour change to be named, and deriving the list is what made it visible.
 → `omarchy-shell themes open`, then `omarchy-shell wifi open`: Wi-Fi is on screen
 and `themes state` is `closed`. Pre-fix the picker stays up and Wi-Fi is under it
@@ -632,8 +632,8 @@ dir
 **I4** *Withdrawn.* This said the extended-sheet margin arrives with the header,
 on the assumption that E5's copies sat in the block I3 was moving. They do not,
 and **E5 has nothing left to share**: what remains is one line in the theme
-picker (`margins.bottom: -root.gestureStrip`) and one in the drawer, which is a
-different expression -- the drawer drops the inset while the keyboard is up
+picker (`margins.bottom: -root.gestureStrip`) and one in the app drawer, which is a
+different expression -- the app drawer drops the inset while the keyboard is up
 (`gestures.md` I5e), and dropping it is the whole point of its version.
 
 > A component for one line that differs between its two callers is a worse
@@ -643,7 +643,7 @@ different expression -- the drawer drops the inset while the keyboard is up
 > either file who does not see it deletes the margin as a hack. `gestures.md` I1
 > and I5a already hold the canonical version, and both sites cite it.
 → `grep -rn 'margins.bottom: .*gestureStrip' default/omarchy/plugins/` matches
-the theme picker and the drawer, and each cites `gestures.md` I1
+the theme picker and the app drawer, and each cites `gestures.md` I1
 
 ---
 
@@ -656,7 +656,7 @@ nine files.
 **J1** *Withdrawn.* The eight colour blocks are not copies of each other, which
 only became clear from reading all eight: three compute `subdued` three different
 ways — a flat alpha in the three popup surfaces, `readableOn` against the surface
-in the theme picker, `mix` then `readableOn` in the shade — and a fourth was not
+in the theme picker, `mix` then `readableOn` in the control center — and a fourth was not
 reading the theme at all (J1a). What is left shared between them is four lines of
 `Color.<layer>.*`, and a component to carry those saves about four lines net while
 adding the indirection `style.md` C2 argues against by name.
@@ -717,15 +717,15 @@ the same "cleared on press, never on release, because `released` precedes
 common dir
 
 **J4** One resolver answers "which app is this". Three implementations today,
-and the shade's walks every app entry per notification card where the drawer
+and the control center's walks every app entry per notification card where the app drawer
 built an index precisely so it would not have to.
-→ `grep -n 'function entryFor' moarchy.shade/Shade.qml` matches nothing
+→ `grep -n 'function entryFor' moarchy.control-center/ControlCenter.qml` matches nothing
 
-**J5** A tile is one component and a row is one component. The shade's two tiles
-differ in layout and two flags; the drawer draws an icon-and-label cell twice
+**J5** A tile is one component and a row is one component. The control center's two tiles
+differ in layout and two flags; the app drawer draws an icon-and-label cell twice
 and a settings row its own comment calls "the same row drawn in
 moarchy.settings".
-→ `grep -c 'component WideTile\|component SmallTile' moarchy.shade/Shade.qml`
+→ `grep -c 'component WideTile\|component SmallTile' moarchy.control-center/ControlCenter.qml`
 is 1
 
 **J6** `E7_EXEMPT` is empty. *Done.* Both files take `Shared.PressVeil` through
@@ -746,14 +746,14 @@ is a search over the Settings tree, so in the common dir it would be shared code
 that depends on a plugin — the same edge pointing the wrong way. Moving only
 `Guards.js` splits a pair the selftest checks as a pair.
 
-> What the drawer depends on is the Settings *tree*, and there is deliberately
-> one of those: `Drawer.qml`'s header argues that the alternative is a second copy
+> What the app drawer depends on is the Settings *tree*, and there is deliberately
+> one of those: `AppDrawer.qml`'s header argues that the alternative is a second copy
 > of the tree in the launcher. The dependency is on the right thing; the
 > *directory* is what makes it look like a layering fault.
 > `bin/moarchy-selftest` already checks first, and separately, that both files are
-> beside the drawer, because a missing import makes the whole plugin fail to load.
+> beside the app drawer, because a missing import makes the whole plugin fail to load.
 → `grep -n '^\.import' moarchy.settings/Search.js` shows why the file cannot
-move, and the selftest reports `O the drawer's imports` before any other §O check
+move, and the selftest reports `O the app drawer's imports` before any other §O check
 
 **J8** A host-contract property a plugin never reads is not declared. Four
 plugins declare five of them apiece and read one; the host assigns by name into
@@ -788,7 +788,7 @@ moarchy.bluetooth/Bluetooth.qml` is 1 apiece
 
 **K2** What differs stays with the plugin: NetworkManager against BlueZ, the
 scan lifecycle, the glyphs, and the wait BlueZ needs before it will power an
-adapter up under a soft block (`shade.md` S6d-8, whose 700ms is an AC and is not
+adapter up under a soft block (`control-center.md` S6d-8, whose 700ms is an AC and is not
 a candidate for anything).
 → `grep -n '700' moarchy.bluetooth/Bluetooth.qml` still matches, and
 `bin/moarchy-selftest --settings` still passes its Wi-Fi and Bluetooth blocks
@@ -858,7 +858,7 @@ three answers today: a busctl probe the back gesture waits on, and two copies of
 a surface-height threshold with two copies of the `200` it compares against.
 The probe and the threshold answer different questions and both stay; the two
 copies of the threshold do not. *Done, 2026-09-16.* `moarchy.common/Osk.qml`
-declares the height and asks the threshold as `reserving(win)`; the drawer's
+declares the height and asks the threshold as `reserving(win)`; the app drawer's
 inset and the home strip's fill both call it.
 → `grep -rn 'keyboardPanelHeight' default/omarchy/plugins/` matches one
 declaration
@@ -896,7 +896,7 @@ output and writes the new one to `DSI-1` by name, so it is the only hardcoded
 output name in the tree and it silently does nothing on any device whose panel
 is called something else. This is `devices.md` §4 row 6, ruled **probe, no key**
 by D3.
-→ `grep -rn 'DSI-1' default/ bin/` matches nothing, and the shade's rotate tile
+→ `grep -rn 'DSI-1' default/ bin/` matches nothing, and the control center's rotate tile
 turns the screen on the attached device
 
 **N3** The battery path is probed. `Device.qml` reads
@@ -909,7 +909,7 @@ battery` answers a number on the attached device
 
 **N4** The comment above the back-overlay ladder is true. It states that no
 sheet in `overlayIds` owns a page stack and that the `goBack()` branch below it
-is therefore kept for a future surface — and the drawer has owned one since its
+is therefore kept for a future surface — and the app drawer has owned one since its
 detail card landed, so that branch fires on every back swipe over an open card.
 A comment claiming a live branch is dormant is worse than no comment: it invites
 the next reader to delete it.
@@ -922,7 +922,7 @@ the next reader to delete it.
 > decision about an escape hatch, not an oversight, and G4 is not a licence to
 > overturn one. What was wrong is the *other* half of the same comment.
 → `grep -n 'No sheet in overlayIds' moarchy.gestures/Service.qml` matches
-nothing, and the sentence that replaces it names the drawer
+nothing, and the sentence that replaces it names the app drawer
 
 ---
 
@@ -946,7 +946,7 @@ Ordered by value over risk, not by section number.
 6. **§B6** — the layer rule, and the two defects on either side of it.
    *Done 2026-09-15.*
 7. **§F** — the largest win and the largest risk; last, on top of a green G1.
-   *Done 2026-09-15*, in the order shade, drawer, gestures: the shade first
+   *Done 2026-09-15*, in the order control center, app drawer, gestures: the control center first
    because it is the only surface exercising both latch directions, a non-zero
    start, a freeze-on-begin and a hand-over, so it proves the component before
    anything irreversible; the gestures plugin last because every `gestures.md`
@@ -1030,7 +1030,7 @@ in this change's diff.
 Not acceptance criteria — the boundaries any implementation works inside.
 
 - **A user plugin override shadows a whole directory, not a file.**
-  `~/.config/omarchy/plugins/moarchy.drawer` wins over the packaged one
+  `~/.config/omarchy/plugins/moarchy.app-drawer` wins over the packaged one
   (`user-plugin-dir-overrides`), and a `../moarchy.common` import from inside it
   resolves against `~/.config/omarchy/plugins/`, where the common dir may not
   be. §E either ships the common dir to both roots or accepts that an override
@@ -1057,7 +1057,7 @@ Not acceptance criteria — the boundaries any implementation works inside.
   and a manifest-less directory does not disturb the registry.* §E is unblocked.
 - **§E collides with another session's files.** Seven of the nine `PressVeil`
   copies and four of the six colour-maths copies are in `Settings.qml`,
-  `SettingsRow.qml`, `Themes.qml`, `Shade.qml` and `Drawer.qml`, and the
+  `SettingsRow.qml`, `Themes.qml`, `ControlCenter.qml` and `AppDrawer.qml`, and the
   worktree ownership split puts settings and themes on another session's side
   ([[shared-worktree-and-phone]]). §E is one change that touches nine files at
   once, which is the shape that does not divide. It needs agreeing before it

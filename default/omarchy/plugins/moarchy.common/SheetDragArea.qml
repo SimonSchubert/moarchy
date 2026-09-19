@@ -12,12 +12,12 @@
 //     }
 //
 // Every full-screen sheet in this shell is dragged by the controls drawn on it
-// rather than by a handler over them: `Drawer.qml` and `Shade.qml` both record,
+// rather than by a handler over them: `AppDrawer.qml` and `ControlCenter.qml` both record,
 // from measurement, that a `DragHandler` across the content receives one
 // translation event per gesture, because each content `MouseArea` holds the
 // exclusive grab. So the sheet's drag is fed by hand from every control, and
-// the four lines that do it stood twelve times -- eight in the shade, four in
-// the drawer.
+// the four lines that do it stood twelve times -- eight in the control center, four in
+// the app drawer.
 //
 // It is not a tidiness question. A control that omits one of the four is not
 // obviously wrong on screen: it still lights, it still clicks, and the sheet
@@ -32,8 +32,8 @@
 // ---------------------------------------------------------------------------
 // **The tracker, and the mapping into scene coordinates.** Those live on the
 // sheet, in `sheetPress`/`sheetMove`/`sheetRelease`/`sheetCancel`, because each
-// sheet does something of its own on the way in: the drawer clears `holdFired`,
-// the shade resets its trace. This forwards to them and knows neither.
+// sheet does something of its own on the way in: the app drawer clears `holdFired`,
+// the control center resets its trace. This forwards to them and knows neither.
 //
 // **The press state.** `pressed` comes from MouseArea, and what a control does
 // with it is style.md H1 and H6 -- including the drag guard, since `pressed`

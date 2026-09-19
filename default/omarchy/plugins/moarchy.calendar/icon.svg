@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- A leaf of a calendar, hung on two rings.
 
-     Four days and not thirty: the drawer asks for 42px, and at 42px a month
+     Four days and not thirty: the appDrawer asks for 42px, and at 42px a month
      of squares is a texture rather than a grid. Mill and Peg solitaire both
      shipped an icon that lost its figure at that size, so this one was drawn
      against the small render. The green square is today, which is the only

@@ -5,18 +5,18 @@ GenericName=Hardware Monitor
 Comment=Battery, thermals, CPU, memory and storage at a glance
 # A shell plugin is not a process you launch, it is a screen the shell already
 # holds. Asking the shell to summon it is what makes a plugin appear in the
-# drawer and behave like any other app.
+# appDrawer and behave like any other app.
 Exec=omarchy-shell shell toggle moarchy.device
 # An absolute path, not a themed name. AppLibrary.iconSource() returns a file
 # URL for anything starting with "/" and never consults the icon theme, which
 # is the point: the themed name resolved to a dark monochrome glyph on the
-# drawer's dark sheet, so the entry was drawn and unreadable. The file ships
+# appDrawer's dark sheet, so the entry was drawn and unreadable. The file ships
 # beside the plugin it belongs to, at the path the package installs it to.
 Icon=/usr/share/moarchy/plugins/moarchy.device/icon.svg
 Terminal=false
 Categories=System;Monitor;
 Keywords=battery;temperature;cpu;memory;hardware;
 # Ownership marker. install/config.sh sweeps entries whose named plugin is no
-# longer in the repo; without it a deleted plugin leaves a drawer icon that
+# longer in the repo; without it a deleted plugin leaves a appDrawer icon that
 # launches nothing.
 X-Moarchy-Plugin=moarchy.device

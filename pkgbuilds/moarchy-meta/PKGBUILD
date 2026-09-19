@@ -169,7 +169,7 @@ depends=(
   # pacman resolves this array top to bottom, and when geary came first
   # nothing in the transaction provided the name yet, so pacman picked the
   # alphabetically first provider in the sync dbs -- chipass, a Qt password
-  # manager with a drawer tile of its own -- and installed it beside
+  # manager with a appDrawer tile of its own -- and installed it beside
   # gnome-keyring. Measured 2026-09-16 in the builder container, resolving this
   # array with geary before gnome-keyring and after: chipass in the plan, then
   # not. image/verify.sh checks for it.
@@ -192,7 +192,7 @@ depends=(
   # `foot` by name and pkgbuilds/moarchy declares it, so every TUI, every agent
   # window, the config editor and the removal prompt were foot before this list
   # said so. Themed by upstream's foot.ini.tpl, and it turns a tap into a
-  # left-button click (`man 1 foot`, TOUCHSCREEN), which is what the shade's TUI
+  # left-button click (`man 1 foot`, TOUCHSCREEN), which is what the controlCenter's TUI
   # cards rely on and what makes it usable as THE terminal rather than only as
   # the one scripts open.
   #
@@ -257,7 +257,7 @@ depends=(
   # speak text-input-v3 and zwp_virtual_keyboard_v1 for everything that does not,
   # keeps ONE layer surface for the life of the process, and reads the Omarchy
   # palette straight out of ~/.local/state/omarchy/current/theme/colors.toml, so
-  # it recolours live on omarchy-theme-set like the bar and the drawer.
+  # it recolours live on omarchy-theme-set like the bar and the appDrawer.
   #
   # Built by docker/build-packages.sh from the pin in manifest.toml and
   # published to the [moarchy] repo. It was deliberately absent from this list
@@ -398,7 +398,7 @@ depends=(
   # --- Apps -------------------------------------------------------------------
   # The set docs/apps.md documents as working, and the reason it is in the *base*
   # list rather than the extras one: without it a fresh install has eight
-  # launchable entries, six of which are terminals, and pulling the drawer up
+  # launchable entries, six of which are terminals, and pulling the appDrawer up
   # gives you an app grid with nothing in it. A phone with no clock, no file
   # manager and no browser is not finished -- and those three are now the
   # Quickshell plugins in moarchy, not a GTK/KDE process apiece.
@@ -689,7 +689,7 @@ optdepends=(
 
   # Needed only by bin/moarchy-touch, which synthesises touchscreen input
   # through /dev/uinput so bin/moarchy-selftest --gestures can drive the
-  # gesture drawer without a finger. Not needed to run the phone, only to test it.
+  # gesture appDrawer without a finger. Not needed to run the phone, only to test it.
   'python-evdev'
 )
 

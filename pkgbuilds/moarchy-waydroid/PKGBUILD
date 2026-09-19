@@ -70,7 +70,7 @@ sha256sums=('SKIP' 'SKIP')
 
 package() {
   # /usr/lib/moarchy/bin is the project's own bin dir and is NOT on PATH,
-  # which is deliberate: these are called by the drawer and by the user through
+  # which is deliberate: these are called by the appDrawer and by the user through
   # an absolute path, not typed.
   install -Dm755 "$srcdir/moarchy-waydroid-setup" \
     "$pkgdir/usr/lib/moarchy/bin/moarchy-waydroid-setup"

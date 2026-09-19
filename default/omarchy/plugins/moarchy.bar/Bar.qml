@@ -17,8 +17,8 @@
 // Why nothing here is tappable
 // ---------------------------------------------------------------------------
 // Android's status bar is not tappable either, and here that is forced rather
-// than chosen: moarchy.shade owns the top edge with a layer-shell grab
-// strip on Overlay so a downward drag anywhere along the bar opens the shade.
+// than chosen: moarchy.control-center owns the top edge with a layer-shell grab
+// strip on Overlay so a downward drag anywhere along the bar opens the control center.
 // Overlay outranks this surface's Top, so a tap here would never arrive. Rather
 // than fight for it, this surface draws and nothing else -- no HoverHandler, no
 // TapHandler, keyboardFocus None.
@@ -65,8 +65,8 @@ Item {
   //   barSize, barHidden  notifications/Service.qml positions toasts under the bar
   //   fontFamily          notifications/Service.qml renders toast text
   //   notificationPopups  false, so notifications/Service.qml puts every
-  //                       notification straight into the history the shade
-  //                       lists and toasts none of them (docs/shade.md S24,
+  //                       notification straight into the history the control center
+  //                       lists and toasts none of them (docs/control-center.md S24,
   //                       pkgbuilds/omarchy-config/notification-popups-bar-opt-out.patch)
   // Called behind a typeof guard, so a missing one is survivable but leaves the
   // caller returning "no-bar" forever:
@@ -88,7 +88,7 @@ Item {
   // bar: both flipped the flag and then told `omarchy.bar` -- upstream's plugin
   // id, and upstream's bar is the one this phone replaces -- to re-read it, so
   // every attempt answered "Target not found" behind a `-q`. The row went rather
-  // than the name being fixed: the shade's grab strip owns the top edge whether
+  // than the name being fixed: the control center's grab strip owns the top edge whether
   // or not this draws, so a hidden bar leaves 26px still eating drags with
   // nothing on screen to say why, and the switch that undid it lived inside the
   // screen it had just made harder to reach. docs/settings.md C4a.
@@ -99,7 +99,7 @@ Item {
   // true, and a bar that omits it is a bar with no toast offset.
   readonly property bool barHidden: false
 
-  // S24. No toasts: a phone reads its notifications in the shade, and a toast
+  // S24. No toasts: a phone reads its notifications in the control center, and a toast
   // here is an Overlay surface across the top of every app and every sheet
   // that takes their touches until it expires -- which upstream's first-run
   // ones never do. Every notification goes to the history instead, whatever
@@ -332,7 +332,7 @@ Item {
   // absent and from a modem that is unwell -- and it used to draw the same
   // rune as the latter. On a phone that boots with a locked SIM nothing else
   // on screen says why calls fail, and the answer is four taps away in the
-  // drawer under "SIM".
+  // app drawer under "SIM".
   readonly property bool simLocked: root.modemLock === "sim-pin" ||
                                     root.modemLock === "sim-puk"
   readonly property bool modemUsable: root.modemState !== "" && !root.simMissing
@@ -396,14 +396,14 @@ Item {
     ? root.shell.serviceFor("omarchy.notifications") : null
   readonly property bool dnd: root.notifications ? root.notifications.doNotDisturb === true : false
 
-  // S26. What is waiting in the shade, counted off the history directory.
+  // S26. What is waiting in the control center, counted off the history directory.
   //
   // It used to be `notifications.popupModel.count` -- what is on screen right
   // now -- and S24 leaves that permanently empty: with no toasts there is
   // never a live popup to count, so the one state worth showing in a bar with
   // nothing under it would have been invisible. The service writes one .json
   // per notification into this directory and removes it on dismissal, so the
-  // count is the list the shade shows.
+  // count is the list the control center shows.
   //
   // The service's own path, which does not read XDG_STATE_HOME.
   readonly property string historyDir:
@@ -559,7 +559,7 @@ Item {
           // the right weight while it meant "and there is one on screen right
           // now"; as the only indication a notification exists at all it was
           // too quiet to find, and the count it drew is the same count, so
-          // nothing is lost by drawing the glyph the shade's own list is full
+          // nothing is lost by drawing the glyph the control center's own list is full
           // of instead.
           StatusGlyph {
             anchors.verticalCenter: parent.verticalCenter

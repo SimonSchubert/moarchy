@@ -44,7 +44,7 @@ Item {
   id: root
 
   // Injected by the host after construction, and not `readonly` or `required` --
-  // see the drawer, which also says why this is the only one declared (J8).
+  // see the app drawer, which also says why this is the only one declared (J8).
   property var shell: null
 
   readonly property string pluginId: "moarchy.settings"
@@ -67,7 +67,7 @@ Item {
   property string returnTo: ""
 
   // ---------------------------------------------------------- the quiet open
-  // docs/settings.md O4. A drawer search result names a page and a row, and
+  // docs/settings.md O4. A app drawer search result names a page and a row, and
   // `activate` cannot take it: `rowById` resolves against the page that is
   // open, so the row has to be standing before it can be named. Standing it up
   // the ordinary way means opening this surface -- and the first row anyone
@@ -82,7 +82,7 @@ Item {
   //
   // `quietWasMapped` and `quietStack` are put back on the way out. A quiet open
   // that never showed anything must leave Settings exactly as it found it, or
-  // taking a screenshot from the drawer throws away a Settings sitting in the
+  // taking a screenshot from the app drawer throws away a Settings sitting in the
   // carousel on some other page (K4).
   property string pendingRow: ""
   property bool quietOpen: false
@@ -245,7 +245,7 @@ Item {
   // A deep link arrives as one page id, but back has to walk up from it. Page
   // ids are dotted the way upstream's menu ids are, so the ancestors are the
   // prefixes: system.power -> root, system, system.power. Without this, back
-  // from the shade's power glyph would close Settings rather than go up a level.
+  // from the control center's power glyph would close Settings rather than go up a level.
   function stackFor(pageId) {
     if (pageId === "root") return ["root"]
     var parts = String(pageId).split(".")
@@ -370,11 +370,11 @@ Item {
 
     // K12, `settings.md` A7. A summon that names no page and finds the window
     // already mapped is somebody asking for the screen they were on -- the
-    // shade's gear tapped from another workspace, a drawer result, a second
+    // control center's gear tapped from another workspace, a app drawer result, a second
     // press of a keybinding -- and an app answers that by coming back where it
     // was, not by throwing away where you were. Explicit is still explicit:
     // `openAt system.power` navigates whether or not the window is up, which is
-    // what the shade's power glyph depends on.
+    // what the control center's power glyph depends on.
     //
     // `opened` is read before anything below maps, so a close (K6) makes this
     // false and the next open rebuilds at the root -- which is `settings.md` A6
@@ -413,7 +413,7 @@ Item {
 
   // Nothing to look at: the row is already running somewhere else. Put back the
   // stack the open found, and leave the window exactly as mapped or unmapped as
-  // it was -- a quiet open fired from the drawer must not close a Settings that
+  // it was -- a quiet open fired from the app drawer must not close a Settings that
   // was sitting on another workspace (K4).
   function dropQuiet() {
     if (!root.quietOpen) return
@@ -444,7 +444,7 @@ Item {
 
   // A quiet open holds a surface the host thinks is mapped and the user cannot
   // see. Every path out of settlePending() ends it, but a guard batch that
-  // never answers is a path out of nothing -- and the symptom would be a drawer
+  // never answers is a path out of nothing -- and the symptom would be a app drawer
   // tap that appears to do nothing while Settings sits in openPanelIds
   // invisible, which is worse than either outcome it is choosing between. So
   // the wait has a floor: give up and show the page.
@@ -468,7 +468,7 @@ Item {
     root.pendingRow = ""
 
     var row = root.rowById(id)
-    // Gone, hidden by its guard, or not ready. The drawer offered it, so doing
+    // Gone, hidden by its guard, or not ready. The app drawer offered it, so doing
     // nothing at all would be exactly the silent failure O9 exists to stop:
     // show the page and let the screen explain itself.
     if (!row || !root.rowVisible(row) || !root.rowEnabled(row)) {
@@ -905,7 +905,7 @@ Item {
 
     function close(): string { root.dismiss(); return "ok" }
 
-    // O4-O9, and the verb the drawer's results are checked through. Stand the
+    // O4-O9, and the verb the app drawer's results are checked through. Stand the
     // stack up on `page`, wait for that page's guards, then fire `row` through
     // the same activate() a tap goes through -- without ever mapping the
     // surface unless there turns out to be something to show.
@@ -914,7 +914,7 @@ Item {
     // happened is read afterwards from `state`, `page` and `lastLaunch`.
     //
     // The row is looked up in the page's *declared* rows, which is the same set
-    // the drawer's index walks. A provider-built row is not in either, and
+    // the app drawer's index walks. A provider-built row is not in either, and
     // answering `unknown row` for one is the honest reply.
     function runRow(page: string, rowId: string): string {
       if (!Pages.exists(page)) return "unknown page: " + page
@@ -1086,7 +1086,7 @@ Item {
     function coverage(): string {
       var rows = Pages.coverage()
       var out = []
-      var names = { N: "Native", B: "Bridged", S: "Shade" }
+      var names = { N: "Native", B: "Bridged", S: "Control Center" }
       for (var i = 0; i < rows.length; i++)
         out.push([rows[i][0], names[rows[i][1]] || rows[i][1],
                   rows[i][2], rows[i][3]].join("\t"))
@@ -1109,7 +1109,7 @@ Item {
     appName: "Settings"
     pageTitle: root.pageTitle === "Settings" ? "" : root.pageTitle
     pluginId: root.pluginId
-    // K5. The gear the shade opens this by: U+E615, nf-seti-config.
+    // K5. The gear the control center opens this by: U+E615, nf-seti-config.
     //
     // Spelled as an escape where its siblings carry the rune itself
     // (moarchy.wifi, moarchy.bluetooth, moarchy.sim), because this one did not

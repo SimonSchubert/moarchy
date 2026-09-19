@@ -1,13 +1,13 @@
-# Notification shade — specification
+# Control Center — specification
 
-What the shade shows and what each control does. Present tense, normative.
+What the control center shows and what each control does. Present tense, normative.
 The archaeology lives in `docs/build-log.md`.
 
-**How the shade opens, closes and is dismissed is not here** — it is a gesture,
+**How the control center opens, closes and is dismissed is not here** — it is a gesture,
 and it belongs to `docs/gestures.md` (A8, G1–G3, H2, H5). Restating those
 would give us two specs to disagree with each other. This file is the contents.
 
-The grab band across the status bar is the shade's own way in and is always
+The grab band across the status bar is the control center's own way in and is always
 there (`gestures.md` Q7). It is no longer the only one: a swipeable edge can
 be set to raise this sheet (Q1), and then it arrives from that edge instead.
 Everything below is about the sheet and holds whichever way it was raised —
@@ -42,10 +42,10 @@ is fixed.
 minute. The sheet covers the status bar, so the time has to reappear here —
 losing it is the one thing a phone user would notice immediately.
 
-**S2** The gear opens the settings list and closes the shade on the way.
+**S2** The gear opens the settings list and closes the control center on the way.
 Everything the Omarchy menu reaches that is not an app lives there.
 
-**S3** The power button opens Settings at its Power page and closes the shade on
+**S3** The power button opens Settings at its Power page and closes the control center on
 the way. It used to summon the Omarchy menu at its `system` route; that menu is
 a popup with no tap-outside dismiss in this port, since the port patch
 stubs out `HyprlandFocusGrab`, so it was a trapdoor. Lock, Suspend, Log out,
@@ -61,7 +61,7 @@ second line reads, in order of preference: `Off`, the connected network's name,
 it. Its second line reads `No adapter`, `Off`, the connected device's name, or
 `On`.
 
-**S6** A **long press** on the Wi-Fi tile opens the network picker: the shade
+**S6** A **long press** on the Wi-Fi tile opens the network picker: the control center
 closes and the `moarchy.wifi` screen comes up. The tap it interrupts does not
 also fire, so the radio is left as it was. 500ms, Android's interval; a press
 that turns into a drag of the sheet cancels it.
@@ -83,9 +83,9 @@ nothing saved in range is the case where turning it off matters least.
 
 **S6b** The picker is `moarchy.wifi`, a screen, not a terminal — and since
 `gestures.md` K1, a screen that is a window, so it opens on a workspace of its
-own and the shade's sheet is gone by the time it does.
+own and the control center's sheet is gone by the time it does.
 
-Summoning it is not suppressed by `shade dryRun 1`. The two effects dryRun holds
+Summoning it is not suppressed by `control-center dryRun 1`. The two effects dryRun holds
 back are the ones that cannot be taken back on a phone reached over the radio it
 would switch off; a screen can be closed again. Suppressing it made S6 and S6c
 unpassable by construction — they assert the picker is on screen, and the only
@@ -123,7 +123,7 @@ running impala would start it to fight NetworkManager for `wlan0` rather than
 fail cleanly.
 
 **S6c** A long press on the **Bluetooth** tile does the same for pairing: the
-shade closes and the `moarchy.bluetooth` screen comes up. The two wide tiles
+control center closes and the `moarchy.bluetooth` screen comes up. The two wide tiles
 behave alike — hold for the thing the radio is for, and both of them now hold a
 screen rather than a terminal.
 
@@ -140,12 +140,12 @@ on-screen keyboard has. Three things it still could not be:
   against the 44 `style.md` E1 asks for. Every tap is a near miss between two
   devices.
 - **Part of the shell.** A terminal is a *window*: it takes a workspace, it
-  gets a tile on its card in the overview, and it is themed by foot's own
+  gets a tile on its card in the workspace overview, and it is themed by foot's own
   palette rather
   than by `Color.popups.*`. Holding one tile gave you a screen and holding the
   other gave you an app.
 - **Able to say what the tile already says.** Battery level, "Connecting…",
-  which device is the audio sink — the shade knows all three and the terminal
+  which device is the audio sink — the control center knows all three and the terminal
   could not show any of them in the shell's own type.
 
 **S6d** The picker is `moarchy.bluetooth`, an overlay plugin, the same shape as
@@ -163,7 +163,7 @@ nobody is reading. It is retried while the screen is up, because BlueZ refuses
 `StartDiscovery` on an adapter that is still powering on, and because a scan
 times out on its own after a couple of minutes.
 
-**S6d-3** Tapping a row opens the drawer under it with the actions that apply to
+**S6d-3** Tapping a row opens the app drawer under it with the actions that apply to
 that device, one row open at a time: **Connect** or **Pair**, **Disconnect**,
 **Forget**. Nothing acts on a tap of the row itself — unlike Wi-Fi's open
 network, there is no Bluetooth device for which the intent of a tap is
@@ -176,7 +176,7 @@ related but different reason — keeping a focused text field alive. There is no
 text field here.)
 
 **S6d-5** A device reports its battery level when BlueZ has one, as a percentage
-next to its name. This is the one thing the shade cannot show and the reason to
+next to its name. This is the one thing the control center cannot show and the reason to
 open the screen when everything is already connected.
 
 **S6d-6** Pairing, connecting and forgetting go through
@@ -272,17 +272,17 @@ uuid, 0600 root:root — and that copy answers from then on. Measured on sargo
 **S29d** The privileged half is `bin/moarchy-data`, not `nmcli` from the shell.
 NetworkManager's `settings.modify.system` is `auth_admin`, so `nmcli c modify`
 as the session user answers `Insufficient privileges`, and a polkit prompt
-raised from the shade would land on top of the shade that asked for it. Same
+raised from the control center would land on top of the control center that asked for it. Same
 split, and the same reason, as `moarchy.sim` and `bin/moarchy-sim`.
 
 Its `status` is read once per open, like the rfkill and torch probes — nothing
-here changes while the shade is shut. Under `shade dryRun 1` the writes are
+here changes while the control center is shut. Under `control-center dryRun 1` the writes are
 held back and the summon is not, exactly as S6's are.
 
-Check: `omarchy-shell shade open`, then `omarchy-shell shade mobile` reads
+Check: `omarchy-shell control-center open`, then `omarchy-shell control-center mobile` reads
 `present on connected unlocked sim drawn` on a phone carrying data, and
 `present on disconnected locked sim drawn` on one whose SIM is still locked.
-`omarchy-shell shade dataTap` under `dryRun 1` answers `picker` with
+`omarchy-shell control-center dataTap` under `dryRun 1` answers `picker` with
 `lastLaunch` `moarchy.sim` while the SIM is locked. The last token is the
 latch: across an off/on the first goes `absent` for a few seconds while this
 stays `drawn`, which is the tile not moving. All run on the device 2026-09-17.
@@ -310,7 +310,7 @@ is a permissions failure the rest of the time. The row divides its width by
 what is actually shown, three tiles or four. When present it writes the LED
 directly.
 
-Check: `omarchy-shell shade open`, then `grim /tmp/shade.png` — four tiles on a
+Check: `omarchy-shell control-center open`, then `grim /tmp/control center.png` — four tiles on a
 device whose LED exists, three where it does not.
 
 **S10a** On a device that has the LED, the session user **can** write it on a
@@ -372,10 +372,10 @@ button on the card, and the swipe is the only per-card path. See
 
 **S19** A clear-all removes every notification, both the live popups and the
 history. It is the only dismissal reachable by tap, which is what keeps
-emptying the shade from depending on knowing about H7's swipe.
+emptying the control center from depending on knowing about H7's swipe.
 
 **S20** The list is the only scrolling region on the sheet, and while it can
-scroll it keeps vertical drags — the shade must never close out from under
+scroll it keeps vertical drags — the control center must never close out from under
 someone reading it (`gestures.md` H5). When it fits, it gives that space back,
 and so does the sheet: it ends where the list does (S21).
 
@@ -385,7 +385,7 @@ notifications" placeholder — an empty list is simply empty, and the sheet now
 stops there rather than holding two thirds of the screen blank underneath it.
 
 **? S21a** The sheet grows *per open*, not live: a notification that arrives
-while the shade is already down does not join the list, or extend the sheet,
+while the control center is already down does not join the list, or extend the sheet,
 until it is next opened.
 — confirm: this is not new and not about the height. `historyRows` is filled
 by `refresh()`, which runs on `open()` and nowhere else, so the list has always
@@ -397,7 +397,7 @@ directory on open, which is a change to S18, not to this.
 that cap the list scrolls rather than the sheet growing further (S20).
 
 The cap is not slack. The band of scrim left underneath is the tap-to-dismiss
-target and where a thumb starts the up-drag that closes the shade
+target and where a thumb starts the up-drag that closes the control center
 (`gestures.md` H2), and the drag handle is the status bar, so a sheet allowed
 to reach the full screen would leave an upward drag starting within 26px of
 the top with nowhere to travel. A short sheet hands back more of that band,
@@ -416,7 +416,7 @@ sent it, Omarchy's own confirmations included — goes straight into the list
 above, and no surface is mapped over the screen for it. A toast is an Overlay
 surface across the top of every app and every sheet, and it takes their touches
 until it expires; upstream's first-run toasts never do. The bar says that
-something arrived (S26); the shade is where it is read.
+something arrived (S26); the control center is where it is read.
 
 Silent (S7) still decides what is worth keeping. With it on, upstream's rule
 for a silenced notification applies: one marked transient, or a bare
@@ -430,9 +430,9 @@ meant to go upstream — a bar that says nothing keeps its toasts, so desktop
 Omarchy is unchanged). Pointing `bar.id` back at `omarchy.bar` brings them
 back with the rest of the desktop.
 
-→ with the shade shut, a notification maps no `omarchy-notifications` layer
+→ with the control center shut, a notification maps no `omarchy-notifications` layer
 (`swaymsg -t get_tree` and `-t get_outputs` name no such surface), and
-`omarchy-shell shade notifications` lists it once the shade is opened
+`omarchy-shell control-center notifications` lists it once the control center is opened
 
 **S25** Each card leads with an icon: the notification's own picture (an
 avatar, album art), else its app icon, else the icon of the desktop entry its
@@ -443,10 +443,10 @@ some 48px in reads as misaligned, not as information.
 The resolution order is upstream `NotificationCard`'s, so a card here and a
 toast on a desktop resolve the same value the same way.
 
-→ `omarchy-shell shade icons` names a source for every row, and none of them
+→ `omarchy-shell control-center icons` names a source for every row, and none of them
 is `none`
 
-**S26** While the shade holds any notification, the status bar shows a bell
+**S26** While the control center holds any notification, the status bar shows a bell
 beside the clock. It goes when the list is emptied, by Clear all or by the last
 swipe. While Silent is on, Silent's glyph shows instead: the list still fills,
 and the bar says only that you asked not to be told.
@@ -461,7 +461,7 @@ The history directory is the count, watched the way the radio flags are.
 `bell=none` after Clear all, and `bell=none` with Silent on
 
 **S27** Tapping a card does what clicking its toast did, then the card goes and
-the shade closes. First match wins: the argv an Omarchy notification carries
+the control center closes. First match wins: the argv an Omarchy notification carries
 (`omarchy-notification-send --exec` — the first-run "Update System" is one),
 else the sender's open window, else a launch of the app whose desktop entry
 answers to its name. A card with none of those does not light under a finger,
@@ -476,48 +476,48 @@ answer for the many senders that register no such action.
 
 The tap is told from S18's swipe by where the card is, not by a timer: a swipe
 has moved it, a tap has not. A launch goes through the host's app library, so a
-card's launch draws the same splash a tap in the drawer draws (`windows.md`
+card's launch draws the same splash a tap in the app drawer draws (`windows.md`
 L1), and a focus goes through `moarchy.gestures` — `activate()` is a no-op on
 this compositor (`gestures.md` K12).
 
 → a real tap on a card whose notification carries `--exec touch <file>` creates
-the file, closes the shade and removes the card; `omarchy-shell shade actions`
+the file, closes the control center and removes the card; `omarchy-shell control-center actions`
 names what each card would do, one line per row
 
 ---
 
-## S28. What the shade is drawn over
+## S28. What the control center is drawn over
 
-**S28** Pulling the shade down over an open app drawer leaves the drawer open,
-and closing the shade reveals it still there. The shade is on `Overlay` and the
-drawer on `Top`, so it draws above it without either of them being put away
+**S28** Pulling the control center down over an open app drawer leaves the app drawer open,
+and closing the control center reveals it still there. The control center is on `Overlay` and the
+app drawer on `Top`, so it draws above it without either of them being put away
 — the hide that used to be here cost you the sheet you were reading.
 
-The back gesture takes them one at a time, shade first, because
-`moarchy.gestures`' `overlayIds` is in dismissal order and the shade leads it
-(`gestures.md` G1, G3). An up-swipe from the strip clears the shade and leaves
-the drawer, which is A8 applied to a drawer that is already up.
-→ with `omarchy-shell drawer state` == `open`, `omarchy-shell shade open`
-leaves it `open`, and so does `omarchy-shell shade close`
+The back gesture takes them one at a time, control center first, because
+`moarchy.gestures`' `overlayIds` is in dismissal order and the control center leads it
+(`gestures.md` G1, G3). An up-swipe from the strip clears the control center and leaves
+the app drawer, which is A8 applied to a app drawer that is already up.
+→ with `omarchy-shell app-drawer state` == `open`, `omarchy-shell control-center open`
+leaves it `open`, and so does `omarchy-shell control-center close`
 
 ---
 
 ## Constraints
 
-- **The shade covers the whole screen and reserves nothing.** Growing it with
+- **The control center covers the whole screen and reserves nothing.** Growing it with
   an exclusive zone would reflow every tiled window at 60Hz for the length of
   the drag.
 - **It takes no keyboard focus**, so a tap on a tile and a flick back up leaves
   you exactly where you were.
-- **A drawer open underneath keeps the seat's keyboard.** The drawer declares
+- **A app drawer open underneath keeps the seat's keyboard.** The app drawer declares
   `WlrKeyboardFocus.Exclusive` while it is up and this surface declares `None`,
-  so a keyboard the drawer's search field raised stays up behind the shade
-  (S28) and is still there when the shade goes.
-- **The bar underneath has no tap targets** and cannot have any: the shade's
+  so a keyboard the app drawer's search field raised stays up behind the control center
+  (S28) and is still there when the control center goes.
+- **The bar underneath has no tap targets** and cannot have any: the control center's
   grab strip is on Overlay and covers the bar's top band, so a button there
   would never receive a touch and the cause would not be anywhere near it.
 - **Two edges are cut out of its input region** — the home pill along the
-  bottom and the back edge down the left — so both keep working with the shade
+  bottom and the back edge down the left — so both keep working with the control center
   down.
 - Every action that leaves the shell — airplane, torch, brightness, rotate —
   is fire-and-forget and re-reads the real state rather than trusting its own

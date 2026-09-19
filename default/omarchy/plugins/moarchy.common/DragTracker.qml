@@ -16,12 +16,12 @@
 //     }
 //
 // Four surfaces each wrote this out: the gesture strip, the wallpaper, the
-// drawer's sheet and handle, and the shade's sheet and band. Each had its own
+// app drawer's sheet and handle, and the control center's sheet and band. Each had its own
 // copy of the start coordinates, `lastY`/`lastT`, an identical frame-to-frame
 // speed reading, a slop latch, a 0..1 clamp, and the
 // cleared-on-press flag that stops a drag ending as a tap. Two of the four had
-// a watchdog and two did not, so a stranded touch left the drawer parked where
-// it left the shade recovered (F2).
+// a watchdog and two did not, so a stranded touch left the app drawer parked where
+// it left the control center recovered (F2).
 //
 // A fifth wrote it out and was missed: the back edge, which travels sideways
 // (refactor.md H1). It is the reason `axis` exists. It was not a Y-axis
@@ -43,13 +43,13 @@
 // input rather than choosing it.
 //
 // **The progress property.** This publishes a number; the surface assigns it.
-// That is what keeps the gestures plugin's path intact: it drives the drawer
+// That is what keeps the gestures plugin's path intact: it drives the app drawer
 // through a direct object reference frame by frame, and a shared component
 // that reached for the host would marshal a string per touch event on the one
 // path that cannot afford it (refactor.md Constraints).
 //
 // **The trace.** `dragTrace` hangs off each surface's own `onProgressChanged`
-// and records what that surface drew, which is the point of it -- the drawer
+// and records what that surface drew, which is the point of it -- the app drawer
 // traces `homeHint` beside it, and neither is a property of the touch.
 // `stranded()` and `canceled()` fire so the surface can mark its own.
 //
@@ -78,8 +78,8 @@ Item {
   // The distance, in scene px, that carries progress from 0 to 1. F4.
   property real travel: 1
 
-  // +1 when travelling *down* raises progress (the shade), -1 when travelling
-  // up does (the drawer, the strip). One signed factor rather than a branch:
+  // +1 when travelling *down* raises progress (the control center), -1 when travelling
+  // up does (the app drawer, the strip). One signed factor rather than a branch:
   // the four surfaces differ only in this.
   property int openDirection: -1
 
@@ -92,7 +92,7 @@ Item {
   // How far along the axis a finger has to go before this claims the gesture:
   // +1 claims a positive delta only (down on Y, right on X), -1 a negative one
   // (up, left), 0 either. Read every frame rather than once, so a surface whose
-  // answer depends on its own state -- the shade's band latches either way once
+  // answer depends on its own state -- the control center's band latches either way once
   // open and downward only while shut -- expresses that as a binding.
   //
   // A sign rather than the compass word this took until H2, for the reason
@@ -115,12 +115,12 @@ Item {
   property int slop: 0
 
   // Claim the gesture on the press rather than on the first movement past the
-  // slop. For a surface whose whole area is a handle -- the drawer's grab bar,
-  // the shade's band across the status bar -- there is nothing else the finger
+  // slop. For a surface whose whole area is a handle -- the app drawer's grab bar,
+  // the control center's band across the status bar -- there is nothing else the finger
   // could have meant, and both of those already set `dragging` from the press.
   //
-  // It is not cosmetic. `dragging` gates the shade's input mask and the
-  // drawer's `opened`, so latching a frame later than the touch would change
+  // It is not cosmetic. `dragging` gates the control center's input mask and the
+  // app drawer's `opened`, so latching a frame later than the touch would change
   // which surface a second finger reaches mid-pull.
   property bool latchOnPress: false
 
@@ -150,7 +150,7 @@ Item {
 
   // The gesture has been claimed. This is what `dragging` is bound to, and it
   // is deliberately not `active`: `opened` and `keyboardFocus` read `dragging`
-  // on the drawer, so a mere touch flipping it would tell the rest of the
+  // on the app drawer, so a mere touch flipping it would tell the rest of the
   // shell the sheet had stopped being open.
   property bool latched: false
 
@@ -179,7 +179,7 @@ Item {
   // open" was positive in their own release rule. Unifying on the scene sign
   // without flipping those two back inverted their fling test: a quick flick
   // up produced a large negative number, which is neither `>= fling` nor
-  // `> -fling`, so the drawer sprang shut from above halfway. A slow drag past
+  // `> -fling`, so the app drawer sprang shut from above halfway. A slow drag past
   // the commit still opened, which is why a 2000ms synthetic drag never caught
   // it.
   //
@@ -206,8 +206,8 @@ Item {
 
   // Whether anything has moved yet. Separate from `latched`, because a surface
   // that claims the gesture on the press still has a slop to cross before it
-  // moves: the shade's band owns the status bar from the touch, and a 2px
-  // wobble on it must not start opening the shade.
+  // moves: the control center's band owns the status bar from the touch, and a 2px
+  // wobble on it must not start opening the control center.
   property bool travelling: false
 
   // ------------------------------------------------------ measuring speed
@@ -268,7 +268,7 @@ Item {
   // ----------------------------------------------------------- signals
 
   // The gesture latched. Where a surface freezes anything for the duration --
-  // the shade latches its own height (S23) -- this is the frame to do it on.
+  // the control center latches its own height (S23) -- this is the frame to do it on.
   signal began()
 
   // Per frame, after the state above is updated. The velocity is

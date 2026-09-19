@@ -21,7 +21,7 @@
 // widget back to a 360px bar to reach its popup is not a trade worth making.
 //
 // So this is a screen of its own, the same shape as moarchy.themes: an overlay
-// plugin, summoned by the shade's tile and by Settings, with a back chevron.
+// plugin, summoned by the control center's tile and by Settings, with a back chevron.
 //
 // ---------------------------------------------------------------------------
 // What it does NOT reimplement
@@ -51,7 +51,7 @@ Item {
   id: root
 
   // Injected by the host after construction, and not `readonly` or `required` --
-  // see the drawer, which also says why this is the only one declared (J8).
+  // see the app drawer, which also says why this is the only one declared (J8).
   property var shell: null
 
   readonly property string pluginId: "moarchy.wifi"
@@ -64,7 +64,7 @@ Item {
   // window has a workspace for.
   readonly property bool opened: wifiWindow.visible
 
-  // How the overview and the back gesture find this plugin from its window
+  // How the workspace overview and the back gesture find this plugin from its window
   // (moarchy.common/ShellApps.js).
   readonly property var appWindow: wifiWindow
 
@@ -77,7 +77,7 @@ Item {
   }
 
   // Where Back goes, set by whoever summoned this screen, so the chevron
-  // returns to the shade or the Settings page you came from rather than
+  // returns to the control center or the Settings page you came from rather than
   // dropping you on the home screen.
   property string returnTo: ""
   property string returnPage: ""
@@ -136,7 +136,7 @@ Item {
   // `rows` recomputes on every scan result. Reassigning a ListView's model
   // rebuilds its delegates, the focused TextField is destroyed with them, and
   // the on-screen keyboard retracts mid-passphrase. Holding the array
-  // reference steady while a drawer is open keeps the delegate -- and its focus
+  // reference steady while a app drawer is open keeps the delegate -- and its focus
   // -- alive. Signal strengths going stale for the few seconds someone is
   // typing is not a cost worth mentioning next to that.
   property var frozenRows: []
@@ -233,7 +233,7 @@ Item {
   //
   // The field lives inside a ListView delegate, so it does not exist at the
   // window's scope -- and there is not one of it, there is one per row. The
-  // drawer can write `searchField.activeFocus` because its search field is a
+  // app drawer can write `searchField.activeFocus` because its search field is a
   // sibling in the same Column; copying that shape here produced
   //   ReferenceError: passField is not defined
   // at load, which cost the surface its bottom margin binding.
@@ -264,7 +264,7 @@ Item {
       return
     }
     // An open network nobody has joined is the one case with nothing to ask:
-    // connect on the tap. Everything else opens its drawer, which carries the
+    // connect on the tap. Everything else opens its app drawer, which carries the
     // passphrase field when the network is secured and not connected, and the
     // Disconnect/Forget actions when they apply.
     if (!row.connected && !row.known && !root.needsPassphrase(row.security)) {
@@ -408,7 +408,7 @@ Item {
       return out.join("\n")
     }
 
-    // docs/style.md F3, F4. Same job as the drawer's searchTarget():
+    // docs/style.md F3, F4. Same job as the app drawer's searchTarget():
     // the pill and the field draw identically whether or not they are the same
     // rectangle, so the rects have to be read rather than photographed.
     // Surface coordinates; bin/moarchy-touch takes these doubled.
@@ -530,7 +530,7 @@ Item {
             readonly property bool hasError: root.errorSsid === rowItem.modelData.ssid
 
             width: list.width
-            // Tall enough for a finger, and taller again when a drawer is open.
+            // Tall enough for a finger, and taller again when a app drawer is open.
             height: Style.space(58)
                     + (rowItem.isExpanded
                        ? Style.space(60)
@@ -637,7 +637,7 @@ Item {
               color: root.accent
             }
 
-            // ----------------------------------------------------- drawer
+            // ----------------------------------------------------- app drawer
             // Two rows, not one: at 360px a passphrase field, a Join and a
             // Forget do not fit on a line, and shrinking the field is the wrong
             // thing to shrink.
@@ -734,7 +734,7 @@ Item {
                   // measures the painted bounds and shifts by the difference
                   // (docs/style.md B5). anchors.centerIn centres the box the font
                   // reserves, and a Nerd Font glyph is rarely centred inside it --
-                  // measured on the shade's gear, 4 device pixels off.
+                  // measured on the control center's gear, 4 device pixels off.
                   Ui.OpticalGlyph {
                     anchors.fill: parent
                     text: root.showPassphrase ? "󰛐" : "󰛑"   // eye / eye-off

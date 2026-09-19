@@ -8,7 +8,7 @@
 # This moves the sink and stops. It sends no IPC and asks for no panel: the
 # plugin that draws the vertical track binds the sink and raises itself when
 # what it is bound to changes, so the feedback follows the volume however the
-# volume moved -- this script, the shade's slider, an Android app under
+# volume moved -- this script, the control center's slider, an Android app under
 # Waydroid, a headset's own buttons (V3).
 #
 # Two things that buys, and they are the reason it is written this way round

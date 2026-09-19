@@ -110,9 +110,9 @@ Item {
   // theme that is white, and white on a theme whose accent is a pale yellow is
   // an equals key nobody can find.
   readonly property string onAccent: {
-    var level = root.shade(root.colours.accent)
-    return Math.abs(level - root.shade(root.colours.background))
-         > Math.abs(level - root.shade(root.colours.foreground))
+    var level = root.controlCenter(root.colours.accent)
+    return Math.abs(level - root.controlCenter(root.colours.background))
+         > Math.abs(level - root.controlCenter(root.colours.foreground))
       ? root.colours.background : root.colours.foreground
   }
 

@@ -46,8 +46,8 @@ have_dbus=0
 # GTK answers every themed icon name out of the theme this names, and for a
 # theme that is not installed it answers `image-missing` -- a white square with
 # a folded corner -- for all of them at once, in every GTK app. The shell never
-# showed it: Quickshell walks the icon directories itself, so the drawer, the
-# carousel and the shade's notification icons have always resolved correctly
+# showed it: Quickshell walks the icon directories itself, so the app drawer, the
+# carousel and the control center's notification icons have always resolved correctly
 # whatever this said.
 #
 # Checked, not replaced: install a Yaru one day and upstream's choice starts

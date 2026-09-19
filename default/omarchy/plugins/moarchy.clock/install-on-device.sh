@@ -75,6 +75,6 @@ QS_DISABLE_FILE_WATCHER=1 QS_NO_RELOAD_POPUP=1 \
 sleep 2
 pgrep -x quickshell >/dev/null && echo "    restarted omarchy-shell" || echo "    shell failed to start, see ~/.local/state/moarchy/shell.log"
 ENDSSH
-echo "==> done. tap Clock in the drawer, or: omarchy-shell shell toggle $ID"
+echo "==> done. tap Clock in the appDrawer, or: omarchy-shell shell toggle $ID"
 echo "    the alarm only watches the clock while the shell is running, and"
 echo "    cannot wake a suspended phone -- see this plugin's README."

@@ -1,5 +1,5 @@
 # Make the flash LED's brightness writable by the session's group, which is
-# what the shade's Torch tile needs to exist at all (docs/shade.md S10, S10a).
+# what the controlCenter's Torch tile needs to exist at all (docs/control-center.md S10, S10a).
 #
 # feedbackd ships a rule for exactly this attribute -- 72-feedbackd.rules,
 # matching */*:flash -- and it does not work on Arch: the rule runs
@@ -10,7 +10,7 @@
 #   white:flash: Failed to execute '/usr/libexec/fbd-ledctrl ...', ignoring
 #
 # so the attribute keeps root:root 0644 on every boot. Nothing else notices:
-# the shade probes with `[ -w ... ]` and correctly hides a control it cannot
+# the controlCenter probes with `[ -w ... ]` and correctly hides a control it cannot
 # operate, which draws three tiles instead of four and reads exactly like a
 # phone with no flash LED. Found on sargo, where the LED is real.
 #
@@ -27,7 +27,7 @@
 # the package depends on feedbackd so the group is there when this runs.
 #
 # *:torch is matched for the same reason feedbackd matches it: some devices
-# name the same LED that way. The shade only ever probes *:flash.
+# name the same LED that way. The controlCenter only ever probes *:flash.
 ACTION=="add|change", SUBSYSTEM=="leds", KERNEL=="*:flash|*:torch", \
   RUN+="/usr/bin/chgrp feedbackd %S%p/brightness", \
   RUN+="/usr/bin/chmod g+w %S%p/brightness"

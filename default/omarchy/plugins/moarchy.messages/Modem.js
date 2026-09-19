@@ -290,7 +290,7 @@ function lockCommand() {
   return ["sh", "-c", "[ -x \"$1\" ] && exec \"$1\" lock; exit 0", "sh", SCREEN]
 }
 
-// A line in the shade's notification list. Nothing on this phone pops up --
+// A line in the control center's notification list. Nothing on this phone pops up --
 // moarchy.bar turns popups off -- so this is where a text that arrived while
 // the phone was in a pocket is found. `omarchy-notification-send` because the
 // image has no libnotify; off moarchy, nothing.

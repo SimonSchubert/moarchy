@@ -24,8 +24,8 @@ moarchy-waydroid is installed. Two steps, in this order:
 Re-run moarchy-waydroid-setup if the scale, the panel, the bar or the strip
 ever changes: every number it writes is computed from the device.
 
-Android apps then appear in the drawer on their own. Launch them from there --
-the drawer routes them through moarchy-android-launch, and `waydroid app
+Android apps then appear in the appDrawer on their own. Launch them from there --
+the appDrawer routes them through moarchy-android-launch, and `waydroid app
 launch` by hand gives up the status bar inset (docs/android.md AC 11).
 
 MSG

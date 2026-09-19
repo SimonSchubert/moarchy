@@ -36,6 +36,6 @@ wl-copy < "$OUT"
 
 # omarchy-notification-send, not notify-send: this image ships no libnotify
 # binary, so the old line was `command not found` swallowed by its own
-# redirect -- the one confirmation the row had, silently absent. The shade
+# redirect -- the one confirmation the row had, silently absent. The control center
 # shows this one.
 omarchy-notification-send "Screenshot" "Saved to $(basename "$OUT")" 2>/dev/null || true

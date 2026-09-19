@@ -6,7 +6,7 @@
 # PHONE defaults to the same target scripts/device.sh uses.
 #
 # Two desktop entries and a command, where other plugins have one entry: the
-# drawer's, the hidden one xdg-open runs for a text file, and moarchy-editor in
+# app drawer's, the hidden one xdg-open runs for a text file, and moarchy-editor in
 # ~/.local/bin, which is what $EDITOR needs because it has to wait. None of
 # this makes the editor the phone's default; `omarchy-default-editor
 # moarchy-editor` does that on an image whose moarchy package knows the name.
@@ -80,4 +80,4 @@ QS_DISABLE_FILE_WATCHER=1 QS_NO_RELOAD_POPUP=1 \
 sleep 2
 pgrep -x quickshell >/dev/null && echo "    restarted omarchy-shell" || echo "    shell failed to start, see ~/.local/state/moarchy/shell.log"
 ENDSSH
-echo "==> done. tap Text Editor in the drawer, or: ~/.local/bin/moarchy-editor FILE"
+echo "==> done. tap Text Editor in the appDrawer, or: ~/.local/bin/moarchy-editor FILE"

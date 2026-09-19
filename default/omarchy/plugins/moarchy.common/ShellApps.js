@@ -58,7 +58,7 @@ function forToplevel(shell, tl) {
 // Focus a window -- any window, not only a shell app.
 //
 // It lives beside the shell-app helpers because both of this file's importers
-// need it and neither owns a compositor connection: moarchy.overview when a
+// need it and neither owns a compositor connection: moarchy.workspace-overview when a
 // tile on a card is tapped, moarchy.common/AppWindow when a screen is already
 // running and is
 // summoned again. The call is handed to moarchy.gestures, which is where every
@@ -79,7 +79,7 @@ function focusToplevel(shell, tl) {
 // Stand on the workspace the next window will land on -- windows.md L10.
 //
 // Here for focusToplevel()'s reason rather than a new one: it is a compositor
-// call, the drawer is what needs it and the drawer has no connection of its
+// call, the app drawer is what needs it and the app drawer has no connection of its
 // own, and moarchy.gestures is where every compositor call in this shell
 // already lives. It owns the rule as well as the socket (gestures.md F1), so
 // asking it also means not writing "the lowest free workspace" a third time.

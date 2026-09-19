@@ -20,7 +20,7 @@
 --   1080x2220 / 3  =  360x740 logical
 --
 -- 360 logical pixels wide is what every layout constant in the shell was
--- tuned against: the bar height, the drawer grid, the keyboard's exclusive
+-- tuned against: the bar height, the appDrawer grid, the keyboard's exclusive
 -- zone, the home strip. The extra 20 rows of height are a taller screen,
 -- which the QML already handles -- it reads screen.height with a 720 fallback
 -- rather than assuming.

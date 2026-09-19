@@ -33,7 +33,7 @@ say "setting up for $USER_NAME"
 # what sxmo and the other PinePhone environments do.
 usermod -aG input "$USER_NAME" || echo "!! could not add $USER_NAME to input" >&2
 
-# The camera flash LED, which is also the torch. The shade has a tile for it,
+# The camera flash LED, which is also the torch. The control center has a tile for it,
 # and the tile is drawn only where the user can write
 # /sys/class/leds/white:flash/brightness -- so two things have to be true, and
 # this is the second of them.
@@ -42,7 +42,7 @@ usermod -aG input "$USER_NAME" || echo "!! could not add $USER_NAME to input" >&
 # gives that attribute the feedbackd group and group write. An earlier version
 # of this comment said 72-feedbackd.rules already did that; it does not on Arch,
 # and on sargo the attribute stayed root:root 0644 with the tile missing
-# entirely (docs/shade.md S10a, docs/build-log.md).
+# entirely (docs/control-center.md S10a, docs/build-log.md).
 #
 # Neither half is sufficient alone, and the failure is silent both ways round:
 # the tile disappears rather than lighting nothing.

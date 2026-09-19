@@ -68,7 +68,7 @@ pkill -x quickshell 2>/dev/null
 # -- and on this SoC the old process does not exit inside the time it takes to
 # fork the new one. Losing that race is worse than either outcome sounds: the
 # new shell exits immediately, the old one then finishes dying, and the phone is
-# left with NO shell at all -- no bar, no gestures, no drawer -- with that one
+# left with NO shell at all -- no bar, no gestures, no app drawer -- with that one
 # line in the log as the only sign. Seen for real, after a restart that looked
 # like it worked.
 #

@@ -24,7 +24,7 @@ list is the same nine it was before the bump.
 | --- | --- |
 | **Native** | Reimplemented as a phone control or screen. moarchy code, not Omarchy's. Container rows that become one of our screens are Native too -- nothing of upstream's runs. |
 | **Bridged** | Upstream's own script runs unchanged; only the way it is launched changes -- a tiled TUI-sized terminal instead of a floating one, epiphany instead of a Chromium web app. |
-| **Shade** | Already a control in the pull-down shade. Deliberately not repeated in Settings. |
+| **Control Center** | Already a control in the pull-down control center. Deliberately not repeated in Settings. |
 | **Unsupported** | Hidden from the UI. The reason names the missing binary, the x86_64 constraint, or the Hyprland dependency. |
 
 Two rules decide the hard cases.
@@ -61,7 +61,7 @@ appeared and the keys did not.
 | --- | ---: |
 | Native | 69 |
 | Bridged | 58 |
-| Shade | 1 |
+| Control Center | 1 |
 | Unsupported | 205 |
 | **Total** | **333** |
 
@@ -95,7 +95,7 @@ The two root entries that are not the head of a route of their own.
 
 | id | label | class | lands at | note |
 | --- | --- | --- | --- | --- |
-| `apps` | Apps | Native | App drawer | the drawer is the `apps` provider; not repeated in Settings |
+| `apps` | Apps | Native | App drawer | the app drawer is the `apps` provider; not repeated in Settings |
 | `about` | About | Native | About phone > About Omarchy | a page of rows; `omarchy-launch-about` re-execs through the default terminal with `--render`, which qmlkonsole refused. foot is the default since 2026-09-08, but the page stays rows -- fastfetch re-measuring itself on every resize is wrong in a 47-column window whichever terminal draws it |
 
 ## System (8)
@@ -104,7 +104,7 @@ Native 3 · Bridged 2 · Unsupported 3
 
 | id | label | class | lands at | note |
 | --- | --- | --- | --- | --- |
-| `system` | System | Native | System > Power | also the shade's power glyph target |
+| `system` | System | Native | System > Power | also the control center's power glyph target |
 | `system.screensaver` | Screensaver | Unsupported | -- | `omarchy-launch-screensaver` exits 1 unless `ttfx` is present, and ttfx has no aarch64 build in any repo here; it failed silently, which looked like a screensaver that ran |
 | `system.lock` | Lock | Native | System > Power > Lock | `moarchy-system-lock`; blanks unless a hardware keyboard is present |
 | `system.suspend` | Suspend | Unsupported | -- | suspending locks the session: the session starts sway-session.target (config/sway/config, the target itself shipped by pkgbuilds/moarchy; install/config.sh started it until 2026-09-06), which brings up 4.x's omarchy-sleep-lock unit, and the lock it raises is an ext-session-lock surface -- so the on-screen keyboard is hidden by the very prompt asking for a password. Same trap idle-lock was disabled for. Locked a phone out on 2026-09-05 |
@@ -132,7 +132,7 @@ Native 2 · Bridged 6 · Unsupported 2
 
 ## Trigger (47)
 
-Native 14 · Bridged 6 · Shade 1 · Unsupported 26
+Native 14 · Bridged 6 · Control Center 1 · Unsupported 26
 
 | id | label | class | lands at | note |
 | --- | --- | --- | --- | --- |
@@ -172,11 +172,11 @@ Native 14 · Bridged 6 · Shade 1 · Unsupported 26
 | `trigger.share.folder` | Folder | Unsupported | -- | `omarchy-menu-share` targets localsend; not installed |
 | `trigger.share.receive` | Receive | Unsupported | -- | localsend is not installed |
 | `trigger.toggle.idle-lock` | Stay Awake | Native | Display > Stay awake | switch; reads `omarchy-toggle-idle status`. Needs swayidle in autostart.conf to consult the flag |
-| `trigger.toggle.notifications` | Notifications | Shade | shade > Silent tile | already a shade control; not repeated |
+| `trigger.toggle.notifications` | Notifications | Control Center | control center > Silent tile | already a control center control; not repeated |
 | `trigger.toggle.crash-capture` | Crash Capture | Native | Sound & notifications > Crash capture | switch; negative-polarity flag `crash-capture-off` |
 | `trigger.toggle.screensaver` | Screensaver | Unsupported | -- | the `screensaver-off` flag gates Omarchy's idle screensaver; the phone's swayidle blanks the panel instead |
 | `trigger.toggle.nightlight` | Nightlight | Native | Display > Night light | switch; needs a wlsunset-backed `moarchy-toggle-nightlight` keeping the `--status` JSON shape |
-| `trigger.toggle.top-bar` | Menu Bar | Unsupported | -- | was a Show status bar switch until 2026-09-08. It nudged `omarchy.bar`, upstream's plugin id, so it never moved this phone's bar; and the shade's grab strip owns the top edge whether the bar draws or not, so hiding it leaves 26px eating drags with nothing on screen to explain them. `docs/settings.md` C4a |
+| `trigger.toggle.top-bar` | Menu Bar | Unsupported | -- | was a Show status bar switch until 2026-09-08. It nudged `omarchy.bar`, upstream's plugin id, so it never moved this phone's bar; and the control center's grab strip owns the top edge whether the bar draws or not, so hiding it leaves 26px eating drags with nothing on screen to explain them. `docs/settings.md` C4a |
 | `trigger.toggle.battery-percentage` | Battery Percentage | Native | Appearance > Status bar > Battery percentage | upstream targets a desktop-bar widget we never instantiate; new flag read by Bar.qml, applied through the toggles-directory watch and `omarchy-shell bar syncFlags` |
 | `trigger.toggle.workspace-layout` | Workspace Layout | Unsupported | -- | `omarchy-hyprland-workspace-layout-toggle` switches Hyprland dwindle/master |
 | `trigger.toggle.window-gaps` | Window Gaps | Unsupported | -- | Hyprland-only; one app per workspace means gaps only inset a single fullscreen window |
@@ -231,19 +231,19 @@ Native 25 · Bridged 14 · Unsupported 23
 | `setup.network.qr` | QR Code | Bridged | Network & internet > Wi-Fi QR code | `omarchy-shell shell summon omarchy.wifiqr`; upstream `when` kept |
 | `setup.default` | Defaults | Native | Apps & defaults > Default apps |  |
 | `setup.default.agent` | Agent | Native | Default apps > AI agent | unguarded, like upstream. It was guarded on the disjunction of the page's nine, which hid the only screen that installs one (`docs/settings.md` F8) |
-| `setup.default.agent.claude` | Claude | Native | Default apps > AI agent | radio row and installer: the tap runs `moarchy-agent open <name>`, which writes the one drawer tile (rewritten, never added to) and hands off to `omarchy-default-agent`. On PATH from first boot as a mise wrapper, like all nine |
-| `setup.default.agent.codex` | Codex | Native | Default apps > AI agent | radio row and installer: the tap runs `moarchy-agent open <name>`, which writes the one drawer tile (rewritten, never added to) and hands off to `omarchy-default-agent`. On PATH from first boot as a mise wrapper, like all nine |
-| `setup.default.agent.copilot` | Copilot | Native | Default apps > AI agent | radio row and installer: the tap runs `moarchy-agent open <name>`, which writes the one drawer tile (rewritten, never added to) and hands off to `omarchy-default-agent`. On PATH from first boot as a mise wrapper, like all nine |
-| `setup.default.agent.crush` | Crush | Native | Default apps > AI agent | radio row and installer: the tap runs `moarchy-agent open <name>`, which writes the one drawer tile (rewritten, never added to) and hands off to `omarchy-default-agent`. On PATH from first boot as a mise wrapper, like all nine |
+| `setup.default.agent.claude` | Claude | Native | Default apps > AI agent | radio row and installer: the tap runs `moarchy-agent open <name>`, which writes the one app drawer tile (rewritten, never added to) and hands off to `omarchy-default-agent`. On PATH from first boot as a mise wrapper, like all nine |
+| `setup.default.agent.codex` | Codex | Native | Default apps > AI agent | radio row and installer: the tap runs `moarchy-agent open <name>`, which writes the one app drawer tile (rewritten, never added to) and hands off to `omarchy-default-agent`. On PATH from first boot as a mise wrapper, like all nine |
+| `setup.default.agent.copilot` | Copilot | Native | Default apps > AI agent | radio row and installer: the tap runs `moarchy-agent open <name>`, which writes the one app drawer tile (rewritten, never added to) and hands off to `omarchy-default-agent`. On PATH from first boot as a mise wrapper, like all nine |
+| `setup.default.agent.crush` | Crush | Native | Default apps > AI agent | radio row and installer: the tap runs `moarchy-agent open <name>`, which writes the one app drawer tile (rewritten, never added to) and hands off to `omarchy-default-agent`. On PATH from first boot as a mise wrapper, like all nine |
 | `setup.default.agent.cursor-agent` | Cursor CLI | Unsupported | -- | Cursor's CLI, installed through the mise registry. `moarchy-agent`'s list is the nine above; this one arrived with the v4.0.3 bump and adding it is a moarchy change, not an upstream one |
-| `setup.default.agent.gemini` | Gemini | Native | Default apps > AI agent | radio row and installer: the tap runs `moarchy-agent open <name>`, which writes the one drawer tile (rewritten, never added to) and hands off to `omarchy-default-agent`. On PATH from first boot as a mise wrapper, like all nine |
-| `setup.default.agent.grok` | Grok | Native | Default apps > AI agent | radio row and installer. Was the agent the drawer tile named before anything was picked, until 2026-09-08; that tile is now a setup tile pointing at this page (`docs/settings.md` P3, P10), so this row is identical to the eight above |
+| `setup.default.agent.gemini` | Gemini | Native | Default apps > AI agent | radio row and installer: the tap runs `moarchy-agent open <name>`, which writes the one app drawer tile (rewritten, never added to) and hands off to `omarchy-default-agent`. On PATH from first boot as a mise wrapper, like all nine |
+| `setup.default.agent.grok` | Grok | Native | Default apps > AI agent | radio row and installer. Was the agent the app drawer tile named before anything was picked, until 2026-09-08; that tile is now a setup tile pointing at this page (`docs/settings.md` P3, P10), so this row is identical to the eight above |
 | `setup.default.agent.hermes` | Hermes | Unsupported | -- | `omarchy-install-hermes-cli` installs it, and stands aside for the `hermes-desktop` package when that is present. `moarchy-agent`'s list is the nine above; this one arrived with the v4.0.3 bump and adding it is a moarchy change, not an upstream one |
 | `setup.default.agent.muse` | Muse Code | Unsupported | -- | installed from an unpinned launcher script fetched at install time (`api.meta.ai/muse-launcher.sh`), which is the shape V2 exists to keep out. `moarchy-agent`'s list is the nine above; this one arrived with the v4.0.3 bump and adding it is a moarchy change, not an upstream one |
-| `setup.default.agent.omp` | omp | Native | Default apps > AI agent | radio row and installer: the tap runs `moarchy-agent open <name>`, which writes the one drawer tile (rewritten, never added to) and hands off to `omarchy-default-agent`. On PATH from first boot as a mise wrapper, like all nine |
+| `setup.default.agent.omp` | omp | Native | Default apps > AI agent | radio row and installer: the tap runs `moarchy-agent open <name>`, which writes the one app drawer tile (rewritten, never added to) and hands off to `omarchy-default-agent`. On PATH from first boot as a mise wrapper, like all nine |
 | `setup.default.agent.openclaw` | OpenClaw | Unsupported | -- | comes from the `openclaw` pacman package rather than mise. `moarchy-agent`'s list is the nine above; this one arrived with the v4.0.3 bump and adding it is a moarchy change, not an upstream one |
-| `setup.default.agent.opencode` | OpenCode | Native | Default apps > AI agent | radio row and installer: the tap runs `moarchy-agent open <name>`, which writes the one drawer tile (rewritten, never added to) and hands off to `omarchy-default-agent`. On PATH from first boot as a mise wrapper, like all nine |
-| `setup.default.agent.pi` | Pi | Native | Default apps > AI agent | radio row and installer: the tap runs `moarchy-agent open <name>`, which writes the one drawer tile (rewritten, never added to) and hands off to `omarchy-default-agent`. On PATH from first boot as a mise wrapper, like all nine |
+| `setup.default.agent.opencode` | OpenCode | Native | Default apps > AI agent | radio row and installer: the tap runs `moarchy-agent open <name>`, which writes the one app drawer tile (rewritten, never added to) and hands off to `omarchy-default-agent`. On PATH from first boot as a mise wrapper, like all nine |
+| `setup.default.agent.pi` | Pi | Native | Default apps > AI agent | radio row and installer: the tap runs `moarchy-agent open <name>`, which writes the one app drawer tile (rewritten, never added to) and hands off to `omarchy-default-agent`. On PATH from first boot as a mise wrapper, like all nine |
 | `setup.default.browser` | Browser | Native | Default apps > Browser | empty on a base install, so the parent row hides |
 | `setup.default.browser.chromium` | Chromium | Bridged | Default apps > Browser | extras-only, aarch64-verified; presence-guarded |
 | `setup.default.browser.chrome` | Chrome | Unsupported | -- | x86_64-only |
@@ -477,7 +477,7 @@ Native 6 · Bridged 8 · Unsupported 14
 | `update.config.hyprsunset` | Hyprsunset | Unsupported | -- | hyprsunset is Hyprland-only |
 | `update.config.plymouth` | Plymouth | Unsupported | -- | plymouth is not installed |
 | `update.config.tmux` | Tmux | Bridged | Shell & plugins > Reset tmux config | tmux is installed |
-| `update.config.shell` | Shell | Unsupported | -- | `omarchy-refresh-shell` rewrites shell.json from Omarchy's defaults, dropping `bar.id` and every moarchy.* plugin -- it succeeds, then restarts into the desktop bar with no drawer, shade or gestures |
+| `update.config.shell` | Shell | Unsupported | -- | `omarchy-refresh-shell` rewrites shell.json from Omarchy's defaults, dropping `bar.id` and every moarchy.* plugin -- it succeeds, then restarts into the desktop bar with no app drawer, control center or gestures |
 | `update.hardware.audio` | Audio | Bridged | System > Restart hardware |  |
 | `update.hardware.wifi` | Wi-Fi | Bridged | System > Restart hardware |  |
 | `update.hardware.bluetooth` | Bluetooth | Bridged | System > Restart hardware |  |

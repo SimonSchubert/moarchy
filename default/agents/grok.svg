@@ -8,7 +8,7 @@
        relative luminance 0.027 against 0.113-0.276 for the other nine, and
        19.6:1 against a light theme's sheet. That is not a dark tile, it is a
        hole punched in the grid, and it was the one icon of ours a light theme
-       showed as a black square. Brand-black is x.com's answer; a drawer that
+       showed as a black square. Brand-black is x.com's answer; a appDrawer that
        has to work on both a cream sheet and a near-black one cannot take it.
        Moved, the mean is 0.205, the middle of the family, and white on the
        lightest end of the gradient is 2.6:1, which is where codex, omp and

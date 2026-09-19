@@ -8,7 +8,7 @@
 #
 # autoconnect is stated rather than left to its default, because it IS the
 # behaviour: a phone with a SIM in it carries data without being asked, and the
-# tile that turns it off is docs/shade.md S29.
+# tile that turns it off is docs/control-center.md S29.
 #
 # This is a packaged default, so it lives in /usr/lib and not in /etc -- the
 # override path stays free, and image/verify.sh counts /etc profiles to catch a

@@ -42,7 +42,7 @@ screen, says `Not updating · 4 min ago` in the header, and backs off.
 plugins/moarchy.launches/install-on-device.sh
 ```
 
-Then tap **Launches** in the drawer, or:
+Then tap **Launches** in the app drawer, or:
 
 ```sh
 omarchy-shell shell toggle moarchy.launches

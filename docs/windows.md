@@ -38,7 +38,7 @@ workspace, and `moarchy-one-app-per-workspace` makes that the normal case.
 Split a workspace and the borders come back — they are then the only thing
 saying which pane has focus.
 
-A workspace given a second window through the overview (gestures.md P6) is split
+A workspace given a second window through the workspace overview (gestures.md P6) is split
 vertically, so this is exactly the case the paragraph above describes: two
 visible windows, two sets of borders, and the border is what says which of them
 has focus.
@@ -77,9 +77,9 @@ Settings ▸ Install from the AUR, `passwd`, and every other bridged row that
 asks a question drew a prompt over a keyboard whose keys took no touches.
 
 **W6** A window never lands on a workspace that already holds one. Whatever
-opened it — the drawer, a keybinding, a terminal, another app —
+opened it — the app drawer, a keybinding, a terminal, another app —
 `bin/moarchy-one-app-per-workspace` moves it to a free workspace and follows it
-there. This is the guarantee; the drawer's own hop (L10) only makes it look
+there. This is the guarantee; the app drawer's own hop (L10) only makes it look
 immediate.
 
 **A floating window counts as an occupant**, and this is the whole of the
@@ -108,8 +108,8 @@ with it here: two seconds is most of a PinePhone app launch, so the feedback
 arrived after the moment it was for, and a panel of chrome is not what a phone
 shows while an app opens.
 
-**L1** Tapping an app in the drawer puts that app's own icon on screen,
-centred, as the drawer closes. Not two seconds later.
+**L1** Tapping an app in the app drawer puts that app's own icon on screen,
+centred, as the app drawer closes. Not two seconds later.
 → `omarchy-shell splash state` reads `open` within a second of the launch
 
 **L2a** The splash is on the Overlay layer, not Top. Sway renders a fullscreen
@@ -170,28 +170,28 @@ no feedback at all: `moarchy-store` started the entry itself, through
 nothing. You tapped Open and the store sat there — on this hardware for
 seconds — until the window mapped and the workspace switched under you.
 
-So the store asks the shell instead: `omarchy-shell drawer launch <id>`, the
-same entry point a tap in the drawer goes through, with its own `Gio` call kept
-as the fallback for a machine that has no shell to ask. That makes the drawer's
+So the store asks the shell instead: `omarchy-shell app-drawer launch <id>`, the
+same entry point a tap in the app drawer goes through, with its own `Gio` call kept
+as the fallback for a machine that has no shell to ask. That makes the app drawer's
 `launch` IPC a contract with a consumer outside this repo, not the test hook
 its comment used to call it.
 
 → the installed `moarchy-store`'s `launcher.py` calls
-`omarchy-shell drawer launch`, rather than reaching Open through `Gio` alone
+`omarchy-shell app-drawer launch`, rather than reaching Open through `Gio` alone
 
 **L9a** The id goes **without** its `.desktop` suffix. AppLibrary keys entries
 by the bare id, so the suffixed form launches the app and matches no entry —
 the splash then draws L7's fallback outline rather than the icon of the thing
 you just installed, which is worse than a plain miss because it looks
 deliberate. L7 cannot catch it: `fallback` is a pass there, by design.
-→ `omarchy-shell drawer launch <bare id>` for a real app leaves
+→ `omarchy-shell app-drawer launch <bare id>` for a real app leaves
 `omarchy-shell splash drawn` reading `icon <path>`, not `fallback`
 
 <p align="center">
   <img src="screenshots/splash.png" width="40%" alt="the Calculator icon on the wallpaper while it launches">
 </p>
 
-**L10** Tapping an app in the drawer leaves the workspace you tapped from
+**L10** Tapping an app in the app drawer leaves the workspace you tapped from
 immediately, before the window exists. The splash (L1) is drawn over the
 wallpaper of the workspace the window is about to land on, not over the app you
 were in.
@@ -201,7 +201,7 @@ daemon cannot act before the window exists, and on this hardware an app launch
 is seconds — seconds spent looking at the app you were leaving, with the splash
 over it.
 
-**The occupancy test may not be read off the seat.** The drawer holds
+**The occupancy test may not be read off the seat.** The app drawer holds
 `keyboard_interactivity` Exclusive while it is up, so sway deactivates the
 window underneath and the focused toplevel reads null over an app that is
 plainly there — the surface asking the question is the one that took the
@@ -220,9 +220,9 @@ Two exceptions, and both are "there will be no new window to arrive on". An
 entry that summons a plugin (L5) may draw a layer surface, which is visible
 from every workspace; and an app that is already running maps nothing at all,
 because `gtk-launch` asks the running instance to present itself.
-→ with the drawer **open** over an app — the state a finger leaves it in, and
-the one the old check missed by launching from a closed drawer —
-`omarchy-shell drawer launch <id>` for an app that is not running changes the
+→ with the app drawer **open** over an app — the state a finger leaves it in, and
+the one the old check missed by launching from a closed app drawer —
+`omarchy-shell app-drawer launch <id>` for an app that is not running changes the
 focused workspace within two seconds, before the window exists; over an Android
 app, `gestures status` reads `focus=none rep="" occupied=yes`; for
 `moarchy.device`, and for an app already running on a workspace of its own, the
@@ -232,7 +232,7 @@ focused workspace has not changed
 
 Apps started from a terminal, from a keybinding, or by
 `moarchy-launch-terminal` and friends. The splash hangs off
-`AppLibrary.launch()`, which is the drawer's, the Omarchy menu's and — since L9
+`AppLibrary.launch()`, which is the app drawer's, the Omarchy menu's and — since L9
 — the store's path, and nothing else's.
 
 The store's other two Open paths are also outside it, and correctly so. A

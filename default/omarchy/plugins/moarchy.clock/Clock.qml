@@ -196,9 +196,9 @@ Item {
   // light theme that is white, and white on a pale yellow accent is a Start
   // button nobody can find. Calculator's rule, and its reason.
   readonly property color accentInk: {
-    var level = root.shade(root.colours.accent)
-    return Math.abs(level - root.shade(root.colours.background))
-         > Math.abs(level - root.shade(root.colours.foreground))
+    var level = root.controlCenter(root.colours.accent)
+    return Math.abs(level - root.controlCenter(root.colours.background))
+         > Math.abs(level - root.controlCenter(root.colours.foreground))
       ? root.colours.background : root.colours.foreground
   }
 
@@ -310,11 +310,11 @@ Item {
   //
   // So a `close()` that only reset page state -- which is what this was, and
   // what its siblings in this repository still are -- leaves `opened` true for
-  // ever: the first tap on the drawer icon opens the app and no tap ever
+  // ever: the first tap on the app drawer icon opens the app and no tap ever
   // closes it again. Measured on the phone, on this plugin and on two others.
   //
   // A ring is the one exception. Nothing that can happen by accident should be
-  // able to lose an alarm that is going off, and a tap on a drawer icon is the
+  // able to lose an alarm that is going off, and a tap on a app drawer icon is the
   // definition of something that happens by accident.
   function close(): void {
     root.draft = null

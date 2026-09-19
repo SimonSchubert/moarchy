@@ -80,10 +80,10 @@ TERMLIST
   #
   # A NoDisplay copy in ~/.local/share/applications does work -- it makes
   # hidden-entries.sh report both ids -- and it changes nothing, because they were
-  # already filtered. It was written, measured against the drawer, and deleted.
+  # already filtered. It was written, measured against the app drawer, and deleted.
   #
   # Worth knowing how nearly it went the other way: the first A/B test moved the
-  # masks out and re-queried, and the drawer still hid both, which reads as "the
+  # masks out and re-queried, and the app drawer still hid both, which reads as "the
   # masks are not what does it". It was a stale cache. desktopHiddenEntryIds is
   # only recomputed on appsChanged, and REMOVING a NoDisplay file changes nothing
   # in DesktopEntries.applications -- so no rescan fired, and the shell answered
@@ -160,7 +160,7 @@ fi
 
 setup_terminal
 
-# The coding agents: nine wrappers and one drawer tile, and not one download.
+# The coding agents: nine wrappers and one app drawer tile, and not one download.
 #
 # `seed` writes a five-line ~/.local/bin/<name> per agent through
 # omarchy-mise-install, each of which runs `mise use -g <package>` on ITS first
@@ -235,7 +235,7 @@ fi
 # extension that other implementations do not honour, so it is a loop.
 #
 # The entry is org.moarchy.Editor.open.desktop, the hidden one, and not the
-# drawer's org.moarchy.Editor.plugin.desktop: the drawer's toggles the window,
+# app drawer's org.moarchy.Editor.plugin.desktop: the app drawer's toggles the window,
 # and a toggle handed a path hides an editor that is already open instead of
 # opening the file in it.
 #

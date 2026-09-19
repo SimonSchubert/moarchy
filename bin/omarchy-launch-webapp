@@ -72,7 +72,7 @@ esac
 #      XDG_DATA_HOME/xdg-desktop-portal/applications. Both files, or the web
 #      app is a window that aborts on the first link.
 #
-# The per-app id is the point (B2): the carousel and the drawer index on the
+# The per-app id is the point (B2): the carousel and the app drawer index on the
 # window's app id, so one profile shared between web apps would collapse them
 # into a single card. The profile lives at Epiphany's own canonical path under
 # XDG_DATA_HOME rather than somewhere tidier of this project's choosing --

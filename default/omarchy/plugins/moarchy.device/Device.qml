@@ -8,7 +8,7 @@
 // takes long enough that you stop reaching for it to answer "is it charging?".
 // The shell is already resident, so a plugin screen is on-screen in one frame.
 //
-// It is still launched from the drawer like an app, via a .desktop entry whose
+// It is still launched from the app drawer like an app, via a .desktop entry whose
 // Exec asks the shell to summon it. That is the whole trick to a plugin
 // behaving like an app: nothing new starts, but the affordance is identical.
 //
@@ -33,7 +33,7 @@ Item {
   id: root
 
   // Injected by the host after construction, and not `readonly` or `required` --
-  // see the drawer, which also says why this is the only one declared (J8).
+  // see the app drawer, which also says why this is the only one declared (J8).
   property var shell: null
 
   readonly property string pluginId: "moarchy.device"
@@ -41,7 +41,7 @@ Item {
   property bool opened: false
   property string returnTo: ""
 
-  // Palette, C1's full-screen block: this is a Top layer surface like the drawer
+  // Palette, C1's full-screen block: this is a Top layer surface like the app drawer
   // and the theme picker, so it reads `Color.menu.*`.
   //
   // It read `Color.surface`, `Color.surfaceContainer`, `Color.onSurface`,
@@ -216,7 +216,7 @@ Item {
     WlrLayershell.layer: WlrLayer.Top
 
     // No bottom margin here, deliberately, and this is the one surface that
-    // must not get one. The drawer, Settings and the theme picker extend under
+    // must not get one. The app drawer, Settings and the theme picker extend under
     // the gesture strip; this stays arranged inside the usable area so it can
     // be the control they are measured against -- same layer, same zero zone,
     // no margin, so the difference between its height and theirs is the margin

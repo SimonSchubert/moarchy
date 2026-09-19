@@ -34,7 +34,7 @@ hl.on("hyprland.start", function()
   -- The on-screen keyboard. It does not raise itself: it comes up when its
   -- restore handle is tapped, when a text field is tapped, or when something
   -- drives sm.puri.OSK0. A keyboard that appeared whenever anything took
-  -- focus covered half the screen for the drawer's own search field.
+  -- focus covered half the screen for the appDrawer's own search field.
   hl.exec_cmd("moarchy-keyboard")
 
   -- Blank the screen when idle, but never lock it. swayidle is an

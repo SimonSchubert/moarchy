@@ -105,7 +105,7 @@ Item {
   readonly property color feltColour: Theme.mix(root.hueColor("green"),
                                                 root.colours.background,
                                                 root.colours.dark ? 0.34 : 0.58)
-  // A shade of the felt rather than of the window: grid lines have to stay
+  // A control center of the felt rather than of the window: grid lines have to stay
   // darker than the board in both directions.
   readonly property color feltLine: Theme.mix(root.feltColour, "#000000", 0.70)
   readonly property color darkDisc: Theme.mix(root.colours.background, "#0d0d10", 0.22)

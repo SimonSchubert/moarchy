@@ -54,7 +54,7 @@ They ship in `moarchy`, in the same plugin tree as the shell's own surfaces
 | Store | `moarchy-store-git` | Install and remove packages against a signed catalogue |
 | foot | `foot` | The terminal, and the only one — see [One terminal](#one-terminal) |
 
-**Device** sits in the drawer beside these and is not an app: it is a screen the
+**Device** sits in the app drawer beside these and is not an app: it is a screen the
 shell already holds, with a desktop entry that toggles a plugin
 (`default/omarchy/plugins/moarchy.device/`). It earns the slot because nothing
 else on the phone shows thermals, memory or storage, and there is no settings
@@ -62,11 +62,11 @@ row that opens it.
 
 **Wi-Fi** and **Bluetooth** had entries of their own and no longer do. They are
 settings, not apps, and they were already reachable two other ways — a long
-press on the shade's tile, and the *Wi-Fi networks* / *Bluetooth devices* rows
-under Network & internet, which the drawer's own search field returns for
+press on the control center's tile, and the *Wi-Fi networks* / *Bluetooth devices* rows
+under Network & internet, which the app drawer's own search field returns for
 "wifi" or "bluetooth". A third copy in the app grid bought nothing and cost two
 cells in the first screenful. Settings and Themes never had an entry either —
-they open from the shade.
+they open from the control center.
 
 ## GNOME (libadwaita)
 
@@ -82,7 +82,7 @@ Email was Geary until 2026-09-16, and is **Mail** under [Ours](#ours) now.
 `org.freedesktop.secrets`: Geary did, and while `moarchy-meta` listed it first,
 pacman resolved the name before anything in the transaction provided it and
 installed the alphabetically first provider, `chipass`, with a tile of its own
-in the drawer. `image/verify.sh` fails an image that has it.
+in the app drawer. `image/verify.sh` fails an image that has it.
 
 ## Plasma Mobile (Kirigami)
 
@@ -137,8 +137,8 @@ two too many and `htop` had nothing the other two do not — and the audio mixer
 was replaced by Settings' own two screens well before it was removed from the
 set. Both install in one command if you want them back.
 
-**Wi-Fi is not a TUI.** The shade's tile and Settings both open `moarchy.wifi`,
-a touch screen with a passphrase field — see `docs/shade.md` S6b.
+**Wi-Fi is not a TUI.** The control center's tile and Settings both open `moarchy.wifi`,
+a touch screen with a passphrase field — see `docs/control-center.md` S6b.
 `nmtui-connect` still works from a terminal, but its buttons cannot be pressed
 with a finger. `impala` looks like the wifi TUI to reach for and is wrong twice
 over: its buttons have the same problem, and it is an **iwd** client on a phone
@@ -158,7 +158,7 @@ commented block at the foot of `pkgbuilds/moarchy-meta/PKGBUILD`.
 | `kclock`, `index-fm` | A second clock and a second file manager, dropped 2026-09-06. Index drags the whole MauiKit stack in behind it |
 | `gnome-clocks`, `kalk`, `calindori`, `gnome-contacts`, `portfolio-file-manager`, `kweather` | Replaced 2026-09-15 by the `moarchy.*` shell plugins. gnome-contacts writes evolution-data-server, which Calls and Chats resolved names through; Phone and Messages read the Contacts plugin's file instead, so nothing on the image needs it any more. It installs from the store |
 | `gnome-calls`, `chatty`, `mmsd-tng` | Replaced 2026-09-16 by `moarchy.phone` and `moarchy.messages`, daemons included. Installing Chatty back beside Messages is worse than a second tile: while it runs it takes every text off the modem and deletes it, so Messages never sees one. `mmsd-tng` was Chatty's MMS transport, and Messages is SMS only |
-| `gnome-text-editor` | Replaced 2026-09-16 by `moarchy.editor`, as the drawer's editor, the handler for text files and `$EDITOR`. It still does a great deal the plugin does not — tabs, search, highlighting, spell check — and installs from the store; `omarchy-default-editor gnome-text-editor` makes it the editor again |
+| `gnome-text-editor` | Replaced 2026-09-16 by `moarchy.editor`, as the app drawer's editor, the handler for text files and `$EDITOR`. It still does a great deal the plugin does not — tabs, search, highlighting, spell check — and installs from the store; `omarchy-default-editor gnome-text-editor` makes it the editor again |
 | `geary` | Replaced 2026-09-16 by `moarchy.mail`. moarchy-store's sweep had already rejected it for this screen — a desktop-shaped three-pane client that wants an unlocked keyring, whose prompt maps behind its own window — and it is not in the store. `sudo pacman -S geary` still installs it. Mail keeps its password in a 0600 file, not the keyring, so the two do not share an account |
 | `loupe`, `papers`, `foliate`, `secrets` | Dropped 2026-09-16 with no plugin in their place. The default set is the shell's own apps and what a phone cannot be a phone without; an image viewer, a PDF viewer, an e-book reader and a KeePass client are each a tap away in the store. Until one is installed, a picture, PDF or `.epub` tapped in Files has no handler of its own |
 | `chipass` | Never listed, and installed anyway: Geary's `org.freedesktop.secrets` resolved to it while `gnome-keyring` came after `geary` in the list. See [GNOME](#gnome-libadwaita) |
@@ -225,7 +225,7 @@ be a surprise on the next `pacman -Syu`.
 ## One terminal
 
 The phone shipped three until 2026-09-08, and they were not three choices so
-much as one engine and two entries in the drawer beside it:
+much as one engine and two entries in the app drawer beside it:
 `bin/moarchy-launch-tui` execs `foot` *by name* and `pkgbuilds/moarchy` declares
 it, so every TUI, every agent window, the config editor and the removal prompt
 were foot already. `alacritty` cost 7.75 MiB — eight times the other two
@@ -235,7 +235,7 @@ launched, and `qmlkonsole`'s 935 KiB had won the xdg default by being the only
 `Unknown option 'render'`.
 
 Verified on touch before the other two were dropped: foot turns a tap into a
-left-button click (`man 1 foot`, TOUCHSCREEN), which is what the shade's TUI
+left-button click (`man 1 foot`, TOUCHSCREEN), which is what the control center's TUI
 cards already rely on.
 
 **T1** One terminal is installed. `alacritty` and `qmlkonsole` are not in the
@@ -250,7 +250,7 @@ both hung on the first candidate in their own fallback chain.
 → `omarchy-default-terminal` prints `foot`, and `xdg-terminal-exec --print-id`
 prints `foot.desktop` and exits 0 rather than timing out
 
-**T3** The drawer shows one terminal, not three — and this one is *already
+**T3** The app drawer shows one terminal, not three — and this one is *already
 true*, which is why it is written down. `foot` ships `foot.desktop`,
 `footclient.desktop` and `foot-server.desktop`, all three `TerminalEmulator`
 and none of them `NoDisplay`, so dropping two packages looked like it would
@@ -259,7 +259,7 @@ leave three tiles behind. Upstream Omarchy hides both by id in
 which `AppLibrary` reads into `configuredHiddenEntryIds`. Nothing here
 implements it; the criterion exists because a `launcher.hides` that loses those
 lines is a regression nobody would look for.
-→ `omarchy-shell drawer entries` holds `foot` and holds neither `footclient`
+→ `omarchy-shell app-drawer entries` holds `foot` and holds neither `footclient`
 nor `foot-server`
 
 > A `NoDisplay` copy in `~/.local/share/applications` was written to do this job
@@ -278,7 +278,7 @@ different truth.
 → `settings rowsOn apps.default.terminal` holds `foot` and not `alacritty`;
 `settings rowsOn apps.packages.more` holds `alacritty`
 
-**T5** The drawer still refuses to remove the terminal. `pkgbuilds/moarchy`
+**T5** The app drawer still refuses to remove the terminal. `pkgbuilds/moarchy`
 declares `foot`, and it is now the only terminal there is to lose.
 → `moarchy-app-remove plan foot` reports a blocker (selftest L12a)
 
@@ -299,7 +299,7 @@ a GLES 2.0 GPU, not something configuration fixes.
 ### Web apps
 
 A site a phone treats as an app: its own window with no browser chrome, its own
-name and icon on its tile in the overview, its own entry in the drawer's grid.
+name and icon on its tile in the workspace overview, its own entry in the app drawer's grid.
 Ids are `B<n>`.
 
 **B1** A web app opens as a window of its own site: no tab strip, no
@@ -319,22 +319,22 @@ fullscreen window on sway draws above the Top layer and ignores exclusive zones,
 so it takes the status bar, the launch splash, and the band the on-screen
 keyboard reserves. So the win here is the window and its identity (B2), not a
 bare canvas.
-→ launched from the drawer, the window is Epiphany's web-app window: no tab
+→ launched from the app drawer, the window is Epiphany's web-app window: no tab
 strip, and `org.gnome.Epiphany.WebApp_<slug>` is its own profile
 
 **B2** Each web app is its own window identity. The profile directory's
 basename becomes the window's app id — `org.gnome.Epiphany.WebApp_x_com` — and
 the entry names it in `StartupWMClass`, which is what gives its tile in the
-overview and the shade's notification card (`shade.md` S25) a name and an icon
+workspace overview and the control center's notification card (`control-center.md` S25) a name and an icon
 to take.
 Without it a web app's card reads `org.gnome.Epiphany.WebApp_x_com`, and two
 web apps sharing one profile would collapse into a single card.
 → `swaymsg -t get_tree` reports one `app_id` per web app, each matching its
-entry's `StartupWMClass`; `omarchy-shell overview windows` names the app
+entry's `StartupWMClass`; `omarchy-shell workspace-overview windows` names the app
 
-**B3** The drawer carries **X** and **Discord** from first boot, with their own
+**B3** The app drawer carries **X** and **Discord** from first boot, with their own
 artwork. Both are upstream's own entries and upstream's own icons; nothing on
-this phone ever copied either into a place the drawer or an icon theme reads,
+this phone ever copied either into a place the app drawer or an icon theme reads,
 so the package installs them.
 
 Not Spotify, which is where this parts company with the desktop and with
@@ -345,7 +345,7 @@ client over librespot, from the repo (`manifest.toml`, `[aur.spot-client]`).
 Every other web app upstream ships an entry for — WhatsApp, YouTube, Zoom, the
 Google ones — installs with `omarchy-webapp-install` and needs nothing from
 this project.
-→ `omarchy-shell drawer entries` lists `X` and `Discord` — the entries are
+→ `omarchy-shell app-drawer entries` lists `X` and `Discord` — the entries are
 named by id, without the `.desktop`, like every other row
 
 **B4** The phone asks the web for a phone's version of itself. WebKitGTK's own

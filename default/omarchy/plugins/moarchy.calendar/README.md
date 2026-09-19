@@ -240,7 +240,7 @@ is starting, hours before anybody taps Calendar — which is the whole argument
 for a plugin, and also the thing that makes a plugin dangerous. A fault in an
 app that starts when you open it is a broken app. A fault in an app the shell
 holds open is a broken **phone**: the shell never finishes starting, and there
-is no bar, no drawer and no way to get at anything.
+is no bar, no app drawer and no way to get at anything.
 
 This app shipped that fault. The month pager is a `ListView` over eighteen
 hundred months, and it was laying itself out in the unopened window and then
@@ -283,8 +283,8 @@ plugins/moarchy.calendar/install-on-device.sh
 
 That copies the plugin into `~/.config/omarchy/plugins/moarchy.calendar`,
 asks the shell to validate and enable it, writes a `.desktop` entry so the
-drawer can summon it, and restarts the shell. Then tap **Calendar** in the
-drawer.
+app drawer can summon it, and restarts the shell. Then tap **Calendar** in the
+app drawer.
 
 ```sh
 omarchy-shell shell toggle moarchy.calendar

@@ -7,7 +7,7 @@ insets, the density and the launcher). Waydroid 1.6.3 from ALARM
 `extra`, LineageOS 20 (Android 13) arm64 with GApps, on `moarchy-sargo`.
 Telegram, Google Maps, Basecamp, CoinGecko, OKX, Wise and Curve all install,
 launch and render. Google Play works, signed in, and installs apps that then
-appear in moarchy's own drawer with their icons.
+appear in moarchy's own app drawer with their icons.
 
 `moarchy-waydroid` is packaged and ships in 0.4.0; the inset, density and
 launcher work landed after it and is unreleased. Everything below was measured
@@ -77,10 +77,10 @@ Waydroid gets more right than expected. These need **no code**:
 
 | | why |
 |---|---|
-| Drawer entries | Waydroid writes `~/.local/share/applications/waydroid.<pkg>.desktop` per launcher app (`tools/services/user_manager.py:97-131`) |
+| App drawer entries | Waydroid writes `~/.local/share/applications/waydroid.<pkg>.desktop` per launcher app (`tools/services/user_manager.py:97-131`) |
 | Icons and names | the Wayland `app_id` is `waydroid.<pkg>` — the *same string* as the desktop id — so `Apps.index()` resolves both already; the icon is an absolute PNG path, which `AppLibrary.iconSource()` handles |
-| Window management | Android apps are ordinary toplevels, so `moarchy-one-app-per-workspace` gives each its own workspace — though "no code" was too strong: the sway rule below floats them (AC 5), and both that daemon and the drawer's hop had to learn that a floating window occupies a workspace before this was true (windows.md W6, L10) |
-| Notifications | Waydroid forwards to `org.freedesktop.Notifications` (`tools/services/notification_manager.py:74`), so Android notifications land in moarchy's shade with their icons |
+| Window management | Android apps are ordinary toplevels, so `moarchy-one-app-per-workspace` gives each its own workspace — though "no code" was too strong: the sway rule below floats them (AC 5), and both that daemon and the app drawer's hop had to learn that a floating window occupies a workspace before this was true (windows.md W6, L10) |
+| Notifications | Waydroid forwards to `org.freedesktop.Notifications` (`tools/services/notification_manager.py:74`), so Android notifications land in moarchy's control center with their icons |
 | Clipboard | bridged both ways |
 
 What is **ours** is a small amount of configuration, and it is the whole
@@ -179,10 +179,10 @@ preinstalled images and downloads nothing.
 → `waydroid.cfg` has `system_ota = None`; `cache_http` stays empty.
 *(Conditional on D1.)*
 
-**AC 4** Android apps appear in the drawer with their own icon and name, and
+**AC 4** Android apps appear in the app drawer with their own icon and name, and
 disappear when uninstalled.
 → install any app; `~/.local/share/applications/waydroid.<pkg>.desktop` exists
-and the drawer shows it **without a shell restart**.
+and the app drawer shows it **without a shell restart**.
 
 **AC 5** An Android app fills the screen **and its content clears moarchy's own
 chrome**, with no black band and no Android titlebar.
@@ -246,7 +246,7 @@ settle before sway routes it.
 **AC 8** `docs/apps.md` and `docs/devices.md` move in the same commit: the
 non-goal amended, the package listed.
 
-**AC 9** A duplicate name in the drawer is resolved. Android Maps and Contacts
+**AC 9** A duplicate name in the app drawer is resolved. Android Maps and Contacts
 sit beside moarchy's own with nothing to tell them apart.
 → decide: a badge, or `launcher.hides` entries for Android apps that duplicate
 something native.
@@ -263,9 +263,9 @@ different scale, bar height or panel must produce different numbers without
 being edited.
 
 **AC 11** `policy_control` is `null*` **at the window's first layout**, after a
-launch **from the drawer**.
+launch **from the app drawer**.
 → poison it (`settings put global policy_control "immersive.status=*"`), launch
-from the drawer, and read it back: `null*`, with the status inset non-zero.
+from the app drawer, and read it back: `null*`, with the status inset non-zero.
 
 This is the criterion the whole design turns on, and three orderings were
 measured on 2026-09-18 to establish it:
@@ -445,7 +445,7 @@ first launch after an install adds `dex2oat`.
   worth keeping: a sideloaded APK failing is not evidence the app fails.
 - The Back rung exists as a prototype on one device, under `/tmp`, surviving no
   reboot.
-- **The drawer is the only launch path covered.** `moarchy.drawer` routes
+- **The app drawer is the only launch path covered.** `moarchy.app-drawer` routes
   `waydroid.*` entries through `moarchy-android-launch` itself, which Waydroid
   cannot race. Anything else that starts an Android app — `gtk-launch` by hand,
   `omarchy-launch-or-focus`, an intent from another app — still goes through

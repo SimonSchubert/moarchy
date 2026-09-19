@@ -25,7 +25,7 @@ comment in its header claimed it mirrored every other screen in the shell.
 
 | Term | What it means |
 | --- | --- |
-| **surface** | One screen this shell draws: the bar, the drawer, the shade, Settings, Themes, Wi-Fi, Bluetooth, Device, the splash, the volume panel. |
+| **surface** | One screen this shell draws: the bar, the app drawer, the control center, Settings, Themes, Wi-Fi, Bluetooth, Device, the splash, the volume panel. |
 | **token** | A value read from `Style` or `Color` rather than written as a number. |
 | **chrome** | What is drawn to say a control is there: the pill, the circle, the track. |
 | **target** | The region that answers a tap. Not the same object as the chrome, and this file spends §E on the difference. |
@@ -102,7 +102,7 @@ A glyph that has to land **centred in a slot** goes through
 difference. Neither obvious alternative gets there: a filled `Text` with
 `AlignHCenter` aligns the advance of the *primary* family while painting a
 fallback glyph of a different width, and `anchors.centerIn` centres the box the
-font reserves — measured on the shade's gear, 3.9 and 1.7 device pixels off a
+font reserves — measured on the control center's gear, 3.9 and 1.7 device pixels off a
 72px circle respectively, against 0.3 for `OpticalGlyph`. A glyph anchored to an
 edge rather than centred may stay a plain `Text`.
 
@@ -115,8 +115,8 @@ edge rather than centred may stay a plain `Text`.
 | Layer | Source | Surfaces |
 | --- | --- | --- |
 | bar | `Color.bar.*` | `moarchy.bar` |
-| full-screen | `Color.menu.*` | drawer, Settings, Themes, Device |
-| popup / pull-down | `Color.popups.*` | shade, Wi-Fi, Bluetooth, SIM, the volume panel |
+| full-screen | `Color.menu.*` | app drawer, Settings, Themes, Device |
+| popup / pull-down | `Color.popups.*` | control center, Wi-Fi, Bluetooth, SIM, the volume panel |
 
 Every token named here is one upstream's `Color` singleton actually has:
 `foreground`, `background`, `accent`, `urgent`, `muted`, and a nested object per
@@ -138,7 +138,7 @@ readonly property color textOnAccent:  Color.background
 ```
 
 Two blocks, not one, is the whole reason this is a per-surface property block
-rather than a shared singleton: the shade wants `popups` and the drawer wants
+rather than a shared singleton: the control center wants `popups` and the app drawer wants
 `menu`, and a component that picks for itself can serve only one of them. That
 is also why `SettingsRow` takes its colours as *properties* — it is used from
 both.
@@ -162,10 +162,10 @@ Missing file is `large`, which is the look this phone shipped with:
 
 | Radius | large | modest | square | What it is |
 | --- | --- | --- | --- | --- |
-| sheet | `Style.space(28)` | `Style.space(12)` | `0` | A full-width surface that slides in: the shade sheet, the drawer sheet. |
-| tile | `Style.space(20)` | `Style.space(8)` | `0` | Something in a grid or a row that you tap as a unit: shade tiles, theme cells, the drawer's open-app tiles. Kit `Pill` / `Fab` / `TextField` / `IconButton` / `Switch` / `Check` use this too, via `UiFile.radiusOn`, capped at half the short side so Large stays a pill/circle. So does `moarchy-keyboard`'s restore handle, which reads `tile` out of the same file (its AC 59) and, having no `Style`, does not scale it. |
+| sheet | `Style.space(28)` | `Style.space(12)` | `0` | A full-width surface that slides in: the control center sheet, the app drawer sheet. |
+| tile | `Style.space(20)` | `Style.space(8)` | `0` | Something in a grid or a row that you tap as a unit: control center tiles, theme cells, the app drawer's open-app tiles. Kit `Pill` / `Fab` / `TextField` / `IconButton` / `Switch` / `Check` use this too, via `UiFile.radiusOn`, capped at half the short side so Large stays a pill/circle. So does `moarchy-keyboard`'s restore handle, which reads `tile` out of the same file (its AC 59) and, having no `Style`, does not scale it. |
 | card | `Style.space(18)` | `Style.space(6)` | `0` | A stacked panel or list row: Settings rows, Wi-Fi rows, notification cards, the confirm card, Device's panels. |
-| pill / circle | `height / 2`, `width / 2` | same | same | A true capsule that is always fully round: the drawer handle, the home pill. |
+| pill / circle | `height / 2`, `width / 2` | same | same | A true capsule that is always fully round: the app drawer handle, the home pill. |
 
 Held as `readonly property int radiusSheet / radiusTile / radiusCard` on the
 surface, bound to `Shared.UiFile` (or `Chrome.UiFile` in an app), so the name
@@ -175,12 +175,12 @@ is `Switch`, a tick box is `Check` — not a `Rectangle` with a copied radius.
 modest`, or pick from the theme switcher; colours stay in `colors.toml` and are
 not this file.
 
-The shade's tile height, slider height and header-button size are the other
-half of that file (`shade = "roomy" | "compact"`), not a fifth radius.
+The control center's tile height, slider height and header-button size are the other
+half of that file (`control center = "roomy" | "compact"`), not a fifth radius.
 
 **D2** A rounded rectangle drawn over a rounded corner squares it back off with
-a second rectangle rather than being left with notches — the drawer sheet and
-the shade sheet both do this at their top edge, which is off screen.
+a second rectangle rather than being left with notches — the app drawer sheet and
+the control center sheet both do this at their top edge, which is off screen.
 
 ---
 
@@ -209,9 +209,9 @@ one's edge and one of two adjacent buttons stops working near its border.
 **E4** Where E1 cannot be reached by growing — because the neighbours are too
 close for E3 — the gap moves *inside* the target instead: the control is centred
 in a slot of its own, and the layout gives up the width. That is a real cost and
-it gets written down where it is paid, not waved through. The shade's three
+it gets written down where it is paid, not waved through. The control center's three
 transport buttons are the only place in this shell that needed it; the note in
-`Shade.qml` says what the track title lost.
+`ControlCenter.qml` says what the track title lost.
 
 **E5** A slot is derived from the glyph it holds, not fixed at 44 —
 `Math.max(Style.space(44), glyphSlot)`. `glyphSlot` follows the theme's font
@@ -219,7 +219,7 @@ size, so on a theme with a larger base font the glyph is already over the floor,
 and a hard 44 would shrink its target back down to meet it.
 
 **E6** A drag area declared before its siblings sits *under* them: later
-siblings take input first. That ordering is how the shade and the drawer let a
+siblings take input first. That ordering is how the control center and the app drawer let a
 drag that starts on empty sheet reach the sheet while a tile still gets its own
 taps, and it is load-bearing in both files.
 
@@ -227,7 +227,7 @@ taps, and it is load-bearing in both files.
 
 ## F. Text inputs
 
-Both pill-shaped text fields in this shell — the drawer's search and the Wi-Fi
+Both pill-shaped text fields in this shell — the app drawer's search and the Wi-Fi
 passphrase — are a `Ui.TextField` drawn *inside* the pill rather than as the
 pill: `background: null`, so the pill is a sibling `Rectangle`. (The third
 input in the shell is a settings `input` row, which has no pill: the row card is
@@ -238,25 +238,25 @@ That shape has a trap in it, and both fields were in it. Positioned by
 `anchors.verticalCenter` with `verticalPadding: 0` and no background, the
 control is exactly one line of text tall — 16–22 logical px of a 46px pill — and
 the insets were anchor margins, which puts them outside the control too. The
-drawer's magnifier and its 16px lead-in, and the Wi-Fi passphrase's lead-in,
+app drawer's magnifier and its 16px lead-in, and the Wi-Fi passphrase's lead-in,
 were chrome with nothing under them. Derived from the geometry rather than
 measured on glass: **roughly a third** of the drawn search pill focused the
 field, and the rest of it looked identical and did nothing.
 
 **F1** Tapping anywhere inside the drawn pill focuses the field and raises the
 keyboard. Anywhere means the corners, the leading glyph, and both insets.
-→ `omarchy-shell drawer searchTarget` gives the pill's rect; a
+→ `omarchy-shell app-drawer searchTarget` gives the pill's rect; a
 `sudo moarchy-touch tap` inside its top-left corner makes the same call report
 `focused=true`
 
 **F2** The chrome does not move. The inset is `leftPadding` on the field instead
 of an anchor margin — which draws identically, and is inside the hit area rather
 than outside it.
-→ a `grim` capture of the drawer differs from the previous one only where the
+→ a `grim` capture of the app drawer differs from the previous one only where the
 caret is
 
 **F3** The field never extends past its pill.
-→ in `omarchy-shell drawer searchTarget`, `field=` is contained by `pill=`
+→ in `omarchy-shell app-drawer searchTarget`, `field=` is contained by `pill=`
 
 **F4** A control at the end of a field — Wi-Fi's reveal eye — keeps its own 44px
 target, and a tap on it does not focus the field.
@@ -268,15 +268,15 @@ type, `leftPadding` is `horizontalPadding + Border.left(spec)`, and that spec is
 `focus` or `normal` — so on any theme whose focus border is a different width
 from its normal one, the placeholder and the caret shift sideways at the moment
 of the tap. Pinning the four paddings is what settles it.
-→ `omarchy-shell drawer searchTarget` reports the same `field=` rect focused
+→ `omarchy-shell app-drawer searchTarget` reports the same `field=` rect focused
 and unfocused
 
 **F6** A field a thumb fills, a thumb can empty in one tap. Any text input that
 takes a free-form query carries a **clear** control at its trailing end, drawn
 only while there is something to clear. On a phone the alternative is holding
-backspace down, or closing the surface and reopening it — which on the drawer
+backspace down, or closing the surface and reopening it — which on the app drawer
 throws away the scroll position and the query. The keyboard stays where it was
-(G14): closing the drawer does not put it away.
+(G14): closing the app drawer does not put it away.
 
 Four things follow from the controls this shell already has, and none of them
 are new rules:
@@ -297,10 +297,10 @@ Not every field: a passphrase already has a trailing control and the pair a
 password field is expected to carry is a reveal, not a clear; a settings `input`
 row is a 58px card whose placeholder *is* its label, holding a number of minutes
 or one line of text. This is for the search fields.
-→ `omarchy-shell drawer type wifi` then `drawer searchTarget` reports a `clear=`
+→ `omarchy-shell app-drawer type wifi` then `app-drawer searchTarget` reports a `clear=`
 rect whose shorter side is at least 44 and which lies inside `pill=`; a
 `sudo moarchy-touch tap` inside it makes the same call report `text="" clear=none
-focused=` unchanged, and `drawer results` comes back empty
+focused=` unchanged, and `app-drawer results` comes back empty
 
 ---
 
@@ -335,7 +335,7 @@ breathing pulse is the only one.
 
 **G3** Never put `opacity` on a subtree to fade it. The renderer groups and
 composites the whole subtree off-screen first, which on this GPU is the frame
-budget. Animate the alpha of one blended quad instead; the shade's scrim is the
+budget. Animate the alpha of one blended quad instead; the control center's scrim is the
 worked example.
 
 **G4** Move things with `y`/`x`, not `scale`. A translation is free and a scale
@@ -373,7 +373,7 @@ next tone up, in whichever direction the theme's ink runs, and no surface has to
 know which fill it is over. It needs no seventh colour role (C2): the ink is one
 the control already draws with.
 → the veil is culled at rest rather than drawn transparent: `visible: color.a > 0`.
-Nothing in the scene graph culls an alpha-0 rectangle, and the shade alone carries
+Nothing in the scene graph culls an alpha-0 rectangle, and the control center alone carries
 thirteen of them — two tiles at 328×128 panel px, four at 212×124, two sliders at
 672×100, and the rest — which is about a third of a 720×1440 panel left blended
 into every frame, forever, to say nothing.
@@ -408,21 +408,21 @@ Gating on `pressed` cannot work — `enabled` and `color` are then two bindings 
 one notify signal, and QML runs them in the order the notifier list was built,
 which is the reverse of the order they are written in.
 
-**H6** A press that becomes a drag is not a press. On the shade and the drawer the
+**H6** A press that becomes a drag is not a press. On the control center and the app drawer the
 tiles *are* the sheet's drag handle (E6), so `MouseArea.pressed` stays true for the
 whole gesture and a scrolling thumb would light every tile it crossed. Those bind
 `pressed && !root.sheetDragging`. A `MouseArea` inside a `Flickable` needs no
 guard: the grab is stolen, `QQuickMouseArea::ungrabMouse()` clears `pressed`
 *before* it emits `canceled()`, and the state leaves by itself. One with a
 `drag.target` of its own guards on `drag.active`.
-→ in `Shade.qml` and `Drawer.qml`, no `.pressed` is read on a line that does not
+→ in `ControlCenter.qml` and `AppDrawer.qml`, no `.pressed` is read on a line that does not
 also name the guard
 
 **H7** Four kinds of `MouseArea` are not controls, and each says which it is where
 it sits: a drag catcher under the content, a scrim that dismisses, a tap swallower
 behind a modal, a swipe area with no `onClicked`. Each carries
 `// no press state (style.md H7): <what it is>` — spelled with the filename,
-because a bare `(H7)` in `Shade.qml` or `Drawer.qml` already means `gestures.md`.
+because a bare `(H7)` in `ControlCenter.qml` or `AppDrawer.qml` already means `gestures.md`.
 The exemption is a comment and not an absence, because an absence is exactly what
 a forgotten control looks like.
 → the comment is *inside* the `MouseArea` block, which is where the check reads
@@ -435,7 +435,7 @@ which also leaves E6's ordering intact — the veil takes no input, and every
 `MouseArea` stays the last sibling. It is sized to the **chrome** and never to the
 grown target (E2): a 36px circle answering over 44 highlights 36. Where a control
 has no chrome at all, one is drawn at the size the control was always meant to
-look rather than at the size of its hit area — the shade's three transport buttons
+look rather than at the size of its hit area — the control center's three transport buttons
 highlight `tapSlot − 10`, handing back the gap E4 moved inside them.
 
 ---
@@ -532,8 +532,8 @@ Arch Linux ARM, and not in the AUR, where neither `yaru-icon-theme` nor
 done has pointed GTK at nothing.
 
 The shell cannot see it, which is why it went unnoticed for so long:
-Quickshell walks the icon directories itself, so the drawer's grid, the
-overview's tiles and this shade's notification icons (`shade.md` S25) have
+Quickshell walks the icon directories itself, so the app drawer's grid, the
+workspace overview's tiles and this control center's notification icons (`control-center.md` S25) have
 always resolved correctly whatever this setting said. The one surface this
 project looks at hardest is the one surface the bug cannot reach.
 
@@ -559,15 +559,15 @@ numbers.
 | `moarchy.settings` | row, any type | 58 full-width | ok |
 | `moarchy.settings` | Cancel / Continue | 110 × 44 | ok |
 | `moarchy.settings` | header back | 38 drawn, 44 answering | ok, E2 |
-| `moarchy.shade` | tiles, sliders, notification cards | roomy: tiles 62, sliders 48; compact: tiles 48, sliders 36 (target still 44, E2) | ok |
-| `moarchy.shade` | gear / power | `shadeRound` drawn (36 roomy / 32 compact), answering toward 44 (E2, E3) | ok |
-| `moarchy.shade` | media prev / play / next | `tapSlot` ≥ 44 | ok, E4 E5 |
-| `moarchy.shade` | Clear all | 44 tall | ok, E2 |
+| `moarchy.control-center` | tiles, sliders, notification cards | roomy: tiles 62, sliders 48; compact: tiles 48, sliders 36 (target still 44, E2) | ok |
+| `moarchy.control-center` | gear / power | `controlCenterRound` drawn (36 roomy / 32 compact), answering toward 44 (E2, E3) | ok |
+| `moarchy.control-center` | media prev / play / next | `tapSlot` ≥ 44 | ok, E4 E5 |
+| `moarchy.control-center` | Clear all | 44 tall | ok, E2 |
 | `moarchy.volume` | track | 44 × 180 | ok |
-| `moarchy.volume` | mute | `shadeRound` drawn (36 roomy / 32 compact), answering in a 44 slot | ok, E4 E5 |
-| `moarchy.drawer` | app cell | 90 × 86 | ok |
-| `moarchy.drawer` | settings result row | 58 full-width | ok |
-| `moarchy.drawer` | search field | fills its pill | ok, F1–F5 |
+| `moarchy.volume` | mute | `controlCenterRound` drawn (36 roomy / 32 compact), answering in a 44 slot | ok, E4 E5 |
+| `moarchy.app-drawer` | app cell | 90 × 86 | ok |
+| `moarchy.app-drawer` | settings result row | 58 full-width | ok |
+| `moarchy.app-drawer` | search field | fills its pill | ok, F1–F5 |
 | `moarchy.themes` | theme cell | half-width grid cell | ok |
 | `moarchy.themes` | header back | 38 drawn, 44 answering | ok, E2 |
 | `moarchy.wifi` | network row, Join / Disconnect / Forget | ≥ 44 | ok |
@@ -598,8 +598,8 @@ it.
 
 | control | changed region | logical | drawn at |
 | --- | --- | --- | --- |
-| shade gear (`RoundButton`) | 72 × 73 | **36 × 36.5** | 36, answering over 44 |
-| shade Silent (`SmallTile`) | 212 × 124 | **106 × 62** | tile height 62 |
+| control center gear (`RoundButton`) | 72 × 73 | **36 × 36.5** | 36, answering over 44 |
+| control center Silent (`SmallTile`) | 212 × 124 | **106 × 62** | tile height 62 |
 | Settings row (`SettingsRow`) | 672 × 116 | **336 × 58** | row height 58 |
 
 *H8 and E2, in one measurement.* The gear answers over 44 and is drawn at 36, and
@@ -637,9 +637,9 @@ line at the same time, and five things moved:
   have: Wi-Fi's rows and Device's two panels are `card` (18) now, next to
   Settings' rows rather than 4px off them.
 - Two more wrote their radius as a bare number where the name says which of the
-  four was meant: the drawer's sheet, its detail card. Themes called its
+  four was meant: the app drawer's sheet, its detail card. Themes called its
   grid cell a `card` at the tile radius; it is a `radiusTile`, same value.
-- The drawer's app labels were the last text in the
+- The app drawer's app labels were the last text in the
   shell still at Regular. Both surfaces now carry `textWeight`.
 - Wi-Fi's reveal eye was a plain `Text` centred in a 44px circle, which is the
   case B5 exists for. It is an `Ui.OpticalGlyph` now, like the gear and the four
@@ -649,7 +649,7 @@ line at the same time, and five things moved:
 synthesised through `/usr/lib/moarchy/bin/moarchy-touch` (panel pixels, so twice
 the logical coordinate).
 
-*E1–E3, on the shade's gear.* Drawn at 36 logical px, spanning x 268–304; the
+*E1–E3, on the control center's gear.* Drawn at 36 logical px, spanning x 268–304; the
 grown target adds 4, so 264–308. A tap at **265.5** — outside the drawn circle,
 inside the target — opened Settings. The control tap at **257.5**, outside both,
 left it closed. That is E2 in two taps: the drawing did not change and the
@@ -661,7 +661,7 @@ old field rather than merely near its edge, and the 16px right inset. Repeated
 three times each: 8 of 9 trials focused, the one miss a tap that landed while
 the sheet was still animating open.
 
-*F3.* `omarchy-shell drawer searchTarget` reports `pill=10,26 340x46
+*F3.* `omarchy-shell app-drawer searchTarget` reports `pill=10,26 340x46
 field=10,26 340x46` — the field is not merely inside the pill, it *is* the pill.
 
 *E1, on `moarchy.bluetooth`'s action strip*, 2026-09-07.
@@ -680,15 +680,15 @@ completion as well now.
 *F5.* That `field=` rect is identical focused and unfocused, in every reading.
 
 **F6 verified on glass**, 2026-09-13, on the PinePhone, against the packaged
-build rather than a hand-copied file. `omarchy-shell drawer searchTarget`
+build rather than a hand-copied file. `omarchy-shell app-drawer searchTarget`
 throughout; taps synthesised with `moarchy-touch` in panel pixels, so twice the
-logical coordinate, and the drawer's surface starts at screen y=26.
+logical coordinate, and the app drawer's surface starts at screen y=26.
 
 | state | reading |
 | --- | --- |
 | empty | `pill=10,26 340x46 field=10,26 340x46 clear=none text=""` |
 | `wifi` typed | `field=10,26 296x46 clear=306,27 44x44 text="wifi"` |
-| after a tap on `clear` | `field=10,26 340x46 clear=none text=""`, `drawer results` empty |
+| after a tap on `clear` | `field=10,26 340x46 clear=none text=""`, `app-drawer results` empty |
 
 Five things that reading settles, and the last three are the ones a screenshot
 could not:
@@ -719,8 +719,8 @@ passTarget` answers with the empty string its no-row-expanded branch returns —
 there is simply no row to expand.
 
 **One trap worth writing down**, because it cost the most time here: a plugin's
-surface coordinates are not screen coordinates. The drawer's layer surface
+surface coordinates are not screen coordinates. The app drawer's layer surface
 starts at screen y=26, below the bar, so the first taps aimed straight at
 `searchTarget`'s y landed 26 logical px high and hit nothing, with no error
 anywhere — the same silent-failure shape this file exists for. Read the offset
-from `drawer geometry` (`h=494` = 720 − 26 bar − 200 keyboard); never assume it.
+from `app-drawer geometry` (`h=494` = 720 − 26 bar − 200 keyboard); never assume it.

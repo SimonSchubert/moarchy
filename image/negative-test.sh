@@ -58,7 +58,7 @@ touch $W/r/etc/moarchy-debug-image
 # 6. give the account a real password hash
 sed -i 's|^moarchy:!:|moarchy:$6$fakehashfakehashfakehash:|' $W/r/etc/shadow
 # 7. remove a shell plugin
-rm -rf $W/r/usr/share/moarchy/plugins/moarchy.shade
+rm -rf $W/r/usr/share/moarchy/plugins/moarchy.control-center
 # 8. un-enable the grow unit
 rm -f $W/r/etc/systemd/system/sysinit.target.wants/moarchy-grow-rootfs.service
 umount $W/r

@@ -25,7 +25,7 @@ print(w(json.load(sys.stdin)))'; }
 
 echo "== every plugin still loads (J8: 43 declarations deleted) =="
 missing=""
-for id in bar bluetooth device drawer gestures settings shade sim splash themes wifi; do
+for id in bar bluetooth device appDrawer gestures settings controlCenter sim splash themes wifi; do
   a=$(active "moarchy.$id"); [ "$a" = "missing" ] && missing="$missing moarchy.$id"
 done
 [ -z "$missing" ] && ok "all eleven moarchy plugins are registered" \
@@ -62,13 +62,13 @@ else
   no "picker before=$t1 after=$t2, wifi=$w2" "expected open -> closed, wifi open"
 fi
 
-echo "== B6 read from the other end: the shade does NOT clear the drawer =="
-sh_ -q drawer open >/dev/null; sleep 2
-sh_ -q shade open >/dev/null; sleep 2
-d=$(sh_ drawer state); s=$(sh_ shade state)
-sh_ -q shade close >/dev/null; sleep 1; sh_ -q drawer close >/dev/null; sleep 1
-[ "$d" = "open" ] && [ "$s" = "open" ] && ok "shade over drawer leaves both open (S28)" \
-  || no "drawer=$d shade=$s after the shade opened over it" "expected both open"
+echo "== B6 read from the other end: the controlCenter does NOT clear the appDrawer =="
+sh_ -q appDrawer open >/dev/null; sleep 2
+sh_ -q controlCenter open >/dev/null; sleep 2
+d=$(sh_ appDrawer state); s=$(sh_ controlCenter state)
+sh_ -q controlCenter close >/dev/null; sleep 1; sh_ -q appDrawer close >/dev/null; sleep 1
+[ "$d" = "open" ] && [ "$s" = "open" ] && ok "controlCenter over appDrawer leaves both open (S28)" \
+  || no "appDrawer=$d controlCenter=$s after the controlCenter opened over it" "expected both open"
 
 echo "== N1: a back swipe over the Omarchy menu closes the menu, not the app =="
 setsid foot >/dev/null 2>&1 &
@@ -87,13 +87,13 @@ fi
 swaymsg '[app_id="foot"] kill' >/dev/null 2>&1; sleep 1
 
 echo "== F8/H3: no tracker is left holding a touch =="
-for s in "shade sheet" "drawer geometry"; do
+for s in "controlCenter sheet" "appDrawer geometry"; do
   out=$(sh_ $s); d=$(printf '%s' "$out" | tr ' ' '\n' | sed -n 's/^drag=//p')
   [ "$d" = "idle" ] && ok "$s reports drag=idle with no finger down" \
                     || no "$s reports drag=$d" "$out"
 done
 
-echo "== G14a: tapping the drawer's search field raises the keyboard =="
+echo "== G14a: tapping the appDrawer's search field raises the keyboard =="
 # The workspace rect, never sm.puri.OSK0 Visible: that property reports the
 # keyboard's intent and has been seen true with grim showing nothing drawn.
 rect_h() { swaymsg -t get_workspaces | python3 -c 'import json,sys
@@ -103,32 +103,32 @@ touch_bin=/usr/lib/moarchy/bin/moarchy-touch
 # measured against a known floor rather than leftover state from an earlier
 # surface.
 busctl --user call sm.puri.OSK0 /sm/puri/OSK0 sm.puri.OSK0 SetVisible b false >/dev/null 2>&1
-sh_ -q drawer close >/dev/null; sleep 1
+sh_ -q appDrawer close >/dev/null; sleep 1
 osk_down=$(rect_h)
-sh_ -q drawer open >/dev/null; sleep 2
+sh_ -q appDrawer open >/dev/null; sleep 2
 osk_open=$(rect_h)
 if [ "$osk_open" = "$osk_down" ]; then
-  ok "opening the drawer left the keyboard down ($osk_open)"
+  ok "opening the appDrawer left the keyboard down ($osk_open)"
 else
-  no "rect $osk_down -> $osk_open on open" "the drawer raised the keyboard by itself"
+  no "rect $osk_down -> $osk_open on open" "the appDrawer raised the keyboard by itself"
 fi
-field=$(sh_ drawer searchTarget | tr ' ' '\n' | sed -n 's/^field=//p')
+field=$(sh_ appDrawer searchTarget | tr ' ' '\n' | sed -n 's/^field=//p')
 fx=$(printf '%s' "$field" | cut -d, -f1); fy=$(printf '%s' "$field" | cut -d, -f2)
 if [ -n "$fx" ] && [ -n "$fy" ]; then
   sudo -n "$touch_bin" tap "$fx" "$fy" >/dev/null 2>&1; sleep 3
-  focused=$(sh_ drawer searchTarget | tr ' ' '\n' | sed -n 's/^focused=//p')
+  focused=$(sh_ appDrawer searchTarget | tr ' ' '\n' | sed -n 's/^focused=//p')
   osk_up=$(rect_h)
-  sh_ -q drawer close >/dev/null; sleep 3
+  sh_ -q appDrawer close >/dev/null; sleep 3
   osk_after=$(rect_h)
   if [ "$focused" = "true" ] && [ "$osk_up" -lt "$osk_down" ] 2>/dev/null; then
     ok "the tap focused the field and the rect dropped ($osk_down -> $osk_up)"
   else
     no "focused=$focused rect $osk_down -> $osk_up" "expected focus and a lower rect"
   fi
-  [ "$osk_after" = "$osk_up" ] && ok "closing the drawer left the keyboard up ($osk_after)" \
-    || no "rect is $osk_after after closing, was $osk_up with the keyboard up" "the drawer hid the keyboard"
+  [ "$osk_after" = "$osk_up" ] && ok "closing the appDrawer left the keyboard up ($osk_after)" \
+    || no "rect is $osk_after after closing, was $osk_up with the keyboard up" "the appDrawer hid the keyboard"
 else
-  no "drawer searchTarget gave no field centre" "$(sh_ drawer searchTarget)"
+  no "appDrawer searchTarget gave no field centre" "$(sh_ appDrawer searchTarget)"
 fi
 
 echo "== H1/H5: the back edge has a tracker, so its trace marks a cancel =="

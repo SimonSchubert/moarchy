@@ -1,25 +1,25 @@
 #!/bin/bash
-# Read and write ~/.config/omarchy/ui.toml -- corners and shade control sizes.
+# Read and write ~/.config/omarchy/ui.toml -- corners and control center control sizes.
 #
 # Colours stay in the staged theme (omarchy-theme-set / colors.toml). This
 # file is the half that is a preference: how round cards are, how tall the
-# shade's sliders and tiles are. The theme switcher, Settings, and an agent
+# control center's sliders and tiles are. The theme switcher, Settings, and an agent
 # that edits the path all write the same keys; FileView picks the change up
 # with no restart.
 #
 #   moarchy-ui                         print current "key=value" lines
 #   moarchy-ui get corners             large | modest | square
 #   moarchy-ui get corners-label       Large | Modest | Square
-#   moarchy-ui get shade               roomy | compact
-#   moarchy-ui get shade-label         Roomy | Compact
-#   moarchy-ui get gesture-bottom      none | drawer | overview | shade
+#   moarchy-ui get control center               roomy | compact
+#   moarchy-ui get control center-label         Roomy | Compact
+#   moarchy-ui get gesture-bottom      none | app-drawer | workspace-overview | control-center
 #   moarchy-ui get gesture-right       the same four
 #   moarchy-ui get gesture-summary     "App drawer · Overview"
 #   moarchy-ui get gesture-hold        none | agent | a sheet | an app id
 #   moarchy-ui get gesture-power       the same
 #   moarchy-ui corners modest
-#   moarchy-ui shade compact
-#   moarchy-ui gesture-bottom overview
+#   moarchy-ui control center compact
+#   moarchy-ui gesture-bottom workspace-overview
 #   moarchy-ui gesture-hold org.gnome.Calls
 #   moarchy-ui set sheet 16            numeric override (logical px)
 
@@ -36,7 +36,7 @@ norm_corners() {
   esac
 }
 
-norm_shade() {
+norm_density() {
   case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
     roomy|comfortable|large|big|huge) echo roomy ;;
     compact|small|dense|tight) echo compact ;;
@@ -51,9 +51,9 @@ norm_shade() {
 norm_target() {
   case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
     none|off|nothing) echo none ;;
-    drawer|moarchy.drawer) echo drawer ;;
-    overview|moarchy.overview) echo overview ;;
-    shade|moarchy.shade) echo shade ;;
+    app-drawer|moarchy.app-drawer) echo app-drawer ;;
+    workspace-overview|moarchy.workspace-overview) echo workspace-overview ;;
+    control-center|moarchy.control-center) echo control-center ;;
     *) echo "$2" ;;
   esac
 }
@@ -70,7 +70,7 @@ norm_tap() {
     "") printf '%s' "$2" ;;
     none|off|nothing) echo none ;;
     agent) echo agent ;;
-    drawer|overview|shade|themes) printf '%s' "$low" ;;
+    app-drawer|workspace-overview|control-center|themes) printf '%s' "$low" ;;
     *) printf '%s' "$raw" ;;
   esac
 }
@@ -82,7 +82,7 @@ label_tap() {
   case "$1" in
     none) echo Nothing ;;
     agent) echo "Coding agent" ;;
-    drawer|overview|shade|themes) label_target "$1" ;;
+    app-drawer|workspace-overview|control-center|themes) label_target "$1" ;;
     *) printf '%s' "$1" ;;
   esac
 }
@@ -90,9 +90,9 @@ label_tap() {
 label_target() {
   case "$1" in
     none) echo Nothing ;;
-    drawer) echo "App drawer" ;;
-    overview) echo Overview ;;
-    shade) echo "Notification shade" ;;
+    app-drawer) echo "App drawer" ;;
+    workspace-overview) echo "Workspace overview" ;;
+    control-center) echo "Control Center" ;;
     themes) echo Themes ;;
     *) echo Nothing ;;
   esac
@@ -106,8 +106,8 @@ label_corners() {
   esac
 }
 
-label_shade() {
-  case "$(norm_shade "$1")" in
+label_density() {
+  case "$(norm_density "$1")" in
     compact) echo Compact ;;
     *) echo Roomy ;;
   esac
@@ -115,17 +115,17 @@ label_shade() {
 
 # Defaults match Ui.js fallback().
 corners=large
-shade=roomy
-gesture_bottom=drawer
-gesture_right=overview
+control_center=roomy
+gesture_bottom=app-drawer
+gesture_right=workspace-overview
 gesture_hold=agent
 gesture_power=none
 sheet=""
 tile=""
 card=""
-shade_tile=""
-shade_slider=""
-shade_round=""
+control_center_tile=""
+control_center_slider=""
+control_center_round=""
 
 read_file() {
   [[ -f $FILE ]] || return 0
@@ -145,15 +145,15 @@ read_file() {
     raw="${raw#\'}"
     case $key in
       corners) corners=$(norm_corners "$raw") ;;
-      shade|density) shade=$(norm_shade "$raw") ;;
+      control_center|density) control_center=$(norm_density "$raw") ;;
       sheet) sheet=$raw ;;
       tile) tile=$raw ;;
       card) card=$raw ;;
-      shade_tile|shadeTile) shade_tile=$raw ;;
-      shade_slider|shadeSlider) shade_slider=$raw ;;
-      shade_round|shadeRound) shade_round=$raw ;;
-      gesture_bottom|gestureBottom) gesture_bottom=$(norm_target "$raw" drawer) ;;
-      gesture_right|gestureRight) gesture_right=$(norm_target "$raw" overview) ;;
+      control_center_tile|controlCenterTile) control_center_tile=$raw ;;
+      control_center_slider|controlCenterSlider) control_center_slider=$raw ;;
+      control_center_round|controlCenterRound) control_center_round=$raw ;;
+      gesture_bottom|gestureBottom) gesture_bottom=$(norm_target "$raw" appDrawer) ;;
+      gesture_right|gestureRight) gesture_right=$(norm_target "$raw" workspaceOverview) ;;
       gesture_hold|gestureHold) gesture_hold=$(norm_tap "$raw" agent) ;;
       gesture_power|gesturePower) gesture_power=$(norm_tap "$raw" none) ;;
     esac
@@ -169,18 +169,18 @@ write_file() {
 # and change with omarchy-theme-set. This file reshapes the UI.
 #
 # corners: large | modest | square
-# shade:   roomy | compact
+# control center:   roomy | compact
 #
 # Which sheet each swipeable edge raises:
-#   gesture_bottom, gesture_right: none | drawer | overview | shade
+#   gesture_bottom, gesture_right: none | app-drawer | workspace-overview | control-center
 #   gesture_hold, gesture_power:   the same, plus agent or an app id
 #
 # Optional numbers (logical px) override the preset for that key:
-#   sheet, tile, card, shade_tile, shade_slider, shade_round
+#   sheet, tile, card, control_center_tile, control_center_slider, control_center_round
 
 EOF
     printf 'corners = "%s"\n' "$corners"
-    printf 'shade = "%s"\n' "$shade"
+    printf 'control_center = "%s"\n' "$control_center"
     printf 'gesture_bottom = "%s"\n' "$gesture_bottom"
     printf 'gesture_right = "%s"\n' "$gesture_right"
     printf 'gesture_hold = "%s"\n' "$gesture_hold"
@@ -188,23 +188,23 @@ EOF
     if [[ -n $sheet ]]; then printf 'sheet = %s\n' "$sheet"; fi
     if [[ -n $tile ]]; then printf 'tile = %s\n' "$tile"; fi
     if [[ -n $card ]]; then printf 'card = %s\n' "$card"; fi
-    if [[ -n $shade_tile ]]; then printf 'shade_tile = %s\n' "$shade_tile"; fi
-    if [[ -n $shade_slider ]]; then printf 'shade_slider = %s\n' "$shade_slider"; fi
-    if [[ -n $shade_round ]]; then printf 'shade_round = %s\n' "$shade_round"; fi
+    if [[ -n $control_center_tile ]]; then printf 'control_center_tile = %s\n' "$control_center_tile"; fi
+    if [[ -n $control_center_slider ]]; then printf 'control_center_slider = %s\n' "$control_center_slider"; fi
+    if [[ -n $control_center_round ]]; then printf 'control_center_round = %s\n' "$control_center_round"; fi
   } >"$FILE"
 }
 
 usage() {
-  echo "Usage: moarchy-ui [get KEY | corners VALUE | shade VALUE |" >&2
+  echo "Usage: moarchy-ui [get KEY | corners VALUE | control-center VALUE |" >&2
   echo "                   gesture-bottom VALUE | gesture-right VALUE |" >&2
   echo "                   gesture-hold VALUE | gesture-power VALUE | set KEY NUMBER]" >&2
-  echo "  KEY: corners, corners-label, shade, shade-label," >&2
+  echo "  KEY: corners, corners-label, control-center, control-center-label," >&2
   echo "       gesture-bottom, gesture-bottom-label, gesture-right," >&2
   echo "       gesture-right-label, gesture-summary, gesture-hold," >&2
   echo "       gesture-hold-label, gesture-power, gesture-power-label" >&2
   echo "  corners: large | modest | square" >&2
-  echo "  shade:   roomy | compact" >&2
-  echo "  gesture: none | drawer | overview | shade" >&2
+  echo "  control-center:  roomy | compact" >&2
+  echo "  gesture: none | app-drawer | workspace-overview | control-center" >&2
   echo "  hold/power also take: agent, or a desktop entry id" >&2
   exit 1
 }
@@ -213,7 +213,7 @@ read_file
 
 if (($# == 0)); then
   printf 'corners=%s\n' "$corners"
-  printf 'shade=%s\n' "$shade"
+  printf 'control_center=%s\n' "$control_center"
   printf 'gesture_bottom=%s\n' "$gesture_bottom"
   printf 'gesture_right=%s\n' "$gesture_right"
   printf 'gesture_hold=%s\n' "$gesture_hold"
@@ -221,9 +221,9 @@ if (($# == 0)); then
   if [[ -n $sheet ]]; then printf 'sheet=%s\n' "$sheet"; fi
   if [[ -n $tile ]]; then printf 'tile=%s\n' "$tile"; fi
   if [[ -n $card ]]; then printf 'card=%s\n' "$card"; fi
-  if [[ -n $shade_tile ]]; then printf 'shade_tile=%s\n' "$shade_tile"; fi
-  if [[ -n $shade_slider ]]; then printf 'shade_slider=%s\n' "$shade_slider"; fi
-  if [[ -n $shade_round ]]; then printf 'shade_round=%s\n' "$shade_round"; fi
+  if [[ -n $control_center_tile ]]; then printf 'control_center_tile=%s\n' "$control_center_tile"; fi
+  if [[ -n $control_center_slider ]]; then printf 'control_center_slider=%s\n' "$control_center_slider"; fi
+  if [[ -n $control_center_round ]]; then printf 'control_center_round=%s\n' "$control_center_round"; fi
   exit 0
 fi
 
@@ -233,8 +233,8 @@ get)
   case "$2" in
     corners) echo "$corners" ;;
     corners-label) label_corners "$corners" ;;
-    shade|density) echo "$shade" ;;
-    shade-label|density-label) label_shade "$shade" ;;
+    control-center|control_center|density) echo "$control_center" ;;
+    control-center-label|density-label) label_density "$control_center" ;;
     gesture-bottom) echo "$gesture_bottom" ;;
     gesture-right) echo "$gesture_right" ;;
     gesture-bottom-label) label_target "$gesture_bottom" ;;
@@ -249,7 +249,7 @@ get)
       # locale, and this runs from a shell with no LANG as often as not.
       printf '%s · %s\n' "$(label_target "$gesture_bottom")" \
                         "$(label_target "$gesture_right")" ;;
-    sheet|tile|card|shade_tile|shade_slider|shade_round)
+    sheet|tile|card|control_center_tile|control_center_slider|control_center_round)
       eval "val=\${$2}"
       echo "$val"
       ;;
@@ -265,16 +265,16 @@ corners)
   write_file
   echo "$corners"
   ;;
-shade)
+control-center|control_center)
   [[ $# -eq 2 ]] || usage
-  shade=$(norm_shade "$2")
-  shade_tile=""; shade_slider=""; shade_round=""
+  control_center=$(norm_density "$2")
+  control_center_tile=""; control_center_slider=""; control_center_round=""
   write_file
-  echo "$shade"
+  echo "$control_center"
   ;;
 gesture-bottom)
   [[ $# -eq 2 ]] || usage
-  # No companion overrides to drop: unlike `corners` and `shade`, these two
+  # No companion overrides to drop: unlike `corners` and `control-center`, these two
   # presets own no numeric keys.
   gesture_bottom=$(norm_target "$2" "$gesture_bottom")
   write_file
@@ -301,7 +301,7 @@ gesture-power)
 set)
   [[ $# -eq 3 ]] || usage
   case "$2" in
-    sheet|tile|card|shade_tile|shade_slider|shade_round)
+    sheet|tile|card|control_center_tile|control_center_slider|control_center_round)
       [[ $3 =~ ^[0-9]+([.][0-9]+)?$ ]] || usage
       eval "$2=\$3"
       write_file

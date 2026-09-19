@@ -21,7 +21,7 @@ function dataDir(app, home, xdg, override) {
 
 // What an app's window pushes out of the way as it opens.
 //
-// The shade, the drawer, the overview and the theme picker are the four
+// The control center, the app drawer, the workspace overview and the theme picker are the four
 // surfaces that can be up when somebody taps an app, and all four are modal in
 // the sense that matters: they cover the screen. Leaving one of them open
 // behind a window is how a back swipe ends up dismissing the wrong thing.
@@ -32,7 +32,7 @@ function dataDir(app, home, xdg, override) {
 // over a window that has just opened.
 //
 // A no-op off the shell, where `shell` is null and there is nothing to hide.
-var OVERLAYS = ["moarchy.shade", "moarchy.drawer", "moarchy.overview",
+var OVERLAYS = ["moarchy.control-center", "moarchy.app-drawer", "moarchy.workspace-overview",
                 "moarchy.themes"]
 
 function hideOverlays(shell) {

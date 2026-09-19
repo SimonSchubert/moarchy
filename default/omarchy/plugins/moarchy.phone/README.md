@@ -43,7 +43,7 @@ This also stops and masks `calls-daemon`, because GNOME Calls would otherwise
 ring as well and answer from its own window. `systemctl --user unmask
 calls-daemon.service` undoes it.
 
-Then tap **Phone** in the drawer, or:
+Then tap **Phone** in the app drawer, or:
 
 ```sh
 omarchy-shell shell toggle moarchy.phone

@@ -6,7 +6,7 @@ index 34b1314..4f8974b 100644
    readonly property int liveBarSize: shell && shell.bar && !shell.bar.barHidden ? Math.max(0, shell.bar.barSize) : defaultBarSize
    readonly property int barClearance: liveBarSize + Style.gapsOut
  
-+  // A bar that shows notifications itself -- a phone's pull-down shade, say --
++  // A bar that shows notifications itself -- a phone's pull-down controlCenter, say --
 +  // declares `notificationPopups: false`, and then nothing toasts: every
 +  // notification goes straight into history, the way a DND-silenced one does,
 +  // for the bar to show. A bar that says nothing keeps the toasts.

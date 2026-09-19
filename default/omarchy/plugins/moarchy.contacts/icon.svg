@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- A person, not an address book.
 
-     The drawer paints a .desktop icon bare, with no tile behind it, so an icon
+     The appDrawer paints a .desktop icon bare, with no tile behind it, so an icon
      that is a filled card reads as a tile instead of as a thing. A head and
      shoulders are the smallest mark that still says somebody at the 42px the
-     drawer asks for. -->
+     appDrawer asks for. -->
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
   <circle cx="64" cy="42" r="22" fill="#3584e4"/>
   <path d="M26 112c0-24 17-38 38-38s38 14 38 38z" fill="#3584e4"/>

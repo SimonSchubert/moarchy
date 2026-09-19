@@ -232,7 +232,7 @@ n=$(ls -1d "$R"/usr/share/moarchy/plugins/*/ 2>/dev/null | wc -l | tr -d ' ')
                    || no "repo has $want plugins, image has $n"
 
 # The default apps the plugins replaced must not sneak back in. Checking the
-# desktop entry, not the package name: that is what the drawer lists.
+# desktop entry, not the package name: that is what the app drawer lists.
 for e in org.gnome.clocks org.kde.kalk org.kde.calindori org.gnome.Contacts \
          dev.tchx84.Portfolio org.kde.kweather org.gnome.TextEditor \
          org.gnome.Calls sm.puri.Chatty org.gnome.Geary; do
@@ -287,7 +287,7 @@ grep -q '^MimeType=x-scheme-handler/mailto;' "$R/usr/share/applications/org.moar
   || no "nothing in the image handles mailto: links"
 
 # The editor is the one plugin that is also a default for something outside
-# the drawer, and both of those halves are files the package has to lay down:
+# the app drawer, and both of those halves are files the package has to lay down:
 # the hidden entry xdg-open is pointed at, and the command $EDITOR runs. A
 # package that shipped the plugin without them would pass every line above
 # and leave `git commit` with an editor that is not there.
@@ -328,8 +328,8 @@ for _pdir in /repo/default/omarchy/plugins/*/; do
   ls "$_pdir"*.desktop >/dev/null 2>&1 || continue
   _tile=$(grep -lx "Exec=omarchy-shell shell toggle $_pid" "$R"/usr/share/applications/*.desktop 2>/dev/null \
             | xargs -r grep -Lx 'NoDisplay=true' 2>/dev/null | head -1)
-  [ -n "$_tile" ] && ok "$_pid has a drawer tile ($(basename "$_tile"))" \
-                  || no "$_pid has no drawer tile -- a default app nobody can open"
+  [ -n "$_tile" ] && ok "$_pid has a appDrawer tile ($(basename "$_tile"))" \
+                  || no "$_pid has no appDrawer tile -- a default app nobody can open"
 done
 unset _pdir _pid _shelljson _tile
 
@@ -530,7 +530,7 @@ else
   no "xdg-terminals.list does not name foot -- xdg-terminal-exec will hang (T2)"
 fi
 
-# T3: one terminal in the DRAWER, which is a different claim from T1 -- foot
+# T3: one terminal in the APP_DRAWER, which is a different claim from T1 -- foot
 # ships three TerminalEmulator entries, none of them NoDisplay. Upstream hides
 # the other two by id, and this asserts that upstream file rather than anything
 # of ours: nothing here implements T3, so the only way it regresses is that
@@ -541,7 +541,7 @@ if [ ! -s "$_hides" ]; then
 else
   for e in footclient foot-server; do
     grep -qx "$e" "$_hides" \
-      && ok "$e is hidden from the drawer by launcher.hides (T3)" \
+      && ok "$e is hidden from the appDrawer by launcher.hides (T3)" \
       || no "$e is not in launcher.hides -- it will show as a second terminal (T3)"
   done
 fi

@@ -1,5 +1,5 @@
 #!/bin/bash
-# What an app in the drawer is, and how to be rid of it (docs/gestures.md L).
+# What an app in the app drawer is, and how to be rid of it (docs/gestures.md L).
 #
 # ---------------------------------------------------------------------------
 # Why this exists when upstream already removes launcher entries
@@ -18,7 +18,7 @@
 # so the only statement of what a removal will take is pacman's own [Y/n]
 # prompt, in a 60-column foot window, answered on the on-screen keyboard. On a
 # desktop that is the right control. Here it is the consequence being stated in
-# the one surface that costs a keyboard to read (L7), so the drawer asks the
+# the one surface that costs a keyboard to read (L7), so the app drawer asks the
 # question itself and this script answers it: `plan` is what the card shows,
 # `remove` is what Remove runs, and neither opens a terminal.
 #
@@ -73,7 +73,7 @@ usage() {
   exit 1
 }
 
-# --- what the drawer is pointing at -----------------------------------------
+# --- what the app drawer is pointing at -----------------------------------------
 #
 # The search order is upstream's: the user directory first, then XDG_DATA_DIRS.
 # A user entry shadowing a packaged one is the entry that launches, so it has to

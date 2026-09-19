@@ -27,13 +27,13 @@ index e6202da..548f01a 100644
 +      "id": "moarchy.gestures"
 +    },
 +    {
-+      "id": "moarchy.drawer"
++      "id": "moarchy.app-drawer"
 +    },
 +    {
-+      "id": "moarchy.overview"
++      "id": "moarchy.workspace-overview"
 +    },
 +    {
-+      "id": "moarchy.shade"
++      "id": "moarchy.control-center"
 +    },
 +    {
 +      "id": "moarchy.wifi"
@@ -365,7 +365,7 @@ index 0cc0575..235daf6 100644
 +  // that has no panelLoaders, no openPanelIds and no callIfLoaded at all.
 +  //
 +  // moarchy's phone UI is not a third-party plugin. It IS the shell -- the bar,
-+  // the drawer, the shade and the edge gestures that
++  // the appDrawer, the controlCenter and the edge gestures that
 +  // drive all of them ship in the image and replace what upstream draws
 +  // (docs/structure.md, the plugin contract). It is third-party only in the
 +  // bookkeeping sense that PluginRegistry scans /usr/share/moarchy/plugins with
@@ -374,14 +374,14 @@ index 0cc0575..235daf6 100644
 +  //
 +  // Scoping it would not degrade it, it would stop it: moarchy.gestures reads
 +  // shell.panelLoaders to drive a drag frame-by-frame and shell.openPanelIds to
-+  // know what a swipe should dismiss, and every overlay hides moarchy.shade and
-+  // moarchy.drawer by name before it opens. All of that returns null or false
++  // know what a swipe should dismiss, and every overlay hides moarchy.control-center and
++  // moarchy.app-drawer by name before it opens. All of that returns null or false
 +  // through the scoped surface, so the phone comes up with a bar and nothing
 +  // that responds to touch.
 +  //
 +  // So: trust our own namespace, and leave the sandbox in force for everyone
 +  // else. `moarchy.` cannot be squatted from ~/.config -- a user copy shadowing
-+  // moarchy.shade is the same UI at the same id, which is the point of it --
++  // moarchy.control-center is the same UI at the same id, which is the point of it --
 +  // and any genuinely foreign plugin the user installs is still scoped, which
 +  // is a protection 4.0.2 did not offer at all.
 +  //
@@ -390,7 +390,7 @@ index 0cc0575..235daf6 100644
 +  // clock, contacts, files and the rest, packaged into the same directory.
 +  // They need the same trust: their AppWindow.focusWindow() reads
 +  // shell.panelLoaders["moarchy.gestures"] to raise a window on this
-+  // compositor, and Plugin.js hideOverlays() hides the shade and the drawer
++  // compositor, and Plugin.js hideOverlays() hides the controlCenter and the appDrawer
 +  // by name. Both return nothing through the scoped surface, so an untrusted
 +  // Keep opens and then cannot be focused from the shelf. They are our apps,
 +  // shipped in the image, not a third-party clone -- and one prefix now says

@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- A sheet with lines on it, and a pencil across its corner.
 
-     The drawer paints a .desktop icon bare, with no plate behind it, so the
+     The appDrawer paints a .desktop icon bare, with no plate behind it, so the
      sheet is the object and its outline is what is not a rectangle: a folded
      corner at the top right, and the pencil breaking the edge at the bottom.
      The lines are the theme's dim grey rather than a hairline, because a 2px
-     stroke at the 42px the drawer asks for is one grey pixel.
+     stroke at the 42px the appDrawer asks for is one grey pixel.
 
      No clip path: QtSvg ignores clip-path and paints an out-of-defs clipPath
      as a black rectangle. -->

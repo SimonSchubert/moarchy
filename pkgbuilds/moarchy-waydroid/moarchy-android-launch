@@ -20,7 +20,7 @@
 # So there is no watcher that can fix this after the fact, which is why
 # moarchy-waydroid-immersive was deleted rather than amended.
 #
-# moarchy.drawer calls this directly for any waydroid.<pkg> entry. The
+# moarchy.app-drawer calls this directly for any waydroid.<pkg> entry. The
 # generated .desktop files are deliberately left alone: waydroid's user_manager
 # rewrites them on every session start, so anything patched into them converges
 # rather than holds (docs/android.md §7).

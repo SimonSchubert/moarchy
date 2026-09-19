@@ -734,7 +734,7 @@ same manifest now agree.
 > `moarchy.` namespace at the three injection points. Marking our directory
 > first-party instead would have been one word, and would have cost the
 > override: `PluginRegistry` refuses a third-party id that collides with a
-> first-party one, so a `~/.config` copy of `moarchy.shade` would stop loading
+> first-party one, so a `~/.config` copy of `moarchy.control-center` would stop loading
 > and the on-device iteration loop with it. Genuinely foreign plugins stay
 > scoped, which is a protection 4.0.2 did not offer at all. The stale-plugin sweep in `install/config.sh` — and
 > `scripts/test-plugin-sweep.sh` with it — is gone: pacman owns the files now,
@@ -770,7 +770,7 @@ same manifest now agree.
 > The counts in that sentence were nine directories and eight plugins when it
 > was written, grew to eleven and ten as `moarchy.wifi`, `moarchy.bluetooth` and
 > `moarchy.splash` arrived, and are ten and nine today — `moarchy.recents` was
-> deleted on 2026-09-13 when the drawer took over showing what is open
+> deleted on 2026-09-13 when the app drawer took over showing what is open
 > (`gestures.md` M). They are deliberately no longer written down here: `default/omarchy/plugins/` and `port-4x.patch`'s `plugins[]` are
 > the two places that answer it, and a third copy is the divergence P5 exists to
 > prevent.
@@ -867,7 +867,7 @@ namespace becomes one, and the kit that exists twice becomes one. Nothing here
 is user-visible: the phone comes up with the same 31 plugins drawing the same
 surfaces, which is exactly what makes it checkable.
 → the shell loads 31 plugins, `bin/moarchy-selftest --surfaces` passes, and the
-drawer lists the same entries it lists today
+app drawer lists the same entries it lists today
 
 > Sequenced after M4 and not before it because it moves every install path at
 > once. The order within it matters: B6 first (one tree), then E10 (one kit,

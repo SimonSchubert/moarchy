@@ -19,8 +19,8 @@ visible.
 | **guard** | A `when:` shell condition copied verbatim from `omarchy-menu.jsonc`. A row whose guard fails is not rendered. |
 | **reader** | The command a `switch` or `choice` page reads its state from. |
 | **bridged launch** | Running an upstream `omarchy-*` command unchanged, in a TUI terminal or the browser. |
-| **the shade** | The pull-down (`moarchy.shade`), which owns the radios and sliders. |
-| **running** | The window is mapped. It stays mapped while you are on another workspace, and has a tile on its card in the overview for exactly that span (`gestures.md` K1). |
+| **the control center** | The pull-down (`moarchy.control-center`), which owns the radios and sliders. |
+| **running** | The window is mapped. It stays mapped while you are on another workspace, and has a tile on its card in the workspace overview for exactly that span (`gestures.md` K1). |
 | **closed** | Not running. The window is gone, the card with it, and the stack is back at the root. |
 
 There is no *hidden*. It was the state a layer surface needed to stand for "off
@@ -61,7 +61,7 @@ they are together because they are all toggles. A phone groups by *subject*: the
 battery percentage switch lives with the status bar, night light with Display,
 crash capture with notifications. "Toggles" is a category nobody looks for.
 
-**Power leaves the root.** The shade already has a power glyph. It now deep-links
+**Power leaves the root.** The control center already has a power glyph. It now deep-links
 to `system.power` here rather than summoning `omarchy.menu`, so there is one
 implementation behind two entry points.
 
@@ -69,8 +69,8 @@ implementation behind two entry points.
 upstream's `apps` provider. A launcher inside Settings would repeat it.
 
 Three rows exist that upstream has no id for. **Wi-Fi networks** and **Bluetooth
-devices**: the shade toggles both radios, and each row opens the same screen its
-tile opens on a long press — `moarchy.wifi` (`docs/shade.md` S6b) and
+devices**: the control center toggles both radios, and each row opens the same screen its
+tile opens on a long press — `moarchy.wifi` (`docs/control-center.md` S6b) and
 `moarchy.bluetooth` (S6c, S6d). One picker behind two entry points, twice.
 
 The third is **Update system**, and it is not `update.omarchy` wearing a new
@@ -86,18 +86,18 @@ and migrations upstream's script does and delivering an upgrade.
 
 ## A. Getting in and out
 
-**A1** The shade's gear opens Settings at the root page.
+**A1** The control center's gear opens Settings at the root page.
 → `omarchy-shell settings state` == `open`; `omarchy-shell settings page` == `root`
 
-**A2** Opening Settings puts away the shade, drawer and theme picker, so
+**A2** Opening Settings puts away the control center, app drawer and theme picker, so
 nothing of the shell's is drawn over the window it just mapped.
-→ each of `omarchy-shell {shade,drawer,themes} state` == `closed`
+→ each of `omarchy-shell {control center,app drawer,themes} state` == `closed`
 
 Sheets only, and Wi-Fi and Bluetooth are deliberately not in that list any more:
 they are windows on their own workspaces (`gestures.md` K1) and putting them
 away would be closing them.
 
-**A3** The shade's power glyph opens Settings at the Power page, not the vendored
+**A3** The control center's power glyph opens Settings at the Power page, not the vendored
 `omarchy.menu`.
 → `settings page` == `system.power`; `omarchy-shell shell listPlugins` does not
 show `omarchy.menu` open
@@ -122,19 +122,19 @@ gesture at the root (`gestures.md` K6).
 → `settings close; settings open; settings page` == `root`
 
 **A7** Summoning Settings while it is already running focuses its window instead
-of opening a second one, whichever entry point does it — the shade's gear, a
-drawer result, an IPC verb (`gestures.md` K12) — and it comes back on the page
+of opening a second one, whichever entry point does it — the control center's gear, a
+app drawer result, an IPC verb (`gestures.md` K12) — and it comes back on the page
 it was on.
 
 Naming a page still navigates: `openAt system.power` goes to Power whether or
-not the window is up, which is what the shade's power glyph depends on. The page
+not the window is up, which is what the control center's power glyph depends on. The page
 is only kept when the summon named none, because that summon is somebody asking
 for *the screen*, and an app asked for by name comes back where you left it.
 This does not touch A6: closing clears the stack, so a reopen after a close is
 still the root.
 → from another workspace and from `appearance.bar`, `settings open` leaves the
 focused workspace holding the Settings window, `settings page` still
-`appearance.bar`, and `overview windows` with exactly one `moarchy.settings`
+`appearance.bar`, and `workspace-overview windows` with exactly one `moarchy.settings`
 line
 
 ## B. The page stack and back
@@ -149,13 +149,13 @@ line
 root is on top. It never closes the app underneath.
 → from depth 2: `settings page` moves up one and the open-window count is unchanged
 
-**B4** An up-swipe from the strip treats Settings as the app it is: the drawer
+**B4** An up-swipe from the strip treats Settings as the app it is: the app drawer
 rises over it, and a drag carried on into the home band lands on a home screen
 with Settings left running on its own workspace (`gestures.md` K4). Nothing is
-closed — its card in the overview is still there to come back to.
-→ `overview windows` has a `moarchy.settings` line; after the home band the
+closed — its card in the workspace overview is still there to come back to.
+→ `workspace-overview windows` has a `moarchy.settings` line; after the home band the
 focused workspace's `representation` is empty, that line is still in
-`overview windows`, and `settings state` is still `open`
+`workspace-overview windows`, and `settings state` is still `open`
 
 This replaces a criterion that was only ever half true. It read "an up-swipe
 puts Settings away and does nothing else — A8 applied to this surface", and the
@@ -245,7 +245,7 @@ battery-percentage-off on` with no IPC call at all reaches the bar too
 **C4a** Nothing in Settings hides the status bar. The **Show status bar** switch
 was removed on 2026-09-08 rather than repaired: it had the same dead IPC call as
 C4, and behind it a feature worth less on this phone than on a desktop. The
-shade's grab strip owns the top edge whatever the bar does (`docs/shade.md`), so
+control center's grab strip owns the top edge whatever the bar does (`docs/control-center.md`), so
 hiding the bar leaves the 26px still swallowing drags, with nothing drawn to say
 why -- and the way back was a switch inside the screen it had just made harder to
 reach. The `bar-off` flag is no longer read at all, so a phone left with it set
@@ -328,7 +328,7 @@ its label is the name the `background` row on `appearance` shows as its detail
 
 **D8** A choice row whose write ends in a terminal leaves Settings where it is,
 the same as C9 and for the same reason (`gestures.md` K8). Choosing an AI agent
-runs `moarchy-agent open <name>`, which writes the drawer tile (P) and then hands
+runs `moarchy-agent open <name>`, which writes the app drawer tile (P) and then hands
 off to `omarchy-default-agent`, installing through mise in a presentation
 terminal and exec'ing the agent; both ends of that are a `foot` window, which now
 maps above Settings rather than under it.
@@ -385,7 +385,7 @@ underneath the terminal and taking no touches
 terminal it launched are both cards and the row you came from is one tap away.
 The terminal is not covered, because a window does not cover another window
 (`gestures.md` K8).
-→ after `settings activate`, `overview windows` holds both `moarchy.settings`
+→ after `settings activate`, `workspace-overview windows` holds both `moarchy.settings`
 and the terminal, and `settings state` == `open`
 
 Settings used to hide itself here, and the hide was the only thing making the
@@ -470,8 +470,8 @@ is empty
 
 **G2** Every id appears exactly once.
 → `settings coverage | cut -f1 | sort | uniq -d` is empty; the line count is
-`129`, one per id a row or page names, plus `apps` (the drawer) and the one
-Shade id. It is not `320`: an id with no row cannot be emitted by a map built
+`129`, one per id a row or page names, plus `apps` (the app drawer) and the one
+Control Center id. It is not `320`: an id with no row cannot be emitted by a map built
 out of rows
 
 It said `137` until 2026-09-07, and had done since the eight branding ids left
@@ -483,7 +483,7 @@ same shape as the G7 note below, and the same lesson: a constant written in two
 places drifts in one of them.
 
 **G3** Every class is one of the three *renderable* words.
-→ `settings coverage | cut -f2 | sort -u` == `Bridged Native Shade`.
+→ `settings coverage | cut -f2 | sort -u` == `Bridged Native Control Center`.
 `Unsupported` must never reach a row, so it has no case in `Settings.qml`'s
 class map and cannot appear here; the Unsupported set lives in
 `docs/menu-coverage.md` alone
@@ -491,7 +491,7 @@ class map and cannot appear here; the Unsupported set lives in
 **G4** Every Native and Bridged id resolves to a page and a row that exist, or
 names the surface outside this stack that satisfies it.
 → `settings rowsOn <pageId>` contains `<rowId>` for each. The one exception is
-`apps`, which is the app drawer: it names `moarchy.drawer` and no row
+`apps`, which is the app drawer: it names `moarchy.app-drawer` and no row
 
 **G5** Every upstream id is accounted for, live or dropped.
 → `settings coverage` line count plus the `Unsupported` entry rows in
@@ -504,7 +504,7 @@ of those Unsupported rows carries a non-empty reason
 
 **G7** The class totals are the ones committed to.
 → `settings coverage | cut -f2 | sort | uniq -c` == 58 Bridged, 70 Native,
-1 Shade. `Unsupported` is not one of the answers -- see G3
+1 Control Center. `Unsupported` is not one of the answers -- see G3
 
 It was 71/65 until the three `trigger.reminder.*` ids stopped being bridged
 (section J), and 68/68 until `update.timezone`, the two `setup.plugin`
@@ -516,9 +516,9 @@ G7 is the copy to trust and the table is now moved with it. The selftest's copy 
 dropped three rows without moving it, so G7 was red for reasons unrelated to
 what it was asserting -- which is the failure mode a duplicated constant has.
 
-## H. Not repeating the shade
+## H. Not repeating the control center
 
-**H1** No control the shade owns appears in Settings: Wi-Fi radio, Bluetooth radio,
+**H1** No control the control center owns appears in Settings: Wi-Fi radio, Bluetooth radio,
 airplane mode, brightness, volume, silent, torch, rotate, media transport.
 → no row on any page has a `switch` whose label matches
 `^(wi-?fi|bluetooth|airplane|brightness|volume|silent|torch|rotate)`
@@ -527,8 +527,8 @@ The two rows that open `moarchy.wifi` and `moarchy.bluetooth` are network
 *configuration*, not radio toggles, and are named "Wi-Fi networks" and
 "Bluetooth devices".
 
-**H2** The single Shade-class id is recorded and not rendered.
-→ `settings coverage` shows `trigger.toggle.notifications` as `Shade` with an
+**H2** The single Control Center-class id is recorded and not rendered.
+→ `settings coverage` shows `trigger.toggle.notifications` as `Control Center` with an
 empty row field
 
 ## I. Robustness
@@ -549,7 +549,7 @@ and `undefined` as a `color` renders pure black with nothing logged
 
 **I4** Nothing routes a Settings row through `omarchy.menu` for a route that now
 has a page.
-→ `grep -n 'summon("omarchy.menu"' Settings.qml Shade.qml` returns only the
+→ `grep -n 'summon("omarchy.menu"' Settings.qml ControlCenter.qml` returns only the
 `launch: menu` bridge helper
 
 **I5** `$MOARCHY_PATH/bin` comes first on the shell's PATH.
@@ -591,7 +591,7 @@ wc -l` == `omarchy-reminder show --json | jq .count`, and `find
 the open
 
 Three detectors for that second half could not have failed, and are recorded
-here so they are not tried again. `omarchy-shell shade notifications` answered
+here so they are not tried again. `omarchy-shell control-center notifications` answered
 zero lines on a phone holding ten notifications. A count of the store does not
 move, because the store is capped. The newest filename does not reliably move
 either -- the store prunes, and an entry newer than the ones it kept was seen
@@ -674,9 +674,9 @@ refresh`, with no reopen
 it mapped its window and drew nothing but a truncated tab strip: no device list,
 no sliders, nothing to touch. These two screens are what it was there for.
 
-**Routing, not volume.** The shade owns volume, brightness and the radios (H1),
+**Routing, not volume.** The control center owns volume, brightness and the radios (H1),
 and a slider here would be exactly the repetition that section exists to stop.
-What the shade has no room for is *which* device, and on a phone that is the
+What the control center has no room for is *which* device, and on a phone that is the
 earpiece against the speaker against a headset against a paired Bluetooth sink.
 
 **The devices stay PipeWire's.** `moarchy-audio` reads `pactl` and writes
@@ -817,17 +817,17 @@ different versions of different packages and the pair is what a bug report needs
 → `settings rowsOn about.omarchy` holds a row labelled `Omarchy` and one
 labelled `moarchy`
 
-## O. Search from the drawer
+## O. Search from the app drawer
 
-Everything above is reachable by thumb, and only by thumb: pull the shade, tap
+Everything above is reachable by thumb, and only by thumb: pull the control center, tap
 the gear, walk the tree. That is the right shape for browsing and the wrong one
-for the case where you already know the name of the thing. So the drawer's
+for the case where you already know the name of the thing. So the app drawer's
 search field searches this tree as well as the app catalogue, and a result is
 the row itself rather than a screen two levels above it.
 
 This runs the one-implementation rule the other way round from the departure
 above, and both directions hold. Settings still has no launcher — `apps` left
-for the drawer and stays there. What the drawer gains is not a copy of the tree:
+for the app drawer and stays there. What the app drawer gains is not a copy of the tree:
 the index is a walk of `Pages.js`, the tap goes through Settings' own
 `activate()`, and there is no second list of actions anywhere.
 
@@ -837,31 +837,31 @@ the ~420 timezone cities, every installed font, every wallpaper, every live
 reminder and every plugin out of a search for "e". It is a property of where the
 index comes from, not a filter that could be forgotten.
 
-**O1** With the field empty the drawer is what it was: no settings section, and
+**O1** With the field empty the app drawer is what it was: no settings section, and
 the two IPC verbs the store depends on still answer apps alone.
-→ `drawer type ""; drawer results` is empty, and `drawer entries` lists only
+→ `app-drawer type ""; app drawer results` is empty, and `app-drawer entries` lists only
 `.desktop` ids
 
 **O2** Typing shows at most five settings results, each carrying a glyph, a
 label and the top-level section it lives in.
-→ `drawer type screen; drawer results` has 1..5 lines and no empty field on any
+→ `app-drawer type screen; app drawer results` has 1..5 lines and no empty field on any
 of them
 
 **O3** Every result names a page and a row that exist. The index is a walk of
 the model, so a result that cannot be reached in Settings is a result that
 should not have been offered.
-→ for every key `<pageId>/<rowId>` in `drawer results`, `settings rowsOn
+→ for every key `<pageId>/<rowId>` in `app-drawer results`, `settings rowsOn
 <pageId>` contains `<rowId>`
 
 **O4** An `action` row runs, and Settings never appears. Not "appears briefly":
 this is the surface `moarchy-capture-screenshot` would photograph.
-→ after `drawer type screenshot; drawer activateResult tools/screenshot`,
+→ after `app-drawer type screenshot; app drawer activateResult tools/screenshot`,
 `settings state` == `closed`, `settings running` == `stopped`, `settings
-lastLaunch` == `moarchy-capture-screenshot`, and `drawer state` == `closed`
+lastLaunch` == `moarchy-capture-screenshot`, and `app-drawer state` == `closed`
 
 `running` is the load-bearing half. `state` says the surface is not up now;
 `running` says it never was, because a Settings that had mapped would still be
-running with a card of its own in the overview behind it (K1). The other half of
+running with a card of its own in the workspace overview behind it (K1). The other half of
 this AC is the
 effect rather than the cause -- that the PNG holds a wallpaper or an app and not
 a half-drawn sheet -- and no IPC can answer it: it needs a real `grim` against a
@@ -871,46 +871,46 @@ capture at all.
 **O5** A `nav` row lands on the page it points at, not on the page it lives on.
 Set a reminder is a row on `tools.reminders` and a screen of its own, and the
 screen is the thing being asked for.
-→ `drawer activateResult tools.reminders/new`: `settings state` == `open` and
+→ `app-drawer activateResult tools.reminders/new`: `settings state` == `open` and
 `settings page` == `tools.reminders.new`
 
 **O6** A `switch` or a `choice` opens the screen it lives on and changes
 nothing. A radio flipped from a search result is a setting changed by something
 that never showed you its current value.
-→ `drawer activateResult display/nightlight`: `settings page` == `display`, and
+→ `app-drawer activateResult display/nightlight`: `settings page` == `display`, and
 `moarchy-toggle-nightlight --status | jq -r .enabled` is what it was before
 
 **O7** A row whose guard fails is not offered, and a query whose hits carry no
 guard forks nothing. F3 and F5 exist because a fork on this SoC costs more than
 the test inside it, and a search field runs on every keystroke.
-→ with `omarchy-cmd-present` off PATH no guarded row appears in `drawer
-results`; with `bash` wrapped in a counting stub, `drawer type screenshot`
-leaves the count at 0 and `drawer type qr` raises it by exactly 1
+→ with `omarchy-cmd-present` off PATH no guarded row appears in `app drawer
+results`; with `bash` wrapped in a counting stub, `app-drawer type screenshot`
+leaves the count at 0 and `app-drawer type qr` raises it by exactly 1
 
 **O8** A row carrying `confirm` shows Settings with the question armed rather
 than acting on it. The quiet path is for rows that were going to run anyway, and
 a row that asks was never one of those.
-→ `drawer activateResult tools.reminders/clear`: `settings confirmText` is
+→ `app-drawer activateResult tools.reminders/clear`: `settings confirmText` is
 non-empty and `systemctl --user list-timers` still lists the unit
 
 **O9** A row that cannot act yet opens its page instead of failing silently.
 J8's Set a reminder needs a duration typed, and the field it needs is on the
-screen the drawer has just been asked to skip.
-→ `drawer activateResult tools.reminders.new/custom` with nothing typed:
+screen the app drawer has just been asked to skip.
+→ `app-drawer activateResult tools.reminders.new/custom` with nothing typed:
 `settings state` == `open`, `settings page` == `tools.reminders.new`, and
 `settings lastLaunch` is untouched
 
 **O10** Provider-built rows are not indexed.
-→ no key in `drawer results` names a timezone city, a font, a wallpaper or a
-live reminder, for any query; `drawer type europe` answers the region `nav` row
+→ no key in `app-drawer results` names a timezone city, a font, a wallpaper or a
+live reminder, for any query; `app-drawer type europe` answers the region `nav` row
 and nothing under it
 
 **O11** The second section does not cost the first its geometry. The bottom
 inset that keeps the last content pixel clear of the home pill belongs to
 whatever is last, and that is no longer the grid.
-→ with results showing, `drawer geometry`'s `gap` is >= its `strip`
+→ with results showing, `app-drawer geometry`'s `gap` is >= its `strip`
 
-**O12** Search does not become a second shade. Section H keeps the radios,
+**O12** Search does not become a second control center. Section H keeps the radios,
 brightness and volume out of Settings; a field that searched them back in would
 undo it from the other end. The index inherits H1 rather than restating it --
 what is not in the tree cannot be found in the tree -- so the check is that the
@@ -952,9 +952,9 @@ $HOME/.ssh/authorized_keys 2>/dev/null || echo 0) authorized`
 The AI agent page installs an agent (D8, F8). This section is the other half:
 what the phone does with one once it is picked, which is put it in the app grid,
 because a coding agent reached only by walking Settings > Apps & defaults >
-Default apps > AI agent is four taps deep and invisible in the drawer.
+Default apps > AI agent is four taps deep and invisible in the app drawer.
 
-**P1** The drawer carries exactly **one** agent tile, however many agents have
+**P1** The app drawer carries exactly **one** agent tile, however many agents have
 been opened. Every agent used to write a `.desktop` of its own, so the grid grew
 by one each time a different one was tried and never shrank; nine of them is nine
 icons in a 64-entry grid for a thing nobody runs nine of. There is one file and
@@ -983,7 +983,7 @@ or unrecognised `defaults/agent` all produce the setup tile.
 Adwaita, breeze or hicolor, which is what left this on `system-run` -- a stock
 glyph the grid already draws for Terminal and Foot. The three candidates tried
 before it were worse: `applications-development` exists, at
-`breeze/categories/{22,32}/`, and a `categories/` icon is not one the drawer's
+`breeze/categories/{22,32}/`, and a `categories/` icon is not one the app drawer's
 lookup finds, so the tile came up **empty**; `accessories-dictionary` and
 `text-x-script` came up empty as well. `AppLibrary.iconSource()` returns a file
 URL for anything starting with `/` and never consults the theme, which is the
@@ -1042,7 +1042,7 @@ its nine choice rows drawn
 
 **P11** A new user can find that screen by the name of the agent they want. The
 setup tile carries all nine agent names as `Keywords`, so typing `claude` into
-the drawer on a phone with no agent installed finds the screen that installs
+the app drawer on a phone with no agent installed finds the screen that installs
 Claude -- which is the search that returned nothing at all before.
 → the setup tile's `Keywords` contains every name in `moarchy-agent list`
 
@@ -1116,19 +1116,19 @@ page is ticked and it is `b-none`
 
 **Q5** Setting an edge moves the tick without the page being reopened (D4), and
 leaves Settings where it is: nothing here opens a terminal.
-→ `settings set shell.gestures.bottom overview; settings value
-shell.gestures.bottom` == `overview`, and `settings state` == `open`
+→ `settings set shell.gestures.bottom workspace overview; settings value
+shell.gestures.bottom` == `workspace overview`, and `settings state` == `open`
 
-**Q6** The two edge pages are static, so their rows are in the drawer's
+**Q6** The two edge pages are static, so their rows are in the app drawer's
 search index. A page built by a provider is not (O10), and an edge has four
 possible answers -- there is nothing here to be generated.
-→ `omarchy-shell drawer type swipe` lists both nav rows
+→ `omarchy-shell app-drawer type swipe` lists both nav rows
 
 **Q7** The two edge pages offer the words the shell accepts and no others.
 Two files agree on four strings by construction -- `Ui.js`'s table and
 `moarchy-ui`'s `norm_target` -- and this is what keeps a fifth from being
 added to one of them.
-→ every `value` on both edge pages is one of `none|drawer|overview|shade`,
+→ every `value` on both edge pages is one of `none|app drawer|workspace overview|control center`,
 and `omarchy-shell gestures targets` resolves the two current ones to plugin
 ids
 
@@ -1139,7 +1139,7 @@ installs something. The four nav rows above them stay static and indexed, so
 typing `hold` or `power` still finds the screen -- what is not indexed is the
 fifty-nine apps, which is what O10 exists to keep out of a search for `e`.
 → `settings rowsOn shell.gestures.hold` has one row per line of
-`moarchy-trigger rows hold`, and `drawer type power` lists the nav row
+`moarchy-trigger rows hold`, and `app-drawer type power` lists the nav row
 
 **Q9** A tap row's detail is its desktop id, not a repeated word. Fifty-nine
 rows reading `App` say nothing, and two apps may share a name where the id is
@@ -1183,13 +1183,13 @@ omarchy-shell settings geometry             -> w= h= margin= strip= gap= screen=
 omarchy-shell settings runRow <page> <row>  -> ok | unknown page: <id> | unknown row
 ```
 
-Section O adds three verbs to the drawer's own handler and one here.
+Section O adds three verbs to the app drawer's own handler and one here.
 
 ```
-omarchy-shell drawer type <text>            -> ok      (sets the field, flushes the debounce)
-omarchy-shell drawer results                -> TSV key type label section visible
-omarchy-shell drawer matches                -> TSV key guarded|-
-omarchy-shell drawer activateResult <key>   -> ok | unknown result | hidden
+omarchy-shell app-drawer type <text>            -> ok      (sets the field, flushes the debounce)
+omarchy-shell app-drawer results                -> TSV key type label section visible
+omarchy-shell app-drawer matches                -> TSV key guarded|-
+omarchy-shell app-drawer activateResult <key>   -> ok | unknown result | hidden
 ```
 
 `results` is what the section is drawing; `matches` is what the index found
@@ -1198,7 +1198,7 @@ verb it would not be checkable: a row missing from a one-verb answer could
 equally mean its guard said no, its guard has not answered yet, or the query
 never matched it.
 
-`runRow` is the quiet path a drawer result takes: stand the stack up on `page`,
+`runRow` is the quiet path a app drawer result takes: stand the stack up on `page`,
 run that page's guard batch, then activate `row` -- and show the surface only if
 the row asks a question, refuses, or is one of the kinds that has a screen to
 show. It answers on dispatch, because the guards are a `bash -lc` away; what
@@ -1246,8 +1246,8 @@ parity a bash assertion rather than a promise.
 - **`update.config.shell` stays hidden permanently.** `omarchy-refresh-shell`
   rewrites `~/.config/omarchy/shell.json` from Omarchy's defaults, dropping
   `bar.id: moarchy.bar` and every `moarchy.*` entry from `plugins[]`.
-  It succeeds, then restarts into the thirteen-widget desktop bar with no drawer,
-  shade or gestures.
+  It succeeds, then restarts into the thirteen-widget desktop bar with no app drawer,
+  control center or gestures.
 - **There is no Branding page.** Its six rows edited two files of ASCII art, and
   nothing on this phone renders either. About Omarchy is a page of rows now
   (section N), and `omarchy-screensaver` opens with a check for `ttfx`, which has
@@ -1261,7 +1261,7 @@ parity a bash assertion rather than a promise.
   no `Quickshell.I3` counterpart. AC B5 is the compensation, not a fix.
 - **The status bar cannot be hidden, from here or from anywhere.** The switch
   existed and never worked (C4a), and the phone reads the top edge differently
-  from a desktop: the shade's grab strip is a separate Overlay surface, so
+  from a desktop: the control center's grab strip is a separate Overlay surface, so
   hiding the bar takes away what the strip is drawn against and leaves 26px that
   still swallows a downward drag. `trigger.toggle.top-bar` and both
   `style.bar.position.*` ids are Unsupported together, for one reason -- this

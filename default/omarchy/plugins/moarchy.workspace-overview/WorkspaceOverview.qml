@@ -1,4 +1,4 @@
-// The overview: every workspace as a card, and a window you can pick up.
+// The workspace overview: every workspace as a card, and a window you can pick up.
 //
 // Implements docs/gestures.md §P. AC ids in comments below refer to that file,
 // which is the contract; this file is one way of meeting it.
@@ -25,13 +25,13 @@
 // ---------------------------------------------------------------------------
 // Why Top and not Overlay
 // ---------------------------------------------------------------------------
-// The drawer's reason, minus the keyboard. A sheet on Top with a zero exclusive
+// The app drawer's reason, minus the keyboard. A sheet on Top with a zero exclusive
 // zone is arranged into what the exclusive surfaces left -- below the bar,
 // above the home pill -- with no geometry maths here. Overlay would put it over
 // the bar, which is the one piece of chrome that should stay readable while you
 // are looking at a map of the phone.
 //
-// It takes no keyboard focus at all, which the drawer cannot afford to do: this
+// It takes no keyboard focus at all, which the app drawer cannot afford to do: this
 // screen has no field to type in, and Exclusive focus deactivates the window
 // underneath. That window is precisely what the focused card is drawn from
 // (P4), so taking focus would blank the one marker the map exists to carry.
@@ -60,12 +60,12 @@ Item {
   // way the failure is silent.
   property var shell: null
 
-  readonly property string pluginId: "moarchy.overview"
+  readonly property string pluginId: "moarchy.workspace-overview"
 
   // ---------------------------------------------------------------- the sheet
   //
   // P2. 0 shut .. 1 open, and the right-edge drag writes it directly, the way
-  // the strip writes the drawer's. That is what makes this follow the finger
+  // the strip writes the app drawer's. That is what makes this follow the finger
   // rather than appear at a threshold.
   // gestures.md Q2. Which screen edge raised this sheet. Written by
   // moarchy.gestures on a press, and only while the sheet is at rest shut
@@ -90,7 +90,7 @@ Item {
   }
 
   // P9. Mapped once the edge drag has latched, not on press. The gestures
-  // plugin sets it, the same way it warms the drawer -- most presses on an edge
+  // plugin sets it, the same way it warms the app drawer -- most presses on an edge
   // are not the gesture that opens the sheet, and a surface warmed for one that
   // never happened is a full-screen composite nobody asked for.
   property bool warming: false
@@ -103,10 +103,10 @@ Item {
   // The one place `sheetWidth` is written. Guarded on a number that could only
   // be the shut band (P8), and no phone this runs on has a 100px-wide screen.
   //
-  // Not `overviewWindow.width`: shut, this window is a one-pixel column, and
+  // Not `workspaceOverviewWindow.width`: shut, this window is a one-pixel column, and
   // the drag that *opens* the sheet necessarily starts while it is. Dividing a
   // drag by the band moves the sheet hundreds of times finger speed until the
-  // surface grows -- the drawer records the same trap on the other axis.
+  // surface grows -- the app drawer records the same trap on the other axis.
   property real sheetWidth: 0
 
   // The same trap on the other axis, for the same reason: on a bottom edge
@@ -117,11 +117,11 @@ Item {
   // D2a, Q2. The sheet's own extent along the axis the finger travels on.
   readonly property real closeTravel: Math.max(1, root.sideways
     ? (root.sheetWidth > 0 ? root.sheetWidth
-                           : (overviewWindow.screen ? overviewWindow.screen.width : 360))
+                           : (workspaceOverviewWindow.screen ? workspaceOverviewWindow.screen.width : 360))
     : (root.sheetHeight > 0 ? root.sheetHeight
-                            : (overviewWindow.screen ? overviewWindow.screen.height : 720)))
+                            : (workspaceOverviewWindow.screen ? workspaceOverviewWindow.screen.height : 720)))
 
-  // P2. Seven tenths across, which is the drawer's own commit fraction: the two
+  // P2. Seven tenths across, which is the app drawer's own commit fraction: the two
   // sheets are dragged the same way on different axes, and a phone with one
   // threshold for "far enough" is a phone you only have to learn once.
   readonly property real closeCommit: 0.7
@@ -141,7 +141,7 @@ Item {
     // P6. A vertical drag on this sheet scrolls the list of cards, and a card
     // list that shut the sheet whenever a thumb's arc wandered sideways would
     // be a list nobody could scroll. Kept on both axes here, unlike the
-    // drawer's: this sheet's list is the only thing on it, so the close drag
+    // app drawer's: this sheet's list is the only thing on it, so the close drag
     // sharing the scroll axis is the case that needs it most.
     axisDominant: true
     slop: root.dragSlop
@@ -212,7 +212,7 @@ Item {
   function sheetCancel(): void { sheetDrag.cancel() }
 
   // Diagnostic only, and cheap enough to leave in: one integer per frame while
-  // a drag is in flight, cleared when the next one starts. The drawer's
+  // a drag is in flight, cleared when the next one starts. The app drawer's
   // `dragTrace` and the back edge's `backTrace` are the same instrument, and
   // for the same reason -- polling `progress` over IPC is slower than the thing
   // being sampled, so an animation and a finger look identical from outside.
@@ -235,7 +235,7 @@ Item {
 
   // ---------------------------------------------------------------- the board
   //
-  // P3. What sway is holding, read through moarchy.overview/Tree.js. Kept from
+  // P3. What sway is holding, read through moarchy.workspace-overview/Tree.js. Kept from
   // the last good answer rather than emptied on a parse failure: a card list
   // that blinks out and back is worse than one that waits a beat.
   property var board: []
@@ -347,7 +347,7 @@ Item {
 
   // ------------------------------------------- what to draw for a window (P5)
   //
-  // The index is the drawer's, through the same moarchy.common/Apps.js -- which
+  // The index is the app drawer's, through the same moarchy.common/Apps.js -- which
   // asks it the narrower question of whether an app is running (L10). Resolving
   // "which icon is this window" twice is what left every moarchy-apps plugin
   // drawn as `org.quickshell` with no artwork (K5).
@@ -396,7 +396,7 @@ Item {
   // case, not a defect: an XWayland client has no foreign-toplevel handle at
   // all, and one mapped since the tree was read has not reached the list yet.
   // So every resolver below falls back to the app id the *tree* gave us, which
-  // is the same key the drawer's index is built on.
+  // is the same key the app drawer's index is built on.
   //
   // The exception is a shell app, and it cannot be one: its app id is the shell
   // process's own (K9), so there is nothing to look up -- and it always has a
@@ -597,7 +597,7 @@ Item {
 
   // P13. Windows this opening of the sheet has asked to close. An app that
   // refuses to quit is still running and has its tile back the next time the
-  // overview comes up -- `open()` is where the list is dropped -- because the
+  // workspace overview comes up -- `open()` is where the list is dropped -- because the
   // alternative is a card that says a window is there while the phone says it
   // is not, for as long as the sheet stays up.
   property var closing: []
@@ -671,7 +671,7 @@ Item {
   function open(payloadJson) {
     // A sheet opening puts away every sheet on its own layer or above it, and
     // none of the ones below it (docs/refactor.md B6). This one is Top, so that
-    // is the shade above it and the drawer and the theme picker beside it --
+    // is the control center above it and the app drawer and the theme picker beside it --
     // read from the rank rather than named here (I2), because five screens that
     // named their own pair gave three different answers.
     // Q3a. A summon carries no direction, so it uses this sheet's own edge --
@@ -722,13 +722,13 @@ Item {
   // ------------------------------------------------------------------ the IPC
   //
   // P10. Reachable without a finger, which is how the selftest asserts it:
-  //   omarchy-shell overview state
-  //   omarchy-shell overview grid
-  //   omarchy-shell overview windows
-  //   omarchy-shell overview move 1234 3
-  //   omarchy-shell overview lift 2 0 / aim 180 600 / lifted / trash
+  //   omarchy-shell workspace overview state
+  //   omarchy-shell workspace overview grid
+  //   omarchy-shell workspace overview windows
+  //   omarchy-shell workspace overview move 1234 3
+  //   omarchy-shell workspace overview lift 2 0 / aim 180 600 / lifted / trash
   IpcHandler {
-    target: "overview"
+    target: "workspace-overview"
 
     function state(): string { return root.opened ? "open" : "closed" }
 
@@ -935,7 +935,7 @@ Item {
   readonly property int radiusTile: ui.radiusTile
   readonly property int radiusCard: ui.radiusCard
 
-  // Must match moarchy.gestures' own stripHeight, duplicated for the drawer's
+  // Must match moarchy.gestures' own stripHeight, duplicated for the app drawer's
   // reason: this surface has to know the number even when the gestures plugin
   // failed to load, and a sheet that stopped short of the bottom in that case
   // would leave a band of wallpaper with the pill drawn on it.
@@ -956,7 +956,7 @@ Item {
   // and one without, which is a band of wallpaper for a frame.
   Shared.Osk { id: osk }
   readonly property bool keyboardUp:
-    root.surfaceUp && overviewWindow.width > 100 && osk.reserving(overviewWindow)
+    root.surfaceUp && workspaceOverviewWindow.width > 100 && osk.reserving(workspaceOverviewWindow)
 
   readonly property color surface: Color.menu.background
   // NOT `onSurface`: QML reserves the `on<Uppercase>` prefix for signal
@@ -1111,12 +1111,12 @@ Item {
   }
 
   PanelWindow {
-    id: overviewWindow
+    id: workspaceOverviewWindow
 
     // P8. Never unmapped: shut, a one-pixel column along the right edge; grown
     // to the sheet when the edge drag latches, not on press.
     //
-    // The drawer's measurement, on the other axis and for the same reason.
+    // The app drawer's measurement, on the other axis and for the same reason.
     // Quickshell deletes a layer-shell window that goes invisible, so each open
     // would build a new QQuickWindow -- a render thread, a GL context, a
     // swapchain, the whole scene graph and a first layout -- while the finger
@@ -1138,8 +1138,8 @@ Item {
     implicitHeight: 1
     color: "transparent"
 
-    onWidthChanged: if (overviewWindow.width > 100) root.sheetWidth = overviewWindow.width
-    onHeightChanged: if (overviewWindow.height > 200) root.sheetHeight = overviewWindow.height
+    onWidthChanged: if (workspaceOverviewWindow.width > 100) root.sheetWidth = workspaceOverviewWindow.width
+    onHeightChanged: if (workspaceOverviewWindow.height > 200) root.sheetHeight = workspaceOverviewWindow.height
 
     // P8. Grown is not live. While warming, this surface is full-screen, on Top
     // and over everything -- so its input region is cut down until the sheet is
@@ -1152,7 +1152,7 @@ Item {
     Region { id: warmRegion; x: -1; y: -1; width: 1; height: 1 }
     mask: root.progress > 0 ? null : warmRegion
 
-    WlrLayershell.namespace: "moarchy-overview"
+    WlrLayershell.namespace: "moarchy-workspace-overview"
     WlrLayershell.layer: WlrLayer.Top
 
     // Reserve nothing, but be arranged into what the exclusive surfaces left:
@@ -1164,7 +1164,7 @@ Item {
     // the sheet's own background runs to the bottom edge rather than leaving a
     // band of the app behind it with the pill drawn on it (I1).
     //
-    // Gated on the keyboard, which is the drawer's subtlety and not a different
+    // Gated on the keyboard, which is the app drawer's subtlety and not a different
     // one. A margin does not extend a surface "under the strip" -- it extends it
     // past the bottom of the *usable area*, and what sits there depends on what
     // else is reserving. With the keyboard down that is the strip, which is
@@ -1201,11 +1201,11 @@ Item {
       // close. The cross axis takes the parent, because it never collapses.
       width: root.sideways
            ? (root.sheetWidth > 0 ? root.sheetWidth
-              : (overviewWindow.screen ? overviewWindow.screen.width : parent.width))
+              : (workspaceOverviewWindow.screen ? workspaceOverviewWindow.screen.width : parent.width))
            : parent.width
       height: root.sideways ? parent.height
             : (root.sheetHeight > 0 ? root.sheetHeight
-               : (overviewWindow.screen ? overviewWindow.screen.height : parent.height))
+               : (workspaceOverviewWindow.screen ? workspaceOverviewWindow.screen.height : parent.height))
 
       // Q2. Rides in from whichever edge raised it. Translation only: this is
       // a Mali-400 at GLES 2.0, so an `x` costs nothing where a `scale` costs

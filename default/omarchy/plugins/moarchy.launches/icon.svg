@@ -2,7 +2,7 @@
 <!-- A rocket, nose up, with the flame under it.
 
      Drawn as the object rather than as a launch button: the app is a list of
-     rockets and the drawer is a grid of objects — a handset, a briefcase, a
+     rockets and the appDrawer is a grid of objects — a handset, a briefcase, a
      book — so a rocket belongs there and a grey square with a rocket in it
      does not. -->
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">

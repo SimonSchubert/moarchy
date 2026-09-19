@@ -5,9 +5,9 @@
      clock rather than a clock. A bare round face is what a dozen widgets on
      this phone already look like, starting with the shell's own; the two bells
      are what say at 42px that this is the app you set a morning with. They
-     also keep it apart from the calendar's icon in the same drawer.
+     also keep it apart from the calendar's icon in the same appDrawer.
 
-     No plate behind it, for the reason Calculator's icon gives: the drawer
+     No plate behind it, for the reason Calculator's icon gives: the appDrawer
      paints a desktop icon bare, so an icon that fills its own square is the
      one thing in the grid that reads as a tile instead of as a thing. A clock
      is round, which makes this easy.

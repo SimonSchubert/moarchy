@@ -64,7 +64,7 @@ ref        = "1a4585d986b350b3fad533abfb1750f6873681fd"
 # something drives sm.puri.OSK0 -- the back gesture, $mod+i -- and nothing else
 # writes the bool, so a dismissal holds until a person ends it. An app asking
 # for text input is not an app asking for a keyboard, and reading it as one put
-# half the screen under every focused terminal and every tap in the drawer's
+# half the screen under every focused terminal and every tap in the appDrawer's
 # search box. It was slow as well as intrusive: each rise and drop re-arranges
 # every app on every workspace, and 0.1.0-3 -- what every image from 0.2.1 to
 # 0.2.2 carries -- did that on each focus change. Going to this behaviour on the
@@ -75,7 +75,7 @@ ref        = "1a4585d986b350b3fad533abfb1750f6873681fd"
 # longer exists. --retract-delay is gone with the timer.
 #
 # And AC 52 before those: the restore handle moves to Overlay while the
-# keyboard is retracted, so the drawer and Settings stop drawing over the one
+# keyboard is retracted, so the appDrawer and Settings stop drawing over the one
 # control that brings the keyboard back. That criterion is load-bearing now
 # rather than a convenience -- it is the only way up.
 #
@@ -117,7 +117,7 @@ pkgbuilddir = "."
 # phone: the package installed there called itself 0.1.0.r58.effa05e and had no
 # icon in it. makepkg had re-cloned the code at HEAD, which is where the App
 # Store's own artwork has lived since 6f5858d -- but the RECIPE was still
-# c08a0737's, and c08a0737's package() does not install it. So the drawer drew
+# c08a0737's, and c08a0737's package() does not install it. So the appDrawer drew
 # the App Store as a label with an empty square above it, and the version
 # string said the fix was already in.
 #

@@ -10,13 +10,13 @@
 
        No double hyphen anywhere in here. XML forbids one inside a comment, and
        the whole file is then unparseable: rsvg and Qt both refuse it, the
-       drawer draws a label with nothing above it, and nothing is logged. This
+       appDrawer draws a label with nothing above it, and nothing is logged. This
        file shipped that way for one build because the sentence above it used
        to have an em dash in it.
 
        This is the last of the three. Wi-Fi and Bluetooth had one each until
-       their drawer entries went (docs/apps.md): both are settings screens the
-       shade's tiles and Settings already reach, and an app grid is for apps.
+       their appDrawer entries went (docs/apps.md): both are settings screens the
+       controlCenter's tiles and Settings already reach, and an app grid is for apps.
 
        A chip rather than `computer-symbolic`'s desktop tower: the page behind
        it is this phone's CPU, memory, thermals and battery, and nothing on a

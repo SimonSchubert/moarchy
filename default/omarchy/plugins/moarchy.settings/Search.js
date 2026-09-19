@@ -1,7 +1,7 @@
-// The Settings tree, flattened and scored, for the drawer's search field.
+// The Settings tree, flattened and scored, for the app drawer's search field.
 //
 // docs/settings.md section O is the contract. In one sentence: typing in the app
-// drawer searches this tree as well as the app catalogue, and a tap on a result
+// app drawer searches this tree as well as the app catalogue, and a tap on a result
 // goes to the row rather than to a screen two levels above it.
 //
 // ---------------------------------------------------------------------------
@@ -40,7 +40,7 @@
 .import "Pages.js" as Pages
 
 // Row types that never make it into the index. Everything else does, and what a
-// tap *does* with it is decided in the drawer (O4-O6, O9), not here.
+// tap *does* with it is decided in the app drawer (O4-O6, O9), not here.
 var SKIP_TYPES = { "input": true };
 
 // A row may also opt out by declaring `unlisted: true`, which the walk honours
@@ -191,7 +191,7 @@ function score(hit, terms) {
 }
 
 // The top `limit` rows for a query, best first. An empty query answers nothing
-// at all: with the field empty the drawer is the app grid it has always been
+// at all: with the field empty the app drawer is the app grid it has always been
 // (O1), and that is a decision about the screen rather than a shortcut here.
 function search(query, limit) {
     var q = normalise(query);

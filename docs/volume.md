@@ -10,7 +10,7 @@ Ids are `V<n>`, cited by `bin/moarchy-selftest --volume` and by the code.
 watches both and draws what it sees. That is the whole wiring, and V3 is the
 criterion that keeps it: a shell that is down, or too busy to answer, costs the
 feedback and never the control — and any other way the volume moves (the
-shade's slider, an Android app under Waydroid, `wpctl` over ssh) raises the
+control center's slider, an Android app under Waydroid, `wpctl` over ssh) raises the
 same panel with no second caller to teach.
 
 The timestamp exists for one case and it is the case this surface was built
@@ -29,7 +29,7 @@ reason: the hand holding the phone is already at that edge.
 | | |
 | --- | --- |
 | track | 44 × 180, `radiusTile` capped at half its width. Fill grows from the bottom |
-| mute | the shade's `shadeRound` circle under the track, answering in a 44 slot of its own (`style.md` E4) |
+| mute | the control center's `controlCenterRound` circle under the track, answering in a 44 slot of its own (`style.md` E4) |
 | card | the two of them on one `radiusCard` panel, `Style.space(6)` of padding, `Style.space(8)` between |
 | margin | `Style.space(16)` clear of the screen's right edge — the gesture plugin's edge band (V10) |
 
@@ -97,7 +97,7 @@ interval, on a surface that exists to be looked at once.
 ## V8–V11. Touch
 
 **V8** A drag along the track sets the volume as the finger moves, not on
-release. The sink is in-process and free to follow a finger — the shade's
+release. The sink is in-process and free to follow a finger — the control center's
 volume slider is `live` for the same reason, and its brightness slider is not.
 → `sudo moarchy-touch drag` down the track leaves `omarchy-shell volume drag`
 reporting `commits=` above 2, and a `to=` at the finger's end
@@ -126,10 +126,10 @@ place with it up as with it down.
 
 ## V12–V15. When it stays away
 
-**V12** The panel does not appear while the shade is open. The shade's own
+**V12** The panel does not appear while the control center is open. The control center's own
 slider is already moving, and a second reading of the same number over the top
 of it is not feedback.
-→ with `omarchy-shell shade state` == `open`, `moarchy-volume up` leaves
+→ with `omarchy-shell control-center state` == `open`, `moarchy-volume up` leaves
 `omarchy-shell volume state` == `closed`
 
 **V13** The keys work with the screen blanked, and leave nothing on screen when
@@ -138,8 +138,8 @@ cannot be an animation: the unmap is a timer.
 → `moarchy-screen blank; moarchy-volume down; sleep 4; moarchy-screen wake`
 moves the volume and leaves `omarchy-shell volume state` == `closed`
 
-**V14** With no audio sink there is no panel — the same rule the shade's volume
-slider follows (`shade.md` S14). A track with nothing behind it is a control
+**V14** With no audio sink there is no panel — the same rule the control center's volume
+slider follows (`control-center.md` S14). A track with nothing behind it is a control
 that lies.
 → `omarchy-shell volume level` reads `sink=none`, and `state` stays `closed`
 across a `moarchy-volume up`
@@ -168,7 +168,7 @@ the rocker bound at runtime. `bin/moarchy-selftest --volume`: V1–V13 pass.
 
 | | |
 | --- | --- |
-| geometry | `card=288,248 56x244 track=294,254 44x180 mute=294,442 44x44 margin=16 screen=360x740` — the layout table evaluated, on a 360×740 screen at `corners = "square"`, `shade = "compact"` |
+| geometry | `card=288,248 56x244 track=294,254 44x180 mute=294,442 44x44 margin=16 screen=360x740` — the layout table evaluated, on a 360×740 screen at `corners = "square"`, `control center = "compact"` |
 | the key path | a real `KEY_VOLUMEUP` through `/dev/uinput` moves the sink 0.40 → 0.45 and leaves `volume state` == `open`: sway's binding, the command and the watch, end to end |
 | the drag | 29 values written across one 700ms drag, finishing at 75% (V8) |
 | blanked | `moarchy-screen blank`, a key press, and `volume state` == `closed` when the panel lights again (V13) |

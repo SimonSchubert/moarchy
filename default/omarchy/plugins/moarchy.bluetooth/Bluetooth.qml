@@ -6,7 +6,7 @@
 // The Bluetooth tile used to open `bluetui` in a terminal, and bluetui is not
 // a bad program -- unlike nmtui it enables mouse reporting, so foot's
 // tap-to-click reaches it, and its bindings are all keys the on-screen
-// keyboard has. Operable is not the same as usable (docs/shade.md S6c):
+// keyboard has. Operable is not the same as usable (docs/control-center.md S6c):
 //
 //   * a list row is one terminal line, ~17 logical px on the 60x41 grid
 //     moarchy-launch-tui gives, against the 44 docs/style.md E1 asks for;
@@ -27,7 +27,7 @@
 // widget is never instantiated and the panel it owns can never be summoned.
 //
 // So this is a screen of its own, the same shape as moarchy.wifi: a window the
-// shell draws and maps (docs/gestures.md K1, K10), summoned by the shade's tile
+// shell draws and maps (docs/gestures.md K1, K10), summoned by the control center's tile
 // and by Settings, with a back chevron.
 //
 // ---------------------------------------------------------------------------
@@ -38,7 +38,7 @@
 // READS Quickshell.Bluetooth the same way -- every property below is a BlueZ
 // property, nothing parses `bluetoothctl` output -- but three of the four
 // actions shell out to `omarchy-bluetooth-device`, and it is worth being exact
-// about why rather than leaving it looking like laziness (docs/shade.md
+// about why rather than leaving it looking like laziness (docs/control-center.md
 // S6d-6):
 //
 //   Quickshell registers no org.bluez.Agent1. Its pair() is a bare
@@ -69,7 +69,7 @@ Item {
   id: root
 
   // Injected by the host after construction, and not `readonly` or `required` --
-  // see the drawer, which also says why this is the only one declared (J8).
+  // see the app drawer, which also says why this is the only one declared (J8).
   property var shell: null
 
   readonly property string pluginId: "moarchy.bluetooth"
@@ -88,7 +88,7 @@ Item {
   // dismissed in one motion.
   readonly property bool opened: bluetoothWindow.visible
 
-  // How the overview and the back gesture find this plugin from its window
+  // How the workspace overview and the back gesture find this plugin from its window
   // (moarchy.common/ShellApps.js).
   readonly property var appWindow: bluetoothWindow
 
@@ -102,7 +102,7 @@ Item {
   }
 
   // Where Back goes, set by whoever summoned this screen, so the chevron
-  // returns to the shade or the Settings page you came from rather than
+  // returns to the control center or the Settings page you came from rather than
   // dropping you on the home screen.
   property string returnTo: ""
   property string returnPage: ""
@@ -124,7 +124,7 @@ Item {
   // C3, not a flat alpha. `container` is painted with alpha over the surface,
   // so the background this text actually lands on is the blend of the two, and
   // a constant 0.62 falls below AA on six of the 22 themes. Same computation
-  // as the shade, which is the surface this screen matches.
+  // as the control center, which is the surface this screen matches.
   readonly property color subduedBase: Theme.mix(
     Qt.rgba(root.surface.r, root.surface.g, root.surface.b, 1), Color.popups.text, 0.08)
   readonly property color subdued: Theme.readableOn(root.subduedBase,
@@ -289,7 +289,7 @@ Item {
   // network on the tap because there is exactly one thing that tap could mean;
   // no Bluetooth device is that unambiguous -- a paired headset in reach could
   // as easily be one you are about to forget as one you are about to connect
-  // -- so every device opens its drawer and the drawer carries the verbs.
+  // -- so every device opens its app drawer and the app drawer carries the verbs.
   function rowTapped(row) {
     if (root.busyAddress !== "") return          // one action at a time
     root.errorAddress = ""
@@ -399,8 +399,8 @@ Item {
 
   // ------------------------------------------------------------- the radio
   // S6d-8. Unblock first when the adapter reads blocked, then write `enabled`
-  // once the unblock has landed -- the same order and the same 700ms the shade
-  // uses (docs/shade.md S9), because BlueZ will not power an adapter up
+  // once the unblock has landed -- the same order and the same 700ms the control center
+  // uses (docs/control-center.md S9), because BlueZ will not power an adapter up
   // underneath an rfkill soft block and drops the write with nothing on
   // screen to show for it. The user is in group rfkill, so none of this needs
   // root.
@@ -574,7 +574,7 @@ Item {
     pluginId: root.pluginId
     // The literal character, not an escape: JavaScript's \u takes exactly four
     // hex digits, so "\uF00AF" is U+F00A followed by an "F". U+F00AF,
-    // md-bluetooth -- the same rune the shade's tile and the Settings row wear.
+    // md-bluetooth -- the same rune the control center's tile and the Settings row wear.
     glyph: "󰂯"
     color: root.surface
 
@@ -664,7 +664,7 @@ Item {
             readonly property bool hasError: root.errorAddress === rowItem.modelData.address
 
             width: list.width
-            // Tall enough for a finger, and taller again when the drawer is
+            // Tall enough for a finger, and taller again when the app drawer is
             // open: 44 of actions plus 8 above and 8 below.
             height: Style.space(58)
                     + (rowItem.isExpanded ? Style.space(60) : 0)
@@ -736,7 +736,7 @@ Item {
                 color: rowItem.modelData.connected ? root.accent : root.subdued
               }
 
-              // S6d-5. The one thing the shade's tile cannot show, and the
+              // S6d-5. The one thing the control center's tile cannot show, and the
               // reason to open this screen when everything is already
               // connected. A number rather than a battery glyph: a 12px icon
               // that has to distinguish five levels says less than "62%".
@@ -777,7 +777,7 @@ Item {
               color: root.accent
             }
 
-            // ----------------------------------------------------- drawer
+            // ----------------------------------------------------- app drawer
             // One row of verbs, right-aligned, at most two of them visible at
             // once: Connect/Pair with Forget for a remembered device that is
             // off, Disconnect with Forget for one that is on. They fit on a

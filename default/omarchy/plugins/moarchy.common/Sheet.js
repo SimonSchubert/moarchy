@@ -27,25 +27,25 @@
 //
 // In stacking order, topmost first, which is the order `topmostOverlay()` walks.
 // The ids themselves, so a caller that means one particular sheet -- the strip's
-// swipe up means the drawer and nothing else -- names it rather than spelling it.
-var SHADE = "moarchy.shade"
-var DRAWER = "moarchy.drawer"
-var OVERVIEW = "moarchy.overview"
+// swipe up means the app drawer and nothing else -- names it rather than spelling it.
+var CONTROL_CENTER = "moarchy.control-center"
+var APP_DRAWER = "moarchy.app-drawer"
+var WORKSPACE_OVERVIEW = "moarchy.workspace-overview"
 var THEMES = "moarchy.themes"
 
 var SHEETS = [
-  { id: SHADE, rank: 2 },
-  { id: DRAWER, rank: 1 },
-  { id: OVERVIEW, rank: 1 },
+  { id: CONTROL_CENTER, rank: 2 },
+  { id: APP_DRAWER, rank: 1 },
+  { id: WORKSPACE_OVERVIEW, rank: 1 },
   { id: THEMES, rank: 1 }
 ]
 
 // Where the caller sits. B6's rule is "every sheet on its own layer or above",
 // and these are the three answers that rule needs:
 //
-//   OVERLAY  the shade, the only sheet up there, so it covers nothing
-//   TOP      the drawer and the theme picker, which cover each other and the
-//            shade above them
+//   OVERLAY  the control center, the only sheet up there, so it covers nothing
+//   TOP      the app drawer and the theme picker, which cover each other and the
+//            control center above them
 //   WINDOW   a shell app, which is an ordinary window and therefore *under*
 //            every one of them -- so it clears all three
 var WINDOW = 0
@@ -60,8 +60,8 @@ function ids() {
 }
 
 // Put away what this screen is about to draw over. Anything ranked at or above
-// the caller, never itself, and never anything below -- the shade keeps the
-// drawer standing because it draws over it (shade.md S28), and that is the same
+// the caller, never itself, and never anything below -- the control center keeps the
+// app drawer standing because it draws over it (control-center.md S28), and that is the same
 // rule read from the other end rather than an exception to it.
 function cover(shell, mine, rank) {
   if (!shell || typeof shell.isPluginOpen !== "function") return

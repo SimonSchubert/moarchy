@@ -37,7 +37,7 @@ arrangement in which this app's headline feature works at all.
 `Clock.qml` when the shell starts and keeps it. So the timer that watches for
 an alarm is running while there is no window anywhere on the screen, inside a
 process that is already running for a dozen other reasons — the bar, the
-gestures, the drawer.
+gestures, the app drawer.
 
 The alternative shapes are both worse, and both were what a GTK app in `apps/`
 would have had to be:
@@ -359,7 +359,7 @@ So the shell closes an app by calling the plugin's own `close()`, and asks
 whether it is open by reading the plugin's own `opened`. A `close()` that only
 resets page state — which is what this one was, and what its siblings in this
 repository still are — leaves `opened` true for ever. The first tap on the
-drawer icon opens the app and **no tap ever closes it again**.
+app drawer icon opens the app and **no tap ever closes it again**.
 
 Measured on the phone, tapping each icon twice:
 
@@ -372,7 +372,7 @@ Measured on the phone, tapping each icon twice:
 
 The fix here is three lines: `close()` saves if it needs to and hides the
 window. The one exception is a ring — nothing that can happen by accident
-should be able to lose an alarm that is going off, and a tap on a drawer icon
+should be able to lose an alarm that is going off, and a tap on a app drawer icon
 is the definition of something that happens by accident, so `close()` returns
 early while something is ringing and only `Stop` or `Snooze` will do.
 
@@ -436,7 +436,7 @@ plugins/moarchy.clock/install-on-device.sh
 
 Copies the plugin with `shared/qs_ui` vendored as `ui/`, lays the icon and the
 desktop entry down, adds the id to `~/.config/omarchy/shell.json`, and
-restarts the shell. Then tap Clock in the drawer, or:
+restarts the shell. Then tap Clock in the app drawer, or:
 
 ```sh
 omarchy-shell shell toggle moarchy.clock

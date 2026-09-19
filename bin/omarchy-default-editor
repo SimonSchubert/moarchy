@@ -72,7 +72,7 @@ printf '%s\n' "$editor" >"$editor_file"
 # a TUI has none, and xdg-mime would record a name nothing can resolve.
 _desktop=""
 case "$editor" in
-# The hidden entry, not the drawer's: the drawer's toggles, and a toggle with a
+# The hidden entry, not the app drawer's: the app drawer's toggles, and a toggle with a
 # path in it hides an editor that is already open instead of opening the file.
 moarchy-editor) _desktop="org.moarchy.Editor.open.desktop" ;;
 gnome-text-editor) _desktop="org.gnome.TextEditor.desktop" ;;

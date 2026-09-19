@@ -12,11 +12,11 @@
 # control, guarded where the control is also a drag handle). Plus three things
 # that are not ACs at all: that every SVG this project ships still parses, the
 # sheet-stacking rule, the edge table (gestures.md Q2), and the workspace-layout
-# rule the overview drags onto (gestures.md P7) -- all of which decide behaviour
+# rule the workspace overview drags onto (gestures.md P7) -- all of which decide behaviour
 # and none of which needs the phone to run.
 #
 # Does NOT cover E (touch targets) or F (text inputs): a hit area is a runtime
-# rectangle, and the accessors that answer for it -- `omarchy-shell drawer
+# rectangle, and the accessors that answer for it -- `omarchy-shell app drawer
 # searchTarget`, `omarchy-shell wifi passTarget` -- need the phone. See
 # docs/style.md §J.
 #
@@ -143,8 +143,8 @@ for path in sorted(pathlib.Path(sys.argv[1]).glob("*/*.qml")):
     # four non-controls it is. The exemption is a comment and not an absence,
     # because an absence is what a forgotten control looks like (H7).
     #
-    # Spelled `style.md H7` and not `H7`: a bare (H7) in Shade.qml or
-    # Drawer.qml already means gestures.md, and both files have one.
+    # Spelled `style.md H7` and not `H7`: a bare (H7) in ControlCenter.qml or
+    # AppDrawer.qml already means gestures.md, and both files have one.
     #
     # `SheetArea` counts, and leaving it out was a silent hole for exactly as
     # long as it took to test for: a sheet's controls are MouseAreas by
@@ -190,7 +190,7 @@ for path in sorted(pathlib.Path(sys.argv[1]).glob("*/*.qml")):
     #
     # Read over the following three lines and not the one, because an `on:`
     # expression with three terms wraps, and the guard is as likely to be on the
-    # continuation as on the head. The shade's notification card is the case
+    # continuation as on the head. The control center's notification card is the case
     # that forced it: it drags sideways rather than opening the sheet, so its
     # guard is the card's own displacement and it sits on line two of the
     # binding. Line-by-line, that read as an unguarded press on a control that
@@ -201,7 +201,7 @@ for path in sorted(pathlib.Path(sys.argv[1]).glob("*/*.qml")):
     # way H7 declares a non-control above, because the alternative is teaching
     # this regex one bespoke property name per surface until it matches
     # anything with an `&&` in it.
-    if path.name in ("Shade.qml", "Drawer.qml"):
+    if path.name in ("ControlCenter.qml", "AppDrawer.qml"):
         for n, line in enumerate(lines, 1):
             if not re.search(r"\w+\.pressed\b", line):
                 continue
@@ -338,7 +338,7 @@ else
 fi
 
 # gestures.md P7. What a workspace holding two windows is arranged as, which is
-# the rule the overview's drag exists on top of. The daemon's own functions with
+# the rule the workspace overview's drag exists on top of. The daemon's own functions with
 # `swaymsg` stubbed, so the command strings are asserted rather than the phone --
 # including the fallback that focuses a window to set the layout, and therefore
 # has to put focus back.
@@ -349,7 +349,7 @@ else
   no "the workspace layout rule is broken (P7)" "$ws_out"
 fi
 
-# Chrome file. Corners, shade sizes and which sheet each swipeable edge raises
+# Chrome file. Corners, control center sizes and which sheet each swipeable edge raises
 # (gestures.md Q1) live in ~/.config/omarchy/ui.toml, and moarchy-ui is the
 # writer the theme switcher, Settings and an agent all use.
 # A parser that disagrees with the writer is a theme switcher that does not
@@ -420,7 +420,7 @@ fi
 
 # --- gestures.md K5: a shell app's tile wears its own glyph -------------------
 # Not a style.md section. A shell app's window carries the shell process's own
-# app id, so the overview's tile has no desktop entry to take an icon from and
+# app id, so the workspace overview's tile has no desktop entry to take an icon from and
 # asks the plugin for a glyph instead -- and an empty one falls through to an
 # Image with an empty source, which draws nothing at all. Settings shipped that
 # way from a116d9a: the tile carried the right name and a blank square, and
@@ -465,7 +465,7 @@ for path in sorted(pathlib.Path(sys.argv[1]).glob("*/*.qml")):
             problems.append(f"{rel}:{i + 1}  AppWindow declares no glyph")
         elif glyph.group(1) in ('""', "''"):
             problems.append(f"{rel}:{i + 1}  AppWindow declares an empty glyph; "
-                            "its tile in the overview draws nothing")
+                            "its tile in the workspaceOverview draws nothing")
 if not seen:
     problems.append("!! no AppWindow found -- this check is reading nothing")
 print("%d|%s" % (seen, "; ".join(problems)))
@@ -484,7 +484,7 @@ fi
 # length in moarchy.device/icon.svg, and each carries a paragraph of prose
 # saying why it is drawn the way it is. XML forbids a double hyphen inside a
 # comment, so one em dash rewritten as two hyphens makes the whole file
-# unparseable, and nothing says so: rsvg refuses it, Qt refuses it, the drawer
+# unparseable, and nothing says so: rsvg refuses it, Qt refuses it, the app drawer
 # draws the label with an empty square above it, and no log anywhere mentions
 # it. It has now happened twice, in the same hour, in two files whose own
 # comments warn about it -- which is the definition of a rule that needs a
@@ -521,7 +521,7 @@ elif [[ -z ${svg_bad// /} ]]; then
   ok "every shipped SVG parses ($svg_n files)"
 else
   no "unparseable SVG: $svg_bad" \
-     "a double hyphen inside an XML comment; the drawer draws the label and no icon"
+     "a double hyphen inside an XML comment; the appDrawer draws the label and no icon"
 fi
 
 printf '\n%d passed, %d failed' "$pass" "$fail"

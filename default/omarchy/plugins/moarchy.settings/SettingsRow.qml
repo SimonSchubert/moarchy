@@ -4,11 +4,11 @@
 // differs only in the ~24px at the trailing edge: a chevron, a switch, a tick,
 // or nothing. Three separate components would have been three copies of the
 // card, so this takes a `rowType` instead. It is the extraction of the row that
-// Settings.qml, Themes.qml and the shade's WideTile had each written out
+// Settings.qml, Themes.qml and the control center's WideTile had each written out
 // separately.
 //
 // Colours come in as properties rather than being read from Color here, because
-// the shade wants them from Color.popups and the full-screen surfaces want them
+// the control center wants them from Color.popups and the full-screen surfaces want them
 // from Color.menu, and a component that picks for itself cannot serve both.
 import QtQuick
 import qs.Commons

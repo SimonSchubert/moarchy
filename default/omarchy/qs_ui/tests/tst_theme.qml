@@ -106,9 +106,9 @@ red = \"#ff757f\"
   function test_the_ramp_only_ever_goes_up() {
     var p = Theme.parse(full)
     var names = ["well", "card", "raised", "pressed", "edge"]
-    var last = Theme.shade(p.background)
+    var last = shade(p.background)
     for (var i = 0; i < names.length; i++) {
-      var here = Theme.shade(Theme.surface(p, names[i]))
+      var here = shade(Theme.surface(p, names[i]))
       verify(here > last, names[i] + " is not a step up from " + names[i - 1])
       last = here
     }
@@ -124,9 +124,9 @@ red = \"#ff757f\"
   // assertion that stops anyone replacing that with white at an alpha.
   function test_a_light_theme_boxes_downwards() {
     var light = Theme.fallback(false)
-    verify(Theme.shade(Theme.surface(light, "card")) < Theme.shade(light.background))
-    verify(Theme.shade(Theme.surface(light, "raised"))
-           < Theme.shade(Theme.surface(light, "card")))
+    verify(shade(Theme.surface(light, "card")) < shade(light.background))
+    verify(shade(Theme.surface(light, "raised"))
+           < shade(Theme.surface(light, "card")))
   }
 
   function test_ink_on_a_fill_is_whichever_of_the_two_is_further_from_it() {
@@ -141,7 +141,7 @@ red = \"#ff757f\"
   function test_a_tint_keeps_the_hue_and_the_ramp() {
     var p = Theme.parse(full)
     compare(Theme.tint(p, p.hues.red, "card"), Theme.mix(p.hues.red, p.background, 0.20))
-    verify(Theme.shade(Theme.tint(p, p.hues.red, "pressed"))
-           > Theme.shade(Theme.tint(p, p.hues.red, "card")))
+    verify(shade(Theme.tint(p, p.hues.red, "pressed"))
+           > shade(Theme.tint(p, p.hues.red, "card")))
   }
 }

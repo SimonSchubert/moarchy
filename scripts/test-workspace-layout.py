@@ -4,7 +4,7 @@
     python3 scripts/test-workspace-layout.py
 
 docs/gestures.md P7 -- "a workspace holding more than one window is split
-vertically" -- is the rule that makes the overview's drag worth making: half of
+vertically" -- is the rule that makes the workspaceOverview's drag worth making: half of
 360 logical px is 180 and nothing on this phone can use it, where half of 740 is
 370 and everything does. It is also the rule with the most ways to be quietly
 wrong: the direction has to be named or an inherited `splith` container keeps

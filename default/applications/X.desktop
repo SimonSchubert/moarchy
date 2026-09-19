@@ -11,7 +11,7 @@ StartupWMClass=org.gnome.Epiphany.WebApp_x_com
 # X, as a web app (docs/apps.md B1-B3).
 #
 # Upstream ships this entry, byte for byte, in /usr/share/omarchy/applications.
-# Nothing on this phone copies it into a place the drawer reads -- only
+# Nothing on this phone copies it into a place the appDrawer reads -- only
 # omarchy-refresh-applications does that, and this project never runs
 # upstream's installer -- so it is repeated here, with the one key upstream has
 # no reason to carry.
@@ -20,7 +20,7 @@ StartupWMClass=org.gnome.Epiphany.WebApp_x_com
 # Epiphany profile named org.gnome.Epiphany.WebApp_<host with dots underscored>
 # (bin/omarchy-launch-webapp says why it must be named that), and that is the
 # app id its window arrives with. The shell indexes entries by their startup
-# class, so without this line the drawer's open-app tile and the shade's notification
+# class, so without this line the appDrawer's open-app tile and the controlCenter's notification
 # card for X would have no entry to take a name or an icon from, and the card
 # would read org.gnome.Epiphany.WebApp_x_com.
 #

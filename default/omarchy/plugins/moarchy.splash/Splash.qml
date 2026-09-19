@@ -45,7 +45,7 @@ Item {
   id: root
 
   // Injected by the host after construction, and not `readonly` or `required` --
-  // see the drawer, which also says why this is the only one declared (J8).
+  // see the app drawer, which also says why this is the only one declared (J8).
   property var shell: null
 
   readonly property string pluginId: "moarchy.splash"
@@ -79,7 +79,7 @@ Item {
 
   // ------------------------------------------------------------------ sizing
   //
-  // Rather more than twice the drawer's grid icon: 96 of a 360px-wide screen,
+  // Rather more than twice the app drawer's grid icon: 96 of a 360px-wide screen,
   // about the fraction a phone splash usually gives its icon. Measured against
   // a capture at 80, which read as a small icon that happened to be centred
   // rather than as a launch. Still leaves the surface (130) well under half the
@@ -207,10 +207,10 @@ Item {
     // fullscreen still put a view above the Top layer.
     //
     // The usual reason to prefer Top -- staying under the gesture strip and the
-    // shade -- costs nothing here. Ordering within Overlay is map order and
+    // control center -- costs nothing here. Ordering within Overlay is map order and
     // this maps last, so it draws over both; but it is a 130px square in the
-    // middle of the screen, the pill is at the bottom edge, and the shade
-    // cannot be open during a launch because launches come from the drawer.
+    // middle of the screen, the pill is at the bottom edge, and the control center
+    // cannot be open during a launch because launches come from the app drawer.
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
@@ -234,7 +234,7 @@ Item {
       anchors.centerIn: parent
       width: root.iconSize
       height: root.iconSize
-      // Without sourceSize an SVG rasterises at its natural size. The drawer
+      // Without sourceSize an SVG rasterises at its natural size. The app drawer
       // learned this holding 512px squares for every visible app.
       sourceSize: Qt.size(root.iconSize, root.iconSize)
       fillMode: Image.PreserveAspectFit

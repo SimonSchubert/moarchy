@@ -2,14 +2,14 @@
 <!-- The four operations, two by two.
 
      A calculator is a rounded rectangle with a screen and a grid of buttons on
-     it, and that is exactly the icon this cannot be: the drawer paints a
+     it, and that is exactly the icon this cannot be: the appDrawer paints a
      .desktop icon bare, with no tile behind it, so an icon that fills its own
      square is the one thing in the grid that reads as a tile instead of as a
      thing. Mill's icon says the same and lost its plate for it.
 
      So the object is the arithmetic rather than the instrument. Four glyphs,
      four hues, nothing finer than 10px at 128 which is three pixels at the 42
-     the drawer asks for. Nothing else in this set is four separate marks, so
+     the appDrawer asks for. Nothing else in this set is four separate marks, so
      the shape alone says which app it is at a glance.
 
      No clip path: QtSvg ignores clip-path and paints an out-of-defs clipPath as

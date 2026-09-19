@@ -46,7 +46,7 @@ Item {
     width: 46
     height: 26
     radius: Metrics.round(root.colours, height)
-    // Off is a filled track one shade darker, not an outlined one. The
+    // Off is a filled track one control center darker, not an outlined one. The
     // outline was a 1px border that a phone screen loses outdoors, and a
     // switch whose off state is invisible is a switch with one state.
     color: root.checked ? root.accent : Theme.alpha(root.dim, 0.34)

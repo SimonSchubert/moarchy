@@ -3,7 +3,7 @@
 Two genres live here, and the difference decides what belongs in a file.
 
 **Contract docs** say what the phone must do. Behaviour, present tense, with a
-check a terminal can run: `gestures.md`, `settings.md`, `shade.md`,
+check a terminal can run: `gestures.md`, `settings.md`, `control-center.md`,
 `volume.md`, `windows.md`, `style.md`, and the T-series in `apps.md`.
 `bin/moarchy-selftest` cites their ids, so a criterion with no test is visible.
 
@@ -34,10 +34,10 @@ because a map that restates a rule is a map that will contradict it.
 
 ```
 **B3** The swipe lands on a workspace with nothing of the shell's drawn over it.
-The shade, the drawer and the theme picker are put away on the way (A8). A shell
+The control center, the app drawer and the theme picker are put away on the way (A8). A shell
 app is a window (K1), so it stays where it is and the swipe back returns to it
 (K2).
-→ with the shade down over an app, a sideways swipe leaves `shade state` ==
+→ with the control center down over an app, a sideways swipe leaves `control-center state` ==
 `closed` and a focused workspace that is not the one it started on
 ```
 
@@ -93,7 +93,7 @@ alongside the change that made them untrue.
   unratified content. It is not decoration.
 - **The table rows in `menu-coverage.md` are parsed** by
   `bin/moarchy-selftest` (G5, G6) against the pattern
-  ``^| `id` | label | Native|Bridged|Shade |``. Their format is code. The prose
+  ``^| `id` | label | Native|Bridged|Control Center |``. Their format is code. The prose
   around them is not.
 
 ## The files
@@ -101,14 +101,14 @@ alongside the change that made them untrue.
 | File | What it is |
 | --- | --- |
 | [`naming-convention.md`](naming-convention.md) | Orientation — what each part of the screen is called, the four swipes, and the four kinds of thing quickshell draws |
-| [`gestures.md`](gestures.md) | Contract — every touch gesture: the strip, the edges, the drawer, long-press |
+| [`gestures.md`](gestures.md) | Contract — every touch gesture: the strip, the edges, the app drawer, long-press |
 | [`settings.md`](settings.md) | Contract — the Settings screens, their rows, and the IPC they answer on |
-| [`shade.md`](shade.md) | Contract — the pull-down: tiles, sliders, media, notifications |
+| [`control-center.md`](control-center.md) | Contract — the pull-down: tiles, sliders, media, notifications |
 | [`volume.md`](volume.md) | Contract — the hardware volume keys and the panel they raise |
 | [`windows.md`](windows.md) | Contract — the window area and the launch splash |
 | [`style.md`](style.md) | Contract — type, colour, shape, touch targets, motion. Binds the keyboard and store repos too |
 | [`apps.md`](apps.md) | What ships on the phone and what each app is for, with screenshots off the device |
-| [`menu-coverage.md`](menu-coverage.md) | All 333 upstream menu entries, classified Native / Bridged / Shade / Unsupported |
+| [`menu-coverage.md`](menu-coverage.md) | All 333 upstream menu entries, classified Native / Bridged / Control Center / Unsupported |
 | [`structure.md`](structure.md) | Decisions — repos, packages, the package repository, the image |
 | [`devices.md`](devices.md) | Decisions — what a second device would need, and what is device-specific |
 | [`upstream.md`](upstream.md) | Decisions — the boundary with Omarchy, and what a version bump may break |
@@ -148,9 +148,9 @@ Thirteen plugins and one directory that is not a plugin, all under
 | Plugin | Kind | What it owns | Contract |
 | --- | --- | --- | --- |
 | `moarchy.gestures` | panel | the bottom strip, the home pill, the back edge — every touch gesture, and the shell's only compositor-dispatch seam | [`gestures.md`](gestures.md) |
-| `moarchy.drawer` | overlay | the app grid, its search field, the uninstall card | [`gestures.md`](gestures.md) §N, [`apps.md`](apps.md) |
-| `moarchy.overview` | overlay | every workspace as a card, dragging a window from one to another, and the bin that closes one | [`gestures.md`](gestures.md) §P |
-| `moarchy.shade` | overlay | the pull-down: quick tiles, brightness and volume, media, notification history | [`shade.md`](shade.md) |
+| `moarchy.app-app drawer` | overlay | the app grid, its search field, the uninstall card | [`gestures.md`](gestures.md) §N, [`apps.md`](apps.md) |
+| `moarchy.workspace-workspace overview` | overlay | every workspace as a card, dragging a window from one to another, and the bin that closes one | [`gestures.md`](gestures.md) §P |
+| `moarchy.control-center` | overlay | the pull-down: quick tiles, brightness and volume, media, notification history | [`control-center.md`](control-center.md) |
 | `moarchy.settings` | overlay | the settings screen tree and the IPC it answers on | [`settings.md`](settings.md) |
 | `moarchy.themes` | overlay | the theme picker, as a grid of live swatches | [`settings.md`](settings.md) §theme |
 | `moarchy.wifi` | overlay | pick a network, type a passphrase | [`settings.md`](settings.md) |
@@ -179,7 +179,7 @@ Thirteen plugins and one directory that is not a plugin, all under
 | `Sheet.js` | the one list of sheets, how they stack, and what every `open()` does identically |
 | `Edge.js` | which axis an edge is, which way it opens, and where a sheet sits part-way in. The one place a sheet's entry edge is arithmetic rather than an `if` |
 | `TrailingSquare.qml` | the rectangle that squares off a sheet's trailing corners, on whichever edge is trailing |
-| `Apps.js` | a window → its icon, its name, its glyph. The overview's cards draw their tiles from it, and the drawer asks it whether an app is already running |
+| `Apps.js` | a window → its icon, its name, its glyph. The workspace overview's cards draw their tiles from it, and the app drawer asks it whether an app is already running |
 | `ShellApps.js` | which of our screens are windows, and the compositor helpers |
 | `Theme.js` | the colour arithmetic: luminance, contrast, mix, readableOn |
 
@@ -193,9 +193,9 @@ The thing to know before touching any of them, and the reason a sheet that opens
 puts some of its neighbours away and not others:
 
 ```
- Overlay   the shade · the gesture strip · the back edge · the right edge ·
+ Overlay   the control center · the gesture strip · the back edge · the right edge ·
            the launch splash · the volume panel
- Top       the drawer · the overview · the theme picker · the status bar ·
+ Top       the app drawer · the workspace overview · the theme picker · the status bar ·
            moarchy.device
            the on-screen keyboard (moarchy-keyboard, its own package)
  windows   Settings · Wi-Fi · Bluetooth · SIM — and every app
@@ -205,8 +205,8 @@ puts some of its neighbours away and not others:
 Two consequences that are easy to get wrong, and have been:
 
 - **A sheet opening puts away every sheet on its own layer or above it, and none
-  below.** So the shade covers nothing (nothing is above it), the drawer and the
-  picker cover each other and the shade, and a *window* is under all three and
+  below.** So the control center covers nothing (nothing is above it), the app drawer and the
+  picker cover each other and the control center, and a *window* is under all three and
   clears all three. One implementation, `Sheet.js`; the rule is
   [`refactor.md`](refactor.md) §B6 and `node scripts/sheet-test.js` runs it.
 - **Our four screens that are windows are windows.** The compositor puts them
@@ -220,7 +220,7 @@ Two consequences that are easy to get wrong, and have been:
 | --- | --- |
 | **strip** | the 20px band along the bottom edge that `moarchy.gestures` reserves off every window, permanently |
 | **edge** | one of the two 16px bands `moarchy.gestures` takes touch in ahead of an app: the left one is back, the right one raises whichever sheet is set for it ([`gestures.md`](gestures.md) Q1). A swipe in from one is a **left-edge** or **right-edge swipe** — the edge is the band, the swipe is the gesture |
-| **sheet** | a full-screen surface that is dismissed rather than left running: the shade, the drawer, the overview, the theme picker |
+| **sheet** | a full-screen surface that is dismissed rather than left running: the control center, the app drawer, the workspace overview, the theme picker |
 | **shell app** | a screen this shell draws and maps as an ordinary window: Settings, Wi-Fi, Bluetooth, SIM |
 | **overlay / panel / bar** | the three plugin *kinds* the host knows. A "sheet" is our word; `kind` is the host's |
 | **travel** | the distance in scene pixels that carries a drag's progress from 0 to 1 |

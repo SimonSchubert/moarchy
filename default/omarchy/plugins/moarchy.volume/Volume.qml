@@ -29,7 +29,7 @@
 // Why it is a panel and not a sheet
 // ---------------------------------------------------------------------------
 // It puts nothing away and nothing puts it away (V15). Sheet.js is read here
-// for exactly one question -- is the shade open, in which case the shade's own
+// for exactly one question -- is the control center open, in which case the control center's own
 // slider is already showing the change (V12) -- and never to cover anything.
 import QtQuick
 import Quickshell
@@ -45,14 +45,14 @@ Item {
   id: root
 
   // Injected by the host after construction, and not `readonly` or `required` --
-  // see the drawer, which also says why this is the only one declared (J8).
+  // see the app drawer, which also says why this is the only one declared (J8).
   property var shell: null
 
   readonly property string pluginId: "moarchy.volume"
 
   // ------------------------------------------------------------- the sink
   //
-  // The same two lines the shade carries. `audio` is pulled out as its own
+  // The same two lines the control center carries. `audio` is pulled out as its own
   // property because it is what the Connections below attach to: the node
   // survives a default-sink change and the audio object does not.
   readonly property var sink: Pipewire.defaultAudioSink
@@ -83,7 +83,7 @@ Item {
   //   F075F  speaker with a cross     mute   (upstream's audio panel uses it)
   //   F057F  speaker, no waves        low
   //   F0580  speaker, one wave        medium
-  //   F057E  speaker, two waves       high   (the shade's volume slider)
+  //   F057E  speaker, two waves       high   (the control center's volume slider)
   //
   // Which is Android's own ladder, including the bare cone at the quiet end.
   readonly property string glyph: root.glyphName === "mute" ? "󰝟"
@@ -103,13 +103,13 @@ Item {
   readonly property int pad: Style.space(6)
   readonly property int gap: Style.space(8)
 
-  // The circle is the shade's round button, so the density preference reshapes
+  // The circle is the control center's round button, so the density preference reshapes
   // this panel with the rest of the phone. What it *answers* in is a slot of
   // its own (style.md E4, E5) rather than a target grown into the gap: the gap
   // is 8, so growing reaches 44 on the roomy preset and stops at 40 on the
   // compact one, and a control that meets the floor at one density and misses
   // it at the other is the failure E1 exists to prevent.
-  readonly property int muteSize: ui.shadeRound
+  readonly property int muteSize: ui.controlCenterRound
   readonly property int muteSlot: Math.max(root.tapSlot, root.muteSize)
 
   readonly property int cardWidth: root.trackWidth + root.pad * 2
@@ -123,9 +123,9 @@ Item {
   readonly property int surfaceWidth: root.cardWidth + root.edgeMargin
 
   // V10. moarchy.gestures' own edge band, duplicated rather than read across
-  // plugins for the reason the shade duplicates it: this surface has to clear
+  // plugins for the reason the control center duplicates it: this surface has to clear
   // the edge even in a session where the gestures plugin failed to load. A card
-  // sitting on the band would take the overview swipe for the three seconds it
+  // sitting on the band would take the workspace overview swipe for the three seconds it
   // is up, and a gesture that works except just after a volume press is worse
   // than one that never worked.
   readonly property int edgeMargin: Style.space(16)
@@ -136,7 +136,7 @@ Item {
 
   // -------------------------------------------------------------- colours
   //
-  // The popup roles, like the shade: this is a transient surface over an app,
+  // The popup roles, like the control center: this is a transient surface over an app,
   // not a screen. C2's six, and `surface` is drawn nearly opaque -- the card
   // sits over whatever was playing, and a translucent one over video is a
   // control you cannot read at exactly the moment you reach for it.
@@ -173,7 +173,7 @@ Item {
 
   function raise(): void {
     if (!root.hasSink) return          // V14
-    if (root.shadeOpen()) return       // V12
+    if (root.controlCenterOpen()) return       // V12
     root.opened = true
     hideTimer.restart()
   }
@@ -187,9 +187,9 @@ Item {
 
   // B1/I2: the id lives in Sheet.js and this asks it a question. Nothing is
   // covered here -- see the header.
-  function shadeOpen(): bool {
+  function controlCenterOpen(): bool {
     return !!(root.shell && typeof root.shell.isPluginOpen === "function"
-              && root.shell.isPluginOpen(Sheet.SHADE))
+              && root.shell.isPluginOpen(Sheet.CONTROL_CENTER))
   }
 
   // --------------------------------------------------------- the latch
@@ -260,7 +260,7 @@ Item {
 
   // ------------------------------------------------------------ the drag
   //
-  // V8. Live, like the shade's volume slider and unlike its brightness one:
+  // V8. Live, like the control center's volume slider and unlike its brightness one:
   // the sink is set in-process and is free to follow a finger, where
   // brightness forks a process per write.
   property bool dragging: false
@@ -290,7 +290,7 @@ Item {
 
     // Raising by hand, for a check that wants the surface without moving
     // anybody's volume. `suppressed` and not `closed`: the two reasons it
-    // refuses (no sink, shade open) are states, and a caller that cannot tell
+    // refuses (no sink, control center open) are states, and a caller that cannot tell
     // them from a panel that opened and closed again learns nothing.
     function show(): string { root.raise(); return root.opened ? "open" : "suppressed" }
     function hide(): string { root.dismiss(); return "closed" }
@@ -441,7 +441,7 @@ Item {
           // is. A rounded fill shorter than its own radius cannot keep the
           // track's corners: its square bottom edge paints outside the
           // rounded outline it sits in, which reads as a rendering fault. The
-          // shade's slider carries the same floor on its own axis, and
+          // control center's slider carries the same floor on its own axis, and
           // Android's own track has it too: its smallest visible fill is
           // about a third of the bar for exactly this reason.
           visible: root.shown > 0

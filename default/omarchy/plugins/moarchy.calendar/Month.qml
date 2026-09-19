@@ -72,7 +72,7 @@ Item {
     return root.colours.foreground
   }
 
-  // The weekend, one shade off the window. Small enough that nobody sees a
+  // The weekend, one control center off the window. Small enough that nobody sees a
   // colour, large enough that the week reads as a week -- which is the whole
   // job of a seven-column grid.
   readonly property color weekendWash: root.colours

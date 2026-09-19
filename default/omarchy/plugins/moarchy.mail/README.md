@@ -81,7 +81,7 @@ Anybody who can read your home directory can read it. On a phone that is you.
 The shell keeps the plugin loaded. Ninety seconds after the shell starts, and
 every fifteen minutes after that, it runs `moarchy-mail peek`: one login, one
 `STATUS`, and headers only if there is something new. New mail rings
-feedbackd's `message-new-email` and puts a line in the shade. It is not IMAP
+feedbackd's `message-new-email` and puts a line in the control center. It is not IMAP
 IDLE, which would be a process holding a connection open all day for a message
 that can wait a quarter of an hour.
 
@@ -95,11 +95,11 @@ it is on screen.
 plugins/moarchy.mail/install-on-device.sh
 ```
 
-That installs the plugin, `~/.local/bin/moarchy-mail`, the drawer's entry and a
+That installs the plugin, `~/.local/bin/moarchy-mail`, the app drawer's entry and a
 hidden one that `mailto:` links open. Geary's mail, settings and keyring entry
 are left where they were.
 
-Then tap **Mail** in the drawer, or:
+Then tap **Mail** in the app drawer, or:
 
 ```sh
 omarchy-shell shell toggle moarchy.mail

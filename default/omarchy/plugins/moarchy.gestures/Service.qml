@@ -30,10 +30,10 @@
 //                 touch and on an occupied one the app is over it and it
 //                 receives nothing. The layer does the work -- there is no "is
 //                 this workspace empty" test anywhere in this file, because
-//                 asking that question is what made the drawer open when it
+//                 asking that question is what made the app drawer open when it
 //                 should not have.
 //   backEdge      Overlay, left, 16px.  Back (G).
-//   overviewEdge  Overlay, right, 16px.  The right edge's sheet (P).
+//   workspaceOverviewEdge  Overlay, right, 16px.  The right edge's sheet (P).
 //                 Above windows, because both have to take the touch before the
 //                 app does. They are the two places here that steal input from
 //                 an app, each is bounded to 16px, and like the strip neither
@@ -58,9 +58,9 @@
 // up-drag (D1) raises the same sheet and differs only in tracking the finger
 // 1:1, because there the thing under the thumb *is* the sheet.
 //
-// It used to be the carousel in that first band, with the drawer reachable
-// only from a blank workspace (the Android split: nav area is the overview,
-// home screen is the launcher). The carousel is gone: the drawer shows what is
+// It used to be the carousel in that first band, with the app drawer reachable
+// only from a blank workspace (the Android split: nav area is the workspace overview,
+// home screen is the launcher). The carousel is gone: the app drawer shows what is
 // open along its top (M), so a switcher that could only switch was a second
 // surface, a second model of what is running, and a gesture whose meaning
 // depended on whether anything was.
@@ -96,7 +96,7 @@ Item {
   // property rather than a literal because no single value is right, and the two
   // edges are separate properties because the same finger does not have the same
   // reach at both sides of a phone it is holding in one hand.
-  readonly property int overviewEdgeWidth: Style.space(16)
+  readonly property int workspaceOverviewEdgeWidth: Style.space(16)
 
   // G10, P8. How far short of the bottom an edge surface stops. Below this the
   // strip wants taps, and above the strip the keyboard does -- and the back edge
@@ -209,13 +209,13 @@ Item {
   property real backCueY: 0
 
   // G12's instrument. One integer per frame of the gesture, the same shape
-  // `drawer dragTrace` is and for the same reason: "does it follow the finger"
+  // `app-drawer dragTrace` is and for the same reason: "does it follow the finger"
   // is a question about the number of samples, and an arc that appeared at the
   // threshold would look identical in a screenshot.
   property var backTrace: []
 
   // One entry, capped. -1 marks a real cancel and -2 a stranded touch the
-  // watchdog retired, which the drawer's trace has distinguished since F2 and
+  // watchdog retired, which the app drawer's trace has distinguished since F2 and
   // this one could not: the back edge had no watchdog to fire (H1, H5).
   function markBackTrace(v: int): void {
     if (root.backTrace.length >= 200) return
@@ -240,7 +240,7 @@ Item {
   readonly property int slop: Style.space(8)
 
   // The old strip travel, kept only as the fallback in targetTravel() for a
-  // drawer that has not published a `closeTravel` yet -- during startup, or if
+  // app drawer that has not published a `closeTravel` yet -- during startup, or if
   // the plugin failed to load. Nothing measures a real gesture against it any
   // more (D2a): a sheet is dragged in units of itself.
   readonly property real pullTravel:
@@ -253,19 +253,19 @@ Item {
   // reach of an ordinary swipe -- measured from a real one on the device, an
   // unremarkable flick up from the strip runs to 92% of the sheet at 2.5 px/ms.
   // So the gesture that means "show me the launcher" was landing in the home
-  // band, taking the drawer it had just dragged up away with it. No threshold
+  // band, taking the app drawer it had just dragged up away with it. No threshold
   // inside 0..1 separates those two intents, because they are the same
   // movement.
   //
   // Past 1.0 they separate cleanly. From an app that is a sweep to the very top
   // of the screen -- the sheet is full and the finger kept going -- and from an
-  // already-open drawer it is one homeExtra further (A6), which is the path
+  // already-open app drawer it is one homeExtra further (A6), which is the path
   // that actually gets used: app, swipe, launcher, swipe, wallpaper.
   readonly property real homeCommit: 1.0
 
   // A6, A7. How much *further* the finger has to travel to reach home when the
   // sheet is already up. Without it `homeCommit` is behind the drag before it
-  // starts -- an open drawer sits at pull 1.0, which is past 0.85 -- so every
+  // starts -- an open app drawer sits at pull 1.0, which is past 0.85 -- so every
   // touch on the strip would go home, including the ones that mean nothing.
   // Measured from where this drag began rather than from the bottom of the
   // sheet, so the gesture costs the same finger movement either way.
@@ -277,9 +277,9 @@ Item {
   // question is which end it is nearer -- and it is what was asked for, in those
   // words.
   //
-  // It was 0.35, inherited from the shade, whose sheet is a different shape and
-  // whose drag has no second stop past it. It was `drawerCommit` while the
-  // drawer was the only sheet an edge could pull up; the overview is dragged by
+  // It was 0.35, inherited from the control center, whose sheet is a different shape and
+  // whose drag has no second stop past it. It was `appDrawerCommit` while the
+  // app drawer was the only sheet an edge could pull up; the workspace overview is dragged by
   // the same rule on the other axis (P2), and one threshold is what keeps "far
   // enough" something you learn once.
   readonly property real sheetCommit: 0.5
@@ -287,7 +287,7 @@ Item {
   // A3. Speed past which a release commits whatever the travel, in logical px
   // per ms. It was 0.6 against a reading that could not be trusted: measured
   // from the strip, ordinary swipes whose real speed was 0.70, 0.66 and 0.58
-  // came through as 0.59, 0.87 and 2.79, so the same gesture opened the drawer
+  // came through as 0.59, 0.87 and 2.79, so the same gesture opened the app drawer
   // or did not, at random. With the reading fixed (DragTracker, "measuring
   // speed") the number can mean something, and 0.3 is what it should mean: a
   // deliberate swipe on this phone lands at 0.35-0.7 and a slow positioning
@@ -298,10 +298,10 @@ Item {
   // D2a. What one pixel of finger is worth to the sheet being dragged: one
   // pixel, on every surface that drags it.
   //
-  // The drawer's *close* drag has always been 1:1 against the sheet's own
+  // The app drawer's *close* drag has always been 1:1 against the sheet's own
   // height, because there the handle is the sheet. The open drag from the
   // wallpaper was the first to match it -- before that the same finger movement
-  // opened the drawer 2.2x faster than it closed it, and a drag from mid-screen
+  // opened the app drawer 2.2x faster than it closed it, and a drag from mid-screen
   // arrived fully open with half the screen still to go (measured: a 250px drag
   // left it at 77%).
   //
@@ -310,9 +310,9 @@ Item {
   // buy nothing. That was a switcher's argument. Pulling a launcher onto the
   // screen at 2.2x finger speed is the "too sensitive" this is the fix for.
   //
-  // Read off the drawer rather than recomputed here, so no two drags on it can
+  // Read off the app drawer rather than recomputed here, so no two drags on it can
   // drift apart -- `closeTravel` is the property its own close divides by.
-  // pullTravel survives as the fallback for a drawer that has not published
+  // pullTravel survives as the fallback for a app drawer that has not published
   // one, and as the unit the sideways gestures were tuned in.
   function targetTravel(): real {
     if (root.dragTarget) {
@@ -349,7 +349,7 @@ Item {
   // Signed **toward open**, not in scene coordinates: positive means "let go
   // now and the sheet should end up further open". Named for it, because both
   // release rules below are fling tests and reading the scene sign into one of
-  // them is what sprang the drawer shut on a quick flick up.
+  // them is what sprang the app drawer shut on a quick flick up.
   readonly property real openVelocity:
     root.lastDrag ? root.lastDrag.openVelocity : 0
 
@@ -372,10 +372,10 @@ Item {
   // What the surface decided on press, before it was known the gesture was
   // even upward.
   // "none", "home", or the id of the sheet being dragged. It was the word
-  // `drawer` while the drawer was the only thing an edge could raise; with
+  // `app-drawer` while the app drawer was the only thing an edge could raise; with
   // the target a setting (Q1) the branch means "a sheet is being dragged"
   // and the id is the more useful thing to carry -- `gestures status` names
-  // which one, where `mode=drawer` could only ever say that it was one.
+  // which one, where `mode=appDrawer` could only ever say that it was one.
   //
   // "home" is the strip with no sheet on it (Q4): nothing to drag, and the
   // second stop still there.
@@ -388,8 +388,8 @@ Item {
 
   // Which sheet that object is, so the commit can go through the host by id.
   // Two edges drag two different sheets now -- the strip and the wallpaper the
-  // drawer (A, D), the right edge the overview (P) -- and `releaseTarget` used
-  // to name the drawer outright. A commit that summoned the wrong sheet would
+  // app drawer (A, D), the right edge the workspace overview (P) -- and `releaseTarget` used
+  // to name the app drawer outright. A commit that summoned the wrong sheet would
   // leave the one being dragged parked at 1.0 with the host believing it shut.
   property string dragSheet: ""
 
@@ -524,10 +524,10 @@ Item {
 
   // Every full-screen overlay this shell can put over an app, topmost first.
   //
-  // G11. That order is the layer order and it is load-bearing: the shade is
+  // G11. That order is the layer order and it is load-bearing: the control center is
   // Overlay and the other two are Top, so a back swipe walking this list from
   // the front closes the sheet being looked at. Two of them can be up at once
-  // since the shade stopped dismissing the drawer (shade.md S28), which is
+  // since the control center stopped dismissing the app drawer (control-center.md S28), which is
   // what made the order matter rather than merely read well.
   //
   // This used to be three ids written out at each of the two call sites, and
@@ -563,9 +563,9 @@ Item {
   // gesture. Minus whatever the strip raises, which a second drag continues
   // into the home band rather than clears (A6).
   //
-  // Read off the setting and not off an id (Q1). Naming the drawer here is
-  // what would make a second drag clear the overview instead of carrying it
-  // on, the moment somebody put the overview on this edge. With `none` there
+  // Read off the setting and not off an id (Q1). Naming the app drawer here is
+  // what would make a second drag clear the workspace overview instead of carrying it
+  // on, the moment somebody put the workspace overview on this edge. With `none` there
   // is no exemption and A8's sweep is total, which is right: an edge that
   // raises nothing has nothing to continue.
   //
@@ -574,7 +574,7 @@ Item {
   // every mounted `omarchy.` surface and not only the popups. A false positive
   // costs nothing where it is used today -- by then we have already decided to
   // clear something -- but as this gate it would stop the strip ever raising
-  // the drawer at all.
+  // the app drawer at all.
   function coveringSheet(): bool {
     for (var i = 0; i < root.overlayIds.length; i++) {
       var id = root.overlayIds[i]
@@ -633,7 +633,7 @@ Item {
   // changes underneath. A sheet left standing while the workspace moves is a
   // gesture that visibly does nothing and silently does something.
   //
-  // All of them rather than the topmost one. The two can differ -- the shade
+  // All of them rather than the topmost one. The two can differ -- the control center
   // pulls down over the theme picker -- and hiding only the top of that pair
   // would leave the other one covering the workspace the swipe had just
   // reached, which is the same failure one layer down.
@@ -662,7 +662,7 @@ Item {
   // goBack() answers true when it consumed the gesture; false means "nothing
   // left, close me".
   //
-  // The drawer owns one: goBack() retires its app-detail card, so this branch
+  // The app drawer owns one: goBack() retires its app-detail card, so this branch
   // fires on every back swipe over an open card. It said the opposite until
   // refactor.md N4 -- that no sheet in overlayIds owned a stack and this was kept for a
   // future one -- which had been untrue since the card landed, and a comment
@@ -689,7 +689,7 @@ Item {
   // with a window plainly focused -- the back gesture ran, found nothing, and
   // closed nothing, while `toplevels` was populated the whole time. The
   // per-toplevel `activated` flag is the one that demonstrably tracks focus:
-  // it is what the overview's focused card is marked from (P4). So prefer the
+  // it is what the workspace overview's focused card is marked from (P4). So prefer the
   // singleton when it answers and fall back to the flag that works, rather
   // than depending on a derived property that does not.
   function focusedToplevel() {
@@ -708,8 +708,8 @@ Item {
   // A sheet holds keyboard_interactivity Exclusive while it is on screen, so
   // sway deactivates the window underneath and every toplevel reads
   // `activated` false -- measured: `gestures status` over an app goes from
-  // `focus=org.kde.keysmith` to `focus=none` the moment the drawer maps, and
-  // back again when it closes. The drawer is the surface that asks this
+  // `focus=org.kde.keysmith` to `focus=none` the moment the app drawer maps, and
+  // back again when it closes. The app drawer is the surface that asks this
   // question, which is why it is the surface that cannot answer it.
   //
   // Only ever *set* from a real focus, and cleared only by a workspace
@@ -733,7 +733,7 @@ Item {
   }
 
   // A sheet going up, for the summon path: `shell toggle`, the store's Open,
-  // a check's `drawer open`. The drag path cannot use it -- `releaseTarget()`
+  // a check's `app-drawer open`. The drag path cannot use it -- `releaseTarget()`
   // only summons once the finger lifts, long after the sheet took focus --
   // and goes through resolveTarget() on the press instead.
   Connections {
@@ -810,7 +810,7 @@ Item {
 
   // Is there an app on the workspace I am standing on? windows.md L10, F5.
   //
-  // One question with two readers -- the home swipe and the drawer's
+  // One question with two readers -- the home swipe and the app drawer's
   // pre-launch hop -- so one answer, here. They each had their own before, and
   // the same defect reached them one at a time.
   //
@@ -885,7 +885,7 @@ Item {
     // the app on it still holds focus (windows.md L10). On the press rather
     // than on the latch: most presses are a sideways swipe and this costs
     // them a property read, where `beginSheet()` would miss the swipe up that
-    // carries straight on from an already-open drawer.
+    // carries straight on from an already-open app drawer.
     root.noteFocused()
     root.dragTarget = null
     root.dragSheet = ""
@@ -908,11 +908,11 @@ Item {
     // most of those are a workspace swipe (B1: horizontal wins). Warming on
     // press mapped the full grid, laid it out, and left it composited on Top
     // for the duration of the switch -- the hitch that vanished when the
-    // drawer plugin failed to load. beginDrawer() maps once the tracker has
+    // app drawer plugin failed to load. beginDrawer() maps once the tracker has
     // latched upward, which is still inside the slop of a real open.
     //
-    // The drawer's progress *is* the pull, on both surfaces, now that both
-    // measure against the same travel. An already-open drawer therefore starts
+    // The app drawer's progress *is* the pull, on both surfaces, now that both
+    // measure against the same travel. An already-open app drawer therefore starts
     // the next drag at 1.0, which is what lets a second swipe carry straight on
     // into the home band (A6) rather than starting over at the bottom of a
     // sheet that is already up.
@@ -940,7 +940,7 @@ Item {
     // property a QML object does not declare throws, and a throw here aborts
     // the handler mid-frame -- so a sheet without the cue would not simply go
     // uncued, it would stop being moved at all from the first frame past the
-    // ramp's start. The drawer is the only sheet that draws it (Q1).
+    // ramp's start. The app drawer is the only sheet that draws it (Q1).
     if (root.dragSource === "strip"
         && typeof root.dragTarget.homeHint !== "undefined") {
       var arms = root.homeThreshold()
@@ -956,7 +956,7 @@ Item {
     if (!root.dragTarget) return
     root.dragTarget.dragging = false
     // Zeroed on every strip release, open or not, and the `open` case is the
-    // one that bites: a drag released in the drawer band at, say, 55% leaves
+    // one that bites: a drag released in the app drawer band at, say, 55% leaves
     // homeHint at 0.43, and a hint nobody retires is a sheet that settles and
     // stays 34px above where it belongs. The carousel got away with carrying
     // this only because `summon` re-entered its open() every time; a sheet
@@ -967,7 +967,7 @@ Item {
     if (root.dragSource === "strip"
         && typeof root.dragTarget.homeHint !== "undefined")
       root.dragTarget.homeHint = 0
-    // The sheet this gesture resolved, not the drawer by name (P2).
+    // The sheet this gesture resolved, not the app drawer by name (P2).
     // `dragSheet` and `dragTarget` are set together or not at all, so reaching
     // here with a target means there is an id to commit through.
     if (open) Sheet.summon(root.shell, root.dragSheet)
@@ -1023,7 +1023,7 @@ Item {
     }
     else if (action === "home") {
       // K4. A shell app goes where an app goes: nowhere. It stays mapped on its
-      // own workspace, it keeps its tile in the overview, and this gesture
+      // own workspace, it keeps its tile in the workspace overview, and this gesture
       // leaves it the way it leaves `foot` -- by going somewhere else.
       //
       // Already on a home screen? Then there is nowhere to go, and going anyway
@@ -1031,18 +1031,18 @@ Item {
       // nothing.
       //
       // Occupancy, and it is asked through workspaceOccupied() because this
-      // and the drawer's pre-launch hop are the same question and drifting
+      // and the app drawer's pre-launch hop are the same question and drifting
       // answers to it have now cost two gestures.
       //
       // `focusedToplevel()` alone was the test here, on the reasoning that no
       // toplevel is activated when focus is on an empty workspace -- true, and
       // true for a second reason as well: an exclusive-focus *layer surface*
       // deactivates the window beneath it, so with one up every toplevel reads
-      // unfocused too. The drawer is such a surface -- it owns a search field,
+      // unfocused too. The app drawer is such a surface -- it owns a search field,
       // so it takes the keyboard -- and it is what is on screen when this
       // runs, because the home band is reached by dragging it. So the drag hid
-      // the drawer, called this, and this concluded the phone was already home
-      // and returned: the drawer slid away and nothing happened.
+      // the app drawer, called this, and this concluded the phone was already home
+      // and returned: the app drawer slid away and nothing happened.
       //
       // `representation` was added beside it and fixed that, for every app
       // sway has in its tiling list. It does not cover an Android one -- a
@@ -1069,7 +1069,7 @@ Item {
       // and a rule written at both ends is the defect refactor.md B1 records.
       //
       // Still the agent's own launcher underneath: with one picked it opens
-      // it, with none it opens the picker, and the drawer's tile is rewritten
+      // it, with none it opens the picker, and the app drawer's tile is rewritten
       // on the way so the icon and this gesture cannot come to name different
       // agents (settings.md P12).
       //
@@ -1232,7 +1232,7 @@ Item {
   // is resting, and a gesture nobody can tell is happening is a gesture nobody
   // finds.
   //
-  // Timers rather than a TapHandler, for the reason the drawer's hold gives at
+  // Timers rather than a TapHandler, for the reason the app drawer's hold gives at
   // length (L1): the MultiPointTouchArea below owns the exclusive grab, so a
   // handler beside it would get a passive one and lose the press wherever that
   // area decided the gesture was over. A timer armed on press has no grab to
@@ -1371,7 +1371,7 @@ Item {
     slop: root.slop
     // C3. A hold that has fired takes the rest of the touch with it: the agent
     // is on its way and the sheets are already swept, so a finger that wanders
-    // afterwards must not also arrive at the drawer it just put away.
+    // afterwards must not also arrive at the app drawer it just put away.
     // Q4. `pendingMode` already carries the answer: it is "none" when a
     // sheet is covering the screen, "home" when this edge raises nothing,
     // and an id when there is something to drag. Testing `dragTarget` here
@@ -1462,7 +1462,7 @@ Item {
   // vertical drag that begins at the edge is an app being scrolled, exactly as
   // G6 says of the other side.
   Shared.DragTracker {
-    id: overviewDrag
+    id: workspaceOverviewDrag
     axis: "x"
     travel: root.targetTravel()
     openDirection: -1
@@ -1470,8 +1470,8 @@ Item {
     axisDominant: true
     slop: root.slop
     // Nothing to drag means nothing to latch: the plugin can have failed to
-    // load, and an already-open overview has nowhere further to go -- there is
-    // no second stop past this sheet the way there is past the drawer (A4).
+    // load, and an already-open workspace overview has nowhere further to go -- there is
+    // no second stop past this sheet the way there is past the app drawer (A4).
     latchable: root.dragTarget !== null && root.dragStartPull < 1
     startFrom: root.dragStartPull
 
@@ -1479,13 +1479,13 @@ Item {
       root.dragMode = root.dragSheet
       root.beginSheet()
     }
-    onMoved: p => root.setTargetProgress(overviewDrag.travelled)
+    onMoved: p => root.setTargetProgress(workspaceOverviewDrag.travelled)
 
-    // The drawer's release rule, on the other axis (P2). `v` is signed toward
+    // The app drawer's release rule, on the other axis (P2). `v` is signed toward
     // open, so a fling out from the edge is the positive one.
     onFinished: (p, v) => {
       root.releaseTarget(v >= root.fling
-        || (v > -root.fling && overviewDrag.travelled >= root.sheetCommit))
+        || (v > -root.fling && workspaceOverviewDrag.travelled >= root.sheetCommit))
       root.reset()
     }
 
@@ -1516,7 +1516,7 @@ Item {
         // other one, and it is already here.
         //
         // Q1: the sheet the strip raises, because this verb exists to make
-        // the same choice a real strip swipe makes. `gestures overview` is
+        // the same choice a real strip swipe makes. `gestures workspaceOverview` is
         // the other kind of verb -- it is named after a plugin and summons
         // that plugin, whatever any edge is set to.
         if (root.bottomTarget === "") return "ok: nothing on the bottom edge"
@@ -1540,10 +1540,10 @@ Item {
 
     // P1. The right edge, without a finger. Distance is what opens the sheet
     // and an IPC verb has no distance, so this is the committed end of it --
-    // `overview progress` is where a real drag is measured.
-    function overview(): string {
-      Sheet.summon(root.shell, Sheet.OVERVIEW)
-      return "ok: overview"
+    // `workspace-overview progress` is where a real drag is measured.
+    function workspaceOverview(): string {
+      Sheet.summon(root.shell, Sheet.WORKSPACE_OVERVIEW)
+      return "ok: workspaceOverview"
     }
 
     // Q1. What each configurable edge is set to, as ids. The words live in
@@ -1579,7 +1579,7 @@ Item {
     // the cut and a tap on a dead edge look identical, which is the confusion
     // that let the keyboard's left column stay swallowed. Ask instead.
     // G12. One integer per frame of a back gesture, cleared on the next press.
-    // The same instrument `drawer dragTrace` is, for the same reason: a cue
+    // The same instrument `app-drawer dragTrace` is, for the same reason: a cue
     // that appeared at the threshold and one that followed the finger look
     // identical in a screenshot and identical to `state`, and only the sample
     // count tells them apart.
@@ -1612,13 +1612,13 @@ Item {
              + " home=" + Math.round(home.height)
              + " kbd=" + (root.keyboardReserving ? 1 : 0)
              + " band=" + (root.fillStripBand ? 1 : 0)
-             // P8. The right edge. `overviewW` is its input band, and it has no
+             // P8. The right edge. `workspaceOverviewW` is its input band, and it has no
              // drawn width to publish beside it -- the surface is the band,
-             // because nothing is drawn on it (P1). `overviewSurfaceW` says so
+             // because nothing is drawn on it (P1). `workspaceOverviewSurfaceW` says so
              // rather than being left out: an equal pair is the assertion.
-             + " overviewW=" + root.overviewEdgeWidth
-             + " overviewSurfaceW=" + Math.round(overviewEdge.width)
-             + " overviewH=" + Math.round(overviewEdge.height)
+             + " workspaceOverviewW=" + root.workspaceOverviewEdgeWidth
+             + " workspaceOverviewSurfaceW=" + Math.round(workspaceOverviewEdge.width)
+             + " workspaceOverviewH=" + Math.round(workspaceOverviewEdge.height)
     }
 
     function status(): string {
@@ -1646,7 +1646,7 @@ Item {
                   + " wins=" + root.focusedWorkspaceWindows()
                   // windows.md L10, F5. The answer the two fields above are
                   // read for, and now neither of them: over an Android app
-                  // with the drawer up, `focus` is none and `rep` is "" and
+                  // with the app drawer up, `focus` is none and `rep` is "" and
                   // the workspace is occupied all the same. A check that
                   // could only see the inputs would have to reimplement the
                   // rule to test it.
@@ -1705,7 +1705,7 @@ Item {
     // rather than on top of it, and the pill stays reachable while typing.
     //
     // Measured, not assumed: on Bottom the keyboard took the edge and stranded
-    // the drawer above it, and restarting either one in either order changed
+    // the app drawer above it, and restarting either one in either order changed
     // nothing -- it is layer order, not map order.
     exclusionMode: ExclusionMode.Auto
 
@@ -1831,7 +1831,7 @@ Item {
         // over nothing, so there is no state left to ask the compositor about.
         //
         // What survives from the old note is why the first line is a
-        // *derived* list: it used to name the shade and the drawer by hand,
+        // *derived* list: it used to name the control center and the app drawer by hand,
         // which left Settings and the theme picker falling through it.
         root.dragSource = "strip"
         // Q4, Q5. A target that did not resolve -- `none`, or a plugin that
@@ -1935,7 +1935,7 @@ Item {
     //
     // Underneath is the whole trick. Bottom is below every window, so at rest
     // this is covered except in the band no window is drawn in; and it is
-    // below every sheet, so the drawer, the shade and the theme picker draw
+    // below every sheet, so the app drawer, the control center and the theme picker draw
     // over it exactly as before. Painting from the *strip* instead would have
     // put it over all four.
     //
@@ -2000,7 +2000,7 @@ Item {
   //
   // G. The one surface here that takes touch ahead of an app, which is why it
   // is 16px and why it never grows. Overlay rather than Top so it sits above
-  // the drawer and the shade and can close them (G3) -- on Top they would map
+  // the app drawer and the control center and can close them (G3) -- on Top they would map
   // later and win.
   PanelWindow {
     id: backEdge
@@ -2010,7 +2010,7 @@ Item {
     // G13. Wider than the band it takes touches in, so the cue has somewhere
     // to be drawn, and masked back down to the band so nothing else changes.
     // A masked-out region falls through to the next surface in the layer,
-    // which is what the shade already relies on to keep this very edge working
+    // which is what the control center already relies on to keep this very edge working
     // underneath it.
     //
     // The mask is unconditional and that is the whole risk here: this surface
@@ -2023,7 +2023,7 @@ Item {
 
     // G10. Anchored top and bottom, then pulled up off the bottom edge. A
     // positive bottom margin shrinks a surface anchored to both -- the same
-    // lever the drawer uses in the other direction, where a negative one
+    // lever the app drawer uses in the other direction, where a negative one
     // extends it past the usable area (I5a).
     margins.bottom: root.edgeBottomInset
     // G10b. The same lever at the other end, for the app's header bar.
@@ -2133,7 +2133,7 @@ Item {
   //
   // P1. The second surface here that takes touch ahead of an app, and the same
   // bargain as the first: 16px, never grown, on Overlay so it sits above the
-  // drawer and the shade rather than under them.
+  // app drawer and the control center rather than under them.
   //
   // It is the plainest surface in this file -- no cue, no mask, no widening --
   // and each of those absences follows from one fact. The back edge draws an arc
@@ -2143,10 +2143,10 @@ Item {
   // to make room for, so the surface is exactly the band it takes touch in and
   // has nothing to mask back off (G13's whole subject).
   PanelWindow {
-    id: overviewEdge
+    id: workspaceOverviewEdge
 
     anchors { top: true; bottom: true; right: true }
-    implicitWidth: root.overviewEdgeWidth
+    implicitWidth: root.workspaceOverviewEdgeWidth
     color: "transparent"
 
     // P8. The same two insets as the other edge, in the same direction: a
@@ -2157,7 +2157,7 @@ Item {
     margins.bottom: root.edgeBottomInset
     margins.top: root.edgeTopInset
 
-    WlrLayershell.namespace: "moarchy-overview-edge"
+    WlrLayershell.namespace: "moarchy-workspace-overview-edge"
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
     exclusionMode: ExclusionMode.Ignore
@@ -2174,12 +2174,12 @@ Item {
         // the part that waits -- beginSheet() runs from onBegan (P8).
         root.dragSource = "rightEdge"
         root.resolveTarget(root.rightTarget, Edge.RIGHT)
-        overviewDrag.press(pts[0].sceneX, pts[0].sceneY)
+        workspaceOverviewDrag.press(pts[0].sceneX, pts[0].sceneY)
       }
 
       onUpdated: pts => {
         if (pts.length === 0) return
-        overviewDrag.move(pts[0].sceneX, pts[0].sceneY)
+        workspaceOverviewDrag.move(pts[0].sceneX, pts[0].sceneY)
       }
 
       // reset() after release() and not instead of it. A latched drag has
@@ -2187,8 +2187,8 @@ Item {
       // idempotent; an unlatched one -- a brush on the edge, or a press with the
       // sheet already open, which cannot latch -- never reaches a handler at all
       // and would otherwise leave `dragTarget` resolved for the next gesture.
-      onReleased: pts => { overviewDrag.release(); root.reset() }
-      onCanceled: pts => overviewDrag.cancel()
+      onReleased: pts => { workspaceOverviewDrag.release(); root.reset() }
+      onCanceled: pts => workspaceOverviewDrag.cancel()
     }
   }
 }

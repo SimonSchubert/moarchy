@@ -27,7 +27,7 @@ TestCase {
     // A sheet added there and not here is a sheet left standing over a window
     // that has just opened.
     compare(Plugin.OVERLAYS.join(","),
-            "moarchy.shade,moarchy.drawer,moarchy.overview,moarchy.themes")
+            "moarchy.control-center,moarchy.app-drawer,moarchy.workspace-overview,moarchy.themes")
   }
 
   function test_hiding_is_a_no_op_off_the_shell() {
@@ -40,12 +40,12 @@ TestCase {
   function test_only_what_is_open_is_hidden() {
     var asked = [], hidden = []
     var shell = {
-      isPluginOpen: function (id) { asked.push(id); return id === "moarchy.drawer" },
+      isPluginOpen: function (id) { asked.push(id); return id === "moarchy.app-drawer" },
       hide: function (id) { hidden.push(id) }
     }
     Plugin.hideOverlays(shell)
     compare(asked.join(","),
-            "moarchy.shade,moarchy.drawer,moarchy.overview,moarchy.themes")
-    compare(hidden.join(","), "moarchy.drawer")
+            "moarchy.control-center,moarchy.app-drawer,moarchy.workspace-overview,moarchy.themes")
+    compare(hidden.join(","), "moarchy.app-drawer")
   }
 }

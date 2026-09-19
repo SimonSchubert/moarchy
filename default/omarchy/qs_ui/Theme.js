@@ -60,9 +60,9 @@ function shade(colour) {
 // nobody can find. Calculator's rule, and its reason.
 function inkOn(colours, fill) {
   if (!colours) return "#ffffff"
-  var level = shade(fill)
-  return Math.abs(level - shade(colours.background))
-       > Math.abs(level - shade(colours.foreground))
+  var level = controlCenter(fill)
+  return Math.abs(level - controlCenter(colours.background))
+       > Math.abs(level - controlCenter(colours.foreground))
     ? colours.background : colours.foreground
 }
 
