@@ -1,0 +1,18 @@
+# The compositor is started from a login shell, not uwsm or a display manager,
+# so nothing ever activates graphical-session.target -- and every unit Omarchy
+# ships is WantedBy=graphical-session.target. That is why swayosd-server was
+# installed but never running, and why the volume keys had no server to talk to.
+#
+# Starting this target from the session's autostart pulls graphical-session
+# .target up with it (BindsTo), and stopping it tears the whole session's units
+# down again.
+#
+# Named for the project rather than the compositor: it is the same target under
+# sway and under Hyprland, and renaming it per compositor would mean two
+# targets that must not both be up.
+[Unit]
+Description=moarchy session
+Documentation=man:systemd.special(7)
+BindsTo=graphical-session.target
+Wants=graphical-session-pre.target
+After=graphical-session-pre.target

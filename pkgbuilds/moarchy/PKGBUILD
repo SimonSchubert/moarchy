@@ -193,7 +193,7 @@ license=('MIT')
 # makes that a fact rather than a coincidence. The Phone and Messages plugins
 # ring through its fbcli as well, and gnome-calls, which used to be the second
 # thing pulling it in, has left the set.
-depends=('bash' 'sway' 'omarchy-config' 'foot' 'polkit-gnome' 'upower' 'feedbackd')
+depends=('bash' 'sway' 'hyprland' 'omarchy-config' 'foot' 'polkit-gnome' 'upower' 'feedbackd')
 source=()
 
 package() {
@@ -380,8 +380,8 @@ package() {
   # condition-skipped line in every boot of every other device.
   install -Dm644 "$_repo/default/systemd/user/moarchy-loudness.service" \
     "$pkgdir/usr/lib/systemd/user/moarchy-loudness.service"
-  install -Dm644 "$_repo/default/systemd/sway-session.target" \
-    "$pkgdir/usr/lib/systemd/user/sway-session.target"
+  install -Dm644 "$_repo/default/systemd/moarchy-session.target" \
+    "$pkgdir/usr/lib/systemd/user/moarchy-session.target"
 
   # No calls-daemon.service or sm.puri.Chatty-daemon.service. Until 2026-09-16
   # this installed same-named replacements for both into /etc/systemd/user,

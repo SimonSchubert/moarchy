@@ -1,6 +1,28 @@
 #!/bin/bash
-# Shim for Omarchy 4.x's shell under Sway. It reads exactly two options; answer
-# those with Sway's equivalents and return valid empty JSON for anything else.
+# Transitional shim for Omarchy 4.x's shell while this image can boot EITHER
+# compositor.
+#
+# Under Hyprland it must get out of the way completely. /usr/lib/moarchy/bin
+# precedes /usr/bin on PATH -- and config/hypr/hyprland.lua deliberately
+# re-prepends it, because upstream's envs.lua would otherwise put its own bin
+# first -- so a shim that answered on its own here would shadow the real
+# hyprctl and make a running Hyprland look installed and completely inert: no
+# binding introspection, no `hyprctl reload` after a theme change, no shell
+# supervision, and no error anywhere to say so.
+#
+# So: if a Hyprland instance is reachable, exec the real one.
+if [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ] ||
+   compgen -G "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/hypr/*/.socket.sock" >/dev/null 2>&1
+then
+  exec /usr/bin/hyprctl "$@"
+fi
+
+# Otherwise this is a sway session, and upstream's shell reads exactly two
+# options. Answer those with sway's equivalents and return valid empty JSON
+# for anything else.
+#
+# This whole file is deleted when sway goes: at that point the real hyprctl is
+# always the right answer and a shim in front of it is only a hazard.
 for a in "$@"; do
   case "$a" in
     decoration:rounding) echo '{"option":"decoration:rounding","int":0}'; exit 0 ;;

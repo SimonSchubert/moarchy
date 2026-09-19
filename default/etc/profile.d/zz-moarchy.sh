@@ -41,11 +41,32 @@ export GROK_DISABLE_AUTOUPDATER=1
 # Guarded on XDG_VTNR so an SSH login stays a plain shell, and on
 # WAYLAND_DISPLAY so re-sourcing inside the session cannot recurse.
 if [ -z "${WAYLAND_DISPLAY:-}" ] && [ "${XDG_VTNR:-}" = "1" ]; then
-  export XDG_CURRENT_DESKTOP=sway
   export XDG_SESSION_TYPE=wayland
   export MOZ_ENABLE_WAYLAND=1
   export QT_QPA_PLATFORM=wayland
   export ELECTRON_OZONE_PLATFORM_HINT=wayland
+
+  # --- Hyprland, one shot ----------------------------------------------------
+  # While the port is in progress this image can boot either compositor, and
+  # which one is decided by a file rather than by a rebuild.
+  #
+  # The flag is removed BEFORE the exec, and that ordering is the whole safety
+  # property: a Hyprland that fails to start, or that exits, lands back on sway
+  # at the next login with nothing to undo and no cable. `touch` the flag and
+  # end the session to try one.
+  #
+  # This block goes away when Hyprland becomes the default -- at which point
+  # the sway exec below is what is deleted, not this.
+  if [ -e "$HOME/.local/state/moarchy/try-hyprland" ]; then
+    rm -f "$HOME/.local/state/moarchy/try-hyprland"
+    export XDG_CURRENT_DESKTOP=Hyprland
+    export XDG_SESSION_DESKTOP=Hyprland
+    # -c for the same reason as sway's: ~/.config/hypr is upstream's, and
+    # docs/structure.md P1 keeps this package out of $HOME.
+    exec Hyprland -c /usr/share/moarchy/config/hypr/hyprland.lua
+  fi
+
+  export XDG_CURRENT_DESKTOP=sway
   # -c because /etc/sway/config belongs to the sway package.
   exec sway -c /usr/share/moarchy/config/sway/config
 fi
