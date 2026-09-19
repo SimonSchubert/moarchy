@@ -21,10 +21,12 @@ citations go first.
 `build-log.md` is neither — it is the chronological account, and it is where the
 archaeology belongs.
 
-**Orientation** is the third genre and there is one of it: [the code](#the-code)
-at the bottom of this file. No criteria, no rationale — just where things are, so
-that a stranger, or this project six months from now, can find the file that owns
-a thing without reading 9,000 lines of contract first. It is a map and not a
+**Orientation** is the third genre and there are two of it, answering two halves
+of the same question: [`naming-convention.md`](naming-convention.md) gives every
+part of the screen its one name, and [the code](#the-code) at the bottom of this
+file says which file draws it. No criteria, no rationale — just so that a
+stranger, or this project six months from now, can find the thing that owns a
+behaviour without reading 9,000 lines of contract first. Both are a map and not a
 second copy of the territory: every row points at the document that governs it,
 because a map that restates a rule is a map that will contradict it.
 
@@ -98,6 +100,7 @@ alongside the change that made them untrue.
 
 | File | What it is |
 | --- | --- |
+| [`naming-convention.md`](naming-convention.md) | Orientation — what each part of the screen is called, the four swipes, and the four kinds of thing quickshell draws |
 | [`gestures.md`](gestures.md) | Contract — every touch gesture: the strip, the edges, the drawer, long-press |
 | [`settings.md`](settings.md) | Contract — the Settings screens, their rows, and the IPC they answer on |
 | [`shade.md`](shade.md) | Contract — the pull-down: tiles, sliders, media, notifications |
@@ -118,6 +121,9 @@ alongside the change that made them untrue.
 
 Orientation, in the sense above: where things are. Nothing here is a criterion.
 Where a rule is mentioned, the file that owns it is named and that file wins.
+[`naming-convention.md`](naming-convention.md) is the other half — the same
+surfaces seen from the screen rather than from the tree, under the names
+[Words used precisely](#words-used-precisely) fixes.
 
 ## What the phone is running
 
@@ -213,7 +219,7 @@ Two consequences that are easy to get wrong, and have been:
 | Term | Meaning |
 | --- | --- |
 | **strip** | the 20px band along the bottom edge that `moarchy.gestures` reserves off every window, permanently |
-| **edge** | one of the two 16px bands `moarchy.gestures` takes touch in ahead of an app: the left one is back, the right one raises whichever sheet is set for it ([`gestures.md`](gestures.md) Q1) |
+| **edge** | one of the two 16px bands `moarchy.gestures` takes touch in ahead of an app: the left one is back, the right one raises whichever sheet is set for it ([`gestures.md`](gestures.md) Q1). A swipe in from one is a **left-edge** or **right-edge swipe** — the edge is the band, the swipe is the gesture |
 | **sheet** | a full-screen surface that is dismissed rather than left running: the shade, the drawer, the overview, the theme picker |
 | **shell app** | a screen this shell draws and maps as an ordinary window: Settings, Wi-Fi, Bluetooth, SIM |
 | **overlay / panel / bar** | the three plugin *kinds* the host knows. A "sheet" is our word; `kind` is the host's |

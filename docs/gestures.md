@@ -317,7 +317,7 @@ workspace's `representation` empty
 
 ---
 
-## G. Left edge — back
+## G. Left-edge swipe — back
 
 **G1** The back swipe undoes the **topmost thing on screen**, in this order:
 
@@ -355,7 +355,7 @@ is a settable property, not a constant baked into a binding: Android makes this
 device-configurable and exposes a per-edge sensitivity slider, which is an
 admission that no single value is right.
 
-**G9** The left edge is back and the right edge is the overview (P1) — one 16px
+**G9** The left-edge swipe is back and the right-edge swipe is the overview (P1) — one 16px
 band each, and no third. Android puts back on both edges; the second one is spent
 here on the map instead, because a phone that already has one way back does not
 need two.
@@ -1066,7 +1066,7 @@ away for a release.
 
 ---
 
-## P. Right edge — the overview
+## P. Right-edge swipe — the overview
 
 The sideways swipe steps one workspace at a time (B1), and on a phone where a
 workspace *is* an app, stepping cannot answer "where is everything". §P is the
@@ -1292,7 +1292,7 @@ refuses, it would have no undo.
 ## Q. Choosing what a trigger opens
 
 Four things point somewhere, and until this section all four pointed at a name
-written in the code: the strip raised `moarchy.drawer`, the right edge raised
+written in the code: the strip raised `moarchy.drawer`, the right-edge swipe raised
 `moarchy.overview`, the hold started the coding agent, and the power button had
 no second meaning at all. Everything else about a drag was already general --
 the travel comes off the target, the progress is written onto it frame by
