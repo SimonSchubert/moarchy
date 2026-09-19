@@ -148,10 +148,10 @@ depends=(
   'swh-plugins'
 )
 
-source=('sway.conf' 'hypr-device.lua' 'device.conf'
+source=('hypr-device.lua' 'device.conf'
         'qbootctl-mark-successful.service' 'q6voiced.conf'
         'make-dcp.py' 'loudness.conf')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 # The camera colour profiles are GENERATED, not committed. make-dcp.py's header
 # says why: a .dcp is a small TIFF whose payload is nine numbers twice over, and
@@ -162,13 +162,11 @@ build() {
 }
 
 package() {
-  install -Dm644 "$srcdir/sway.conf"   "$pkgdir/usr/share/moarchy/device/sway.conf"
   install -Dm644 "$srcdir/device.conf" "$pkgdir/usr/share/moarchy/device/device.conf"
 
-  # The Hyprland half of the same fact (docs/devices.md D6). Shipped BESIDE
-  # sway.conf, not instead of it, for as long as both compositors are
-  # reachable -- the session picks one, and an image that can boot either is
-  # what makes the switch revertible on a phone rather than on a cable.
+  # This device's hardware profile for the compositor (docs/devices.md D6). A
+  # fixed path on purpose: config/hypr/hyprland.lua does not know which phone
+  # it is on, and exactly one package can own the path.
   install -Dm644 "$srcdir/hypr-device.lua" \
     "$pkgdir/usr/share/moarchy/device/hypr/device.lua"
 

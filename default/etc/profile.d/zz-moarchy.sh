@@ -3,8 +3,8 @@
 # ONE file, deliberately. This was two -- zz-moarchy.sh set PATH and
 # zz-moarchy-session.sh exec'd sway -- and /etc/profile sources profile.d in
 # sorted order, where "zz-moarchy-session.sh" sorts BEFORE "zz-moarchy.sh"
-# ('-' is 0x2D, '.' is 0x2E). So the session exec'd sway and replaced the shell
-# before the PATH file ever ran.
+# ('-' is 0x2D, '.' is 0x2E). So the session exec'd the compositor and replaced
+# the shell before the PATH file ever ran.
 #
 # On the device that looked like a broken shell: swaybg is /usr/bin so the
 # wallpaper painted, while moarchy-restart-shell is /usr/lib/moarchy/bin and was
@@ -17,7 +17,7 @@
 # someone intended.
 
 # --- environment -----------------------------------------------------------
-# moarchy's Sway counterparts go ahead of upstream Omarchy's Hyprland scripts.
+# moarchy's phone counterparts go ahead of upstream Omarchy's desktop scripts.
 # 21 names are shared -- omarchy-toggle-nightlight, omarchy-system-lock,
 # omarchy-launch-browser and the rest -- and two packages cannot own one path in
 # /usr/bin, so ours live in their own directory and win by PATH order instead.
@@ -36,7 +36,7 @@ export GROK_DISABLE_AUTOUPDATER=1
 
 # --- the session -----------------------------------------------------------
 # Last in this file, and this file sorts last: everything above has to be in
-# place before sway inherits it.
+# place before the compositor inherits it.
 #
 # Guarded on XDG_VTNR so an SSH login stays a plain shell, and on
 # WAYLAND_DISPLAY so re-sourcing inside the session cannot recurse.
@@ -46,27 +46,9 @@ if [ -z "${WAYLAND_DISPLAY:-}" ] && [ "${XDG_VTNR:-}" = "1" ]; then
   export QT_QPA_PLATFORM=wayland
   export ELECTRON_OZONE_PLATFORM_HINT=wayland
 
-  # --- Hyprland, one shot ----------------------------------------------------
-  # While the port is in progress this image can boot either compositor, and
-  # which one is decided by a file rather than by a rebuild.
-  #
-  # The flag is removed BEFORE the exec, and that ordering is the whole safety
-  # property: a Hyprland that fails to start, or that exits, lands back on sway
-  # at the next login with nothing to undo and no cable. `touch` the flag and
-  # end the session to try one.
-  #
-  # This block goes away when Hyprland becomes the default -- at which point
-  # the sway exec below is what is deleted, not this.
-  if [ -e "$HOME/.local/state/moarchy/try-hyprland" ]; then
-    rm -f "$HOME/.local/state/moarchy/try-hyprland"
-    export XDG_CURRENT_DESKTOP=Hyprland
-    export XDG_SESSION_DESKTOP=Hyprland
-    # -c for the same reason as sway's: ~/.config/hypr is upstream's, and
-    # docs/structure.md P1 keeps this package out of $HOME.
-    exec Hyprland -c /usr/share/moarchy/config/hypr/hyprland.lua
-  fi
-
-  export XDG_CURRENT_DESKTOP=sway
-  # -c because /etc/sway/config belongs to the sway package.
-  exec sway -c /usr/share/moarchy/config/sway/config
+  export XDG_CURRENT_DESKTOP=Hyprland
+  export XDG_SESSION_DESKTOP=Hyprland
+  # -c because ~/.config/hypr is upstream Omarchy's, and docs/structure.md P1
+  # keeps this package out of $HOME.
+  exec Hyprland -c /usr/share/moarchy/config/hypr/hyprland.lua
 fi

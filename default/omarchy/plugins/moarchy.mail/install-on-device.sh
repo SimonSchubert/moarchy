@@ -66,15 +66,15 @@ update-desktop-database ~/.local/share/applications >/dev/null 2>&1 || true
 xdg-mime default org.moarchy.Mail.compose.desktop x-scheme-handler/mailto 2>/dev/null || true
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-1}"
-export SWAYSOCK="${SWAYSOCK:-$(ls "$XDG_RUNTIME_DIR"/sway-ipc.* 2>/dev/null | head -1)}"
+export HYPRLAND_INSTANCE_SIGNATURE="${HYPRLAND_INSTANCE_SIGNATURE:-$(ls -t "$XDG_RUNTIME_DIR"/hypr 2>/dev/null | head -1)}"
 export OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"
-# Restarted through sway, for the reason Messages' installer gives: a shell
+# Restarted through the compositor, for the reason Messages' installer gives: a shell
 # started from this ssh session lives in it, and dies with it.
 pkill -x quickshell 2>/dev/null || true
 for _ in $(seq 20); do pgrep -x quickshell >/dev/null || break; sleep 0.2; done
 mkdir -p ~/.local/state/moarchy
-if [ -x /usr/lib/moarchy/bin/moarchy-restart-shell ] && [ -n "$SWAYSOCK" ]; then
-  swaymsg exec /usr/lib/moarchy/bin/moarchy-restart-shell >/dev/null
+if [ -x /usr/lib/moarchy/bin/moarchy-restart-shell ] && [ -n "$HYPRLAND_INSTANCE_SIGNATURE" ]; then
+  hyprctl dispatch 'hl.dsp.exec_cmd("/usr/lib/moarchy/bin/moarchy-restart-shell")' >/dev/null
 else
   QS_DISABLE_FILE_WATCHER=1 QS_NO_RELOAD_POPUP=1 \
     setsid quickshell -n -p "$OMARCHY_PATH/shell" >~/.local/state/moarchy/shell.log 2>&1 &

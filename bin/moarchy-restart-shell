@@ -19,10 +19,9 @@ export OMARCHY_PATH XDG_RUNTIME_DIR
 # put them on explicitly so a restart from somewhere else (an ssh session, a
 # cron job) does not start a shell whose every button silently does nothing.
 export PATH="$HOME/.local/bin:$(dirname "$(readlink -f "$0")"):$OMARCHY_PATH/bin:$PATH"
-# Hyprland first: an instance directory under $XDG_RUNTIME_DIR/hypr is the
-# signature Quickshell.Hyprland looks for, and it is the name of the directory
-# rather than a path. Newest first, because a restart during a compositor
-# change can leave a stale one behind.
+# An instance directory under $XDG_RUNTIME_DIR/hypr is the signature
+# Quickshell.Hyprland looks for, and it is the name of the directory rather
+# than a path. Newest first, because a restart can leave a stale one behind.
 if [[ -z ${HYPRLAND_INSTANCE_SIGNATURE:-} && -d $XDG_RUNTIME_DIR/hypr ]]; then
   for _d in $(ls -t "$XDG_RUNTIME_DIR/hypr" 2>/dev/null); do
     [[ -S $XDG_RUNTIME_DIR/hypr/$_d/.socket.sock ]] || continue
@@ -32,10 +31,7 @@ if [[ -z ${HYPRLAND_INSTANCE_SIGNATURE:-} && -d $XDG_RUNTIME_DIR/hypr ]]; then
 fi
 [[ -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]] && export HYPRLAND_INSTANCE_SIGNATURE
 
-export SWAYSOCK="${SWAYSOCK:-$(ls "$XDG_RUNTIME_DIR"/sway-ipc.* 2>/dev/null | head -1)}"
-[[ -n $SWAYSOCK ]] || unset SWAYSOCK
-
-[[ -n ${HYPRLAND_INSTANCE_SIGNATURE:-}${SWAYSOCK:-} ]] ||
+[[ -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]] ||
   echo "warning: no compositor socket found; the bar will not populate" >&2
 
 # And WAYLAND_DISPLAY, for the same reason and with a worse failure. A session

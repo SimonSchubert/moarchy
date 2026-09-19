@@ -1,3 +1,0 @@
-#!/bin/bash
-# Sway override: upstream exits Hyprland.
-exec moarchy-system-logout

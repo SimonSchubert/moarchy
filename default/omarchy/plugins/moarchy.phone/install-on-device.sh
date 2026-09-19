@@ -72,17 +72,17 @@ if systemctl --user cat calls-daemon.service >/dev/null 2>&1; then
 fi
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-1}"
-export SWAYSOCK="${SWAYSOCK:-$(ls "$XDG_RUNTIME_DIR"/sway-ipc.* 2>/dev/null | head -1)}"
+export HYPRLAND_INSTANCE_SIGNATURE="${HYPRLAND_INSTANCE_SIGNATURE:-$(ls -t "$XDG_RUNTIME_DIR"/hypr 2>/dev/null | head -1)}"
 export OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"
-# Restarted through sway, not from here. A shell started by this ssh session
+# Restarted through the compositor, not from here. A shell started by this ssh session
 # lives in this ssh session, and polkit gives a remote session nothing:
 # ModemManager then refuses every call and every text with "not authorized",
-# while the app looks fine. `swaymsg exec` makes it sway's child, in the seat.
+# while the app looks fine. `exec_cmd` makes it the compositor's child, in the seat.
 pkill -x quickshell 2>/dev/null || true
 for _ in $(seq 20); do pgrep -x quickshell >/dev/null || break; sleep 0.2; done
 mkdir -p ~/.local/state/moarchy
-if [ -x /usr/lib/moarchy/bin/moarchy-restart-shell ] && [ -n "$SWAYSOCK" ]; then
-  swaymsg exec /usr/lib/moarchy/bin/moarchy-restart-shell >/dev/null
+if [ -x /usr/lib/moarchy/bin/moarchy-restart-shell ] && [ -n "$HYPRLAND_INSTANCE_SIGNATURE" ]; then
+  hyprctl dispatch 'hl.dsp.exec_cmd("/usr/lib/moarchy/bin/moarchy-restart-shell")' >/dev/null
 else
   QS_DISABLE_FILE_WATCHER=1 QS_NO_RELOAD_POPUP=1 \
     setsid quickshell -n -p "$OMARCHY_PATH/shell" >~/.local/state/moarchy/shell.log 2>&1 &

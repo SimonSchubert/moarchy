@@ -20,36 +20,45 @@
 # output's power flag, because swayidle blanks the same output on its own idle
 # timeout. Keying off the panel would make the button's meaning depend on
 # whether the idle timer had fired.
+#
+# Every compositor call goes through `hyprctl dispatch`/`eval` with Lua, not the
+# legacy string form: under a .lua config `hyprctl dispatch dpms off` is a Lua
+# syntax error and `hyprctl keyword` is refused outright.
 
 set -uo pipefail
 
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/moarchy"
 FLAG="$STATE_DIR/screen-locked"
 
-# The Goodix panel shows up twice in get_inputs, as a touch device and as a
-# keyboard; both share one identifier, and `input <id> events` covers both.
-touch_devices() {
-  swaymsg -r -t get_inputs | jq -r '.[] | select(.type == "touch") | .identifier' | sort -u
+dpms() {
+  hyprctl dispatch "hl.dsp.dpms({ action = \"$1\" })" >/dev/null
 }
 
+# The Goodix panel is listed under `touch` in `hyprctl devices -j`, by name.
+touch_devices() {
+  hyprctl devices -j | jq -r '.touch[]? | .name' | sort -u
+}
+
+# true/false, because `enabled` is a device property rather than sway's
+# enabled/disabled event mode.
 set_touch() {
   local id
   while read -r id; do
-    [[ -n $id ]] && swaymsg "input \"$id\" events $1" >/dev/null
+    [[ -n $id ]] && hyprctl eval "hl.device({ name = \"$id\", enabled = $1 })" >/dev/null
   done < <(touch_devices)
 }
 
 lock() {
   mkdir -p "$STATE_DIR"
   : >"$FLAG"
-  set_touch disabled            # before the blank, so the dark panel is already deaf
-  swaymsg 'output * power off' >/dev/null
+  set_touch false               # before the blank, so the dark panel is already deaf
+  dpms off
 }
 
 unlock() {
   rm -f "$FLAG"
-  swaymsg 'output * power on' >/dev/null
-  set_touch enabled             # after the panel is back, so the first tap is seen
+  dpms on
+  set_touch true                # after the panel is back, so the first tap is seen
 }
 
 case "${1:-toggle}" in
@@ -61,12 +70,12 @@ case "${1:-toggle}" in
   # either through lock() would set the flag and then `wake` would refuse to
   # undo it, which is an idle timeout that bricks the screen until the power
   # button is found (docs/refactor.md D1, D3).
-  blank)  swaymsg 'output * power off' >/dev/null ;;
+  blank)  dpms off ;;
   # swayidle's resume hook, and the one way back on. Any input wakes the panel,
   # but while we are locked the only input that should is the power button,
   # which unlocks in its own right -- so resume must not light the screen
   # behind our back. Every caller that means "display on" comes here rather
-  # than to swaymsg, so the flag is the single gate (D1).
-  wake)   [[ -e $FLAG ]] || swaymsg 'output * power on' >/dev/null ;;
+  # than to hyprctl, so the flag is the single gate (D1).
+  wake)   [[ -e $FLAG ]] || dpms on ;;
   *)      echo "usage: ${0##*/} [lock|unlock|toggle|blank|wake]" >&2; exit 1 ;;
 esac

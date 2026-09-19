@@ -1,14 +1,19 @@
 #!/bin/bash
-# Toggle gaps on, and off again. Sway counterpart to
+# Toggle gaps on, and off again. Phone counterpart to
 # omarchy-hyprland-window-gaps-toggle, inverted.
 #
 # Upstream's first press *removes* gaps, because a desktop has them. This phone
-# does not: pkgbuilds/moarchy-device-sargo/sway.conf sets `gaps inner 0` so an app is flush
-# to its workspace (docs/windows.md W1). Against that default the desktop
-# script's first press was a no-op and its second press added padding to a
-# phone, which is exactly backwards. So the state file says "on", and the first
-# press is what puts gaps there -- for the rare split where seeing the boundary
-# is worth 6px. See docs/windows.md W4.
+# does not: config/hypr/looknfeel.lua sets `gaps_in = 0` so an app is flush to
+# its workspace (docs/windows.md W1). Against that default the desktop script's
+# first press was a no-op and its second press added padding to a phone, which
+# is exactly backwards. So the state file says "on", and the first press is what
+# puts gaps there -- for the rare split where seeing the boundary is worth 6px.
+# See docs/windows.md W4.
+#
+# `hyprctl eval`, never `hyprctl keyword`: under a Lua config the legacy parser
+# is gone and keyword is refused outright with "keyword can't work with
+# non-legacy parsers. Use eval." -- a message that says nothing about the
+# command being wrong, so the toggle would fail silently on a phone.
 STATE="${XDG_STATE_HOME:-$HOME/.local/state}/moarchy/gaps-on"
 mkdir -p "$(dirname "$STATE")"
 
@@ -17,12 +22,14 @@ mkdir -p "$(dirname "$STATE")"
 # reader think there are two states to reconcile.
 rm -f "$(dirname "$STATE")/gaps-off"
 
+set_gaps() {
+  hyprctl eval "hl.config({ general = { gaps_in = $1, gaps_out = 0 } })" >/dev/null
+}
+
 if [[ -f $STATE ]]; then
   rm -f "$STATE"
-  swaymsg gaps inner all set 0
-  swaymsg gaps outer all set 0
+  set_gaps 0
 else
   touch "$STATE"
-  swaymsg gaps inner all set 3
-  swaymsg gaps outer all set 0
+  set_gaps 3
 fi

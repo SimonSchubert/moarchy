@@ -65,7 +65,7 @@ PY
 update-desktop-database ~/.local/share/applications >/dev/null 2>&1 || true
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-1}"
-export SWAYSOCK="${SWAYSOCK:-$(ls "$XDG_RUNTIME_DIR"/sway-ipc.* 2>/dev/null | head -1)}"
+export HYPRLAND_INSTANCE_SIGNATURE="${HYPRLAND_INSTANCE_SIGNATURE:-$(ls -t "$XDG_RUNTIME_DIR"/hypr 2>/dev/null | head -1)}"
 export OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"
 pkill -x quickshell 2>/dev/null || true
 for _ in $(seq 20); do pgrep -x quickshell >/dev/null || break; sleep 0.2; done

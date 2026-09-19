@@ -5,13 +5,13 @@
 # $HOME at all -- each thing the old installer wrote there has a system path
 # that the reader already checks:
 #
-#   ~/.config/sway/config            -> sway -c /usr/share/moarchy/config/sway/config
+#   ~/.config/hypr/hyprland.lua      -> Hyprland -c /usr/share/moarchy/config/hypr/hyprland.lua
 #   ~/.config/omarchy/plugins/       -> /usr/share/moarchy/plugins  (PluginRegistry, patched)
 #   ~/.config/omarchy/themed/*.tpl   -> /usr/share/omarchy/default/themed
 #   ~/.config/omarchy/shell.json     -> omarchy-config's defaults, patched
 #   ~/.config/fontconfig/conf.d/     -> /etc/fonts/conf.d
 #   ~/.config/systemd/user/          -> /usr/lib/systemd/user, /etc/systemd/user
-#   ~/.bash_profile exec sway        -> /etc/profile.d (same file as the PATH)
+#   ~/.bash_profile exec compositor  -> /etc/profile.d (same file as the PATH)
 #
 # What is left needs a running user or a live system, and runs once from
 # moarchy-firstboot.service and moarchy-user-setup.service (P8).
@@ -151,8 +151,10 @@ pkgver=$_ver
 #      - the QML seam: Quickshell.I3 -> Quickshell.Hyprland, six intent verbs
 #      - the two Hyprland reload-guard pacman hooks
 #      - moarchy-restart-shell resolving either compositor's socket
-#    `sway` and `hyprland` are BOTH in depends while the image can boot
-#    either; dropping sway is what the last commit of this port does.
+#    Sway is gone: the session execs Hyprland unconditionally, the .conf tree
+#    and its theme template are deleted, and the six overrides that only
+#    existed because upstream's Hyprland scripts could not run are deleted
+#    with them -- upstream's own answer now.
 #
 # 3: the plugin tree is a different tree. moarchy-apps is absorbed and
 #    moarchy-qml-apps is folded in, so this package now ships all 31 plugins
@@ -175,8 +177,14 @@ pkgver=$_ver
 #    with the rest of bin/. The payload changed, so this is not a bump for its
 #    own sake: build-packages.sh keeps the previous build under an unchanged
 #    pkgver-pkgrel.
-pkgrel=5
-pkgdesc="Omarchy's look, keybindings and theming on a phone, under Sway"
+# 6: sway is gone. The .conf tree, the theme template and the device's
+#    sway.conf are deleted, `sway` leaves depends, and six overrides that only
+#    existed because upstream's Hyprland scripts could not run go with them --
+#    so this package ships strictly less and upstream answers for more. The
+#    payload changed in both directions, which is exactly what
+#    docker/build-packages.sh needs a new pkgver-pkgrel to notice.
+pkgrel=6
+pkgdesc="Omarchy's look, keybindings and theming on a phone, under Hyprland"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
 license=('MIT')
@@ -186,7 +194,7 @@ license=('MIT')
 #   foot          bin/moarchy-launch-tui execs it by name -- it is the terminal
 #                 every TUI, and omarchy-launch-floating-terminal-with-
 #                 presentation, opens in.
-#   polkit-gnome  default/sway/autostart.conf execs
+#   polkit-gnome  config/hypr/autostart.lua execs
 #                 polkit-gnome-authentication-agent-1.
 #   upower        moarchy.bar's battery is `import Quickshell.Services.UPower`,
 #                 which talks to upowerd over DBus. No grep for a binary name
@@ -226,7 +234,7 @@ license=('MIT')
 # (Qt5Compat.GraphicalEffects), and python is Mail's: bin/moarchy-mail is
 # Python's standard library and nothing else. Both arrived with the apps when
 # moarchy-qml-apps was folded in (docs/structure.md B6).
-depends=('bash' 'sway' 'hyprland' 'omarchy-config' 'foot' 'polkit-gnome' 'upower' 'feedbackd'
+depends=('bash' 'hyprland' 'omarchy-config' 'foot' 'polkit-gnome' 'upower' 'feedbackd'
          'qt6-5compat' 'python')
 source=()
 
@@ -242,8 +250,9 @@ package() {
   done
 
   # --- default/ and config/ ------------------------------------------------
-  # The sway .conf fragments are included by absolute path from
-  # /etc/sway/config, so they have to be here rather than in $HOME.
+  # config/hypr/ is passed to Hyprland with -c by /etc/profile.d/zz-moarchy.sh
+  # and requires its siblings by package.path, so it has to be here rather than
+  # in $HOME (docs/structure.md P1).
   install -d "$pkgdir/usr/share/moarchy"
   cp -a "$_repo/default" "$pkgdir/usr/share/moarchy/default"
   cp -a "$_repo/config"  "$pkgdir/usr/share/moarchy/config"
@@ -388,13 +397,15 @@ package() {
 
   # --- the theme templates -------------------------------------------------
   # omarchy-theme-set-templates globs the user directory and then
-  # $OMARCHY_PATH/default/themed, so dropping them there themes Sway and every
-  # GTK app from the theme's own colors.toml with nothing copied into a home
-  # and nothing patched upstream (docs/style.md I1a).
+  # $OMARCHY_PATH/default/themed, so dropping them there themes every GTK app
+  # from the theme's own colors.toml with nothing copied into a home and
+  # nothing patched upstream (docs/style.md I1a).
   #
-  # sway.conf.tpl is the one /etc/sway/config includes; gtk.css.tpl and
-  # gtk3.css.tpl are read through the two symlinks omarchy-theme-set-gnome
-  # makes. A glob rather than three named lines: the directory is the list.
+  # The compositor is not templated here any more: upstream Omarchy generates
+  # ~/.local/state/omarchy/current/theme/hyprland.lua itself, which
+  # config/hypr/hyprland.lua requires. gtk.css.tpl and gtk3.css.tpl are read
+  # through the two symlinks omarchy-theme-set-gnome makes. A glob rather than
+  # named lines: the directory is the list.
   install -d "$pkgdir/usr/share/omarchy/default/themed"
   install -m644 "$_repo"/default/themed/*.tpl \
     "$pkgdir/usr/share/omarchy/default/themed/"
