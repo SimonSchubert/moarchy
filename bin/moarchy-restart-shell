@@ -1,11 +1,10 @@
 #!/bin/bash
-# Start (or restart) Omarchy 4.x's quickshell shell under Sway.
+# Start (or restart) Omarchy 4.x's quickshell shell, under EITHER compositor.
 #
-# Upstream's omarchy-restart-shell reaches for HYPRLAND_INSTANCE_SIGNATURE and a
-# $XDG_RUNTIME_DIR/hypr directory, neither of which exists here.
-#
-# SWAYSOCK is the critical bit: without it Quickshell.I3 cannot connect and the
-# bar renders but never populates -- workspaces, focus and events all stay dead.
+# The compositor socket is the critical bit: without it the shell's compositor
+# module cannot connect, and the bar renders but never populates -- workspaces,
+# focus and events all stay dead. Which variable that is depends on which
+# compositor is running, so both are resolved and whichever exists is set.
 
 : "${OMARCHY_PATH:=$HOME/.local/share/omarchy}"
 : "${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
@@ -20,8 +19,24 @@ export OMARCHY_PATH XDG_RUNTIME_DIR
 # put them on explicitly so a restart from somewhere else (an ssh session, a
 # cron job) does not start a shell whose every button silently does nothing.
 export PATH="$HOME/.local/bin:$(dirname "$(readlink -f "$0")"):$OMARCHY_PATH/bin:$PATH"
+# Hyprland first: an instance directory under $XDG_RUNTIME_DIR/hypr is the
+# signature Quickshell.Hyprland looks for, and it is the name of the directory
+# rather than a path. Newest first, because a restart during a compositor
+# change can leave a stale one behind.
+if [[ -z ${HYPRLAND_INSTANCE_SIGNATURE:-} && -d $XDG_RUNTIME_DIR/hypr ]]; then
+  for _d in $(ls -t "$XDG_RUNTIME_DIR/hypr" 2>/dev/null); do
+    [[ -S $XDG_RUNTIME_DIR/hypr/$_d/.socket.sock ]] || continue
+    HYPRLAND_INSTANCE_SIGNATURE=$_d
+    break
+  done
+fi
+[[ -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]] && export HYPRLAND_INSTANCE_SIGNATURE
+
 export SWAYSOCK="${SWAYSOCK:-$(ls "$XDG_RUNTIME_DIR"/sway-ipc.* 2>/dev/null | head -1)}"
-[[ -n $SWAYSOCK ]] || echo "warning: no SWAYSOCK; the bar will not populate" >&2
+[[ -n $SWAYSOCK ]] || unset SWAYSOCK
+
+[[ -n ${HYPRLAND_INSTANCE_SIGNATURE:-}${SWAYSOCK:-} ]] ||
+  echo "warning: no compositor socket found; the bar will not populate" >&2
 
 # And WAYLAND_DISPLAY, for the same reason and with a worse failure. A session
 # shell inherits it; an ssh session does not, and Qt then falls through to the

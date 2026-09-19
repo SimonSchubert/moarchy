@@ -66,7 +66,7 @@
 // depended on whether anything was.
 import QtQuick
 import Quickshell
-import Quickshell.I3
+import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
@@ -191,7 +191,7 @@ Item {
   property bool coveringSwitch: false
   readonly property bool fillWorkspace:
     root.coveringSwitch
-    || root.focusedRepresentation() !== ""
+    || root.focusedWorkspaceWindows() > 0
     || !!root.focusedToplevel()
 
   // G6. Rightward travel that commits a back swipe -- three times the band, so
@@ -420,47 +420,100 @@ Item {
 
   // -------------------------------------------------------- compositor state
   //
-  // I3.socketPath is empty when Quickshell never found $SWAYSOCK -- which
-  // happens if the shell was started outside the session environment. Falling
-  // back to forking swaymsg there keeps every gesture working; silently
-  // dispatching into a dead socket would not.
-  readonly property bool haveI3: String(I3.socketPath || "").length > 0
+  // Hyprland.eventSocketPath is empty when Quickshell never found
+  // $HYPRLAND_INSTANCE_SIGNATURE -- which happens if the shell was started
+  // outside the session environment. Falling back to forking hyprctl there
+  // keeps every gesture working; silently dispatching into a dead socket
+  // would not. bin/moarchy-restart-shell exports the signature for exactly
+  // this reason, the way it exported $SWAYSOCK before it.
+  readonly property bool haveHl: String(Hyprland.eventSocketPath || "").length > 0
 
+  // The compositor's models populate on FIRST ACCESS, not at construction:
+  // read before anything has touched them and every one of them is empty,
+  // which reads exactly like a compositor with nothing running on it.
+  // Measured 2026-09-19: a probe that read Hyprland.workspaces at
+  // Component.onCompleted saw 0 and the same read 1.5s later saw 2.
+  //
+  // A function and not a second Component.onCompleted: QML allows one per
+  // object, and a second silently replaces the first -- "Property value set
+  // multiple times", which costs whichever handler lost.
+  function warmCompositorModels(): void {
+    void (Hyprland.workspaces ? Hyprland.workspaces.values.length : 0)
+    void (Hyprland.toplevels ? Hyprland.toplevels.values.length : 0)
+  }
+
+  // The one place a compositor command is sent. Callers below name an
+  // INTENT -- focusWorkspace, closeFocused -- and this file is the only one
+  // that knows what that costs in Hyprland's Lua.
+  //
+  // Lua, not the legacy string syntax: under a .lua config `hyprctl dispatch`
+  // wraps its argument as `return hl.dispatch(<arg>)`, so `dispatch dpms off`
+  // is a syntax error rather than a command. `hyprctl keyword` does not work
+  // at all and its replacement is `hyprctl eval`.
   function dispatch(cmd: string): void {
-    if (root.haveI3) I3.dispatch(cmd)
-    else Quickshell.execDetached(["swaymsg", cmd])
+    if (root.haveHl) Hyprland.dispatch(cmd)
+    else Quickshell.execDetached(["hyprctl", "dispatch", cmd])
+  }
+
+  // ------------------------------------------------ the compositor vocabulary
+  // Seven shapes, which is the whole of what this shell asks a compositor to
+  // do. Everything else in the tree calls these rather than building a
+  // command, so a third compositor is this block and nothing else.
+  function focusWorkspace(n): void {
+    root.dispatch('hl.dsp.focus({ workspace = "' + String(n) + '" })')
+  }
+  function focusWorkspaceRelative(delta: int): void {
+    root.dispatch('hl.dsp.focus({ workspace = "' + (delta > 0 ? "+" : "") + delta + '" })')
+  }
+  function focusAddress(addr: string): void {
+    root.dispatch('hl.dsp.focus({ window = "address:' + addr + '" })')
+  }
+  function closeFocused(): void {
+    root.dispatch('hl.dsp.window.close()')
+  }
+  function closeAddress(addr: string): void {
+    root.dispatch('hl.dsp.window.close({ window = "address:' + addr + '" })')
+  }
+  function moveAddressToWorkspace(addr: string, n): void {
+    root.dispatch('hl.dsp.window.move({ window = "address:' + addr
+                  + '", workspace = "' + String(n) + '" })')
+  }
+
+  // A foreign-toplevel handle carries no address, so map it through the
+  // compositor's own model: HyprlandToplevel.wayland is the same object this
+  // shell holds as a Toplevel.
+  function addressFor(tl): string {
+    if (!tl) return ""
+    var list = Hyprland.toplevels ? Hyprland.toplevels.values : []
+    for (var i = 0; i < list.length; i++)
+      if (list[i] && list[i].wayland === tl) return String(list[i].address || "")
+    return ""
   }
 
   // P4, K12. Focus a window. Every caller in this shell lands here, so there is
   // one answer to "how do you focus something" and one place to change it.
   //
-  // NOT `Toplevel.activate()`. The foreign-toplevel activate request does nothing on this
-  // compositor: measured 2026-09-08 from inside the running shell, against
-  // `foot` on another workspace and against one of this shell's own windows,
-  // and in both cases the request was sent, no warning appeared anywhere, and
-  // the focused workspace did not move. `close()` on the same handle works, so
-  // this is sway's activate path and not a dead protocol -- sway 1.12 matches
-  // the request's seat against its own seats and drops it when nothing matches.
+  // NOT `Toplevel.activate()`. The foreign-toplevel activate request does
+  // nothing, on EITHER compositor. Measured against sway 1.12 on 2026-09-08
+  // and against Hyprland 0.56.2 on 2026-09-19: the request is sent, no warning
+  // appears anywhere, and the focused workspace does not move. `close()` on
+  // the same handle works, so it is the activate path and not a dead protocol.
   //
-  // It had been silently broken for as long as a tap on a card was a thing. The
-  // check passed throughout, because it asserted that the workspace the tap
-  // landed on holds a window -- which is also true when the tap changed nothing
-  // and you were already looking at one.
+  // It had been silently broken for as long as a tap on a card was a thing.
+  // The check passed throughout, because it asserted that the workspace the
+  // tap landed on holds a window -- which is also true when the tap changed
+  // nothing and you were already looking at one.
   //
-  // Criteria, because a foreign-toplevel handle carries no con_id and there is
-  // nothing else to address a window by. Two windows with the same app id *and*
-  // the same title are ambiguous and sway will act on both; that is the known
-  // cost, and it is a better failure than the request that did nothing at all.
-  function swayEscape(text: string): string {
-    return String(text).replace(/[\\^$.|?*+()\[\]{}"]/g, "\\$&")
-  }
-
+  // By ADDRESS, which is the improvement the compositor change buys here. The
+  // sway version matched on app_id AND title, because a foreign-toplevel
+  // handle carries no con_id and there was nothing else to address a window
+  // by -- so two windows with the same app and title were ambiguous and sway
+  // acted on both. An address is unique, and that known cost is gone.
   function focusToplevel(tl): bool {
     if (!tl) return false
-    var criteria = '[app_id="^' + root.swayEscape(tl.appId || "") + '$"'
-    var title = String(tl.title || "")
-    if (title !== "") criteria += ' title="^' + root.swayEscape(title) + '$"'
-    root.dispatch(criteria + '] focus')
+    var addr = root.addressFor(tl)
+    if (addr === "") return false
+    root.focusAddress(addr)
     return true
   }
 
@@ -698,17 +751,17 @@ Item {
   // which is what makes clearing reliable where the reading it replaced is
   // not.
   Connections {
-    target: I3
+    target: Hyprland
     function onFocusedWorkspaceChanged() { root.lastFocusedToplevel = null }
   }
 
-  // F1. The lowest workspace number Sway does not currently have.
+  // F1. The lowest workspace number the compositor does not currently have.
   //
   // This used to ask each workspace whether its `representation` was empty,
   // and that was wrong for the same reason it was wrong when the strip used it
-  // to choose which sheet to raise: `representation` changes on
-  // *window* events and I3 refreshes workspaces on *workspace* events, so a
-  // workspace that gained a window still reads empty. Home then switched
+  // to choose which sheet to raise: `representation` changed on
+  // *window* events while the model refreshed on *workspace* events, so a
+  // workspace that gained a window still read empty. Home then switched
   // straight onto an occupied workspace. It failed as
   // `the home drag left workspace 2 holding 'V[moa-selftest]'`, which is the
   // bug naming itself.
@@ -748,13 +801,11 @@ Item {
   // What sway says is laid out on the focused workspace, or "" for a bare one.
   // Read off the workspace and not off the seat, so an exclusive-focus layer
   // surface over an app cannot make the app disappear from the answer.
-  function focusedRepresentation(): string {
-    var list = I3.workspaces ? I3.workspaces.values : []
-    for (var i = 0; i < list.length; i++)
-      if (list[i] && list[i].focused)
-        return String(list[i].lastIpcObject
-                      ? (list[i].lastIpcObject.representation || "") : "")
-    return ""
+  function focusedWorkspaceWindows(): int {
+    var ws = Hyprland.focusedWorkspace
+    if (!ws) return 0
+    if (ws.toplevels && ws.toplevels.values) return ws.toplevels.values.length
+    return ws.lastIpcObject ? Number(ws.lastIpcObject.windows || 0) : 0
   }
 
   // Is there an app on the workspace I am standing on? windows.md L10, F5.
@@ -797,9 +848,12 @@ Item {
 
   function firstFreeWorkspace(): int {
     var taken = ({})
-    var list = I3.workspaces ? I3.workspaces.values : []
+    var list = Hyprland.workspaces ? Hyprland.workspaces.values : []
     for (var i = 0; i < list.length; i++) {
-      var n = list[i] ? Number(list[i].number) : -1
+      // `id` IS the visible number on Hyprland -- unlike sway, which kept a
+      // separate internal handle. A special workspace (the scratchpad) has a
+      // negative id, which the > 0 guard skips exactly as it always did.
+      var n = list[i] ? Number(list[i].id) : -1
       if (n > 0) taken[n] = true
     }
     var free = 1
@@ -822,7 +876,7 @@ Item {
   // declines to move is one the daemon will not move either.
   function goToFreeWorkspace(): void {
     if (root.workspaceOccupied())
-      root.dispatch("workspace number " + root.firstFreeWorkspace())
+      root.focusWorkspace(root.firstFreeWorkspace())
   }
 
   // ------------------------------------------------------ driving an overlay
@@ -965,8 +1019,7 @@ Item {
       // switch is the theme colour rather than the wallpaper.
       root.coveringSwitch = true
       coverSettle.restart()
-      root.dispatch(action === "next" ? "workspace next_on_output"
-                                      : "workspace prev_on_output")
+      root.focusWorkspaceRelative(action === "next" ? 1 : -1)
     }
     else if (action === "home") {
       // K4. A shell app goes where an app goes: nowhere. It stays mapped on its
@@ -997,7 +1050,7 @@ Item {
       // home swipe went back to doing nothing, which is the same defect
       // arriving a second time through the same gap.
       if (root.workspaceOccupied())
-        root.dispatch("workspace number " + root.firstFreeWorkspace())
+        root.focusWorkspace(root.firstFreeWorkspace())
     }
     else if (action === "clear") root.hideTopmostOverlay()
 
@@ -1076,7 +1129,10 @@ Item {
   // retry budget waiting before falling back to the keyboard branch -- correct,
   // but it means the first back after a shell restart gets consumed by the
   // probe instead of reaching the overlay underneath.
-  Component.onCompleted: root.startKeyboardProbe()
+  Component.onCompleted: {
+    root.warmCompositorModels()
+    root.startKeyboardProbe()
+  }
 
   function startKeyboardProbe(): void {
     root.keyboardKnown = false
@@ -1163,7 +1219,7 @@ Item {
     // focused. It closes the window in that state and is a no-op on a genuinely
     // empty workspace, which keeps G5 true: on a bare home screen there is
     // nothing focused for it to reach.
-    root.dispatch("kill")
+    root.closeFocused()
   }
 
   // ------------------------------------------------------- press and hold
@@ -1587,7 +1643,7 @@ Item {
                   // is the reading that looks like it answers this question
                   // and does not, in both directions, and a check can only
                   // say which reading moved if it can see them all.
-                  + " rep=" + JSON.stringify(root.focusedRepresentation())
+                  + " wins=" + root.focusedWorkspaceWindows()
                   // windows.md L10, F5. The answer the two fields above are
                   // read for, and now neither of them: over an Android app
                   // with the drawer up, `focus` is none and `rep` is "" and

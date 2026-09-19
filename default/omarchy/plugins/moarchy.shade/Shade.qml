@@ -1069,7 +1069,7 @@ Item {
     // other landscape, so cycling made the landscape you wanted three taps
     // away and put upside-down on the route there.
     //
-    // Sway has no "rotate by 90" verb, so read the current transform and pick
+    // There is no "rotate by 90" verb, so read the current transform and pick
     // the other one. Detached and fire-and-forget: the output reconfigure is
     // what tells us it worked, and there is nothing useful to do if it did not.
     //
@@ -1077,11 +1077,22 @@ Item {
     // named (refactor.md N2, devices.md D3). This said `DSI-1` until then -- the panel this
     // was written on -- which made it the one hardcoded output name in the tree
     // and a silent no-op on any phone whose panel is called something else.
+    //
+    // `hyprctl eval` and not `hyprctl keyword`: under a Lua config the latter
+    // refuses outright -- "keyword can't work with non-legacy parsers" -- and
+    // hl.monitor() takes a whole monitor line, so the SCALE has to be restated
+    // or the rotate would silently reset the phone to scale 1. It is read back
+    // from the compositor for the same reason the name is: the device package
+    // owns that number (devices.md D3) and this file must not carry a second
+    // copy of it.
+    //
+    // Transform is an integer here where sway used words: 0 is normal and 1 is
+    // 90 degrees.
     Quickshell.execDetached(["bash", "-c",
-      "s=$(swaymsg -t get_outputs | python3 -c 'import json,sys;d=json.load(sys.stdin)[0];print(d[\"name\"], d.get(\"transform\",\"normal\"))'); " +
+      "s=$(hyprctl monitors -j | python3 -c 'import json,sys;d=json.load(sys.stdin)[0];print(d[\"name\"], d[\"transform\"], d[\"scale\"])'); " +
       "set -- $s; " +
-      "case $2 in normal) n=90;; *) n=normal;; esac; " +
-      "swaymsg output \"$1\" transform $n"])
+      "case $2 in 0) n=1;; *) n=0;; esac; " +
+      "hyprctl eval \"hl.monitor({ output = \\\"$1\\\", mode = \\\"preferred\\\", position = \\\"auto\\\", scale = $3, transform = $n })\""])
   }
 
   // ---------------------------------------------------- notification history

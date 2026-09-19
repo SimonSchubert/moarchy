@@ -87,7 +87,7 @@ function focusToplevel(shell, tl) {
 // No fallback. focusToplevel() has one only because there is a worse-but-real
 // answer available; there is no equivalent here, and dispatching a workspace
 // switch from a shell whose gestures plugin failed to load would need a
-// second swaymsg path for a case in which the strip is already gone.
+// second hyprctl path for a case in which the strip is already gone.
 function goToFreeWorkspace(shell) {
   var gestures = item(shell, "moarchy.gestures")
   if (!gestures || typeof gestures.goToFreeWorkspace !== "function") return false
@@ -95,7 +95,7 @@ function goToFreeWorkspace(shell) {
   return true
 }
 
-// The lowest workspace number sway does not currently have -- gestures.md F1.
+// The lowest workspace number the compositor does not currently have -- F1.
 //
 // Asked rather than worked out, for goToFreeWorkspace()'s reason: the rule has
 // two implementations already (QML in moarchy.gestures, Python in
@@ -103,7 +103,7 @@ function goToFreeWorkspace(shell) {
 // directions. A third would be a third chance to drift.
 //
 // 0 when the gestures plugin is not loaded, which a caller must treat as "no
-// answer" rather than as workspace zero: sway has no workspace 0 and
+// answer" rather than as workspace zero: there is no workspace 0 and
 // dispatching to one creates a named workspace nothing can swipe to.
 function freeWorkspace(shell) {
   var gestures = item(shell, "moarchy.gestures")
@@ -115,14 +115,16 @@ function freeWorkspace(shell) {
 //
 // Here for focusToplevel()'s reason rather than a new one: moarchy.gestures owns
 // the socket and is the shell's only compositor-dispatch seam, and a second
-// plugin opening its own I3 connection is a second answer to "how does this
-// shell talk to sway".
+// plugin opening its own Hyprland connection is a second answer to "how does
+// this shell talk to the compositor".
 //
-// It does not own the commands. The overview's moves are arrangement decisions
-// -- which window, which workspace -- and those belong to the surface that made
-// them, the same way DragTracker takes a threshold and never picks one. Callers
-// pass sway syntax and read the criteria rules in focusToplevel() before
-// building one.
+// It does not own the commands, and since 2026-09-19 no caller writes one.
+// Compositor syntax lives in moarchy.gestures and nowhere else: the four
+// wrappers below name an INTENT -- focus this workspace, close this window --
+// and a caller that wants something they do not cover is a caller that should
+// add a fifth rather than hand-build Lua here. The sway version let callers
+// pass raw criteria strings, and every one of them was a second place that
+// had to know how a window is addressed.
 //
 // False when there is nothing to dispatch through, so a caller can say so
 // rather than believing a command was sent.
@@ -131,4 +133,38 @@ function dispatch(shell, cmd) {
   if (!gestures || typeof gestures.dispatch !== "function") return false
   gestures.dispatch(String(cmd))
   return true
+}
+
+// ---------------------------------------------------------------- the verbs
+//
+// Each returns false when the gestures plugin is not loaded, which a caller
+// must treat as "nothing was sent" rather than as "it did not work".
+function call(shell, fn, args) {
+  var gestures = item(shell, "moarchy.gestures")
+  if (!gestures || typeof gestures[fn] !== "function") return false
+  gestures[fn].apply(gestures, args)
+  return true
+}
+
+function focusWorkspace(shell, number) {
+  if (!(Number(number) > 0)) return false
+  return call(shell, "focusWorkspace", [Number(number)])
+}
+
+// `address` is the compositor's window handle, a string like "0xaaaa...".
+// It was an integer con_id under sway; a caller testing it with `> 0` is a
+// caller that has not been ported.
+function focusAddress(shell, address) {
+  if (String(address || "") === "") return false
+  return call(shell, "focusAddress", [String(address)])
+}
+
+function closeAddress(shell, address) {
+  if (String(address || "") === "") return false
+  return call(shell, "closeAddress", [String(address)])
+}
+
+function moveAddressToWorkspace(shell, address, number) {
+  if (String(address || "") === "" || !(Number(number) > 0)) return false
+  return call(shell, "moveAddressToWorkspace", [String(address), Number(number)])
 }

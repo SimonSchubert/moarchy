@@ -37,7 +37,7 @@
 // (P4), so taking focus would blank the one marker the map exists to carry.
 import QtQuick
 import Quickshell
-import Quickshell.I3
+import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
@@ -260,16 +260,17 @@ Item {
     return out
   }
 
-  // P3. One `swaymsg` per refresh, and refreshes only while the sheet is up.
+  // P3. One `hyprctl` per refresh, and refreshes only while the sheet is up.
   //
-  // A Process and not I3: Quickshell's I3 object publishes workspaces and
-  // dispatches commands and has no window list at all (Tree.js says why). This
-  // is the same way the rest of this shell reads anything the QML APIs do not
-  // expose -- rfkill, brightnessctl, mmcli -- and it is one fork per change
-  // rather than a subscription this plugin would have to hold while shut.
+  // A Process and not the Hyprland model: Quickshell.Hyprland DOES publish a
+  // window list -- unlike Quickshell.I3, which is why this used to parse a
+  // tree -- but reading it here would mean this plugin holding a live
+  // subscription while the sheet is down, and P9 is that shut, it runs
+  // nothing. One fork per refresh is the same bargain rfkill, brightnessctl
+  // and mmcli are read on.
   Shared.Probe {
     id: treeProbe
-    command: ["swaymsg", "-r", "-t", "get_tree"]
+    command: ["hyprctl", "clients", "-j"]
     // Named rather than taken from scope: `text` is a property on half the
     // types in QtQuick, and qmllint calls the bare form ambiguous for exactly
     // that reason.
@@ -277,7 +278,11 @@ Item {
   }
 
   function receiveTree(json: string): void {
-    var next = Tree.workspaces(json)
+    // The focused workspace is handed in rather than parsed: `hyprctl clients`
+    // says which window is focused but not which workspace is active, and the
+    // compositor model already holds that for free.
+    var focusedId = Hyprland.focusedWorkspace ? Number(Hyprland.focusedWorkspace.id) : 0
+    var next = Tree.workspaces(json, focusedId)
     if (next) root.board = next
   }
 
@@ -289,7 +294,7 @@ Item {
     // Never under a window that is in the air. `board` is rebuilt rather than
     // mutated, so a refresh mid-lift hands the ghost a stale object and the
     // tile it came from stops recognising itself -- the drop still lands,
-    // because a con_id outlives the array it was read from, but the card it
+    // because an address outlives the array it was read from, but the card it
     // left goes back to full strength with the window apparently still on it.
     if (root.lifted) return
     if (!treeProbe.running) treeProbe.running = true
@@ -327,7 +332,7 @@ Item {
   // moves the toplevel list. Between them they cover everything that changes
   // the board without this sheet having asked for it.
   Connections {
-    target: I3.workspaces
+    target: Hyprland.workspaces
     enabled: root.surfaceUp
     function onValuesChanged() { root.refresh() }
   }
@@ -565,20 +570,21 @@ Item {
     return root.move(win.conId, to)
   }
 
-  // P13. One window, closed by con_id.
+  // P13. One window, closed by address.
   //
-  // `kill` is sway's name for `xdg_toplevel.close`, which is a close *request*:
-  // an editor with unsaved work answers it with a dialog and keeps its window.
+  // `window.close` is `xdg_toplevel.close`, which is a close *request*: an
+  // editor with unsaved work answers it with a dialog and keeps its window.
   // That is what makes it acceptable to fire from a drag, and it is why this
   // must not become anything that ends the process.
   //
-  // By con_id and not through the foreign-toplevel handle `toplevelFor` would
+  // By address and not through the foreign-toplevel handle `toplevelFor` would
   // give: that one is matched on app id and title (P5), which is ambiguous for
   // two terminals and for every one of this shell's own screens -- and the
-  // window it would pick wrongly is a window somebody loses.
+  // window it would pick wrongly is a window somebody loses. An address names
+  // exactly one window.
   function closeWindow(win): bool {
-    if (!win || !(win.conId > 0)) return false
-    if (!ShellApps.dispatch(root.shell, "[con_id=" + win.conId + "] kill"))
+    if (!win || String(win.conId || "") === "") return false
+    if (!ShellApps.closeAddress(root.shell, win.conId))
       return false
     // P13. The tile goes now, not when the app answers. Rebuilt rather than
     // pushed into: a `var` holding an array notifies on assignment only.
@@ -620,7 +626,7 @@ Item {
          + " global=" + Math.round(g.x) + "," + Math.round(g.y)
   }
 
-  // P6, P7. One window, one workspace, by con_id.
+  // P6, P7. One window, one workspace, by address.
   //
   // Criteria and not focus, and the order matters: `move container` leaves
   // focus where it was, so the phone stays on the workspace you are looking at
@@ -638,10 +644,9 @@ Item {
   // the daemon that already owns "what happens when a workspace would hold two"
   // rather than being half-owned here -- a keyboard user's `$mod+Shift+2` gets
   // the same treatment as this drag, which it would not if the sheet did it.
-  function move(conId: int, to: int): bool {
-    if (!(conId > 0) || !(to > 0)) return false
-    var sent = ShellApps.dispatch(root.shell,
-      "[con_id=" + conId + "] move container to workspace number " + to)
+  function move(address: string, to: int): bool {
+    if (String(address || "") === "" || !(to > 0)) return false
+    var sent = ShellApps.moveAddressToWorkspace(root.shell, address, to)
     if (sent) settle.begin()
     return sent
   }
@@ -652,13 +657,13 @@ Item {
   // workspace. Both are the same journey at two resolutions, and both leave.
   function focusWindow(win): void {
     if (!win) return
-    if (ShellApps.dispatch(root.shell, "[con_id=" + win.conId + "] focus"))
+    if (ShellApps.focusAddress(root.shell, win.conId))
       root.dismiss()
   }
 
   function goToWorkspace(number: int): void {
     if (!(number > 0)) return
-    if (ShellApps.dispatch(root.shell, "workspace number " + number))
+    if (ShellApps.focusWorkspace(root.shell, number))
       root.dismiss()
   }
 
@@ -742,8 +747,8 @@ Item {
     // and what a check can predict, where a name comes from a desktop entry
     // that is not installed on every phone.
     //
-    // `ids` is the same windows as con_ids, in the same order, and it is what
-    // makes `move` usable from a terminal: a con_id is the only thing that
+    // `ids` is the same windows as addresses, in the same order, and it is
+    // what makes `move` usable from a terminal: an address is the only thing that
     // names one window out of two of the same app (Tree.js says why), and
     // without it a check would have to go and parse the tree itself -- a second
     // reader of the thing being tested.
@@ -775,10 +780,10 @@ Item {
     //
     // Two arguments, because an IpcHandler function takes strings and a phone
     // has no other way to name one window out of several.
-    function move(conId: string, to: string): string {
-      var id = Number(conId)
+    function move(address: string, to: string): string {
+      var id = String(address || "")
       var dest = Number(to)
-      if (!(id > 0) || !(dest > 0)) return "usage: move <con_id> <workspace>"
+      if (id === "" || !(dest > 0)) return "usage: move <address> <workspace>"
       if (!root.move(id, dest)) return "error: nothing to dispatch through"
       return "ok: " + id + " -> " + dest
     }
@@ -1395,7 +1400,7 @@ Item {
                             // still being aimed -- and so a drop that goes
                             // nowhere puts it back where it visibly was.
                             //
-                            // Compared on the con_id and not on the object. A
+                            // Compared on the address and not on the object. A
                             // Repeater over a plain JS array hands the delegate
                             // a wrapper, not the array's own object, so `===`
                             // against what the lift captured is false for the
