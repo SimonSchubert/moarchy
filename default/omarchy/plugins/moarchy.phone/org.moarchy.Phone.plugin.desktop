@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Phone
+GenericName=Phone
+Comment=Make and take calls
+Exec=omarchy-shell shell toggle moarchy.phone
+Icon=org.moarchy.Phone
+Terminal=false
+Categories=Network;Telephony;
+Keywords=phone;call;dial;dialer;keypad;telephone;recents;
+StartupNotify=false
+X-Moarchy-Plugin=moarchy.phone

@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Launches
+GenericName=Rocket launches
+Comment=Upcoming launches, a countdown, and the ones you star
+Exec=omarchy-shell shell toggle moarchy.launches
+Icon=org.moarchy.Launches
+Terminal=false
+Categories=Science;Astronomy;
+Keywords=rocket;launch;space;countdown;
+StartupNotify=false
+X-Moarchy-Plugin=moarchy.launches

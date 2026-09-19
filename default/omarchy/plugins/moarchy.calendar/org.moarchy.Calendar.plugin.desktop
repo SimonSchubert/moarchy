@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Calendar
+GenericName=Calendar
+Comment=The month, the day under it, and what is next
+Exec=omarchy-shell shell toggle moarchy.calendar
+Icon=org.moarchy.Calendar
+Terminal=false
+Categories=Office;Calendar;
+Keywords=calendar;agenda;month;day;event;appointment;diary;date;birthday;
+StartupNotify=false
+X-Moarchy-Plugin=moarchy.calendar

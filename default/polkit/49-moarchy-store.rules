@@ -29,7 +29,7 @@
 // the password dialog back exactly where it is hardest to answer -- on a phone
 // whose keyboard is not up because there is no session to raise it.
 polkit.addRule(function (action, subject) {
-  if (action.id === "org.moarchy.store.manage" && subject.isInGroup("wheel")) {
+  if (action.id === "moarchy.store.manage" && subject.isInGroup("wheel")) {
     return polkit.Result.YES;
   }
 });

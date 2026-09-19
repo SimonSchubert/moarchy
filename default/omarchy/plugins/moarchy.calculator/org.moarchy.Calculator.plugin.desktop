@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Calculator
+GenericName=Calculator
+Comment=The four operations, a tape you can tap, and arithmetic in tens
+Exec=omarchy-shell shell toggle moarchy.calculator
+Icon=org.moarchy.Calculator
+Terminal=false
+Categories=Utility;Calculator;
+Keywords=calculator;calc;maths;math;arithmetic;sum;percent;tape;
+StartupNotify=false
+X-Moarchy-Plugin=moarchy.calculator

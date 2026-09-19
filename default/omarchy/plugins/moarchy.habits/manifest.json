@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "moarchy.habits",
+  "name": "Habits",
+  "version": "0.1.0",
+  "author": "Simon Schubert",
+  "license": "MIT",
+  "description": "Habit tracking: a tap a day, a streak, and sixteen weeks of history.",
+  "kinds": ["overlay"],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "Habits.qml"
+  }
+}

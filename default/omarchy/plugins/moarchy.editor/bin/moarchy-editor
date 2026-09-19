@@ -1,0 +1,108 @@
+#!/bin/bash
+# Open a file in the Text Editor plugin -- and, with --wait, be the editor.
+#
+#   moarchy-editor                  the editor, on whatever it last had open
+#   moarchy-editor notes.md         that file
+#   moarchy-editor --wait FILE      that file, and do not exit until it is closed
+#
+# The editor is not a process. It is QML the shell already holds, so "opening
+# a file" is an IPC call that returns at once -- which is right for a tap in
+# Files and wrong for $EDITOR. `git commit` runs the editor, and reads the
+# message back the moment the editor exits; an editor that exits at once is a
+# commit with the template for a message, or with none. --wait is what makes
+# this usable there.
+#
+# How it waits: it names a marker file in the payload and watches for it. The
+# plugin touches the marker when that file is closed, replaced by another, or
+# the window goes away -- the moments a separate editor process would have
+# exited. The loop is a bash `read -t` against a descriptor that never has
+# anything on it, so waiting forks nothing and burns nothing.
+#
+# A marker nobody will touch is the failure to guard against: the shell
+# restarted while the file was open, and the new one has never heard of it.
+# Every twenty seconds this asks the plugin whether it is still holding the
+# marker, and stops when the answer is no. Three unanswered asks in a row -- a
+# shell that is not there at all -- stop it too.
+set -uo pipefail
+
+ID=moarchy.editor
+wait=false
+
+usage() {
+  echo "usage: moarchy-editor [--wait] [FILE]" >&2
+  exit 2
+}
+
+while (($#)); do
+  case $1 in
+  --wait | -w) wait=true; shift ;;
+  --) shift; break ;;
+  -h | --help) usage ;;
+  -*) echo "moarchy-editor: unknown option $1" >&2; usage ;;
+  *) break ;;
+  esac
+done
+(($# <= 1)) || echo "moarchy-editor: one file at a time -- opening $1" >&2
+
+command -v omarchy-shell >/dev/null || {
+  echo "moarchy-editor: no omarchy-shell -- the editor is a shell plugin" >&2
+  exit 1
+}
+
+# JSON by hand, because the one thing in it that is not ours is a path and a
+# path needs three escapes. A control character in a file name is refused
+# rather than escaped: it is almost always a mistake, and never worth a
+# dependency on jq.
+json_string() {
+  local s=$1
+  if [[ $s == *[$'\001'-$'\037']* ]]; then
+    echo "moarchy-editor: that file name has a control character in it" >&2
+    exit 1
+  fi
+  s=${s//\\/\\\\}
+  s=${s//\"/\\\"}
+  printf '"%s"' "$s"
+}
+
+summon() {
+  local out
+  out=$(omarchy-shell shell summon "$ID" "$1") || exit 1
+  [[ $out == ok ]] || { echo "moarchy-editor: the shell did not take it${out:+ ($out)}" >&2; exit 1; }
+}
+
+if (($# == 0)); then
+  summon "{}"
+  exit 0
+fi
+
+# Absolute, because the shell's working directory is not this one. -m because
+# a file that does not exist yet is a file to create, not an error.
+path=$(realpath -m -- "$1") || exit 1
+
+if [[ $wait != true ]]; then
+  summon "{\"path\":$(json_string "$path")}"
+  exit 0
+fi
+
+dir=${XDG_RUNTIME_DIR:-/tmp}
+marker=$(mktemp -u "$dir/moarchy-editor-XXXXXXXX") || exit 1
+trap 'rm -f -- "$marker"' EXIT
+
+summon "{\"path\":$(json_string "$path"),\"wait\":$(json_string "$marker")}"
+
+# A descriptor with nothing ever on it, so `read -t` is a sleep with no fork.
+exec {idle}<> <(:)
+
+ticks=0
+silent=0
+until [[ -e $marker ]]; do
+  read -r -t 0.5 -u "$idle" _ 2>/dev/null
+  ((++ticks % 40)) && continue
+  answer=$(omarchy-shell shell call "$ID" waiting "$marker" 2>/dev/null)
+  case $answer in
+  yes) silent=0 ;;
+  no) [[ -e $marker ]] || echo "moarchy-editor: the editor let go of $path without saying so" >&2; break ;;
+  *) ((++silent >= 3)) && { echo "moarchy-editor: the shell stopped answering" >&2; break; } ;;
+  esac
+done
+exit 0

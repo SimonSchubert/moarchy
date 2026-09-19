@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "moarchy.coins",
+  "name": "Coins",
+  "version": "0.1.0",
+  "author": "Simon Schubert",
+  "license": "MIT",
+  "description": "A coin tracker: the top hundred by market cap, and the ones you star.",
+  "kinds": ["overlay"],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "Coins.qml"
+  }
+}

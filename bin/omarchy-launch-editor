@@ -2,7 +2,7 @@
 # Sway/phone override. Two things differ from upstream's, and both are
 # consequences of this image no longer shipping a terminal editor
 # (docs/apps.md): neovim left the package set, and the Text Editor plugin
-# (org.moarchy.editor, run as moarchy-editor) is what "the editor" means here
+# (moarchy.editor, run as moarchy-editor) is what "the editor" means here
 # now. GNOME Text Editor was, until 2026-09-16, and is still handled below for
 # anybody who installs it from the store.
 #
@@ -30,7 +30,7 @@
 #    opening a file in it is an IPC call that returns at once. moarchy-editor
 #    --wait is the process that stays -- it hands the plugin a marker path and
 #    returns when the plugin touches it, which it does when the file is closed
-#    or the window goes. plugins/org.moarchy.editor/README.md in moarchy-apps
+#    or the window goes. plugins/moarchy.editor/README.md in moarchy-apps
 #    has the rest.
 #
 #    gnome-text-editor --standalone blocks the same way for the same reason: it

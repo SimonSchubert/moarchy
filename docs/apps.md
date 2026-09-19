@@ -30,24 +30,24 @@ They ship in `moarchy`, in the same plugin tree as the shell's own surfaces
 
 | App | Plugin | What it is |
 | --- | --- | --- |
-| Calculator | `org.moarchy.calculator` | The four operations, a tape, and arithmetic that counts in tens |
-| Calendar | `org.moarchy.calendar` | The month, the day under it, and what is next. Local, no accounts |
-| Clock | `org.moarchy.clock` | Alarms, stopwatch, timer |
-| Contacts | `org.moarchy.contacts` | A name, a number, an email, a note. One JSON file, no accounts |
-| Files | `org.moarchy.files` | One folder at a time. `$mod+f` opens it |
-| Keep | `org.moarchy.keep` | Notes and checklists. Same `notes.json` the GTK app writes |
-| Mail † | `org.moarchy.mail` | One account over IMAP and SMTP: folders, reading, replying, forwarding. No HTML is drawn and no picture is fetched. New mail in the Inbox is looked for every fifteen minutes with the window closed, through `moarchy-mail`, one short run of Python at a time |
-| Messages † | `org.moarchy.messages` | Texts by person, written to one file before they are deleted from the modem. SMS only |
-| Phone † | `org.moarchy.phone` | A keypad, recents with the missed calls in red, and the call screen. It rings with its window closed, because the shell keeps it loaded |
-| Text Editor † | `org.moarchy.editor` | One text file at a time, what a tapped text file opens in, and `$EDITOR` through `moarchy-editor --wait` |
-| Vitals | `org.moarchy.vitals` | Processor, memory, tasks, network, from `/proc` |
-| Weather | `org.moarchy.weather` | Now, today and the week, for places you typed |
-| Coins | `org.moarchy.coins` | Top hundred by market cap, and the ones you star |
-| Habits | `org.moarchy.habits` | A tap a day, a streak, sixteen weeks of history |
-| Launches | `org.moarchy.launches` | Upcoming rockets: a countdown, a pad, the ones you star |
-| Minesweeper | `org.moarchy.minesweeper` | A portrait board and a latching flag |
-| Reversi | `org.moarchy.reversi` | A board drawn for 360px, an opponent on a clock |
-| Noughts and crosses | `org.moarchy.tictactoe` | The game solved at startup, then told to err |
+| Calculator | `moarchy.calculator` | The four operations, a tape, and arithmetic that counts in tens |
+| Calendar | `moarchy.calendar` | The month, the day under it, and what is next. Local, no accounts |
+| Clock | `moarchy.clock` | Alarms, stopwatch, timer |
+| Contacts | `moarchy.contacts` | A name, a number, an email, a note. One JSON file, no accounts |
+| Files | `moarchy.files` | One folder at a time. `$mod+f` opens it |
+| Keep | `moarchy.keep` | Notes and checklists. Same `notes.json` the GTK app writes |
+| Mail † | `moarchy.mail` | One account over IMAP and SMTP: folders, reading, replying, forwarding. No HTML is drawn and no picture is fetched. New mail in the Inbox is looked for every fifteen minutes with the window closed, through `moarchy-mail`, one short run of Python at a time |
+| Messages † | `moarchy.messages` | Texts by person, written to one file before they are deleted from the modem. SMS only |
+| Phone † | `moarchy.phone` | A keypad, recents with the missed calls in red, and the call screen. It rings with its window closed, because the shell keeps it loaded |
+| Text Editor † | `moarchy.editor` | One text file at a time, what a tapped text file opens in, and `$EDITOR` through `moarchy-editor --wait` |
+| Vitals | `moarchy.vitals` | Processor, memory, tasks, network, from `/proc` |
+| Weather | `moarchy.weather` | Now, today and the week, for places you typed |
+| Coins | `moarchy.coins` | Top hundred by market cap, and the ones you star |
+| Habits | `moarchy.habits` | A tap a day, a streak, sixteen weeks of history |
+| Launches | `moarchy.launches` | Upcoming rockets: a countdown, a pad, the ones you star |
+| Minesweeper | `moarchy.minesweeper` | A portrait board and a latching flag |
+| Reversi | `moarchy.reversi` | A board drawn for 360px, an opponent on a clock |
+| Noughts and crosses | `moarchy.tictactoe` | The game solved at startup, then told to err |
 
 | App | Package | What it is |
 | --- | --- | --- |
@@ -156,10 +156,10 @@ commented block at the foot of `pkgbuilds/moarchy-meta/PKGBUILD`.
 | --- | --- |
 | `alacritty`, `qmlkonsole` | The second and third terminals, dropped 2026-09-08 — [One terminal](#one-terminal) |
 | `kclock`, `index-fm` | A second clock and a second file manager, dropped 2026-09-06. Index drags the whole MauiKit stack in behind it |
-| `gnome-clocks`, `kalk`, `calindori`, `gnome-contacts`, `portfolio-file-manager`, `kweather` | Replaced 2026-09-15 by the `org.moarchy.*` shell plugins. gnome-contacts writes evolution-data-server, which Calls and Chats resolved names through; Phone and Messages read the Contacts plugin's file instead, so nothing on the image needs it any more. It installs from the store |
-| `gnome-calls`, `chatty`, `mmsd-tng` | Replaced 2026-09-16 by `org.moarchy.phone` and `org.moarchy.messages`, daemons included. Installing Chatty back beside Messages is worse than a second tile: while it runs it takes every text off the modem and deletes it, so Messages never sees one. `mmsd-tng` was Chatty's MMS transport, and Messages is SMS only |
-| `gnome-text-editor` | Replaced 2026-09-16 by `org.moarchy.editor`, as the drawer's editor, the handler for text files and `$EDITOR`. It still does a great deal the plugin does not — tabs, search, highlighting, spell check — and installs from the store; `omarchy-default-editor gnome-text-editor` makes it the editor again |
-| `geary` | Replaced 2026-09-16 by `org.moarchy.mail`. moarchy-store's sweep had already rejected it for this screen — a desktop-shaped three-pane client that wants an unlocked keyring, whose prompt maps behind its own window — and it is not in the store. `sudo pacman -S geary` still installs it. Mail keeps its password in a 0600 file, not the keyring, so the two do not share an account |
+| `gnome-clocks`, `kalk`, `calindori`, `gnome-contacts`, `portfolio-file-manager`, `kweather` | Replaced 2026-09-15 by the `moarchy.*` shell plugins. gnome-contacts writes evolution-data-server, which Calls and Chats resolved names through; Phone and Messages read the Contacts plugin's file instead, so nothing on the image needs it any more. It installs from the store |
+| `gnome-calls`, `chatty`, `mmsd-tng` | Replaced 2026-09-16 by `moarchy.phone` and `moarchy.messages`, daemons included. Installing Chatty back beside Messages is worse than a second tile: while it runs it takes every text off the modem and deletes it, so Messages never sees one. `mmsd-tng` was Chatty's MMS transport, and Messages is SMS only |
+| `gnome-text-editor` | Replaced 2026-09-16 by `moarchy.editor`, as the drawer's editor, the handler for text files and `$EDITOR`. It still does a great deal the plugin does not — tabs, search, highlighting, spell check — and installs from the store; `omarchy-default-editor gnome-text-editor` makes it the editor again |
+| `geary` | Replaced 2026-09-16 by `moarchy.mail`. moarchy-store's sweep had already rejected it for this screen — a desktop-shaped three-pane client that wants an unlocked keyring, whose prompt maps behind its own window — and it is not in the store. `sudo pacman -S geary` still installs it. Mail keeps its password in a 0600 file, not the keyring, so the two do not share an account |
 | `loupe`, `papers`, `foliate`, `secrets` | Dropped 2026-09-16 with no plugin in their place. The default set is the shell's own apps and what a phone cannot be a phone without; an image viewer, a PDF viewer, an e-book reader and a KeePass client are each a tap away in the store. Until one is installed, a picture, PDF or `.epub` tapped in Files has no handler of its own |
 | `chipass` | Never listed, and installed anyway: Geary's `org.freedesktop.secrets` resolved to it while `gnome-keyring` came after `geary` in the list. See [GNOME](#gnome-libadwaita) |
 | `moarchy-keep`, `moarchy-vitals` | The GTK halves of Keep and Vitals. The plugins are the same apps (same notes file, same `/proc` reader) and two tiles for one job is the cut this list has been making since kclock |

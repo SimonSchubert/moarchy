@@ -7,7 +7,7 @@
 # path arguments, so a caller that handed us a directory (theme wallpaper
 # install) falls through to a process that can open one.
 if [[ $# -eq 0 ]] && command -v omarchy-shell >/dev/null; then
-  exec omarchy-shell shell toggle org.moarchy.files
+  exec omarchy-shell shell toggle moarchy.files
 fi
 for f in nautilus thunar pcmanfm-qt; do
   if command -v "$f" >/dev/null; then exec "$f" "$@"; fi

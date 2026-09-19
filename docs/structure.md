@@ -131,17 +131,19 @@ tooling, the image builder, the device docs, and the dev loop.
 `moarchy` under `repo/` and `image/`. They do not get their own repo until
 one of them has CI worth isolating.
 
-**B6** `moarchy-apps` is absorbed. Its 18 `org.moarchy.*` plugins live in
-`default/omarchy/plugins/` beside the shell's own, `qml-apps/` and
-`scripts/sync-qml-apps.sh` are deleted, and no PKGBUILD builds from a snapshot
-of another repo's working tree. It is the exception B2 never covered: six of
-those plugins are uncommitted upstream, which is why `moarchy-qml-apps` carries
-"when those plugins are tagged, this package should grow a proper source" — and
-why the pin B1 relies on could never be taken.
+**B6** `moarchy-apps` is absorbed. *Done 2026-09-19.* Its 18 `org.moarchy.*`
+plugins live in `default/omarchy/plugins/` beside the shell's own, `qml-apps/`
+and `scripts/sync-qml-apps.sh` are deleted, and no PKGBUILD builds from a
+snapshot of another repo's working tree. It is the exception B2 never covered:
+six of those plugins are uncommitted upstream, which is why `moarchy-qml-apps`
+carries "when those plugins are tagged, this package should grow a proper
+source" — and why the pin B1 relies on could never be taken.
 → `test ! -e qml-apps && test ! -e scripts/sync-qml-apps.sh`, and
 `ls default/omarchy/plugins | wc -l` == 32, of which 31 carry a `manifest.json`
 
-**B7** There is exactly one editable copy of each app. `moarchy-apps` stops
+**B7** There is exactly one editable copy of each app. **Not done —** the
+plugins are still editable in `../moarchy-apps` as well as here, and which way
+to close that is the **?** below. `moarchy-apps` stops
 being a source: it keeps only what this repo does not take — its tests,
 `ui.catalog`, `install-on-device.sh` — or it is archived. **?** Which of the two
 is yours to decide; the criterion is that no file is editable in both places,
@@ -151,7 +153,8 @@ snapshot is undone by the next sync".
 no clone, no `source=`
 
 **B8** Whatever `moarchy-apps` ran against those plugins runs here, or §12 says
-it does not. The sync deliberately left tests, screenshots and the device
+it does not. *Answered in §12, 2026-09-19:* the 43 tests came, the runner did
+not. The sync deliberately left tests, screenshots and the device
 installer behind, so absorbing the plugins without them loses checks that
 currently exist.
 → `scripts/` names the app test runner, or §12 carries the entry
@@ -635,42 +638,43 @@ across 80 files, 35 renamed paths, and a one-release migration in
 `install/config.sh` for phones already carrying the old name. After M3 it would
 have been that plus every installed device.
 
-**N4** One plugin id namespace: **`moarchy.<name>`**, for all 31 plugins. The
-18 `org.moarchy.*` ids are renamed with B6. The id shares one registry keyspace
-with upstream's 37 first-party plugins — `omarchy.bar`, `omarchy.media`,
-`omarchy.workspaces` — every one of which is bare `<vendor>.<name>`, so
-reverse-DNS there is a convention nothing else in the map follows.
+**N4** *Done 2026-09-19.* One plugin id namespace: **`moarchy.<name>`**, for
+all 31 plugins. The 18 `org.moarchy.*` ids are renamed with B6. The id shares
+one registry keyspace with upstream's 37 first-party plugins — `omarchy.bar`,
+`omarchy.media`, `omarchy.workspaces` — every one of which is bare
+`<vendor>.<name>`, so reverse-DNS there is a convention nothing else in the map
+follows.
 → every `default/omarchy/plugins/*/manifest.json` has an `id` matching
 `^moarchy\.[a-z][a-z0-9-]*$`
 
-**N5** Reverse-DNS stays where the namespace is system-wide. A `.desktop` file
-lands in `/usr/share/applications` alongside every other application on the
-machine, and its `Icon=` resolves in a shared theme, so both keep the
-`org.moarchy.<Name>` form; only `Exec=` and `X-Moarchy-Plugin=` carry the
-plugin id. This is not an inconsistency with N4 — it is two namespaces with
+**N5** *Done 2026-09-19.* Reverse-DNS stays where the namespace is system-wide.
+A `.desktop` file lands in `/usr/share/applications` alongside every other
+application on the machine, and its `Icon=` resolves in a shared theme, so both
+keep the `org.moarchy.<Name>` form; only `Exec=` and `X-Moarchy-Plugin=` carry
+the plugin id. This is not an inconsistency with N4 — it is two namespaces with
 different collision risks, each following its own convention.
 → every installed desktop entry naming moarchy begins `org.moarchy.`;
 `moarchy.device.desktop` and `moarchy.sim.desktop`, which break this today, are
 renamed with the rest
 
-**N6** A plugin's directory name is its id. The registry keys on the manifest's
-`id` and treats the directory only as the source path for `entryPoints`, so the
-two *may* diverge; they do not, so that a path in this repo, a path on the
-phone and a string in `shell.json` are one string.
+**N6** *Done 2026-09-19.* A plugin's directory name is its id. The registry
+keys on the manifest's `id` and treats the directory only as the source path
+for `entryPoints`, so the two *may* diverge; they do not, so that a path in
+this repo, a path on the phone and a string in `shell.json` are one string.
 → for each `default/omarchy/plugins/*/manifest.json`, the parent directory's
 name equals its `.id`
 
-**N7** The trust boundary narrows to the one namespace. `pluginIsTrusted` in
-`port-4x.patch` returns true for `moarchy.` alone, and its comment is rewritten
-rather than left describing two prefixes.
+**N7** *Done 2026-09-19, all three edits.* The trust boundary narrows to the
+one namespace. `pluginIsTrusted` in `port-4x.patch` returns true for `moarchy.`
+alone, and its comment is rewritten rather than left describing two prefixes.
 → no `org.moarchy` in that function or its comment — **and**
 `pkgbuilds/omarchy-config/PKGBUILD` carries both a regenerated `sha256sums` for
 the patch and a bumped `pkgrel`. Either alone masks the other, and that pair has
 shipped broken twice.
 
-**N8** Nothing is migrated. Existing phones are reflashed, not upgraded through
-the rename, so `~/.config/omarchy/shell.json` on a device already in the field
-may name ids that no longer exist. Decided 2026-09-19.
+**N8** *Done 2026-09-19.* Nothing is migrated. Existing phones are reflashed,
+not upgraded through the rename, so `~/.config/omarchy/shell.json` on a device
+already in the field may name ids that no longer exist. Decided 2026-09-19.
 → no migration step in `bin/moarchy-user-setup`, and no rename table anywhere
 in `bin/`
 
@@ -857,11 +861,11 @@ is then mostly partition arithmetic.
 > container caught them. The last two needed the hardware, and both were cases
 > where every file was individually correct.
 
-**M5 — One tree. Not started.** B6–B8, N4–N8, and `refactor.md` E10–E11. The
-two source trees become one, the id namespace becomes one, and the kit that
-exists twice becomes one. Nothing here is user-visible: the phone comes up with
-the same 31 plugins drawing the same surfaces, which is exactly what makes it
-checkable.
+**M5 — One tree. B6 and N4–N8 done 2026-09-19; E10–E11 not started.** B6–B8,
+N4–N8, and `refactor.md` E10–E11. The two source trees become one, the id
+namespace becomes one, and the kit that exists twice becomes one. Nothing here
+is user-visible: the phone comes up with the same 31 plugins drawing the same
+surfaces, which is exactly what makes it checkable.
 → the shell loads 31 plugins, `bin/moarchy-selftest --surfaces` passes, and the
 drawer lists the same entries it lists today
 
@@ -879,7 +883,7 @@ M1 — which is the only reason it cost 80 files rather than every phone.
 ## 12. Open questions
 
 The questions this document opened, with what has since answered them. Two are
-closed; the three that are still open are the ones to read.
+closed; the four that are still open are the ones to read.
 
 1. ~~**I3 — the boot chain.**~~ **Answered 2026-09-06.** Everything the boot
    chain needs is in `uboot-pinephone`, `linux-megi`, `uboot-tools` and
@@ -899,7 +903,18 @@ closed; the three that are still open are the ones to read.
    owns how it is built — so it belongs there, not in a local edit to someone
    else's recipe. This is the one entry in the package set V2 does not cover.
 
-4. **How to pin the build environment, given that ALARM has no archive.**
+4. **The absorbed apps' tests have no runner here.** B6 brought 43 test files
+   with the 18 plugins -- `tst_*.qml` per plugin, which had no copy on this
+   side at all. What did not come is what runs them: `moarchy-apps`'
+   `scripts/qml-check.sh` needs `quickshell` and `qmllint` on PATH and a
+   `docker/Dockerfile.qml` to supply them, and it drives each plugin's
+   `shell.qml` -- the standalone entry point this package deliberately does not
+   ship. So the tests are in the tree, in version control, and nothing executes
+   them. They are not lost, which is what B8 was written to prevent; they are
+   parked. The fix is that Dockerfile and a `scripts/qml-check.sh` of ours, and
+   it is the one part of M5 that buys nothing until it exists.
+
+5. **How to pin the build environment, given that ALARM has no archive.**
    `Dockerfile.builder` pins the base image by digest and then runs
    `pacman -Syu`, which floats. The two builds of `moarchy-keyboard` on
    2026-09-05 measure the cost: same pinned source, same `0.1.0-1`, identical

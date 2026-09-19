@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Vitals
+GenericName=System monitor
+Comment=Processor, memory, tasks and network
+Exec=omarchy-shell shell toggle moarchy.vitals
+Icon=org.moarchy.Vitals
+Terminal=false
+Categories=System;Monitor;
+Keywords=system;monitor;cpu;memory;process;task;network;
+StartupNotify=false
+X-Moarchy-Plugin=moarchy.vitals

@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Contacts
+GenericName=Contacts
+Comment=A name, a number, an email, and a note — one file, no accounts
+Exec=omarchy-shell shell toggle moarchy.contacts
+Icon=org.moarchy.Contacts
+Terminal=false
+Categories=Office;ContactManagement;
+Keywords=contacts;address;phone;email;people;book;
+StartupNotify=false
+X-Moarchy-Plugin=moarchy.contacts

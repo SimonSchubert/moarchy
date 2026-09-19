@@ -63,9 +63,9 @@ TestCase {
   }
 
   function test_a_dot_in_a_directory_name_is_not_a_suffix() {
-    // org.moarchy.keep is a plugin id and appears in paths; chopping at the
+    // moarchy.keep is a plugin id and appears in paths; chopping at the
     // last dot of the whole string would mangle a file with no extension.
-    compare(Json.brokenPath("/usr/share/moarchy/plugins/org.moarchy.keep/state", 5),
-            "/usr/share/moarchy/plugins/org.moarchy.keep/state.broken-5.json")
+    compare(Json.brokenPath("/usr/share/moarchy/plugins/moarchy.keep/state", 5),
+            "/usr/share/moarchy/plugins/moarchy.keep/state.broken-5.json")
   }
 }

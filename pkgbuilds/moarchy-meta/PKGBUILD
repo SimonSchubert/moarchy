@@ -96,18 +96,18 @@ pkgver=$_ver
 # a removal under that number would never be offered.
 #
 # 6 was never built under that number; it ships as 0.3.0-1, below.
-# gnome-text-editor leaves. The org.moarchy.editor plugin in
+# gnome-text-editor leaves. The moarchy.editor plugin in
 # moarchy is the editor now -- both what opens a tapped text file and
 # $EDITOR, through moarchy-editor --wait -- and a phone holding 0.2.2-5 would
 # keep GNOME Text Editor as a second tile for the same job, for ever.
 # gnome-calls, chatty and mmsd-tng leave in the same unbuilt release, for
-# org.moarchy.phone and org.moarchy.messages. A phone left holding Calls beside
+# moarchy.phone and moarchy.messages. A phone left holding Calls beside
 # Phone has two things answering one modem, which is not a spare tile but a
 # call picked up in whichever window was quicker.
 # loupe, papers, foliate and secrets leave in it too, so the default set is the
 # shell's plugins plus what a phone cannot do without, and chipass stops
 # arriving behind geary (the note at gnome-keyring says how it got in).
-# geary leaves in the same release, for org.moarchy.mail. A phone holding
+# geary leaves in the same release, for moarchy.mail. A phone holding
 # 0.2.2-5 would keep Geary beside Mail: two tiles, two things holding the same
 # password, and the one of them that waits on a keyring prompt it cannot show.
 #
@@ -322,7 +322,7 @@ depends=(
   'man-db'
   # No neovim, and this one is not just a name leaving a list -- it was the
   # default editor, so removing it is a change of behaviour that took four files
-  # with it. The Text Editor plugin (org.moarchy.editor, in moarchy
+  # with it. The Text Editor plugin (moarchy.editor, in moarchy
   # further down) is the editor now: it is the GUI answer to "the system wants
   # me to edit something", which on a phone with no keyboard attached is the
   # only answer that is any use. It was gnome-text-editor until 2026-09-16.
@@ -375,7 +375,7 @@ depends=(
   # --- Telephony -------------------------------------------------------------
   # Calls and SMS. The modem's own power and audio profile are the device
   # package's (moarchy-device-*); these are the layer above. The apps are the
-  # org.moarchy.phone and org.moarchy.messages plugins in moarchy,
+  # moarchy.phone and moarchy.messages plugins in moarchy,
   # further down, and they reach the modem through processes rather than a
   # library, because Quickshell has no D-Bus module:
   #   modemmanager  mmcli, and the system bus signals a gdbus monitor waits on
@@ -424,7 +424,7 @@ depends=(
   # the packaged shell.json. They arrive with 'moarchy' below; ui.catalog is a
   # kit review window and stays in moarchy-apps.
 
-  # gnome-text-editor left 2026-09-16 for org.moarchy.editor, the same cut as
+  # gnome-text-editor left 2026-09-16 for moarchy.editor, the same cut as
   # the clocks below. It installs from the store for anybody who wants tabs,
   # search and highlighting back, and omarchy-default-editor still offers it.
   #
@@ -435,7 +435,7 @@ depends=(
   # .epub tapped in Files has no handler of its own, and goes wherever
   # xdg-open's fallbacks send it -- not yet looked at on a device.
   # gnome-clocks, portfolio-file-manager, kalk, calindori and kweather left
-  # 2026-09-15: the org.moarchy.{clock,files,calculator,calendar,weather}
+  # 2026-09-15: the moarchy.{clock,files,calculator,calendar,weather}
   # plugins cover the same ground and are already loaded. kclock and index-fm
   # had already gone for being a second clock and a second file manager; this
   # is the same cut against the first of each, now that there is a first that
@@ -474,7 +474,7 @@ depends=(
   # Messages read Contacts' file, so the gap closed with them rather than by
   # putting a 2.3 MB GTK app back on the image.
 
-  # Email is org.moarchy.mail, in moarchy, and has been since
+  # Email is moarchy.mail, in moarchy, and has been since
   # 2026-09-16. geary was here until then. moarchy-store's sweep had already
   # rejected it for this screen -- "desktop-shaped three-pane mail client.
   # Also wants an unlocked keyring" -- and where no keyring was unlocked, its

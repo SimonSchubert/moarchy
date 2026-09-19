@@ -15,7 +15,7 @@ import "ui/Theme.js" as Theme
 import "ui/Metrics.js" as Metrics
 ```
 
-`plugins/org.moarchy.ui.catalog` is the review surface: every control on one
+`plugins/moarchy.ui.catalog` is the review surface: every control on one
 window, and a second page that draws the box system itself -- the elevation
 ramp, the radius scale and the nesting rule -- so a change to any of them is
 looked at rather than reasoned about. Install it with that plugin's

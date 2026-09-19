@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "moarchy.contacts",
+  "name": "Contacts",
+  "version": "0.1.0",
+  "author": "Simon Schubert",
+  "license": "MIT",
+  "description": "A name, a number, an email, and a note -- in one file, with no accounts behind it.",
+  "kinds": ["overlay"],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "Contacts.qml"
+  }
+}

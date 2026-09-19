@@ -1,0 +1,18 @@
+# What xdg-open runs for a text file. Not the drawer's entry, and hidden from
+# the drawer, for one reason: the drawer's entry toggles, and a toggle with a
+# path in it hides an editor that is already open instead of opening the file.
+# `summon` shows, and the plugin reads the bare path xdg-open puts where %f is.
+#
+# The drawer finds a plugin's window by `shell toggle <id>` in an entry's Exec,
+# so this Exec cannot be the drawer's as well.
+[Desktop Entry]
+Type=Application
+Name=Text Editor
+Comment=Open this file in the shell's text editor
+Exec=omarchy-shell shell summon moarchy.editor %f
+Icon=org.moarchy.Editor
+Terminal=false
+NoDisplay=true
+StartupNotify=false
+MimeType=text/plain;text/markdown;text/x-csrc;text/x-chdr;text/x-c++src;text/x-c++hdr;text/x-shellscript;application/x-shellscript;application/json;text/x-python;text/x-log;text/csv;application/toml;application/yaml;application/x-yaml;
+X-Moarchy-Plugin=moarchy.editor

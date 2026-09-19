@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "moarchy.tictactoe",
+  "name": "Noughts and crosses",
+  "version": "0.1.0",
+  "author": "Simon Schubert",
+  "license": "MIT",
+  "description": "Noughts and crosses: the game solved at startup, then told to err.",
+  "kinds": ["overlay"],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "Tictactoe.qml"
+  }
+}

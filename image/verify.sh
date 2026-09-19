@@ -298,49 +298,40 @@ have /usr/bin/moarchy-editor
 grep -q '^FALLBACK="moarchy-editor"' "$R/usr/lib/moarchy/bin/omarchy-launch-editor" \
   && ok "omarchy-launch-editor falls back to moarchy-editor" \
   || no "omarchy-launch-editor falls back to an editor the image does not ship"
-have /usr/share/moarchy/plugins/org.moarchy.calculator/Calculator.qml
-have /usr/share/moarchy/plugins/org.moarchy.calculator/ui/qmldir
-grep -q '"id": "org.moarchy.calculator"' "$R/usr/share/omarchy/config/omarchy/shell.json" \
-  && ok "packaged shell.json enables org.moarchy.calculator" \
+have /usr/share/moarchy/plugins/moarchy.calculator/Calculator.qml
+have /usr/share/moarchy/plugins/moarchy.calculator/ui/qmldir
+grep -q '"id": "moarchy.calculator"' "$R/usr/share/omarchy/config/omarchy/shell.json" \
+  && ok "packaged shell.json enables moarchy.calculator" \
   || no "shell.json does not enable the calculator plugin"
-# Every app must be in that list. A directory under default/omarchy/plugins/
-# that shell.json does not name is a tile that does nothing, which is how
-# a plugin can land in the package and never load.
+# Every plugin must be in that list -- the apps and the phone UI's own
+# surfaces alike, in one loop since docs/structure.md N4 put them in one
+# namespace. A directory that ships in the package and is not named in
+# shell.json is a surface that never loads, and nothing about the image says
+# so: the count above passes, the files are all there, and the phone simply
+# does without it. Third-party ids are only enabled by being listed
+# (PluginRegistry.isEnabled); upstream's first-party ones are enabled by
+# default and ours never are.
 #
-# And every one must have a tile. The list of names above covers the plugins
-# that replaced a GTK or KDE app; this covers the rest -- Coins, Habits and the
-# games -- which are default apps just the same and had no check that a person
-# could reach them. A tile is an entry that toggles the plugin and is not
-# hidden: the editor's and Mail's second entries summon, and do not count.
+# And a plugin that ships a .desktop must have a tile a person can reach --
+# that entry is what makes it an app rather than a surface, so the test keys
+# on the entry and not on the id, which no longer says which is which. A tile
+# is an entry that toggles the plugin and is not hidden: the editor's and
+# Mail's second entries summon, and do not count.
 _shelljson="$R/usr/share/omarchy/config/omarchy/shell.json"
-for _pdir in /repo/default/omarchy/plugins/org.moarchy.*/; do
-  _pid=$(basename "$_pdir")
-  grep -q "\"id\": \"$_pid\"" "$_shelljson" \
-    && ok "shell.json enables $_pid" \
-    || no "shell.json does not enable $_pid"
-  _tile=$(grep -lx "Exec=omarchy-shell shell toggle $_pid" "$R"/usr/share/applications/*.desktop 2>/dev/null \
-            | xargs -r grep -Lx 'NoDisplay=true' 2>/dev/null | head -1)
-  [ -n "$_tile" ] && ok "$_pid has a drawer tile ($(basename "$_tile"))" \
-                  || no "$_pid has no drawer tile -- a default app nobody can open"
-done
-unset _pdir _pid _shelljson _tile
-
-# The same question for the phone UI's own plugins, which had no check at all:
-# a directory that ships in the package and is not named in shell.json is a
-# surface that never loads, and nothing about the image says so -- the count
-# above passes, the files are all there, and the phone simply does without it.
-# Third-party ids are only enabled by being listed (PluginRegistry.isEnabled);
-# upstream's first-party ones are enabled by default and ours never are.
-_shelljson="$R/usr/share/omarchy/config/omarchy/shell.json"
-for _pdir in /repo/default/omarchy/plugins/moarchy.*/; do
+for _pdir in /repo/default/omarchy/plugins/*/; do
   _pid=$(basename "$_pdir")
   # moarchy.common has no manifest, so the registry skips it and so does this.
   [ -f "$_pdir/manifest.json" ] || continue
   grep -q "\"id\": \"$_pid\"" "$_shelljson" \
     && ok "shell.json enables $_pid" \
     || no "shell.json does not enable $_pid -- the plugin ships and never loads"
+  ls "$_pdir"*.desktop >/dev/null 2>&1 || continue
+  _tile=$(grep -lx "Exec=omarchy-shell shell toggle $_pid" "$R"/usr/share/applications/*.desktop 2>/dev/null \
+            | xargs -r grep -Lx 'NoDisplay=true' 2>/dev/null | head -1)
+  [ -n "$_tile" ] && ok "$_pid has a drawer tile ($(basename "$_tile"))" \
+                  || no "$_pid has no drawer tile -- a default app nobody can open"
 done
-unset _pdir _pid _shelljson
+unset _pdir _pid _shelljson _tile
 
 hy=$(grep -rl 'import Quickshell.Hyprland' "$R/usr/share/omarchy/shell" --include=*.qml 2>/dev/null | wc -l)
 i3=$(grep -rl 'import Quickshell.I3'       "$R/usr/share/omarchy/shell" --include=*.qml 2>/dev/null | wc -l)

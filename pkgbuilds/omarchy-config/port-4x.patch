@@ -60,58 +60,58 @@ index e6202da..548f01a 100644
 +      "id": "moarchy.volume"
 +    },
 +    {
-+      "id": "org.moarchy.calculator"
++      "id": "moarchy.calculator"
 +    },
 +    {
-+      "id": "org.moarchy.calendar"
++      "id": "moarchy.calendar"
 +    },
 +    {
-+      "id": "org.moarchy.clock"
++      "id": "moarchy.clock"
 +    },
 +    {
-+      "id": "org.moarchy.contacts"
++      "id": "moarchy.contacts"
 +    },
 +    {
-+      "id": "org.moarchy.files"
++      "id": "moarchy.files"
 +    },
 +    {
-+      "id": "org.moarchy.keep"
++      "id": "moarchy.keep"
 +    },
 +    {
-+      "id": "org.moarchy.vitals"
++      "id": "moarchy.vitals"
 +    },
 +    {
-+      "id": "org.moarchy.weather"
++      "id": "moarchy.weather"
 +    },
 +    {
-+      "id": "org.moarchy.coins"
++      "id": "moarchy.coins"
 +    },
 +    {
-+      "id": "org.moarchy.habits"
++      "id": "moarchy.habits"
 +    },
 +    {
-+      "id": "org.moarchy.launches"
++      "id": "moarchy.launches"
 +    },
 +    {
-+      "id": "org.moarchy.minesweeper"
++      "id": "moarchy.minesweeper"
 +    },
 +    {
-+      "id": "org.moarchy.reversi"
++      "id": "moarchy.reversi"
 +    },
 +    {
-+      "id": "org.moarchy.tictactoe"
++      "id": "moarchy.tictactoe"
 +    },
 +    {
-+      "id": "org.moarchy.editor"
++      "id": "moarchy.editor"
 +    },
 +    {
-+      "id": "org.moarchy.phone"
++      "id": "moarchy.phone"
 +    },
 +    {
-+      "id": "org.moarchy.messages"
++      "id": "moarchy.messages"
 +    },
 +    {
-+      "id": "org.moarchy.mail"
++      "id": "moarchy.mail"
 +    }
 +  ]
  }
@@ -354,7 +354,7 @@ diff --git a/shell/shell.qml b/shell/shell.qml
 index 0cc0575..235daf6 100644
 --- a/shell/shell.qml
 +++ b/shell/shell.qml
-@@ -736,15 +736,56 @@ ShellRoot {
+@@ -736,15 +736,58 @@ ShellRoot {
      return api
    }
  
@@ -385,18 +385,20 @@ index 0cc0575..235daf6 100644
 +  // and any genuinely foreign plugin the user installs is still scoped, which
 +  // is a protection 4.0.2 did not offer at all.
 +  //
-+  // `org.moarchy.` is the same decision one step along: those are the
-+  // calculator, calendar, clock, contacts, files and the rest of the
-+  // moarchy-apps plugins, packaged into /usr/share/moarchy/plugins. Their
-+  // AppWindow.focusWindow() reads shell.panelLoaders["moarchy.gestures"] to
-+  // raise a window on this compositor, and Plugin.js hideOverlays() hides
-+  // the shade and the drawer by name. Both return nothing through the scoped
-+  // surface, so an untrusted Keep opens and then cannot be focused from the
-+  // shelf. They are our apps, shipped in the image, not a third-party clone.
++  // The default apps are in that namespace too, and were `org.moarchy.` until
++  // docs/structure.md N4 renamed them into it -- the calculator, calendar,
++  // clock, contacts, files and the rest, packaged into the same directory.
++  // They need the same trust: their AppWindow.focusWindow() reads
++  // shell.panelLoaders["moarchy.gestures"] to raise a window on this
++  // compositor, and Plugin.js hideOverlays() hides the shade and the drawer
++  // by name. Both return nothing through the scoped surface, so an untrusted
++  // Keep opens and then cannot be focused from the shelf. They are our apps,
++  // shipped in the image, not a third-party clone -- and one prefix now says
++  // so, rather than a list of two that had to be kept in step with a rename.
 +  function pluginIsTrusted(manifest) {
 +    if (!manifest || manifest.__isFirstParty) return true
 +    var id = String(manifest.id || "")
-+    return id.indexOf("moarchy.") === 0 || id.indexOf("org.moarchy.") === 0
++    return id.indexOf("moarchy.") === 0
 +  }
 +
    function pluginShellFor(manifest) {

@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Messages
+GenericName=Text messages
+Comment=Send and receive text messages
+Exec=omarchy-shell shell toggle moarchy.messages
+Icon=org.moarchy.Messages
+Terminal=false
+Categories=Network;Chat;
+Keywords=sms;text;message;messages;chat;
+StartupNotify=false
+X-Moarchy-Plugin=moarchy.messages
