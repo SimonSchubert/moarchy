@@ -153,7 +153,15 @@ pkgver=$_ver
 #      - moarchy-restart-shell resolving either compositor's socket
 #    `sway` and `hyprland` are BOTH in depends while the image can boot
 #    either; dropping sway is what the last commit of this port does.
-pkgrel=2
+#
+# 3: the plugin tree is a different tree. moarchy-apps is absorbed and
+#    moarchy-qml-apps is folded in, so this package now ships all 31 plugins
+#    and the kit (docs/structure.md B6); every id is moarchy.* (N4); and the
+#    three sheets are the control center, the app drawer and the workspace
+#    overview (docs/naming-convention.md). Nothing here is a version bump for
+#    its own sake -- the payload changed, and 0.5.0-2 is already in packages/,
+#    which docker/build-packages.sh would otherwise keep.
+pkgrel=3
 pkgdesc="Omarchy's look, keybindings and theming on a phone, under Sway"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'

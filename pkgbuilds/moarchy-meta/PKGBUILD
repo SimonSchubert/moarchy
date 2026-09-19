@@ -115,7 +115,12 @@ pkgver=$_ver
 # 20260915 images carry, so every removal listed under 6 still reaches a phone
 # that holds it -- as a depends line that no longer names the package. pacman
 # -Syu does not uninstall what leaves this list; `pacman -Rs` does.
-pkgrel=1
+#
+# 2: moarchy-qml-apps leaves this list. It is folded into moarchy, which is
+#    already a depends here, so the apps still arrive -- but a phone holding
+#    the old package keeps it until `pacman -Rs` takes it, and its files are
+#    the pre-rename org.moarchy.* copies.
+pkgrel=2
 pkgdesc="The moarchy package set -- install this and you have the phone"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
