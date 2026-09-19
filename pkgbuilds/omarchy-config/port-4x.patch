@@ -2,6 +2,17 @@ diff --git a/config/omarchy/shell.json b/config/omarchy/shell.json
 index e6202da..548f01a 100644
 --- a/config/omarchy/shell.json
 +++ b/config/omarchy/shell.json
+@@ -1,8 +1,8 @@
+ {
+   "version": 1,
+   "idle": {
+-    "screensaver": 150,
+-    "lock": 300
++    "screensaver": 604800,
++    "lock": 604800
+   },
+   "bar": {
+     "position": "top",
 @@ -23,8 +23,8 @@
          },
          {

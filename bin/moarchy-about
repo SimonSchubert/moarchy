@@ -34,7 +34,7 @@ collect() {
   field "moarchy"    "$(pkg moarchy)"
   field "Device"     "$(tr -d '\0' < /proc/device-tree/model 2>/dev/null)"
   field "Kernel"     "$(uname -r)"
-  field "Compositor" "$(sway -v 2>/dev/null | head -1)"
+  field "Compositor" "$(hyprctl version 2>/dev/null | sed -n 's/^Hyprland \(v[^ ]*\).*/Hyprland \1/p' | head -1)"
   # "Quickshell 0.3.1 (revision , distributed by Arch Linux)" -- the revision is
   # empty in the packaged build, so the parenthetical is a blank and a comma.
   field "Shell"      "$(quickshell --version 2>/dev/null | head -1 | sed 's/ (revision.*//')"

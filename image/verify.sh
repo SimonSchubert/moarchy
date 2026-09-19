@@ -72,17 +72,16 @@ mount -o loop "$WORK/root.img" "$R" 2>/dev/null || {
   no "could not mount the rootfs"; exit 1; }
 
 have() { [ -e "$R$1" ] && ok "$1" || no "$1 missing"; }
-have /usr/bin/sway
+have /usr/bin/Hyprland
 have /usr/bin/quickshell
 have /usr/bin/moarchy-keyboard
 have /usr/lib/moarchy/bin/moarchy-selftest
-have /usr/lib/moarchy/bin/hyprctl
 have /etc/profile.d/zz-moarchy.sh
 have /etc/profile.d/omarchy.sh
 have /etc/fonts/conf.d/50-moarchy-weight.conf
 have /etc/systemd/logind.conf.d/10-power-key.conf
-have /usr/share/moarchy/config/sway/config
-have /usr/share/omarchy/default/themed/sway.conf.tpl
+have /usr/share/moarchy/config/hypr/hyprland.lua
+have /usr/share/moarchy/device/hypr/device.lua
 have /usr/share/omarchy/config/omarchy/shell.json
 have /usr/share/fonts/omarchy/omarchy.ttf
 have /usr/share/applications/moarchy.device.desktop
@@ -257,7 +256,7 @@ done
 # Calls and Chatty were daemons as well as windows, and the daemons are the
 # half that does harm beside the plugins: Chatty deletes every text it takes
 # off the modem, so Messages would never see one. The units that started them
-# under sway were ours, so they are checked by name rather than by package.
+# under the compositor were ours, so they are checked by name rather than by package.
 for u in calls-daemon.service sm.puri.Chatty-daemon.service; do
   if [ -e "$R/etc/systemd/user/$u" ] || [ -L "$R/usr/lib/systemd/user/default.target.wants/$u" ]; then
     no "$u is still installed or enabled -- Phone and Messages replaced it"
@@ -341,20 +340,23 @@ i3=$(grep -rl 'import Quickshell.I3'       "$R/usr/share/omarchy/shell" --includ
 grep -q '"id": "moarchy.bar"' "$R/usr/share/omarchy/config/omarchy/shell.json" \
   && ok "packaged shell.json selects moarchy.bar" || no "shell.json does not select moarchy.bar"
 
-# The sway config is passed with -c and includes by absolute path.
-# The session lives in zz-moarchy.sh, together with the PATH it needs -- see
-# the comment at the top of that file for why it is not two files.
-sess_cfg=$(grep -oE '/usr/share/moarchy/config/sway/config' "$R/etc/profile.d/zz-moarchy.sh" | head -1)
-[ -n "$sess_cfg" ] && ok "the session names the packaged sway config" || no "zz-moarchy.sh does not exec sway -c"
+# The Hyprland config is passed with -c. The session lives in zz-moarchy.sh,
+# together with the PATH it needs -- see the comment at the top of that file
+# for why it is not two files.
+sess_cfg=$(grep -oE '/usr/share/moarchy/config/hypr/hyprland.lua' "$R/etc/profile.d/zz-moarchy.sh" | head -1)
+[ -n "$sess_cfg" ] && ok "the session names the packaged Hyprland config" || no "zz-moarchy.sh does not exec Hyprland -c"
 # And nothing else may exec a session: a second profile.d file that execs would
 # reintroduce the ordering bug, sorted earlier or later.
-extra=$(grep -l 'exec sway' "$R"/etc/profile.d/*.sh 2>/dev/null | grep -cv 'zz-moarchy.sh')
-[ "$extra" = 0 ] && ok "only one profile.d file execs sway" \
-                 || no "$extra other profile.d files exec sway -- ordering hazard"
+extra=$(grep -lE 'exec (Hyprland|sway)' "$R"/etc/profile.d/*.sh 2>/dev/null | grep -cv 'zz-moarchy.sh')
+[ "$extra" = 0 ] && ok "only one profile.d file execs a session" \
+                 || no "$extra other profile.d files exec a session -- ordering hazard"
+# hyprland.lua requires its siblings by package.path rather than including them
+# by absolute path, so the check is that each required file is there.
 miss=0
-while read -r _ f; do [ -e "$R$f" ] || { no "sway include missing: $f"; miss=1; }; done \
-  < <(grep '^include /' "$R/usr/share/moarchy/config/sway/config")
-[ $miss = 0 ] && ok "every absolute sway include resolves"
+while read -r f; do
+  [ -e "$R/usr/share/moarchy/config/hypr/$f.lua" ] || { no "hypr require missing: $f.lua"; miss=1; }
+done < <(sed -n 's/^ *require("hypr\.\([a-z]*\)").*/\1/p' "$R/usr/share/moarchy/config/hypr/hyprland.lua")
+[ $miss = 0 ] && ok "every hypr require resolves"
 
 sec "units"
 # A unit is enabled if the .wants symlink is under EITHER tree: /etc is what
@@ -556,11 +558,11 @@ grep -q 'shown_boxes = "cpu mem"' "$R/home/moarchy/.config/btop/btop.conf" 2>/de
   && no "a user shell.json was created -- it masks the packaged defaults" \
   || ok "no user shell.json (packaged defaults stay in force)"
 
-# The theme is what generates the sway colour config /etc/..../sway/config
-# includes. Without it sway starts with no theme at all.
+# The theme's compositor colours. Upstream generates hyprland.lua itself and
+# config/hypr/hyprland.lua requires it -- moarchy no longer ships a template.
 THEME="$R/home/moarchy/.local/state/omarchy/current/theme"
-[ -e "$THEME/sway.conf" ] && ok "theme generated sway.conf" \
-                          || no "no sway.conf generated -- omarchy-theme-set did not run"
+[ -e "$THEME/hyprland.lua" ] && ok "theme generated hyprland.lua" \
+                             || no "no hyprland.lua generated -- omarchy-theme-set did not run"
 [ -e "$THEME/colors.toml" ] && ok "theme colors.toml (the keyboard reads this)" \
                             || no "no colors.toml -- moarchy-keyboard has no palette"
 [ -f "$R/home/moarchy/.local/state/moarchy/user-setup-done" ] \
@@ -569,39 +571,39 @@ THEME="$R/home/moarchy/.local/state/omarchy/current/theme"
 # ---------------------------------------------------------------------------
 # I7 has no other test. It runs exactly once, on a card, on first boot -- so
 # without this the first time it executes is on someone's phone.
-# The session is started by /etc/profile.d, and what sway inherits from it is
+# The session is started by /etc/profile.d, and what Hyprland inherits from it is
 # the whole ballgame: moarchy-restart-shell lives in /usr/lib/moarchy/bin, so if
 # that is not on PATH the shell never starts -- no bar, no gesture strip, and no
 # log either, because the script that writes the log is the missing one.
 #
 # Every static check passed while this was broken. It took the phone to find it,
-# so it is simulated here: a login shell on tty1, with sway replaced by a stub
+# so it is simulated here: a login shell on tty1, with Hyprland replaced by a stub
 # that reports the environment it was handed instead of starting a compositor.
-sec "behaviour: what sway inherits from a tty1 login"
+sec "behaviour: what Hyprland inherits from a tty1 login"
 
-install -Dm755 /dev/stdin "$R/usr/local/bin/sway" <<'STUB'
+install -Dm755 /dev/stdin "$R/usr/local/bin/Hyprland" <<'STUB'
 #!/bin/bash
 echo "PATH=$PATH"
 echo "OMARCHY_PATH=${OMARCHY_PATH:-<unset>}"
 echo "MOARCHY_PATH=${MOARCHY_PATH:-<unset>}"
-for c in moarchy-restart-shell moarchy-keyboard omarchy-theme-set swaybg; do
+for c in moarchy-restart-shell moarchy-keyboard omarchy-theme-set hyprctl; do
   command -v "$c" >/dev/null 2>&1 && echo "resolves $c" || echo "MISSING $c"
 done
 STUB
 
 login_env=$(chroot "$R" runuser -u moarchy -- \
   env -i HOME=/home/moarchy XDG_VTNR=1 TERM=dumb /bin/bash -l -c true 2>&1)
-rm -f "$R/usr/local/bin/sway"
+rm -f "$R/usr/local/bin/Hyprland"
 
 if [ -z "$login_env" ]; then
-  no "the tty1 login never reached sway -- profile.d did not exec it"
+  no "the tty1 login never reached the compositor -- profile.d did not exec it"
 else
   # The stub only runs if the session block was reached at all.
   echo "$login_env" | grep -q '^PATH=' \
-    && ok "the login shell execs sway" || no "sway was not exec'd from profile.d"
-  for c in moarchy-restart-shell moarchy-keyboard omarchy-theme-set swaybg; do
-    if echo "$login_env" | grep -q "^resolves $c$"; then ok "sway would find $c"
-    else no "sway would NOT find $c -- it is not on the session PATH"; fi
+    && ok "the login shell execs Hyprland" || no "Hyprland was not exec'd from profile.d"
+  for c in moarchy-restart-shell moarchy-keyboard omarchy-theme-set hyprctl; do
+    if echo "$login_env" | grep -q "^resolves $c$"; then ok "Hyprland would find $c"
+    else no "Hyprland would NOT find $c -- it is not on the session PATH"; fi
   done
   for v in OMARCHY_PATH MOARCHY_PATH; do
     val=$(echo "$login_env" | sed -n "s/^$v=//p")

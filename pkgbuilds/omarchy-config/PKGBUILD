@@ -94,7 +94,23 @@ pkgver=${_ver#v}
 #    move: they are all still `moarchy.`.
 #
 #    Same three edits again.
-pkgrel=5
+# 6: upstream's idle service is parked in shell.json. Under sway it could not
+#    initialise -- it imports Quickshell.Hyprland -- so moarchy never had to
+#    care what it was configured to do. Under Hyprland it runs, and at its
+#    lock deadline it execs `omarchy-system-lock`, which this project shadows
+#    all the way down to swaylock. An ext-session-lock client hides every
+#    layer-shell surface including the OSK, so a 300-second auto-lock on a
+#    phone with no password path is only clearable over ssh -- the exact
+#    outcome bin/moarchy-screen's header exists to prevent.
+#
+#    Both timeouts go to a week rather than to an off switch, because there
+#    is no off switch: IdleModel.secondsFromConfig() falls back to the
+#    DEFAULTS on any value below zero, so -1 arms it at 150/300 rather than
+#    disabling it. swayidle plus bin/moarchy-idle-blank stays the one idle
+#    owner, and it blanks without ever locking.
+#
+#    Same two edits as every entry above: the sha256sum and this number.
+pkgrel=6
 pkgdesc="Omarchy's configuration and theme layer, with moarchy's plugins hosted"
 arch=('any')
 url="$_url"
@@ -105,7 +121,7 @@ source=("omarchy-$_ref.tar.gz::$_url/archive/$_ref.tar.gz"
         'port-4x.patch'
         'notification-popups-bar-opt-out.patch')
 sha256sums=('8cc6b1d9d903c606600395e3b3d80ad9f15bd3ab78f0f19b0f49041b1df82013'
-            '252b8a9522c39e5dc4f12faf5214a4f1c77ec725a31618def2e5bf7a62ae8cd6'
+            '3b562e93dbe65fd5aff211285891df51149eaca967136a7a06d5aac997b112e6'
             'e2e3425600b71ae016a8d63439a60dbbb2b42eb51f95516089ebd7d9610d67c5')
 
 # Two patches, and they are different kinds of thing.

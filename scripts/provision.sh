@@ -168,7 +168,7 @@ step_install() {
   phone 'sudo pacman -U --needed --noconfirm ~/pkgs/*.pkg.tar.*' ||
     die "pacman failed -- run './scripts/provision.sh watch' or check the output above"
 
-  info "installed. reboot the phone, or start the session with: exec sway"
+  info "installed. reboot the phone, or start the session with: exec Hyprland"
   info "first boot runs moarchy-firstboot (groups, autologin) and"
   info "moarchy-user-setup (app configs, initial theme) automatically"
 }
@@ -188,10 +188,10 @@ step_verify() {
     export PATH="$MOARCHY_PATH/bin:$OMARCHY_PATH/bin:$PATH"
     export XDG_RUNTIME_DIR=/run/user/$(id -u)
     echo "  GPU:        $(EGL_PLATFORM=surfaceless eglinfo 2>/dev/null | sed -n "s/^OpenGL ES profile version: //p" | head -1)"
-    echo "  sway -C:    $(WLR_BACKENDS=headless sway -C -c ~/.config/sway/config >/dev/null 2>&1 && echo PASS || echo FAIL)"
+    echo "  hypr -c:    $(hyprctl version >/dev/null 2>&1 && echo RUNNING || echo "-")"
     echo "  themes:     $(ls $OMARCHY_PATH/themes 2>/dev/null | wc -l | tr -d " ") vendored"
     echo "  omarchy at: $(git -C $OMARCHY_PATH describe --tags 2>/dev/null)"
-    for p in sway quickshell moarchy-keyboard swaybg swayidle; do
+    for p in Hyprland quickshell moarchy-keyboard swayidle; do
       printf "  %-10s %s\n" "$p" "$(pgrep -x $p >/dev/null && echo running || echo -)"
     done'
 }

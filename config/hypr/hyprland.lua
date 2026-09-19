@@ -60,8 +60,9 @@ table.insert(kept, 1, bin)
 hl.env("PATH", table.concat(kept, ":"))
 
 -- moarchy's phone layer. The module names are upstream's own, so a user who
--- drops ~/.config/hypr/bindings.lua shadows ours exactly as a .conf in
--- ~/.config/sway/config.d/ used to -- same affordance, no extra mechanism.
+-- drops ~/.config/hypr/bindings.lua shadows ours entirely -- the user
+-- directory is earlier on package.path, and that is the whole override
+-- mechanism. No extra one.
 require("hypr.monitors")
 require("hypr.input")
 require("hypr.bindings")

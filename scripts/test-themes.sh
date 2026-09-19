@@ -76,7 +76,7 @@ export PATH="$SHIM:$PATH"
 
 FAKE_HOME="$WORK/home"
 mkdir -p "$FAKE_HOME/.config/omarchy/themed"
-cp "$REPO_ROOT/default/themed/sway.conf.tpl" "$FAKE_HOME/.config/omarchy/themed/"
+cp "$REPO_ROOT/default/themed/gtk.css.tpl" "$FAKE_HOME/.config/omarchy/themed/"
 
 # 4.x writes the staged theme under .local/state, not .config. The old path is
 # where 3.8.4 put it; pointed at that, the runner finds no colors.toml, does
@@ -99,16 +99,18 @@ for theme in "$OMARCHY_PATH"/themes/*/; do
   HOME="$FAKE_HOME" OMARCHY_PATH="$OMARCHY_PATH" \
     "$NEWBASH" "$(command -v omarchy-theme-set-templates)"
 
-  out="$NEXT_THEME/sway.conf"
-  lines=$(grep -c '^client\.' "$out" 2>/dev/null || echo 0)
-  malformed=$(grep '^client\.' "$out" 2>/dev/null |
-    grep -vcE '^client\.[a-z_]+( +#[0-9a-fA-F]{6}){1,5} *$' || true)
+  # gtk.css since the compositor template went with sway: upstream generates
+  # hyprland.lua itself, so this directory's templates are the GTK pair now.
+  out="$NEXT_THEME/gtk.css"
+  lines=$(grep -c '^@define-color' "$out" 2>/dev/null || echo 0)
+  malformed=$(grep '^@define-color' "$out" 2>/dev/null |
+    grep -vcE '^@define-color +[a-z_0-9]+ +#[0-9a-fA-F]{6} *; *$' || true)
 
-  if [[ -f $out && $lines -eq 6 && ${malformed:-0} -eq 0 ]] && ! grep -q '{{' "$out"; then
-    printf "  ok   %-18s accent=%s\n" "$name" "$(awk '/^client\.focused /{print $2}' "$out")"
+  if [[ -f $out && $lines -gt 0 && ${malformed:-0} -eq 0 ]] && ! grep -q '{{' "$out"; then
+    printf "  ok   %-18s %s colours\n" "$name" "$lines"
     pass=$((pass + 1))
   else
-    printf "  FAIL %-18s (client lines=%s malformed=%s)\n" "$name" "$lines" "${malformed:-0}"
+    printf "  FAIL %-18s (@define-color lines=%s malformed=%s)\n" "$name" "$lines" "${malformed:-0}"
     grep '{{' "$out" 2>/dev/null | head -2
     fail=$((fail + 1))
   fi

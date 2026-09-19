@@ -24,12 +24,15 @@ hl.on("hyprland.start", function()
   -- The polkit agent. Upstream leaves this to its own session plumbing.
   hl.exec_cmd("/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1")
 
-  -- The wallpaper. swaybg is not a sway component -- it is a wlr-layer-shell
-  -- client, and Hyprland implements that protocol -- so it carries across the
-  -- compositor change unchanged, and so does the background-switching script
-  -- that writes the file it reads.
-  hl.exec_cmd("swaybg -i " .. (os.getenv("HOME") or "") ..
-              "/.local/state/omarchy/current/background -m fill")
+  -- No wallpaper process. In 4.x the wallpaper is a shell plugin --
+  -- shell/plugins/background/Background.qml -- and it reads the same
+  -- ~/.local/state/omarchy/current/background that swaybg was pointed at, so
+  -- the background-switching script that writes that file is unaffected.
+  --
+  -- swaybg was here because that plugin imports Quickshell.Hyprland and could
+  -- not initialise under sway, which docs/upstream.md logged as the wallpaper
+  -- shipping unported. Hyprland closes it, and running both would be two
+  -- clients painting one output.
 
   -- The on-screen keyboard. It does not raise itself: it comes up when its
   -- restore handle is tapped, when a text field is tapped, or when something

@@ -1,3 +1,8 @@
 #!/bin/bash
-# Shim: upstream locks with hyprlock, which needs Hyprland.
+# Shim. NOT a compositor workaround -- hyprlock runs fine here. Every
+# ext-session-lock client, hyprlock and swaylock alike, hides every
+# layer-shell surface while it is up, and on this phone that includes the
+# on-screen keyboard: the password prompt would have nothing to type into
+# and the only way back in is ssh. moarchy-system-lock keeps that
+# deliberate and off the power button (bin/moarchy-screen's header).
 exec moarchy-system-lock "$@"

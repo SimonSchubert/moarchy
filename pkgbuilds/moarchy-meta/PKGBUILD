@@ -153,7 +153,10 @@ depends=(
   'moarchy-device'
 
   # --- Compositor and session -------------------------------------------------
-  'swaybg'
+  # swayidle and swaylock are NOT sway components -- an ext-idle-notify-v1
+  # client and an ext-session-lock client, both of which Hyprland implements.
+  # swaybg was the third and is gone: the wallpaper is upstream's own shell
+  # plugin now (config/hypr/autostart.lua says why).
   'swayidle'
   'swaylock'
   'wl-clipboard'

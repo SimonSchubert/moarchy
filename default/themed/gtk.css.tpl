@@ -12,9 +12,8 @@
  * the active theme's colors.toml, into
  * ~/.local/state/omarchy/current/theme/gtk.css -- and ~/.config/gtk-4.0/gtk.css
  * is a symlink to that path, made by bin/omarchy-theme-set-gnome. So nothing
- * upstream is patched and nothing is copied into a home: this ships into the
- * same directory sway.conf.tpl already ships into, which upstream's own engine
- * already reads.
+ * upstream is patched and nothing is copied into a home: this ships into
+ * $OMARCHY_PATH/default/themed, which upstream's own engine already reads.
  *
  * A theme that ships its own gtk.css keeps it -- the engine only renders a
  * template whose output does not already exist. And if either of the two open
