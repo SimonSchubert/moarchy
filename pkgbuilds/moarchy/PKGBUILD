@@ -327,6 +327,15 @@ package() {
   install -Dm644 "$_repo/default/pacman-hooks/50-moarchy-shell-reload.hook" \
     "$pkgdir/usr/share/libalpm/hooks/50-moarchy-shell-reload.hook"
 
+  # The Hyprland reload guard, both halves. Upstream ships an equivalent pair
+  # under its own default/libalpm/hooks/, but they name `omarchy-settings` --
+  # a package that does not exist here -- so they never fire and are never
+  # installed. The hooks themselves say what they prevent.
+  install -Dm644 "$_repo/default/pacman-hooks/10-moarchy-hyprland-reload-pause.hook" \
+    "$pkgdir/usr/share/libalpm/hooks/10-moarchy-hyprland-reload-pause.hook"
+  install -Dm644 "$_repo/default/pacman-hooks/90-moarchy-hyprland-reload-resume.hook" \
+    "$pkgdir/usr/share/libalpm/hooks/90-moarchy-hyprland-reload-resume.hook"
+
   # The image locks the account password, so the store's pkexec action could
   # never be authenticated and the store could install nothing. /usr/share, not
   # /etc: this is a package's rule and /etc/polkit-1/rules.d stays free for the

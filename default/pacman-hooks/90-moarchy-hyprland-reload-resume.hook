@@ -1,0 +1,24 @@
+# The other half of 10-moarchy-hyprland-reload-pause.hook: let Hyprland reload
+# again, and reload it once now that every file is back.
+#
+# PostTransaction, so it runs after the last file has been written. If the
+# transaction failed the guard still resumes -- a compositor that has stopped
+# watching its config is worse than one that reloads a config it has already
+# got.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = omarchy-config
+Target = moarchy
+Target = moarchy-device-*
+
+[Action]
+Description = Reloading Hyprland now the config files are back...
+When = PostTransaction
+# Depends, so this is skipped rather than failing on the very first
+# install -- the guard is omarchy-config's own binary and does not exist
+# until that package has landed. Absolute path because a hook's PATH is
+# not a login shell's.
+Depends = omarchy-config
+Exec = /usr/bin/omarchy-hyprland-reload-guard resume

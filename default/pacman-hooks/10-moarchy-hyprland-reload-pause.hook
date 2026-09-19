@@ -1,0 +1,39 @@
+# Stop Hyprland reloading its config while the files are being replaced.
+#
+# Hyprland watches its config and reloads on change. pacman replaces a file by
+# removing it and writing the new one, so mid-transaction there is a window in
+# which /usr/share/omarchy/default/hypr/bootstrap.lua does not exist -- and a
+# reload landing in that window does not fail quietly:
+#
+#   Emergency mode tripped: A lua config error resulted in no binds being
+#   registered. Emergency binds active: SUPER + Q, SUPER + R, SUPER + M
+#   cannot open .../default/hypr/bootstrap.lua: No such file or directory
+#
+# which is a red banner across the top of the phone, every binding gone, and
+# no way back except a reload the user has to know to run. Seen on 2026-09-19
+# upgrading omarchy-config under a running Hyprland.
+#
+# This did not exist under sway: nothing reloaded a sway config on upgrade.
+#
+# THREE targets, because three packages ship files the config reads:
+# omarchy-config has upstream's default/hypr/, moarchy has config/hypr/, and
+# the device package has device/hypr/device.lua. Upstream's own pair of hooks
+# names `omarchy-settings`, a package that does not exist here, so they would
+# never fire -- which is why this is ours rather than theirs.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = omarchy-config
+Target = moarchy
+Target = moarchy-device-*
+
+[Action]
+Description = Pausing Hyprland config auto-reload while these files are replaced...
+When = PreTransaction
+# Depends, so this is skipped rather than failing on the very first
+# install -- the guard is omarchy-config's own binary and does not exist
+# until that package has landed. Absolute path because a hook's PATH is
+# not a login shell's.
+Depends = omarchy-config
+Exec = /usr/bin/omarchy-hyprland-reload-guard pause
