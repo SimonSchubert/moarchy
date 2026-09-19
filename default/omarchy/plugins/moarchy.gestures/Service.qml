@@ -462,8 +462,18 @@ Item {
   function focusWorkspace(n): void {
     root.dispatch('hl.dsp.focus({ workspace = "' + String(n) + '" })')
   }
+  // `e`, and the letter is the whole of it. A bare "+1" is relative by ID and
+  // Hyprland CREATES the workspace it names, so on a phone holding workspaces
+  // 1 and 6 a swipe off 1 lands on a brand-new empty 2 -- bare wallpaper, no
+  // app -- and the next lands on 3, walking away from both real workspaces
+  // instead of rotating between them. Sway had no such thing to get wrong:
+  // `workspace next` was already "next existing".
+  //
+  // "e+1"/"e-1" move among workspaces that EXIST and wrap at the ends, which
+  // is what "next app" means here (docs/gestures.md B3). Measured on sargo
+  // 2026-09-19: from 1 of [1,6], "+1" gave 2 of [2,6]; "e+1" gave 6 of [6].
   function focusWorkspaceRelative(delta: int): void {
-    root.dispatch('hl.dsp.focus({ workspace = "' + (delta > 0 ? "+" : "") + delta + '" })')
+    root.dispatch('hl.dsp.focus({ workspace = "e' + (delta > 0 ? "+" : "") + delta + '" })')
   }
   function focusAddress(addr: string): void {
     root.dispatch('hl.dsp.focus({ window = "address:' + addr + '" })')
