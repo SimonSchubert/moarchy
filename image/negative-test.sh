@@ -92,7 +92,12 @@ catches "real password hash"           "a real password in the image"
 # Matched on the shape of the message, not a count: the check used to say
 # "expected 9 plugins" and now derives the number from the repo.
 catches "plugins, image has"           "a missing shell plugin"
-catches "not enabled in either tree: sysinit.target.wants/moarchy-grow-rootfs" "a disabled first-boot unit"
+# The full message is "not enabled in either tree: <target>.wants/<name>" and
+# <target> is `system/sysinit.target`, not `sysinit.target`. A pattern missing
+# that `system/` matches nothing, which reads as "the verifier is blind" about
+# a check that is working -- [[empty-grep-is-not-absence]], costing one run.
+catches "not enabled in either tree: system/sysinit.target.wants/moarchy-grow-rootfs" \
+        "a disabled first-boot unit"
 
 echo
 if [ $rc -ne 0 ]; then ok "verify.sh exited non-zero ($rc)"; else no "verify.sh exited 0 on a broken image"; fi
