@@ -153,9 +153,9 @@ Item {
   // light theme that is white, and white on a pale accent is a date nobody
   // can find.
   readonly property string accentInk: {
-    var level = root.controlCenter(root.colours.accent)
-    return Math.abs(level - root.controlCenter(root.colours.background))
-         > Math.abs(level - root.controlCenter(root.colours.foreground))
+    var level = root.shade(root.colours.accent)
+    return Math.abs(level - root.shade(root.colours.background))
+         > Math.abs(level - root.shade(root.colours.foreground))
       ? root.colours.background : root.colours.foreground
   }
 

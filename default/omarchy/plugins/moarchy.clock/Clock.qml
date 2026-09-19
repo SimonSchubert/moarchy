@@ -196,9 +196,9 @@ Item {
   // light theme that is white, and white on a pale yellow accent is a Start
   // button nobody can find. Calculator's rule, and its reason.
   readonly property color accentInk: {
-    var level = root.controlCenter(root.colours.accent)
-    return Math.abs(level - root.controlCenter(root.colours.background))
-         > Math.abs(level - root.controlCenter(root.colours.foreground))
+    var level = root.shade(root.colours.accent)
+    return Math.abs(level - root.shade(root.colours.background))
+         > Math.abs(level - root.shade(root.colours.foreground))
       ? root.colours.background : root.colours.foreground
   }
 
