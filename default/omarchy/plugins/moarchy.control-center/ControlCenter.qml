@@ -52,14 +52,16 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
-import Quickshell.Bluetooth
+// Networking only, and only for `Networking.wifiEnabled` in the `wifi` IPC
+// verb: the Bluetooth adapter, the PipeWire sink and the Wi-Fi device itself
+// belong to the widgets that draw them now (docs/widgets.md W3).
 import Quickshell.Networking
-import Quickshell.Services.Pipewire
 import qs.Commons
 import qs.Ui as Ui
 import "../moarchy.common/Theme.js" as Theme
 import "../moarchy.common/ShellApps.js" as ShellApps
 import "../moarchy.common/Edge.js" as Edge
+import "../moarchy.common/Widgets.js" as WidgetList
 import "../moarchy.common" as Shared
 
 Item {
@@ -488,10 +490,11 @@ Item {
   // that forks rfkill every ten seconds for a panel nobody is looking at is
   // just a slower phone.
   function refresh(): void {
-    if (!airplaneProbe.running) airplaneProbe.running = true
-    if (!brightnessProbe.running) brightnessProbe.running = true
-    if (!torchProbe.running) torchProbe.running = true
-    if (!dataProbe.running) dataProbe.running = true
+    // Each widget's own probes, through the column: the backlight, the torch
+    // and the modem are read by the widget that draws them now, and a host
+    // that listed them would be a host that has to be edited to add a widget.
+    radios.refresh()
+    widgetColumn.refresh()
     // Twice, on purpose, and the deferred one is not the redundant one.
     //
     // Immediately, because the sheet is as tall as its content now, so the
@@ -682,41 +685,120 @@ Item {
       return root.opened ? "open" : "closed"
     }
 
+    // W15. The arrangement this surface resolved, one widget per line:
+    //
+    //     connectivity on available=1
+    //     media off available=0
+    //
+    // The host's answer and not the file's, so a `widgets.toml` the shell has
+    // not re-read shows up as a disagreement with `moarchy-widgets list`
+    // rather than as agreement with it.
+    function widgets(): string {
+      var rows = widgetColumn.arrangement
+      var out = []
+      for (var i = 0; i < rows.length; i++) {
+        var live = widgetColumn.instance(rows[i].id)
+        out.push(rows[i].id + " " + (rows[i].on ? "on" : "off")
+                 + " available=" + (live && live.available ? 1 : 0))
+      }
+      return out.join("\n")
+    }
+
+    // The same list with the names and glyphs on it, as JSON, which is what
+    // `moarchy-widgets rows` turns into the Settings page. One list and not
+    // two (W8): Settings asks the shell what the shell resolved, rather than
+    // keeping a catalogue of its own that would be a version behind.
+    function widgetRows(): string {
+      var rows = widgetColumn.arrangement
+      var out = []
+      for (var i = 0; i < rows.length; i++) {
+        var live = widgetColumn.instance(rows[i].id)
+        out.push({ id: rows[i].id,
+                   name: WidgetList.nameFor("control-center", rows[i].id),
+                   glyph: WidgetList.glyphFor("control-center", rows[i].id),
+                   on: rows[i].on,
+                   available: live ? live.available === true : false })
+      }
+      return JSON.stringify(out)
+    }
+
+    // The toggles inside the `toggles` widget, arranged under their own key
+    // (docs/widgets.md §E). The same two verbs and the same two shapes as the
+    // widgets above, because it is the same mechanism one level down --
+    // `moarchy-widgets` addresses this surface as `quick-toggles`.
+    function toggles(): string {
+      var w = widgetColumn.instance("toggles")
+      if (!w) return "absent"
+      var rows = togglesFile.resolve("quick-toggles")
+      var out = []
+      for (var i = 0; i < rows.length; i++)
+        out.push(rows[i].id + " " + (rows[i].on ? "on" : "off")
+                 + " available=" + (w.usable(rows[i].id) ? 1 : 0))
+      return out.join("\n")
+    }
+
+    function toggleRows(): string {
+      var rows = togglesFile.resolve("quick-toggles")
+      var w = widgetColumn.instance("toggles")
+      var out = []
+      for (var i = 0; i < rows.length; i++)
+        out.push({ id: rows[i].id,
+                   name: WidgetList.nameFor("quick-toggles", rows[i].id),
+                   glyph: WidgetList.glyphFor("quick-toggles", rows[i].id),
+                   on: rows[i].on,
+                   available: w ? w.usable(rows[i].id) === true : true })
+      return JSON.stringify(out)
+    }
+
+    // W14. A verb that names a widget answers `absent` when that widget is not
+    // in the arrangement -- not "" and not "ok". An empty answer coerces to 0
+    // in the selftest's `[[ ]]` comparisons and reads as a pass, which is the
+    // failure `empty-ipc-answer-coerces-to-zero` records.
+    function widgetCall(id: string, fn: string): string {
+      var w = widgetColumn.instance(id)
+      if (!w) return "absent"
+      if (typeof w[fn] !== "function") return "absent"
+      return String(w[fn]())
+    }
+
     // S4, S6a. What the Wi-Fi tile is reading, so a check can tell which branch
     // a tap is about to take without inferring it from the phone's own network
     // -- and can say so when the answer is the surprising one.
     function wifi(): string {
-      var device = root.wifiDevice
+      var w = widgetColumn.instance("connectivity")
+      if (!w) return "absent"
       return [Networking.wifiEnabled ? "on" : "off",
-              device && device.connected ? "connected" : "disconnected",
-              root.wifiKnownInRange ? "known-in-range" : "none-known",
-              root.wifiStranded ? "stranded" : "ok"].join(" ")
+              w.wifiDevice && w.wifiDevice.connected ? "connected" : "disconnected",
+              w.wifiKnownInRange ? "known-in-range" : "none-known",
+              w.wifiStranded ? "stranded" : "ok"].join(" ")
     }
 
     // The tile's own decision, reached through the tile's own code. Under
     // `dryRun 1` it records and does not act, so S6a is assertable on a phone
     // that is reached over the radio it would otherwise switch off.
-    function wifiTap(): string { root.wifiTap(); return root.lastAction }
-    function wifiHold(): string { root.wifiHold(); return root.lastAction }
-    function btTap(): string { root.btTap(); return root.lastAction }
-    function btHold(): string { root.btHold(); return root.lastAction }
+    function wifiTap(): string { return widgetCall("connectivity", "wifiTap") }
+    function wifiHold(): string { return widgetCall("connectivity", "wifiHold") }
+    function btTap(): string { return widgetCall("connectivity", "btTap") }
+    function btHold(): string { return widgetCall("connectivity", "btHold") }
 
     // S29d. `mobile` and not `data`: an IpcHandler is a QtObject and `data` is
     // already one of its properties, so a function of that name would collide
     // with it rather than be reachable.
     function mobile(): string {
-      return [root.dataPresent ? "present" : "absent",
-              root.dataEnabled ? "on" : "off",
-              root.dataConnected ? "connected" : "disconnected",
-              root.dataLocked ? "locked" : "unlocked",
-              root.dataSimMissing ? "no-sim" : "sim",
+      var w = widgetColumn.instance("mobile-data")
+      if (!w) return "absent"
+      return [w.dataPresent ? "present" : "absent",
+              w.dataEnabled ? "on" : "off",
+              w.dataConnected ? "connected" : "disconnected",
+              w.dataLocked ? "locked" : "unlocked",
+              w.dataSimMissing ? "no-sim" : "sim",
               // The latch, which is what decides whether the tile is on
               // screen at all -- and the only way a check can tell a tile
               // that is drawn and disconnected from one that has vanished.
-              root.dataSeen ? "drawn" : "hidden"].join(" ")
+              w.dataSeen ? "drawn" : "hidden"].join(" ")
     }
-    function dataTap(): string { root.dataTap(); return root.lastAction }
-    function dataHold(): string { root.dataHold(); return root.lastAction }
+    function dataTap(): string { return widgetCall("mobile-data", "tap") }
+    function dataHold(): string { return widgetCall("mobile-data", "hold") }
 
     function dryRun(on: string): string {
       root.dryRun = (on === "1" || on === "true" || on === "on")
@@ -730,224 +812,49 @@ Item {
 
   readonly property var notifications: root.shell && typeof root.shell.serviceFor === "function"
     ? root.shell.serviceFor("omarchy.notifications") : null
-  readonly property var media: root.shell && typeof root.shell.serviceFor === "function"
-    ? root.shell.serviceFor("omarchy.media") : null
 
-  readonly property var btAdapter: Bluetooth.defaultAdapter
-  readonly property var sink: Pipewire.defaultAudioSink
-  PwObjectTracker { objects: root.sink ? [root.sink] : [] }
+  // ------------------------------------------------- the widget contract
+  //
+  // What a widget draws with, answered by name (docs/widgets.md §C). The
+  // colours and the radii above are the same six roles and three radii this
+  // file always declared; these are the rest of the contract, and they are
+  // deliberately generic names rather than the control center's own -- a
+  // widget that read `controlCenterTile` would be a widget that knows which
+  // surface it is on.
+  readonly property int tileHeight: ui.controlCenterTile
+  readonly property int sliderHeight: ui.controlCenterSlider
+  readonly property int roundSize: ui.controlCenterRound
+  function radiusOn(size) { return ui.radiusOn(size) }
 
-  readonly property var wifiDevice: {
-    var devices = Networking.devices ? Networking.devices.values : []
-    for (var i = 0; i < devices.length; i++)
-      if (devices[i] && devices[i].type === DeviceType.Wifi) return devices[i]
-    return null
-  }
+  // The sheet a widget's controls drag (W13, refactor.md H3). This surface is
+  // one, so it hands over itself; a host that is not dragged hands over null
+  // and SheetDragArea leaves the gesture alone.
+  readonly property var sheet: root
 
-  // The tiles say what they are connected to, not just on or off -- which is
-  // the difference between a switch and a status panel.
-  readonly property string wifiLabel: {
-    if (!Networking.wifiEnabled) return "Off"
-    var device = root.wifiDevice
-    if (!device || !device.connected) return "Not connected"
-    var networks = device.networks ? device.networks.values : []
-    for (var i = 0; i < networks.length; i++)
-      if (networks[i] && networks[i].connected) return String(networks[i].name || "Connected")
-    return "Connected"
-  }
+  // S8, S9. Airplane is the one piece of state two widgets share -- the tile
+  // is in `toggles` and `connectivity` needs it to know whether a tap means
+  // unblock or toggle -- so the host owns one and publishes it rather than
+  // each of them probing rfkill and holding its own answer.
+  Shared.Radios { id: radios }
 
-  // S6a. "Nothing a tap could usefully do." Known means NetworkManager holds a
-  // saved connection for it, so a known network in range is one the phone is
-  // about to join by itself -- and toggling the radio off mid-reconnect is the
-  // last thing the tap should mean. With none in range there is nothing to
-  // wait for, and the picker is the only way out.
-  readonly property bool wifiKnownInRange: {
-    var device = root.wifiDevice
-    var networks = device && device.networks ? device.networks.values : []
-    for (var i = 0; i < networks.length; i++)
-      if (networks[i] && networks[i].known) return true
-    return false
-  }
+  // The arrangement file again, for the `toggles` IPC verbs. The toggles
+  // widget has its own watch on it; this is the host's, and it is read-only.
+  Shared.WidgetsFile { id: togglesFile }
+  readonly property bool airplane: radios.airplane
+  function setAirplane(on) { radios.setAirplane(on) }
+  function enableRadio(kind) { radios.enableRadio(kind) }
 
-  readonly property bool wifiStranded:
-    Networking.wifiEnabled && !root.airplane
-    && !(root.wifiDevice && root.wifiDevice.connected)
-    && !root.wifiKnownInRange
-
-  readonly property string btLabel: {
-    if (!root.btAdapter) return "No adapter"
-    if (!root.btAdapter.enabled) return "Off"
-    var devices = Bluetooth.devices ? Bluetooth.devices.values : []
-    for (var i = 0; i < devices.length; i++)
-      if (devices[i] && devices[i].connected) return String(devices[i].name || "Connected")
-    return "On"
-  }
-
-  // S29a. S4's ordering discipline, applied to the other radio: what is wrong
-  // first, then what is connected, then the bare fact that it is on. "SIM
-  // locked" is the line this phone shows on every boot -- the SIM re-locks at
-  // power-on and nothing but the keypad can answer it (docs/devices.md D33).
-  readonly property string dataLabel:
-    !root.dataEnabled ? "Off"
-    : root.dataSimMissing ? "No SIM"
-    : root.dataLocked ? "SIM locked"
-    : root.dataConnected ? (root.dataOperator !== "" ? root.dataOperator : "Connected")
-    : "Not connected"
-
-  property bool airplane: false
-  property int brightness: 50
-  property bool torchAvailable: false
-  property bool torchOn: false
-
-  // S29d. Mobile data, the one tile whose whole state comes out of a moarchy
-  // script. Quickshell.Networking knows about wifi devices and nothing else,
-  // and the two writes need root -- NetworkManager's settings.modify.system is
-  // auth_admin, and a polkit prompt raised from the control center would land on top of
-  // the control center that asked for it.
-  property bool dataPresent: false
-  // Latched, and the latch is the point. Switching data on can make
-  // ModemManager re-enumerate -- one off/on took this modem from Modem/1 to
-  // Modem/0 -- and NetworkManager has no gsm device at all for a few seconds
-  // either side of that. Bound straight to dataPresent, the tile disappeared
-  // from under the finger that had just tapped it and came back a moment
-  // later. Having a modem is a fact about the hardware, so it is remembered
-  // rather than re-asked: a phone with none never sets this, and a phone whose
-  // modem has gone keeps a tile that says "Not connected", which is the better
-  // of the two wrong answers (S29).
-  property bool dataSeen: false
-  property bool dataEnabled: false
-  property bool dataConnected: false
-  property bool dataLocked: false
-  property bool dataSimMissing: false
-  property string dataOperator: ""
-
-  // Absolute, and moarchy.sim/Sim.qml's own header has the whole reason: a
-  // shell restarted from anywhere but a login session comes up without
-  // /usr/lib/moarchy/bin on PATH, a Process that cannot find its binary does
-  // not throw, and the StdioCollector still fires with empty text. A bare name
-  // here would leave this tile absent on precisely the phones that have a
-  // modem, with one line in the shell log to say why.
-  readonly property string dataTool: "/usr/lib/moarchy/bin/moarchy-data"
-
-  // Airplane mode is one lever over wifi, bluetooth and the modem, which is
-  // what a phone means by it -- `nmcli radio` would leave bluetooth up. The
-  // user is in group rfkill, so none of this needs root.
-  Shared.Probe {
-    id: airplaneProbe
-    command: ["bash", "-c", "cat /sys/class/rfkill/*/soft 2>/dev/null | sort -u | tr -d '\\n'"]
-    // "1" means every switch reads blocked. "0" or "01" means at least one
-    // radio is live, so this is not airplane mode.
-    onAnswered: root.airplane = text.trim() === "1"
-  }
-
-  Shared.Probe {
-    id: brightnessProbe
-    command: ["bash", "-c", "brightnessctl -d backlight -m | cut -d, -f4 | tr -d '%\\n'"]
-    onAnswered: {
-      var v = parseInt(text.trim(), 10)
-      if (isFinite(v)) root.brightness = Math.max(1, Math.min(100, v))
-    }
-  }
-
-  // The flash LED is root:feedbackd 0664 and feedbackd is an empty group on a
-  // bare install, so the tile is dead until install/session.sh has added the
-  // user and they have logged in again. Probe rather than assume: a tile that
-  // is drawn but does nothing is worse than one that is not drawn.
-  Shared.Probe {
-    id: torchProbe
-    command: ["bash", "-c", "[ -w /sys/class/leds/white:flash/brightness ] && cat /sys/class/leds/white:flash/brightness || echo unavailable"]
-    onAnswered: {
-      var out = text.trim()
-      root.torchAvailable = out !== "unavailable" && out !== ""
-      root.torchOn = root.torchAvailable && out !== "0"
-    }
-  }
-
-  Shared.Probe {
-    id: dataProbe
-    command: [root.dataTool, "status"]
-    onAnswered: {
-      var lines = text.trim().split("\n")
-      // A one-line answer is a script that did not run -- an empty text is
-      // what a Process that failed to start hands back, and blanking the tile
-      // on that would hide mobile data on a working phone. Leave what was
-      // there and let the next open ask again.
-      if (lines.length < 2) return
-      var kv = ({})
-      for (var i = 0; i < lines.length; i++) {
-        var at = lines[i].indexOf("=")
-        if (at > 0) kv[lines[i].slice(0, at)] = lines[i].slice(at + 1)
-      }
-      root.dataPresent = kv.present === "yes"
-      if (root.dataPresent) root.dataSeen = true
-      root.dataEnabled = kv.enabled === "yes"
-      root.dataConnected = kv.connected === "yes"
-      root.dataLocked = kv.locked === "yes"
-      root.dataSimMissing = kv.sim === "missing"
-      root.dataOperator = kv.operator ? kv.operator : ""
-    }
-  }
+  Timer { id: historyRefresh; interval: 250; onTriggered: historyRead.running = true }
 
   // --------------------------------------------------------- actions
 
-  function setAirplane(on) {
-    root.airplane = on
-    Quickshell.execDetached(["rfkill", on ? "block" : "unblock", "all"])
-    airplaneRecheck.restart()
-  }
-  // S9. Turning a radio on from inside airplane mode clears airplane mode,
-  // rather than leaving the tile lit and the radio dark contradicting each
-  // other on screen.
+  // Set by `control-center dryRun 1`, the way Settings does it. What the tile
+  // decided is recorded either way; only the effect that cannot be taken back
+  // -- the radio write -- is held back. Without this a check of S6a would have
+  // to switch the radio off on a phone reached over that radio.
   //
-  // Unblocking just that one radio is enough, and is better than `unblock
-  // all`: airplaneProbe calls it airplane mode only when *every* rfkill switch
-  // reads blocked, so freeing one clears the state on the next read -- without
-  // switching the other radios back on behind the user, which is not what
-  // tapping Wi-Fi asked for.
-  property string pendingRadio: ""
-
-  function enableRadio(kind) {
-    Quickshell.execDetached(["rfkill", "unblock", kind])
-    root.pendingRadio = kind
-    airplaneRecheck.restart()
-  }
-
-  // The radio is switched on after the unblock has landed, not alongside it:
-  // NetworkManager will refuse to enable an interface that rfkill still has
-  // blocked, and the write would be silently dropped.
-  Timer {
-    id: airplaneRecheck
-    interval: 700
-    onTriggered: {
-      airplaneProbe.running = true
-      if (root.pendingRadio === "wifi") Networking.wifiEnabled = true
-      else if (root.pendingRadio === "bluetooth" && root.btAdapter)
-        root.btAdapter.enabled = true
-      root.pendingRadio = ""
-    }
-  }
-  Timer { id: historyRefresh; interval: 250; onTriggered: historyRead.running = true }
-
-  // S6, S6a, S6b, S6c. Each wide tile toggles a radio and holds to open the
-  // thing that radio is for. Both open the same screen the matching Settings
-  // row opens (`net.wifi`, `net.bluetooth`), so there is one picker behind two
-  // entry points rather than two that drift.
-  //
-  // Neither is a terminal any more, and the two lost the argument differently.
-  // nmtui-connect fits the 60x41 grid -- its list and buttons are all on
-  // screen -- and none of them can be pressed, because nmtui never asks for
-  // mouse reporting and foot's tap-to-click has nothing to deliver the tap to.
-  // bluetui does ask, and was genuinely operable; it was still a list whose
-  // rows are one terminal line, ~17 logical px against the 44 style.md E1
-  // asks for, in a window carrying its own workspace, its own carousel card
-  // and foot's palette instead of the shell's. moarchy.wifi and
-  // moarchy.bluetooth are the same two lists with tap targets
-  // (docs/control-center.md S6b, S6c, S6d).
-
-  // Set by `control-center dryRun 1`, the way Settings does it. What the tile decided is
-  // recorded either way; only the effect that cannot be taken back -- the radio
-  // write -- is held back. Without this a check of S6a would have to switch the
-  // radio off on a phone reached over that radio.
+  // Read by the widgets off the host (W4), because it is a fact about this
+  // surface being under test and not about any one tile.
   //
   // Summoning a picker is deliberately NOT held back, and used to be. The
   // sentence above said "the radio write and the launch", and the launch it
@@ -962,25 +869,8 @@ Item {
   property string lastLaunch: ""
   property string lastAction: ""
 
-  function wifiTap() {
-    if (root.airplane) {
-      root.lastAction = "unblock"
-      if (!root.dryRun) root.enableRadio("wifi")
-      return
-    }
-    if (root.wifiStranded) {
-      root.openWifi()
-      return
-    }
-    root.lastAction = "toggle"
-    if (!root.dryRun) Networking.wifiEnabled = !Networking.wifiEnabled
-  }
-
-  function wifiHold() { root.openWifi() }
-
-  // One entry point for both tiles: they summon a plugin rather than spawning
-  // a process, so lastLaunch carries the plugin id -- not a command -- and
-  // lastAction records the same "picker" the tile checks assert.
+  // One entry point for every screen a widget asks for, and the host's to
+  // decide (W5): the widget says which screen, this says what it costs.
   function openScreen(id) {
     // The control center goes away first -- the same order the gear uses (S2). It is a
     // sheet over whatever workspace this is, and the screen it summons is a
@@ -991,108 +881,6 @@ Item {
     root.lastLaunch = id
     if (root.shell && typeof root.shell.summon === "function")
       root.shell.summon(id, JSON.stringify({ returnTo: root.pluginId }))
-  }
-
-  function openWifi() { root.openScreen("moarchy.wifi") }
-  function openBluetooth() { root.openScreen("moarchy.bluetooth") }
-
-  // S6c. The pair behaves the same way. No stranded case here: a Bluetooth
-  // adapter with nothing paired in range is the normal resting state of one,
-  // not a dead end worth re-routing the tap for.
-  function btTap() {
-    if (root.airplane) {
-      root.lastAction = "unblock"
-      if (!root.dryRun) root.enableRadio("bluetooth")
-      return
-    }
-    root.lastAction = "toggle"
-    if (!root.dryRun && root.btAdapter) root.btAdapter.enabled = !root.btAdapter.enabled
-  }
-
-  function btHold() { root.openBluetooth() }
-
-  // S29b. A tap on a locked SIM opens the keypad rather than toggling, which is
-  // S6a's reasoning reached for the second time: the switch is a dead end
-  // while the SIM is locked. Turning data off changes nothing anybody can see,
-  // turning it on cannot connect, and the keypad is the only thing on this
-  // phone that gets you from here to online.
-  function dataTap() {
-    if (root.dataLocked) {
-      root.openSim()
-      return
-    }
-    root.lastAction = "toggle"
-    if (!root.dryRun) root.setData(!root.dataEnabled)
-  }
-
-  // S29b. Held, it is the keypad whatever the SIM is doing -- the same "hold
-  // for the thing the radio is for" as the two tiles above (S6, S6c).
-  function dataHold() { root.openSim() }
-
-  function openSim() { root.openScreen("moarchy.sim") }
-
-  // Optimistic, then read back 700ms later: the same shape and the same reason
-  // as setAirplane. moarchy-data returns in well under a second even against a
-  // locked SIM -- it passes nmcli --wait 0 rather than sitting out the 90s
-  // secrets timeout -- but what it returns to is a state still settling, which
-  // is why the tile draws `enabled` (the setting) and not `connected` (S29).
-  // moarchy-data writes the profile's autoconnect too, which is what makes
-  // an `off` survive a reboot (S29c).
-  function setData(on) {
-    root.dataEnabled = on
-    Quickshell.execDetached([root.dataTool, on ? "on" : "off"])
-    dataRecheck.restart()
-  }
-
-  Timer {
-    id: dataRecheck
-    interval: 700
-    onTriggered: dataProbe.running = true
-  }
-
-  function setBrightness(percent) {
-    var v = Math.max(1, Math.min(100, Math.round(percent)))
-    root.brightness = v
-    Quickshell.execDetached(["brightnessctl", "-d", "backlight", "set", v + "%"])
-  }
-
-  function setTorch(on) {
-    if (!root.torchAvailable) return
-    root.torchOn = on
-    Quickshell.execDetached(["bash", "-c",
-      "echo " + (on ? "1" : "0") + " > /sys/class/leds/white:flash/brightness"])
-  }
-
-  function rotate() {
-    // S11. Portrait and one landscape, toggled -- not a cycle through all four
-    // transforms. This is a portrait phone: 180 is upside-down and 270 is the
-    // other landscape, so cycling made the landscape you wanted three taps
-    // away and put upside-down on the route there.
-    //
-    // There is no "rotate by 90" verb, so read the current transform and pick
-    // the other one. Detached and fire-and-forget: the output reconfigure is
-    // what tells us it worked, and there is nothing useful to do if it did not.
-    //
-    // The output is asked for by the same call that reads its transform, not
-    // named (refactor.md N2, devices.md D3). This said `DSI-1` until then -- the panel this
-    // was written on -- which made it the one hardcoded output name in the tree
-    // and a silent no-op on any phone whose panel is called something else.
-    //
-    // `hyprctl eval` and not `hyprctl keyword`: under a Lua config the latter
-    // refuses outright -- "keyword can't work with non-legacy parsers" -- and
-    // hl.monitor() takes a whole monitor line, so the SCALE has to be restated
-    // or the rotate would silently reset the phone to scale 1. It is read back
-    // from the compositor for the same reason the name is: the device package
-    // owns that number (devices.md D3) and this file must not carry a second
-    // copy of it.
-    //
-    // Transform is an integer here where sway used words: 0 is normal and 1 is
-    // 90 degrees.
-    Quickshell.execDetached(["bash", "-c",
-      "s=$(hyprctl monitors -j | python3 -c 'import json,sys;d=json.load(sys.stdin)[0];print(d[\"name\"], d[\"transform\"], d[\"scale\"])'); " +
-      "set -- $s; " +
-      "case $2 in 0) n=1;; *) n=0;; esac; " +
-      "hyprctl eval \"hl.monitor({ output = \\\"$1\\\", mode = \\\"preferred\\\", position = \\\"auto\\\", scale = $3, transform = $n })\""])
   }
 
   // ---------------------------------------------------- notification history
@@ -1284,310 +1072,6 @@ Item {
   }
 
   // ========================================================== components
-
-  // A quick-settings tile with room for a state line. Two of these fit across
-  // the screen, which is the layout Android settled on: the two radios you
-  // actually want to read, then a row of plain toggles under them.
-  component WideTile: Rectangle {
-    id: tile
-    property string glyph: ""
-    property string label: ""
-    property string detail: ""
-    property bool on: false
-    signal activated()
-
-    // S6. Opt-in, and off by default: a tile with no long press must keep the
-    // tap it always had. Were the hold armed everywhere, holding the Bluetooth
-    // tile would swallow its own click and the tile would do nothing at all --
-    // which is worse than not having the gesture.
-    property bool holdable: false
-    signal held()
-
-    // Fired while the finger is still down, as Android does, so the surface
-    // answers the gesture rather than the lift. Cleared on the next press
-    // rather than on release, for the reason sheetWasDrag is (Qt delivers
-    // released before clicked, so a flag cleared on release is already false
-    // when the click lands and the tile fires both actions).
-    property bool heldFired: false
-
-    height: ui.controlCenterTile
-    radius: root.radiusTile
-    color: tile.on ? root.accent : root.container
-    Behavior on color { ColorAnimation { duration: 140 } }
-
-    // Its own 120 rather than the 140 above (docs/style.md H5, G1): a tile
-    // lighting up and a tile acknowledging a thumb are two different state
-    // changes, and one property cannot carry two durations. Veiled toward
-    // whichever ink the tile is carrying, so a lit one still reads as lit (H4).
-    //
-    // Guarded on the drag (H6): these tiles *are* the sheet's drag handle, so
-    // `pressed` stays true for the whole gesture and an unguarded veil would
-    // light every tile a scrolling thumb crossed.
-    PressVeil {
-      anchors.fill: parent
-      radius: parent.radius
-      ink: tile.on ? root.textOnAccent : root.textOnSurface
-      on: tileArea.pressed && !root.sheetDragging
-    }
-
-    Row {
-      anchors.fill: parent
-      anchors.leftMargin: Style.space(12)
-      anchors.rightMargin: Style.space(10)
-      spacing: Style.space(10)
-
-      Ui.OpticalGlyph {
-        anchors.verticalCenter: parent.verticalCenter
-        width: root.glyphSlot
-        height: root.glyphSlot
-        text: tile.glyph
-        fontFamily: Style.font.family
-        fontSize: Style.font.iconLarge
-        color: tile.on ? root.textOnAccent : root.textOnSurface
-      }
-
-      Column {
-        anchors.verticalCenter: parent.verticalCenter
-        // Exact rather than estimated, now the glyph has a width of its own
-        // instead of whatever the font gave it.
-        width: parent.width - root.glyphSlot - Style.space(10)
-        spacing: 0
-
-        Text {
-          width: parent.width
-          text: tile.label
-          font.family: Style.font.family
-          font.pixelSize: Style.font.bodySmall
-          font.weight: root.textWeight
-          color: tile.on ? root.textOnAccent : root.textOnSurface
-          elide: Text.ElideRight
-        }
-        Text {
-          width: parent.width
-          visible: tile.detail !== ""
-          text: tile.detail
-          font.family: Style.font.family
-          font.pixelSize: Style.font.caption
-          font.weight: root.textWeight
-          color: tile.on ? Util.alpha(root.textOnAccent, 0.75) : root.subdued
-          elide: Text.ElideRight
-        }
-      }
-    }
-
-    Timer {
-      id: hold
-      interval: root.holdInterval
-      onTriggered: { tile.heldFired = true; tile.held() }
-    }
-
-    SheetArea {
-      id: tileArea
-      anchors.fill: parent
-      onGrabbed: (area, mouse) => {
-        tile.heldFired = false
-        if (tile.holdable) hold.restart()
-      }
-      // Cancelled by the sheet drag latching, not by any movement at all: a
-      // thumb held still for half a second still travels a few pixels, and a
-      // hold that a steady hand cannot complete is not a gesture.
-      onDragged: (area, mouse) => { if (root.sheetDragging) hold.stop() }
-      onUngrabbed: hold.stop()
-      onClicked: if (!root.sheetWasDrag && !tile.heldFired) tile.activated()
-    }
-  }
-
-  // The compact form, for toggles whose whole state is "on" or "off".
-  component SmallTile: Rectangle {
-    id: small
-    property string glyph: ""
-    property string label: ""
-    property bool on: false
-    signal activated()
-
-    height: ui.controlCenterTile
-    radius: root.radiusTile
-    color: small.on ? root.accent : root.container
-    Behavior on color { ColorAnimation { duration: 140 } }
-
-    // As WideTile. Rotate is the one instance pinned `on: false` -- a momentary
-    // action wearing a toggle's chrome -- so until now a tap on it drew nothing
-    // at all, and this is the only response it has.
-    PressVeil {
-      anchors.fill: parent
-      radius: parent.radius
-      ink: small.on ? root.textOnAccent : root.textOnSurface
-      on: smallArea.pressed && !root.sheetDragging
-    }
-
-    Column {
-      anchors.centerIn: parent
-      spacing: Style.space(3)
-
-      Ui.OpticalGlyph {
-        anchors.horizontalCenter: parent.horizontalCenter
-        width: root.glyphSlot
-        height: root.glyphSlot
-        text: small.glyph
-        fontFamily: Style.font.family
-        fontSize: Style.font.iconLarge
-        color: small.on ? root.textOnAccent : root.textOnSurface
-      }
-      Text {
-        anchors.horizontalCenter: parent.horizontalCenter
-        text: small.label
-        font.family: Style.font.family
-        font.pixelSize: Style.font.caption
-        font.weight: root.textWeight
-        color: small.on ? Util.alpha(root.textOnAccent, 0.75) : root.subdued
-      }
-    }
-
-    SheetArea {
-      id: smallArea
-      anchors.fill: parent
-      onClicked: if (!root.sheetWasDrag) small.activated()
-    }
-  }
-
-  // A track you can put a thumb on rather than a hairline with a knob. The
-  // glyph rides inside it, so the control is its own label and the row costs
-  // one height instead of two.
-  component FatSlider: Item {
-    id: slider
-    property real value: 0        // 0..1
-    property string glyph: ""
-    // Whether to report every step of the drag or only the end of it. Volume is
-    // in-process and free to follow the finger; brightness forks brightnessctl
-    // per write, so it waits for the release.
-    property bool live: false
-    signal committed(real value)
-
-    height: ui.controlCenterSlider
-    readonly property int vGrow: Math.min(Style.space(4),
-      Math.max(0, Math.round((Style.space(44) - height) / 2)))
-    readonly property real clamped: Math.max(0, Math.min(1, slider.value))
-    property real dragValue: slider.clamped
-    property bool dragging: false
-    readonly property real shown: slider.dragging ? slider.dragValue : slider.clamped
-
-    Rectangle {
-      anchors.fill: parent
-      // D1: the same tile radius as the quick-settings tiles, capped at a
-      // half-side so Large stays a pill and Square goes to 0.
-      radius: ui.radiusOn(height)
-      color: root.container
-
-      Rectangle {
-        height: parent.height
-        // Never narrower than the corner diameter: below that a rounded fill
-        // collapses into a lens and reads as a rendering fault rather than a
-        // low value. Square (radius 0) may be a sliver.
-        width: Math.max(parent.radius * 2, parent.width * slider.shown)
-        radius: parent.radius
-        color: root.accent
-        Behavior on width {
-          enabled: !slider.dragging
-          NumberAnimation { duration: 120 }
-        }
-      }
-
-      // Over the track and the fill together, so it says "engaged" without
-      // saying anything about the value. This looks like the one control that
-      // does not need a press state -- the fill follows the thumb -- but that
-      // fails at exactly one point: tap a slider at its current value and
-      // nothing whatever happens. Guarded on the handover rather than on
-      // sheetDragging, because this one hands the gesture over itself (H6).
-      PressVeil {
-        anchors.fill: parent
-        radius: parent.radius
-        on: sliderArea.pressed && !sliderArea.handedOver
-      }
-
-      // Positioned by where the glyph's centre should land, not by where its
-      // box starts: the brightness sun is 3px wider than the speaker, so two
-      // sliders given the same left margin had their glyphs on different
-      // vertical lines.
-      Ui.OpticalGlyph {
-        anchors.left: parent.left
-        anchors.leftMargin: Style.space(20) - Math.round(root.glyphSlot / 2)
-        anchors.verticalCenter: parent.verticalCenter
-        width: root.glyphSlot
-        height: root.glyphSlot
-        text: slider.glyph
-        fontFamily: Style.font.family
-        fontSize: Style.font.icon
-        color: root.textOnAccent
-      }
-    }
-
-    // The one control on the sheet that cannot simply add the sheet drag
-    // alongside its own, because it commits on *press*: this is a tap-to-set
-    // slider, so the value has already moved by the time it is known whether
-    // the finger is going sideways or up. So it hands over instead -- and puts
-    // the value back, which for a live slider means undoing a commit it has
-    // already sent.
-    MouseArea {
-      id: sliderArea
-      anchors.fill: parent
-      // Compact sliders draw under 44; grow the target into the Column gap,
-      // never more than 4, so two adjacent sliders cannot eat each other (E3).
-      anchors.topMargin: -slider.vGrow
-      anchors.bottomMargin: -slider.vGrow
-      property real preValue: 0
-      property real pressX: 0
-      property bool handedOver: false
-      function valueAt(x) { return Math.max(0, Math.min(1, x / Math.max(1, width))) }
-
-      onPressed: mouse => {
-        preValue = slider.value
-        pressX = mouse.x
-        handedOver = false
-        root.sheetPress(this, mouse)
-        slider.dragging = true
-        slider.dragValue = valueAt(mouse.x)
-        if (slider.live) slider.committed(slider.dragValue)
-      }
-
-      onPositionChanged: mouse => {
-        if (handedOver) { root.sheetMove(this, mouse); return }
-        if (!slider.dragging) return
-        // Vertical and clearly not a slider adjustment: give the gesture to
-        // the sheet and restore what the press already changed.
-        var dyScene = mapToItem(null, mouse.x, mouse.y).y - root.sheetPressY
-        if (dyScene < -root.dragSlop && Math.abs(dyScene) > Math.abs(mouse.x - pressX)) {
-          slider.dragging = false
-          handedOver = true
-          if (slider.live) slider.committed(preValue)
-          slider.dragValue = preValue
-          root.sheetMove(this, mouse)
-          return
-        }
-        slider.dragValue = valueAt(mouse.x)
-        if (slider.live) slider.committed(slider.dragValue)
-      }
-
-      // The sheet's touch is ended on every path, not only the handed-over
-      // one. A slider drag never latches the sheet, so this used to be
-      // harmless; since F2 it strands a live watchdog that fires four seconds
-      // later and puts `progress` back under whatever is on screen.
-      onReleased: mouse => {
-        var handed = handedOver
-        handedOver = false
-        root.sheetRelease()
-        if (handed) return
-        if (!slider.dragging) return
-        slider.dragging = false
-        slider.committed(valueAt(mouse.x))
-      }
-
-      onCanceled: {
-        root.sheetCancel()
-        handedOver = false
-        slider.dragging = false
-      }
-    }
-  }
 
   // A tonal icon button, for the two things in the header that are not
   // settings: the Omarchy menu and the power routes. Circle at Large, rounded
@@ -1853,227 +1337,26 @@ Item {
           }
         }
 
-        // ---------------------------------------------------- wide tiles
-        Row {
-          width: parent.width
-          spacing: Style.space(8)
-          readonly property int cell: Math.floor((width - spacing) / 2)
-
-          WideTile {
-            width: parent.cell
-            glyph: "󰤨"
-            label: "Wi-Fi"
-            detail: root.wifiLabel
-            on: Networking.wifiEnabled
-            holdable: true
-            onActivated: root.wifiTap()
-            onHeld: root.wifiHold()
-          }
-
-          WideTile {
-            width: parent.cell
-            glyph: "󰂯"
-            label: "Bluetooth"
-            detail: root.btLabel
-            on: root.btAdapter ? root.btAdapter.enabled : false
-            holdable: true
-            onActivated: root.btTap()
-            onHeld: root.btHold()
-          }
-        }
-
-        // --------------------------------------------------- mobile data
-        // Full width, and that is the shape rather than a default. A third
-        // half-width cell beside Wi-Fi and Bluetooth leaves a hole, and a
-        // fifth SMALL tile does not fit: that row's label has no width and no
-        // elide, so a fifth cell makes "Airplane" spill into its neighbour.
-        // This tile also has a second line genuinely worth reading -- the
-        // operator, or the reason there is no data -- which is the wide tile's
-        // shape and not the small one's.
+        // ------------------------------------------------------ widgets
         //
-        // Absent, not disabled, where NetworkManager sees no gsm device at
-        // all: S10's rule for the torch.
+        // Everything between the header and the notification list is the
+        // user's to arrange (docs/widgets.md). This surface names no widget
+        // and lays out no tile: it hands the column what a widget draws with,
+        // and the column draws what the arrangement says, in the order it
+        // says.
         //
-        // The glyph is md-network_strength_4 (U+F08FA), held at full strength
-        // the way the Wi-Fi tile holds md-wifi_strength_4 -- the tile says
-        // whether data is ON, and the bar is where strength is drawn.
-        //
-        // Picked by reading the font's cmap and NOT by copying a neighbour,
-        // which is how this arrived at an icon of two arrows: the glyphs are
-        // not in omarchy.ttf at all but in JetBrainsMono Nerd Font, by
-        // fontconfig fallback, and the Nerd Font's Material range does not sit
-        // where moarchy.bar's comments say it does. U+F08C1, the top of the
-        // bar's own signal ramp, is md-swap_horizontal_variant there.
-        WideTile {
+        // The header above and the list below are not widgets, and W27/W28
+        // say why: the clock is this sheet's answer to covering the status
+        // bar, and the list is the only scrolling region on the sheet and the
+        // thing its height is derived from (S21, S22).
+        Shared.WidgetColumn {
+          // `widgetColumn` and not `widgets`: the IPC handler below declares a
+          // function of that name, and inside its scope the function would win.
+          id: widgetColumn
           width: parent.width
-          visible: root.dataSeen
-          glyph: "󰣺"
-          label: "Mobile data"
-          detail: root.dataLabel
-          on: root.dataEnabled
-          holdable: true
-          onActivated: root.dataTap()
-          onHeld: root.dataHold()
-        }
-
-        // --------------------------------------------------- small tiles
-        Row {
-          id: smallTiles
-          width: parent.width
-          spacing: Style.space(8)
-          // The torch tile is the one that can be missing rather than off, so
-          // the row divides by what is actually shown.
-          readonly property int shown: root.torchAvailable ? 4 : 3
-          readonly property int cell: Math.floor((width - spacing * (shown - 1)) / shown)
-
-          SmallTile {
-            width: smallTiles.cell
-            glyph: "󰂛"
-            label: "Silent"
-            on: root.notifications ? root.notifications.doNotDisturb : false
-            onActivated: if (root.notifications)
-              root.notifications.setDoNotDisturb(!root.notifications.doNotDisturb)
-          }
-          SmallTile {
-            width: smallTiles.cell
-            glyph: "󰀝"
-            label: "Airplane"
-            on: root.airplane
-            onActivated: root.setAirplane(!root.airplane)
-          }
-          SmallTile {
-            width: smallTiles.cell
-            visible: root.torchAvailable
-            glyph: "󰉄"
-            label: "Torch"
-            on: root.torchOn
-            onActivated: root.setTorch(!root.torchOn)
-          }
-          SmallTile {
-            width: smallTiles.cell
-            glyph: "󰑥"
-            label: "Rotate"
-            on: false
-            onActivated: root.rotate()
-          }
-        }
-
-        // ------------------------------------------------------ sliders
-        FatSlider {
-          width: parent.width
-          glyph: "󰃟"
-          value: root.brightness / 100
-          onCommitted: v => root.setBrightness(v * 100)
-        }
-
-        FatSlider {
-          width: parent.width
-          visible: root.sink && root.sink.audio
-          glyph: "󰕾"
-          live: true
-          value: root.sink && root.sink.audio ? root.sink.audio.volume : 0
-          onCommitted: v => { if (root.sink && root.sink.audio) root.sink.audio.volume = v }
-        }
-
-        // -------------------------------------------------------- media
-        Rectangle {
-          width: parent.width
-          height: Style.space(56)
-          visible: root.media && root.media.hasMedia
-          radius: root.radiusCard
-          color: root.container
-
-          Row {
-            anchors.fill: parent
-            anchors.leftMargin: Style.space(14)
-            anchors.rightMargin: Style.space(12)
-            spacing: Style.space(10)
-
-            Column {
-              // Whatever the transport block and the one gap before it leave.
-              width: parent.width - root.tapSlot * 3 - Style.space(10)
-              anchors.verticalCenter: parent.verticalCenter
-              Text {
-                width: parent.width
-                text: root.media ? root.media.title : ""
-                font.family: Style.font.family
-                font.pixelSize: Style.font.bodySmall
-                font.weight: root.textWeight
-                color: root.textOnSurface
-                elide: Text.ElideRight
-              }
-              Text {
-                width: parent.width
-                text: root.media ? root.media.artist : ""
-                font.family: Style.font.family
-                font.pixelSize: Style.font.caption
-                font.weight: root.textWeight
-                color: root.subdued
-                elide: Text.ElideRight
-              }
-            }
-
-            // Three tapSlot squares butted together with the glyph centred in
-            // each, rather than three glyphs on a shared 10px spacing with the
-            // hit areas grown outward (docs/style.md E4).
-            //
-            // Grown outward they could not get there. On 34px centres -- a 24px
-            // glyph plus the Row's 10px gap -- the middle button can claim 5 on
-            // each side before it starts eating its neighbours (E3), which tops
-            // out at 34 and leaves play the smallest target on the sheet.
-            // Carrying the gap *inside* the slot is what buys the floor, and it
-            // costs the title 40px of width: the one place where 44 was not
-            // free. Nested in its own Row so the outer 10px spacing applies
-            // once, between the title and the block, and not between buttons.
-            Row {
-              anchors.verticalCenter: parent.verticalCenter
-              spacing: 0
-
-              Repeater {
-                model: [
-                  { glyph: "󰒮", action: "previous" },
-                  { glyph: "󰒧", action: "playPause" },
-                  { glyph: "󰒜", action: "next" }
-                ]
-                delegate: Item {
-                  required property var modelData
-                  width: root.tapSlot
-                  height: root.tapSlot
-
-                  // These have never had chrome, so the veil is the chrome
-                  // (docs/style.md H8) -- and it is drawn at tapSlot minus the
-                  // Row gap E4 moved *inside* the target, not at the full
-                  // tapSlot, which would butt three circles edge to edge and
-                  // undo what E4 bought.
-                  PressVeil {
-                    anchors.centerIn: parent
-                    width: root.tapSlot - Style.space(10)
-                    height: width
-                    radius: ui.radiusOn(width)
-                    on: mediaArea.pressed && !root.sheetDragging
-                  }
-
-                  Ui.OpticalGlyph {
-                    anchors.centerIn: parent
-                    width: root.glyphSlot
-                    height: root.glyphSlot
-                    text: modelData.glyph
-                    fontFamily: Style.font.family
-                    fontSize: Style.font.iconLarge
-                    color: root.textOnSurface
-                  }
-
-                  SheetArea {
-                    id: mediaArea
-                    anchors.fill: parent
-                    onClicked: if (!root.sheetWasDrag
-                                   && root.media && typeof root.media.runAction === "function")
-                      root.media.runAction(modelData.action)
-                  }
-                }
-              }
-            }
-          }
+          spacing: root.sheetGap
+          host: root
+          hostId: "control-center"
         }
 
         // ------------------------------------------------ notifications

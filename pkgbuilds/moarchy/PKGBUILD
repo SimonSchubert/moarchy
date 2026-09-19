@@ -167,7 +167,15 @@ pkgver=$_ver
 #    every caller to controlCenter(), which is not a function. 15 call sites
 #    across Theme.js and four apps, and because the kit is vendored into all
 #    eighteen, Calendar and Vitals simply did not start. Found on the device.
-pkgrel=4
+#
+# 5: widgets (docs/widgets.md). The control center's tiles, sliders and media
+#    card are six files in moarchy.common/widgets/ that the user arranges, and
+#    the kit gained a subdirectory the plugin copy above had to be taught about
+#    -- the `find` is -maxdepth 1. bin/moarchy-widgets is new and rides along
+#    with the rest of bin/. The payload changed, so this is not a bump for its
+#    own sake: build-packages.sh keeps the previous build under an unchanged
+#    pkgver-pkgrel.
+pkgrel=5
 pkgdesc="Omarchy's look, keybindings and theming on a phone, under Sway"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
@@ -287,8 +295,9 @@ package() {
   # manifest.json and is imported by relative path from the ones that are
   # (docs/refactor.md E1, E8); the registry's scan skips it because the scan
   # is keyed on the manifest, which is verified on the device rather than
-  # assumed. It ships with the rest because `cp -a` takes the tree, and it has
-  # to: a plugin whose import target did not ship would fail to load.
+  # assumed. It ships with the rest because the loop below takes every
+  # directory, and it has to: a plugin whose import target did not ship would
+  # fail to load.
   # Runtime files only, per directory, rather than `cp -a` of the tree. The
   # apps arrived with their own tests, docs, README and dev scripts when
   # moarchy-apps was absorbed (docs/structure.md B6), and none of that belongs
@@ -312,6 +321,16 @@ package() {
         -name '*.qml' -o -name '*.js' -o -name '*.svg' \
         -o -name 'manifest.json' -o -name '*.desktop' \
       \) ! -name 'shell.qml' -exec cp -a {} "$dest/" \;
+
+    # docs/widgets.md W34. The widgets are a subdirectory of the kit and the
+    # find above is -maxdepth 1, so they have to be named. Without this the
+    # package is complete in every way a build can check and the phone draws a
+    # control center with a header, a gap and a notification list -- every
+    # widget's Loader failing on a file that is not there.
+    if [[ -d ${dir}widgets ]]; then
+      install -d "$dest/widgets"
+      find "${dir}widgets" -maxdepth 1 -name '*.qml' -exec cp -a {} "$dest/widgets/" \;
+    fi
 
     # The kit, vendored as ui/ for the plugins that import it that way. The
     # apps do; the shell's own plugins import ../moarchy.common instead. One

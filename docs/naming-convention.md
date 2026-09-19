@@ -97,14 +97,18 @@ what puts it away, and whether it can be dismissed at all.
 | --- | --- | --- |
 | **sheet** | Full-screen, and put away rather than left running. Opening one puts away every sheet on its own layer or above it, and none below | [`README.md`](README.md#how-the-screens-stack), `moarchy.common/Sheet.js` |
 | **app** | A window on a workspace, owned by the compositor. Four of them are screens this shell draws itself — a **shell app** — and every criterion about apps still applies to them | [`windows.md`](windows.md), [`apps.md`](apps.md), [`gestures.md`](gestures.md) K |
-| **widget** | Not a surface at all: content inside one that something else owns. It has no gesture, no layer and no way in of its own | — |
+| **widget** | Not a surface at all: content inside one that something else owns. It has no gesture, no layer and no way in of its own — and which of them a surface draws, in what order, is the user's | [`widgets.md`](widgets.md) |
 | **always there** | Reserved off every window, or invisible and taking touch ahead of one. Nothing dismisses these. An **edge** is the band; a **left-edge** or **right-edge swipe** is the gesture it takes | [`gestures.md`](gestures.md) §I, [`style.md`](style.md) |
 
-**?** **widget** is a kind this document names and nothing ratifies yet. One
-exists: the media card in the control center. It is not upstream's
-`bar-widget`, which is a manifest kind for a tile in the desktop bar this phone
-replaces ([`control-center.md`](control-center.md)) — nothing here instantiates
-one.
+**widget** was a kind this document named and nothing ratified, with one
+instance: the media card in the control center. [`widgets.md`](widgets.md)
+ratifies it. There are six, they live in `moarchy.common/widgets/`, they carry
+no manifest and no plugin id, and the arrangement — which of them a surface
+draws and in what order — is a line in `~/.config/omarchy/widgets.toml`.
+
+It is still not upstream's `bar-widget`, which is a manifest kind for a tile in
+the desktop bar this phone replaces
+([`control-center.md`](control-center.md)) — nothing here instantiates one.
 
 ## Where a widget goes
 
@@ -120,7 +124,10 @@ somebody else's layout:
    +-------------------------------+
 ```
 
-The host decides whether the row is there at all — the media card appears only
-while something is playing ([`control-center.md`](control-center.md) S16) — and
-the widget decides nothing about its own position. That is the whole difference
-between this kind and the other three.
+The widget decides nothing about its own position. That is the whole difference
+between this kind and the other three — and the two things that *do* decide are
+different from each other: the **user** says whether the row is there and where
+it sits in the order ([`widgets.md`](widgets.md) §D), and the **widget** says
+whether it has anything to draw at all, which is how the media card is absent
+rather than empty while nothing is playing
+([`control-center.md`](control-center.md) S16, `widgets.md` W6).

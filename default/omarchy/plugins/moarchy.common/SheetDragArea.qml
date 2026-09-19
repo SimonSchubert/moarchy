@@ -64,8 +64,21 @@ MouseArea {
 
   // The sheet first on the way in, the control's own work first on the way out,
   // which is the order the twelve hand-written copies used.
-  onPressed: mouse => { area.sheet.sheetPress(area, mouse); area.grabbed(area, mouse) }
-  onPositionChanged: mouse => { area.sheet.sheetMove(area, mouse); area.dragged(area, mouse) }
-  onReleased: { area.ungrabbed(); area.sheet.sheetRelease() }
-  onCanceled: { area.ungrabbed(); area.sheet.sheetCancel() }
+  //
+  // A null sheet is a host that is not dragged at all, not a mistake
+  // (docs/widgets.md W13): the same widget draws on the control center, which
+  // is a sheet, and on a host that is not one. Guarded here rather than at the
+  // call sites, because a widget that had to ask would be a widget that knows
+  // what kind of surface it is on -- which is the coupling this whole
+  // arrangement exists to remove.
+  onPressed: mouse => {
+    if (area.sheet) area.sheet.sheetPress(area, mouse)
+    area.grabbed(area, mouse)
+  }
+  onPositionChanged: mouse => {
+    if (area.sheet) area.sheet.sheetMove(area, mouse)
+    area.dragged(area, mouse)
+  }
+  onReleased: { area.ungrabbed(); if (area.sheet) area.sheet.sheetRelease() }
+  onCanceled: { area.ungrabbed(); if (area.sheet) area.sheet.sheetCancel() }
 }

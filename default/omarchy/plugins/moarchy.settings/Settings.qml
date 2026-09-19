@@ -201,6 +201,51 @@ Item {
   // measurements behind DemiBold rather than Medium.
   readonly property int textWeight: Font.DemiBold
 
+  // ------------------------------------------------- the widget contract
+  //
+  // docs/widgets.md §C. This screen hosts widgets too -- the arrangement page
+  // draws the real ones with mock data (W37) -- so it answers the same property
+  // list the control center does. Most of it it already had; what is added here
+  // is the half a settings screen has never needed.
+  //
+  // The palette above is `Color.menu` where the control center's is
+  // `Color.popups`, which is the whole reason a widget takes its colours from
+  // its host rather than picking them (docs/style.md C2). A preview drawn here
+  // therefore looks like this screen, not like a pull-down pasted onto it.
+  readonly property color containerHigh: Util.alpha(Color.menu.text, 0.14)
+  readonly property color textOnAccent: Color.background
+  function radiusOn(size) { return ui.radiusOn(size) }
+  readonly property int tileHeight: ui.controlCenterTile
+  readonly property int sliderHeight: ui.controlCenterSlider
+  readonly property int roundSize: ui.controlCenterRound
+  readonly property int glyphSlot: Math.round(Style.font.iconLarge * 1.35)
+  readonly property int tapSlot: Math.max(Style.space(44), root.glyphSlot)
+  readonly property int holdInterval: 500
+  readonly property int dragSlop: Style.space(10)
+
+  // W13. Null: this screen is a window, not a sheet, so there is nothing for a
+  // widget's controls to drag and SheetDragArea leaves the gesture alone. It is
+  // the case the null guard was written for, and the arrangement page is where
+  // it is exercised.
+  readonly property var sheet: null
+  readonly property bool sheetDragging: false
+  readonly property bool sheetWasDrag: false
+
+  // Every host action a widget can reach, refused. A preview must not be able
+  // to switch a radio or navigate out of the page drawing it -- though what
+  // actually guarantees that is `preview` inside the widget (W26), which
+  // returns before any of these is reached.
+  //
+  // `dryRun` is deliberately NOT redeclared here. This screen already has one
+  // and it means something else -- `settings dryRun 1`, which records what a
+  // row would have run. A second declaration is a duplicate property, and a
+  // duplicate property does not warn and carry on: the whole plugin fails to
+  // load, with one line in the shell log to say so.
+  readonly property bool airplane: false
+  function setAirplane(on) {}
+  function enableRadio(kind) {}
+  function openScreen(id) {}
+
   // I3. The sheet's own header, bound to this surface's roles once (E2's shape).
   component SheetHeader: Shared.SheetHeader {
     ink: root.textOnSurface
@@ -954,7 +999,13 @@ Item {
     // checked, detail. Visibility and state are only real for the page that is
     // actually open -- another page's guards have not been run, and answering
     // "0" for those would read as "hidden" rather than "not asked".
-    function rows(): string { return root.rowsTsv(root.currentPage) }
+    // An arrangement page has no rows; it has cards, and they answer for
+    // themselves (docs/widgets.md W24a).
+    function rows(): string {
+      if (arrangeSlot.active && arrangeSlot.item)
+        return arrangeSlot.item.report()
+      return root.rowsTsv(root.currentPage)
+    }
 
     function rowsOn(page: string): string { return root.rowsTsv(page) }
 
@@ -1150,10 +1201,28 @@ Item {
           title: root.pageTitle
         }
 
+        // A page that arranges something is not a list of rows and cannot be
+        // made of them: its rows are live widgets, reordered by dragging
+        // (docs/widgets.md §E). It replaces the list rather than sitting
+        // beside it, so the two cannot both claim the flick.
+        Loader {
+          id: arrangeSlot
+          width: parent.width
+          height: Math.max(0, parent.height - y)
+          active: root.pageDef && root.pageDef.arrange !== undefined
+          visible: active
+          sourceComponent: ArrangeView {
+            host: root
+            surface: String(root.pageDef.arrange)
+            onNavigate: page => root.push(page)
+          }
+        }
+
         ListView {
           id: rowList
           width: parent.width
-          height: Math.max(0, parent.height - y)
+          height: arrangeSlot.active ? 0 : Math.max(0, parent.height - y)
+          visible: !arrangeSlot.active
           clip: true
           spacing: Style.space(6)
           model: root.currentRows

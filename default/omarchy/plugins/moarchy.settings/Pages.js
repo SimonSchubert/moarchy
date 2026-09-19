@@ -254,11 +254,34 @@ var PAGES = {
     detailCmd: "omarchy-font-current", covers: { "style.font": "N" } },
   { id: "bar", type: "nav", page: "appearance.bar", glyph: "󰍜", label: "Status bar",
     covers: { "style.bar": "N" } },
+  { id: "control-center", type: "nav", page: "appearance.control-center",
+    glyph: "󰕾", label: "Control Center",
+    detailCmd: "moarchy-widgets summary control-center",
+    keywords: "widgets brightness volume media calendar tiles toggles order arrange rearrange" },
   { id: "more", type: "nav", page: "appearance.more", glyph: "󰉉", label: "Get more",
     covers: { "install.style": "N" } }
 ]},
 
-// Provider pages build their rows at open from a command, one value per line.
+// The control center's widgets, arranged (docs/widgets.md §E). `arrange` and no
+// rows: Settings draws ArrangeView for this instead of the row list, and the
+// value is the surface -- the key in widgets.toml and the catalogue the cards
+// come from.
+//
+// Straight in, with no page of nav rows in front of it. There were two
+// children once, Widgets and Quick toggles, and the parent existed only to
+// list them; a menu whose whole content is "the thing you asked for" is a tap
+// nobody wanted. The toggles are reached from the Edit tile in the toggles
+// widget itself, which is where somebody looking at the toggles already is.
+"appearance.control-center": { title: "Control Center",
+  arrange: "control-center", rows: [] },
+
+// Reached from the control center's own Edit tile, so it has no nav row
+// pointing at it. Back from here still walks up to the widgets page, because
+// the page ids are dotted and `stackFor()` reads the prefixes.
+"appearance.control-center.toggles": { title: "Quick toggles",
+  arrange: "quick-toggles", rows: [] },
+
+// Provider pages build their rows at open from a command, one value per line.// Provider pages build their rows at open from a command, one value per line.// Provider pages build their rows at open from a command, one value per line.
 // The reader answers a path, not a name, because the rows are paths: the
 // provider lists the directory and a choice row ticks when its value equals the
 // page's reader (D1). omarchy-theme-bg-current prettifies -- "1-quattro.jpg"
@@ -1095,6 +1118,16 @@ for (var _t = 0; _t < TZ_REGIONS.length; _t++) {
 }
 
 function page(id) { return PAGES[id] || null; }
+// The page that arranges a surface, found by asking the pages rather than by a
+// second table mapping one to the other (docs/widgets.md W24c). A widget that
+// has a list of its own names the surface; this is what turns that into
+// somewhere to go.
+function pageForArrange(surface) {
+  for (var id in PAGES)
+    if (PAGES[id].arrange === surface) return id
+  return ""
+}
+
 function exists(id) { return !!PAGES[id]; }
 
 // The coverage map, emitted over IPC. Rows first, then the page-level `covers`

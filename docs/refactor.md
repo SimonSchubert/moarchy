@@ -370,14 +370,25 @@ that can pass while measuring nothing is worse than no check.
 → `grep -c 'exists twice' scripts/style-check.sh` == 0, and the suite's count
 drops by two rather than staying at 17
 
-**E11** A widget is not a plugin. A reusable widget — the control center's media card is
-the one that exists — lives in the kit, carries no `manifest.json` and no id,
-and is imported by relative path like everything else there. It never appears
-in the plugins directory, so the registry never sees it and
-`naming-convention.md`'s four kinds stay three-plus-one rather than four
-directories.
+**E11** A widget is not a plugin. A reusable widget lives in the kit, carries no
+`manifest.json`, and never appears in the plugins directory, so the registry
+never sees it and `naming-convention.md`'s four kinds stay three-plus-one
+rather than four directories.
 → nothing under the kit's `widgets/` carries a `manifest.json`, and
 `naming-convention.md`'s **widget** row names that directory
+
+**Done, and it grew.** `docs/widgets.md` is the contract and
+`scripts/style-check.sh` asserts this line. Six widgets, not the one media card
+this section anticipated: the control center's tiles, sliders and media card
+are all of them now, and everything between its header and its notification
+list is drawn by `Shared.WidgetColumn` from a list the user arranges.
+
+Two amendments to what is written above. "No id" was wrong — the catalogue
+names one, because a user arranging widgets has to be able to name the one they
+are moving; what E11 was protecting is that the id is not a *manifest* id and
+the registry cannot see it, and that holds. And the file name is derived from
+the id rather than written beside it (`mobile-data` is `MobileData.qml`), so
+there is still only one place a widget is named.
 
 ---
 

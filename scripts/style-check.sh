@@ -250,8 +250,12 @@ owned = {
 exempt = set(sys.argv[2].split())
 problems, stale = [], []
 
-for path in sorted(pathlib.Path(sys.argv[1]).glob("*/*.qml")):
-    rel = f"{path.parent.name}/{path.name}"
+for path in sorted(list(pathlib.Path(sys.argv[1]).glob("*/*.qml"))
+                   + list(pathlib.Path(sys.argv[1]).glob("*/*/*.qml"))):
+    rel = str(path.relative_to(sys.argv[1]))
+    # The kit itself is where these live. `moarchy.common/widgets` is NOT
+    # the kit -- docs/widgets.md W33: it is the newest directory in the
+    # tree and therefore the likeliest place for the tenth copy.
     if path.parent.name == "moarchy.common":
         continue
     text = path.read_text()
@@ -280,6 +284,178 @@ if [[ -z $e7 ]]; then
   [[ -n $E7_EXEMPT ]] && printf '        still to migrate: %s\n' "$E7_EXEMPT"
 else
   no "shared code written out again (E7)" "$e7"
+fi
+
+# --- a size read off inherited visibility ------------------------------------
+# In QML `visible` is inherited: a child reads false whenever any ancestor is
+# invisible. These surfaces are *measured while they are down* -- the control
+# center reads its own content height to decide what height to open at, and
+# latches it before the first frame of the pull -- so a size bound to a child's
+# `visible` measures zero exactly when the answer matters.
+#
+# It has cost two defects in one day: the volume panel reporting `fill=0` at
+# every volume, and the control center latching a 70px sheet so a pull-down
+# dragged an empty header and snapped to full height on release. Both read
+# correctly the moment anything was on screen, which is why neither was caught
+# by looking.
+printf '\nsize from inherited visibility (not a style.md section)\n'
+vis=$(python3 - "$PLUGINS" <<'VIS'
+import pathlib, re, sys
+
+problems = []
+rx = re.compile(r"^\s*(height|width|implicitHeight|implicitWidth)\s*:\s*"
+                r"([A-Za-z_]\w*)\.visible\b")
+for path in sorted(list(pathlib.Path(sys.argv[1]).glob("*/*.qml"))
+                   + list(pathlib.Path(sys.argv[1]).glob("*/*/*.qml"))):
+    for n, line in enumerate(path.read_text().split("\n"), 1):
+        if line.lstrip().startswith("//"):
+            continue
+        m = rx.match(line)
+        if m:
+            problems.append(
+                f"{path.relative_to(sys.argv[1])}:{n}  {m.group(1)} is read off "
+                f"{m.group(2)}.visible, which is 0 whenever an ancestor is hidden")
+print("\n".join(problems))
+VIS
+)
+if [[ -z $vis ]]; then
+  ok "no size is bound to a child's inherited visible"
+else
+  no "a size measures zero while its surface is down" "$vis"
+fi
+
+# --- duplicate declarations -------------------------------------------------
+# A QML object that declares one name twice does not warn and carry on: the
+# whole component fails to load. The shell says so in a single line --
+# "Duplicate property name" -- and then reports the plugin's absence as an
+# unrelated ReferenceError from its own loader, so the line that names the file
+# is two screens above the line that looks like the error.
+#
+# Cost, when it happened: a settings screen that had gone entirely, found by
+# reading the log rather than by anything failing. It is one grep, so it is
+# here rather than in anybody's memory.
+printf '\nduplicate declarations (not a style.md section)\n'
+dupes=$(python3 - "$PLUGINS" <<'DUPES'
+import collections, pathlib, re, sys
+
+problems = []
+for path in sorted(list(pathlib.Path(sys.argv[1]).glob("*/*.qml"))
+                   + list(pathlib.Path(sys.argv[1]).glob("*/*/*.qml"))):
+    text = path.read_text()
+    # Two-space indent only: the root object's own members. A nested item may
+    # legitimately reuse a name its parent also has, and QML scoping makes that
+    # a shadow rather than a redeclaration.
+    seen = collections.defaultdict(list)
+    for n, line in enumerate(text.split("\n"), 1):
+        m = (re.match(r"\s{2}(?:readonly\s+)?property\s+\S+\s+([A-Za-z_]\w*)", line)
+             or re.match(r"\s{2}function\s+([A-Za-z_]\w*)", line))
+        if m:
+            seen[m.group(1)].append(n)
+    rel = str(path.relative_to(sys.argv[1]))
+    for name, at in sorted(seen.items()):
+        if len(at) > 1:
+            problems.append(f"{rel}  declares {name} {len(at)} times, at lines "
+                            + ", ".join(str(a) for a in at)
+                            + " -- the component will not load")
+print("\n".join(problems))
+DUPES
+)
+if [[ -z $dupes ]]; then
+  ok "no QML root declares a name twice"
+else
+  no "a duplicate declaration will stop a plugin loading" "$dupes"
+fi
+
+# --- widgets ----------------------------------------------------------------
+# docs/widgets.md W1, W2, W5, W7. A widget is a file in the kit that a host
+# draws and the user arranges. The four things it must not be are all greppable,
+# and each is a failure that would look like something else on the phone: a
+# manifest makes it a plugin, a missing file makes it a row that never appears,
+# a summon makes it a surface, and a position of its own makes it a layout.
+printf '\nwidgets (docs/widgets.md, not a style.md section)\n'
+w=$(python3 - "$PLUGINS" <<'WIDGETS'
+import pathlib, re, sys
+
+kit = pathlib.Path(sys.argv[1]) / "moarchy.common"
+wdir = kit / "widgets"
+problems = []
+
+# W1. No manifest: the registry must never see one of these.
+for m in wdir.rglob("manifest.json"):
+    problems.append(f"{m.name}  is a widget with a manifest; "
+                    "the registry would load it (W1)")
+
+# W2. The catalogue names the id and the file name follows from it. Both
+# directions matter: an id with no file is a row that cannot draw, and a file
+# with no id is a widget nothing can reach.
+# Comments stripped first: the file's own usage example spells out a
+# resolve() result, and scanning it raw counted "volume" twice.
+cat = "\n".join(l for l in (kit / "Widgets.js").read_text().split("\n")
+                if not l.lstrip().startswith("//"))
+
+def block(name):
+    start = cat.index("var %s = [" % name)
+    return cat[start:cat.index("\n]", start)]
+
+# WIDGETS only. A toggle is catalogued the same way and arranged by the same
+# code, but it is not a widget and has no file -- it is four lines of data that
+# Toggles.qml draws as a tile (docs/widgets.md §E).
+ids = re.findall(r'\{\s*id:\s*"([a-z0-9-]+)"', block("WIDGETS"))
+
+# A toggle instead has to carry what the tile needs. `native` means the state
+# comes from QML; anything else needs at least a command, or the tile is drawn
+# and does nothing -- which is the failure S10 records about the torch.
+for m in re.finditer(r'\{([^}]*)\}', block("TOGGLES")):
+    row = m.group(1)
+    tid = re.search(r'id:\s*"([a-z0-9-]+)"', row)
+    if not tid:
+        continue
+    tid = tid.group(1)
+    for field in ["name:", "glyph:"]:
+        if field not in row:
+            problems.append(f"toggle {tid} has no {field.rstrip(':')} (W40)")
+    if "native: true" not in row and "cmdOn:" not in row:
+        problems.append(f"toggle {tid} is not native and has no cmdOn, "
+                        "so its tile would do nothing (W40)")
+def file_for(i):
+    return "".join(p[:1].upper() + p[1:] for p in i.split("-") if p) + ".qml"
+for i in ids:
+    if not (wdir / file_for(i)).exists():
+        problems.append(f"{i}  is in the catalogue and {file_for(i)} "
+                        "does not exist (W2)")
+for name in sorted({p.name for p in wdir.glob("*.qml")}
+                   - {file_for(i) for i in ids}):
+    problems.append(f"{name}  is a widget the catalogue does not name (W2)")
+
+for path in sorted(wdir.glob("*.qml")):
+    text = path.read_text()
+    body = "\n".join(l for l in text.split("\n") if not l.lstrip().startswith("//"))
+
+    # W5. A widget takes no action a surface owns. Opening a screen is
+    # host.openScreen(); summoning, hiding and dispatching are not its to do.
+    for rx, why in [(r"shell\.(summon|hide|isPluginOpen)\b", "reaches the shell directly"),
+                    (r"\bdispatch\s*\(", "dispatches to the compositor")]:
+        if re.search(rx, body):
+            problems.append(f"{path.name}  {why}; that is the host's (W5)")
+
+    # W7. The host places it. An anchor or a coordinate at the top level of the
+    # widget's own root item is the widget deciding where it goes.
+    depth = 0
+    for line in text.split("\n"):
+        stripped = line.strip()
+        if depth == 1 and re.match(
+                r"^(x|y|anchors\.(top|bottom|left|right|fill|centerIn))\s*:", stripped):
+            problems.append(f"{path.name}  sets {stripped.split(':')[0].strip()} "
+                            "on its own root; the host places a widget (W7)")
+        depth += line.count("{") - line.count("}")
+
+print("\n".join(problems))
+WIDGETS
+)
+if [[ -z $w ]]; then
+  ok "widgets carry no manifest, no id of their own and no position (W1, W2, W5, W7)"
+else
+  no "a widget is behaving like a surface (docs/widgets.md)" "$w"
 fi
 
 # --- B1, I2: one list of sheets --------------------------------------------

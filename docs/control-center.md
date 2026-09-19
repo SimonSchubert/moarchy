@@ -18,6 +18,16 @@ edge, because the sheet keeps the shape it has and only its path in changes
 Lines marked **?** are my reading of the code, not your decision. Read those
 first — the rest is a description of what is already there.
 
+**Everything between the header and the notification list is a widget now**
+([`widgets.md`](widgets.md)). The Wi-Fi and Bluetooth pair, mobile data, the
+four toggles, the two sliders and the media card are six files in
+`moarchy.common/widgets/`, and which of them this sheet draws — and in what
+order — is the user's. Every criterion below still holds of the default
+arrangement, which is the sheet as it ships; what changed is where the code
+lives and that a row can now be switched off. The header (S1–S3) and the
+notification list (S18–S27) are not widgets and `widgets.md` W27 and W28 say
+why.
+
 Ids are `S<n>`, cited by any check that proves one.
 
 ## Layout, top to bottom
@@ -34,7 +44,9 @@ Ids are `S<n>`, cited by any check that proves one.
 
 The sheet is as tall as what is in it, up to 90% of the screen height below
 the gesture strip. Everything scrolls only in the notification list; the rest
-is fixed.
+is fixed. The six middle rows are in their default order here — a phone whose
+`widgets.toml` names another order draws them in that one, and one with a row
+switched off does not draw it at all.
 
 ## S1–S3. Header
 
