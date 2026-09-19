@@ -141,11 +141,18 @@ pkgver=$_ver
 # the drawer's launch hop reading occupancy from focus rather than from sway's
 # workspace representation.
 #
-# 2: the PinePhone is gone. This package carries no hardware, so what actually
-#    moved is comment-level in bin/ and one rationale in moarchy.settings --
-#    but 0.5.0-1 IS published, so a build at 0.5.0-1 is skipped by
-#    docker/build-packages.sh and the tree would ship yesterday's bytes while
-#    reporting success. The bump is what makes the build happen.
+# 2: the PinePhone is gone, and Hyprland arrives. 0.5.0-1 IS published, so a
+#    build at 0.5.0-1 is skipped by docker/build-packages.sh and the tree
+#    would ship yesterday's bytes while reporting success. This number is what
+#    makes the build happen, and it has been rebuilt rather than re-numbered
+#    each time because none of these was ever published:
+#      - the PinePhone removal (comment-level here, one rationale in settings)
+#      - config/hypr/, the Lua compositor layer, and the one-shot session flag
+#      - the QML seam: Quickshell.I3 -> Quickshell.Hyprland, six intent verbs
+#      - the two Hyprland reload-guard pacman hooks
+#      - moarchy-restart-shell resolving either compositor's socket
+#    `sway` and `hyprland` are BOTH in depends while the image can boot
+#    either; dropping sway is what the last commit of this port does.
 pkgrel=2
 pkgdesc="Omarchy's look, keybindings and theming on a phone, under Sway"
 arch=('any')
