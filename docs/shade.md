@@ -360,7 +360,7 @@ slider has to hand the gesture over and *put the value back* (see
 title and the transport actions the player advertises.
 
 **? S17** The card shows the title only — no artist, no album art.
-— confirm: art would mean decoding an image per track on a Mali-400, which is
+— confirm: art would mean decoding an image per track on a phone GPU, which is
 the cost that ruled out theme previews.
 
 ## S18–S20. Notifications

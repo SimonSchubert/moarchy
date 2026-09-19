@@ -1017,7 +1017,7 @@ app reappear on a `pacman -Syu` as if the removal had not worked.
 
 ## N. Opening the drawer
 
-The sheet is dragged open by a finger at 60Hz on a Mali-400, and everything the
+The sheet is dragged open by a finger at 60Hz on a phone GPU, and everything the
 open path does lands on the frames the sheet is arriving on. The shade is the
 comparison that makes this measurable rather than a feeling: it does none of
 it, and it is the surface people say comes up instantly. N4 is not about cost

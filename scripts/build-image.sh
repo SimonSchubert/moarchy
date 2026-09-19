@@ -2,7 +2,7 @@
 # Build the flashable image, on the Mac, with no phone attached.
 #
 #   ./scripts/provision.sh build      # the packages, first
-#   ./scripts/build-image.sh          # -> images/moarchy-pinephone-<version>-<date>.img.xz
+#   ./scripts/build-image.sh          # -> images/moarchy-sargo-<version>-<date>/
 #
 # For a debug image that joins your wifi on first boot and enables sshd:
 #
@@ -58,10 +58,9 @@ echo "==> building the image container"
 docker build --platform linux/arm64 -f image/Dockerfile -t moarchy-image . >/dev/null
 
 # --privileged: arch-chroot bind-mounts /proc, /sys and /dev so configure.sh
-# can run useradd, locale-gen and a pacman refresh inside the rootfs (and so
-# the PinePhone backend can build an initramfs there). Everything else in
-# build.sh deliberately avoids loop devices, which Docker Desktop's VM does not
-# give us.
+# can run useradd, locale-gen and a pacman refresh inside the rootfs.
+# Everything else in build.sh deliberately avoids loop devices, which Docker
+# Desktop's VM does not give us.
 #
 # WIFI_PSK is passed through the environment, never as an argument, so it stays
 # out of `docker inspect` and the shell history.
@@ -82,43 +81,26 @@ docker run --rm --privileged --platform linux/arm64 \
   -e "MOARCHY_SSH_KEY=${MOARCHY_SSH_KEY:+/key.pub}" \
   -e "COMMIT=$COMMIT" -e "DIRTY=$DIRTY" \
   -e "ALLOW_DIRTY=${ALLOW_DIRTY:-0}" \
-  -e "DEVICE=${DEVICE:-pinephone}" \
+  -e "DEVICE=${DEVICE:-sargo}" \
   ${MOARCHY_SSH_KEY:+-v "$MOARCHY_SSH_KEY:/key.pub:ro"} \
   moarchy-image
 
 # Resolve the real artifact rather than printing a placeholder: these lines are
-# meant to be pasted.
+# meant to be pasted (and [[no-placeholder-commands]] is why).
 #
-# The two backends produce different SHAPES, not just different names
-# (docs/devices.md D10), so this cannot be one glob. A PinePhone image is a
-# single .img.xz you dd to a card; an Android image is a directory of boot.img,
-# rootfs.img, vbmeta.img and a flash.sh you run with the phone in fastboot.
-# This line said moarchy-pinephone-*.img.xz until the second device existed,
-# which would have reported "no image produced" about a sargo build that had
-# just succeeded.
-_dev=${DEVICE:-pinephone}
+# The artifact is a DIRECTORY (docs/devices.md D10): boot.img, rootfs.simg,
+# vbmeta.img and a flash.sh you run with the phone in fastboot. Matched with a
+# trailing slash so a stray .tar.xz beside it is never picked up as the thing
+# to verify.
+_dev=${DEVICE:-sargo}
 echo
-case "$_dev" in
-  pinephone)
-    BUILT=$(ls -td "$OUTDIR"/moarchy-"$_dev"-*.img.xz 2>/dev/null | head -1)
-    if [ -n "$BUILT" ]; then
-      echo "==> verify it:"
-      echo "     ./scripts/verify-image.sh"
-      echo
-      echo "==> flash it (find N with: diskutil list external physical):"
-      echo "     IMAGE_FILE=\"$BUILT\" ./scripts/flash-sd.sh /dev/diskN"
-    fi ;;
-  *)
-    BUILT=$(ls -td "$OUTDIR"/moarchy-"$_dev"-*/ 2>/dev/null | head -1)
-    if [ -n "$BUILT" ]; then
-      echo "==> verify it:"
-      echo "     ./scripts/verify-image.sh \"${BUILT%/}\""
-      echo
-      echo "==> flash it (phone in fastboot, bootloader unlocked):"
-      echo "     ${BUILT}flash.sh"
-    fi ;;
-esac
+BUILT=$(ls -td "$OUTDIR"/moarchy-"$_dev"-*/ 2>/dev/null | head -1)
 if [ -z "$BUILT" ]; then
   echo "!! no image produced for $_dev" >&2
   exit 1
 fi
+echo "==> verify it:"
+echo "     ./scripts/verify-image.sh \"${BUILT%/}\""
+echo
+echo "==> flash it (phone in fastboot, bootloader unlocked):"
+echo "     ${BUILT}flash.sh"

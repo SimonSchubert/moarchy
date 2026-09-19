@@ -9,8 +9,8 @@
   <img src="docs/screenshots/app-lcl.png" width="16%" alt="Linux Command Library, an ordinary GTK app under the gesture strip">
 </p>
 
-Omarchy's look, keybindings and theming on a phone — an original **PinePhone**
-or a **Pixel 3a** — running on Arch Linux ARM with **Sway** in Hyprland's place.
+Omarchy's look, keybindings and theming on a phone — a **Google Pixel 3a** —
+running on Arch Linux ARM with **Sway** in Hyprland's place.
 
 This is not a fork of Omarchy's installer. It is a thin overlay that vendors
 Omarchy's *configuration and theme layer* — which is architecture-neutral — onto
@@ -22,27 +22,6 @@ Download the image for your phone from
 **[Releases](https://github.com/SimonSchubert/moarchy/releases)**. There is no
 installer to run on the device and no default password to change: the account's
 password is locked and tty1 autologin brings the session up without one.
-
-### PinePhone
-
-Write the `.img.xz` to an SD card (8 GB or larger) and power on. The rootfs
-grows to fill the card on first boot.
-
-```bash
-# macOS -- find the card with: diskutil list external physical
-diskutil unmountDisk /dev/diskN
-xz -dc moarchy-pinephone-*.img.xz | sudo dd of=/dev/rdiskN bs=4m
-
-# Linux -- find the card with: lsblk
-xz -dc moarchy-pinephone-*.img.xz | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync
-```
-
-<sub>A Mac's built-in card reader reports as `internal`, so `diskutil list
-external` shows nothing — use `system_profiler SPCardReaderDataType | grep 'BSD
-Name'`. If you have this repo checked out, `./scripts/flash-sd.sh /dev/diskN`
-does the same with guards.</sub>
-
-### Pixel 3a
 
 The bootloader must be unlocked. Unpack the sargo archive, put the phone in
 fastboot (power off, hold Volume Down, tap Power), and run `flash.sh`. That
@@ -58,25 +37,7 @@ cd moarchy-sargo-*
 
 Two hard blockers, both verified rather than assumed.
 
-**1. Hyprland cannot run on this GPU.** Hyprland's renderer includes
-`<GLES3/gl32.h>` and aborts if it cannot get a GLES 3.x context:
-
-```
-src/render/OpenGL.cpp:215  WARN  "EGL: Failed to create a context with GLES3.2, retrying 3.0"
-src/render/OpenGL.cpp:228  RASSERT(false, "EGL: failed to create a context with either GLES3.2 or 3.0")
-```
-
-The PinePhone's Allwinner A64 has a Mali-400 MP2 driven by Lima, which tops out
-at **OpenGL ES 2.0**. That is a hardware limit, not a driver gap, and Hyprland
-0.50 removed the legacy GLES2 renderer that would have been the last way around
-it. Sway (wlroots, GLES2) runs fine.
-
-*(A PinePhone **Pro** is a different story: its Mali-T860 does GLES 3.1 under
-Panfrost, which clears Hyprland's floor. Nothing here targets one — moarchy is
-an image for the original PinePhone, and the preflight script that used to
-detect the difference went with the installer it belonged to.)*
-
-**2. Omarchy's package repo is x86_64-only.**
+**1. Omarchy's package repo is x86_64-only.**
 
 ```
 https://pkgs.omarchy.org/stable/x86_64/omarchy.db  ->  200  (211 packages)
@@ -84,7 +45,11 @@ https://pkgs.omarchy.org/stable/aarch64/omarchy.db ->  404
 ```
 
 `install/preflight/guard.sh` upstream also requires x86_64, limine, a btrfs root
-and vanilla-Arch markers — none of which hold on a PinePhone.
+and vanilla-Arch markers — none of which hold on a phone.
+
+**2. There is no packaged device stack.** No pacman repo anywhere carries an
+SDM670 kernel or the Pixel 3a's firmware, so moarchy builds and publishes both,
+at pins ([`docs/devices.md`](docs/devices.md) §2).
 
 ## What ports cleanly, and why
 
@@ -112,13 +77,13 @@ is, and screenshots straight off the device for the ones that have been run on
 it. Short version: GNOME's
 libadwaita apps and KDE's Kirigami/Plasma Mobile apps both reflow to a 360px
 screen and are the comfortable fit; availability is not the constraint, screen
-width and 2 GB of RAM are.
+width is.
 
 ## What it looks like
 
 [`docs/style.md`](docs/style.md) is the style contract — the type scale, the six
-colour roles, the four radii, the 44px touch-target floor and the motion budget
-a Mali-400 at GLES 2.0 can afford. It binds the shell plugins in this repo *and*
+colour roles, the four radii, the 44px touch-target floor and the motion
+budget. It binds the shell plugins in this repo *and*
 the two surfaces that are not in it: the
 [keyboard](https://github.com/SimonSchubert/moarchy-keyboard) and the
 [store](https://github.com/SimonSchubert/moarchy-store). Three programs, three
@@ -232,17 +197,17 @@ what each owns, how the screens stack, where a given change goes, and what to ru
 | `pkgbuilds/` | `moarchy`, `omarchy-config` (upstream + the Sway port as a patch), `moarchy-meta`, `moarchy-keyring` |
 | `pkgbuilds/moarchy-meta/PKGBUILD` | The aarch64 package set, as `depends`, with every omission explained |
 | `default/sway/bindings.conf` | Omarchy's bindings, translated to Sway, key-for-key |
-| `pkgbuilds/moarchy-device-pinephone/sway.conf` | 720×1440 @ scale 2, touch, tightened gaps |
+| `pkgbuilds/moarchy-device-sargo/sway.conf` | 1080×2220 @ scale 3, touch, no gaps, the power key |
 | `default/themed/sway.conf.tpl` | The one file that themes Sway from any Omarchy theme |
 | `bin/moarchy-*` | Sway counterparts to Omarchy's Hyprland helpers |
 | `bin/omarchy-*` | Shims with upstream's names, so `omarchy-menu` keeps working |
 | `docker/` | aarch64 container that builds every package natively on Apple Silicon |
-| `scripts/flash-sd.sh` | Guarded SD-card flasher for macOS |
+| `image/boot/android-bootimg.sh` | The boot backend: mkbootimg, AVB, the sparse rootfs |
 
 ## Updating
 
 The image ships the `[moarchy]` repository, so everything updates with one
-command — kernel, firmware and modem stack from Arch Linux ARM and DanctNIX,
+command — the kernel, firmware and modem stack from `[moarchy]` itself,
 and the phone UI from moarchy:
 
 ```bash
@@ -282,7 +247,7 @@ first boot, or to the u-boot SPL — that lives outside any partition, at byte
 
 ```bash
 ./scripts/provision.sh build      # the packages, in an aarch64 container
-./scripts/build-image.sh          # -> images/moarchy-pinephone-<version>-<date>.img.xz
+./scripts/build-image.sh          # -> images/moarchy-sargo-<version>-<date>/
 ./scripts/verify-image.sh         # 93 checks against the image just built
 ```
 
@@ -351,30 +316,32 @@ full list with reasons.
 
 ## Measured on the device
 
-Numbers from a real PinePhone (Allwinner A64, 2 GB), not estimates:
+Numbers from a real Pixel 3a (SDM670, 4 GB), not estimates:
 
 | | |
 | --- | --- |
-| GPU | `Mali400`, `OpenGL ES 2.0 Mesa 26.2.1` — Hyprland's 3.0 floor is unreachable |
-| Panel | DSI-1 720x1440, `scale 2` -> 360x720 logical |
-| Terminal | 47x41 characters at font size 9 |
+| GPU | Adreno 615 on freedreno — GLES 3.2 and Vulkan |
+| Panel | 1080x2220, `scale 3` -> 360x740 logical |
+| Storage | rootfs in `userdata`, grown on first boot |
 | btop minimum | 60 columns, regardless of `shown_boxes` |
 
-That last pair is why `moarchy-launch-tui` drops TUIs to font size 7 (~60
+That last row is why `moarchy-launch-tui` drops TUIs to font size 7 (~60
 columns): at Omarchy's desktop font size, btop simply refuses to draw on this
 screen. The window is a normal tiled one — the bar and the keyboard anchor to
 opposite edges, so neither costs a column, and a fullscreened terminal would
 only hide the keyboard.
 
+Wi-Fi, Bluetooth, sound, camera, vibration, NFC, calls with voice on them and
+SMS in both directions are all measured on the handset rather than reported;
+[`docs/devices.md`](docs/devices.md) D27–D34 is the evidence.
+
 ## Known limitations
 
-- **The camera reboots the phone on first launch.** It works on the second
-  attempt and afterwards. Undiagnosed: the candidates are OOM under a
-  software-rendered 2592x1944 preview on 2 GB, a power brownout from the flash
-  LED, or a `sun6i-csi` fault on first pipeline setup.
-- **The microphone records digital silence** — RMS 0 at PipeWire *and* raw ALSA,
-  with `Mic1` on and boost at 7. Calls and voice recording do not work.
-- Whether the camera flash physically fires is unverified.
+- **Telephony has only been tried on an operator with circuit-switched
+  fallback.** A VoLTE-only network needs an IMS stack that is not here yet —
+  [`docs/devices.md`](docs/devices.md) §10.
+- **The camera's colour profile is matrix-only** — no HueSatMap and no look
+  table, so colour is correct rather than pleasing.
 
 ## Out of scope for now
 

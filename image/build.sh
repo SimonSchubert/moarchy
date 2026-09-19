@@ -5,18 +5,20 @@
 #
 # This file builds a ROOTFS, which is the same for every device moarchy
 # supports, and then hands it to a boot backend that turns it into something
-# that device can boot (docs/devices.md D8). What comes out the far end differs
-# in shape, not just in content, and D10 says that is kept rather than hidden:
+# that device can boot (docs/devices.md D8). The artifact is a DIRECTORY and
+# not an image file, and D10 says that is stated rather than papered over:
 #
-#   pinephone  -> sunxi-gpt        one moarchy-pinephone-<ver>-<date>.img.xz
-#                                  to dd onto a card
-#   sargo      -> android-bootimg  boot.img + rootfs.img + vbmeta.img + a
+#   sargo      -> android-bootimg  boot.img + rootfs.simg + vbmeta.img + a
 #                                  flash.sh, to fastboot onto a phone
+#
+# One backend today. The indirection stays because it is the seam a second
+# Qualcomm handset arrives through, and because it has been exercised by two
+# (docs/devices.md D9).
 #
 # No loop devices: mkfs.ext4 -d and mcopy populate a filesystem image from a
 # directory without mounting it. The chroot is what wants --privileged --
 # configure.sh runs useradd, locale-gen and a package-database refresh inside
-# the rootfs, and the PinePhone backend builds an initramfs there.
+# the rootfs.
 set -euo pipefail
 
 OUT=${OUT:-/out}
@@ -27,7 +29,7 @@ PKGS=${PKGS:-/pkgs}
 # Which phone this image is for (docs/devices.md D11). It selects the device
 # package pacstrap installs, the boot backend that assembles the artifact, and
 # the artifact's name.
-DEVICE=${DEVICE:-pinephone}
+DEVICE=${DEVICE:-sargo}
 [ -d "$REPO/pkgbuilds/moarchy-device-$DEVICE" ] ||
   { printf '\033[31m!! no pkgbuilds/moarchy-device-%s\033[0m\n' "$DEVICE" >&2; exit 1; }
 
@@ -41,7 +43,6 @@ DEVICE=${DEVICE:-pinephone}
 # a line here and a device package, not a new backend (D0 -- the Android case
 # is the general one).
 case "$DEVICE" in
-  pinephone) BACKEND=sunxi-gpt ;;
   sargo)     BACKEND=android-bootimg ;;
   *) printf '\033[31m!! DEVICE=%s has no boot backend; add one to the case in %s\033[0m\n' \
        "$DEVICE" "$0" >&2; exit 1 ;;
@@ -53,9 +54,9 @@ esac
 # has to be guessed at later.
 export DEVICE BACKEND
 
-# How much room above the rootfs contents. Shared: both backends size a
-# filesystem to its contents and both want it to boot and run growpart once.
-# The partition geometry that is NOT shared moved into the backends with the
+# How much room above the rootfs contents. Shared rather than the backend's: a
+# backend sizes a filesystem to its contents and wants it to boot and grow
+# once. The partition geometry that is NOT shared lives in the backend with the
 # code that reads it.
 ROOT_SLACK_MIB=${ROOT_SLACK_MIB:-350}
 
@@ -231,32 +232,31 @@ Server = http://mirror.archlinuxarm.org/\$arch/\$repo
 Server = http://mirror.archlinuxarm.org/\$arch/\$repo
 [aur]
 Server = http://mirror.archlinuxarm.org/\$arch/\$repo
+# [danctnix] outlived the phone it was added for: libdng and libmegapixels are
+# not in Arch Linux ARM, and pkgbuilds/megapixels links against both
+# (docs/devices.md §2).
 [danctnix]
 Server = https://archmobile.mirror.danctnix.org/\$repo/\$arch/
 EOF
 
 # ---------------------------------------------------------------------------
 say "pacstrap the rootfs"
-# The base DanctNIX phone, then moarchy-meta, which pulls the entire phone UI
-# through its depends. This is the same one transaction M2 made possible; the
-# image build is just running it in a chroot instead of on a device.
-# The package set is DanctNIX's own explicitly-installed list, read out of
-# /var/lib/pacman/local in their release image, plus moarchy-meta. Hand-picking
-# it was a mistake caught before it shipped: `linux-megi uboot-pinephone
-# danctnix-tweaks` looked like the device stack and left out
-# linux-firmware-realtek, which is the wifi.
+# A base phone, then moarchy-meta, which pulls the entire phone UI through its
+# depends. This is the same one transaction M2 made possible; the image build
+# is just running it in a chroot instead of on a device.
+#
+# The list below is the general phone: an init, a network stack, an audio
+# stack, and the filesystem tools the rootfs needs. It names no hardware.
 #
 # pipewire-jack is named explicitly, and that is not cosmetic: pipewire-audio
 # leaves the jack provider ambiguous, pacstrap prompts "1) jack2 2)
 # pipewire-jack", and with no tty it takes the default -- so an unattended
-# build silently shipped jack2 alongside pipewire. Naming it removes the prompt
-# and matches DanctNIX's list.
+# build silently shipped jack2 alongside pipewire. Naming it removes the
+# prompt.
 #
 # The hardware is named ONCE, in moarchy-device-$DEVICE, and this line installs
-# that package rather than its contents (docs/devices.md D2). DanctNIX's
-# device-pine64-pinephone -- linux-megi, uboot-pinephone, linux-firmware-realtek
-# and the rest -- moved into its depends, along with the note about why picking
-# that list by hand loses the wifi.
+# that package rather than its contents (docs/devices.md D2): the kernel, the
+# firmware and the modem stack are all in its depends.
 #
 # moarchy-meta depends on the VIRTUAL name `moarchy-device` (D5), so naming the
 # concrete package here is what decides which phone this image is for. It is
@@ -293,9 +293,9 @@ info "rootfs: $(du -sh "$ROOTDIR" | cut -f1)"
 
 # ---------------------------------------------------------------------------
 # Whatever this device needs doing to the kernel before the image is built.
-# PinePhone: mkinitcpio -P then mkscr. sargo: nothing but checks -- that kernel
-# mounts root itself and ships no initramfs (D24). Nothing in common but the
-# word "boot" (docs/devices.md D8).
+# On sargo: nothing but checks -- that kernel mounts root itself and ships no
+# initramfs (D24). It is a hook rather than inline code because the next
+# device's answer is a different one (docs/devices.md D8).
 backend_kernel
 
 # ---------------------------------------------------------------------------
@@ -310,6 +310,14 @@ install -d "$ROOTDIR/usr/share/moarchy"
 } > "$ROOTDIR/usr/share/moarchy/build-info"
 cp "$ROOTDIR/usr/share/moarchy/build-info" "$OUT/$NAME.build-info"
 info "commit ${COMMIT:0:12}, dirty=$DIRTY"
+
+# What is actually in it (docs/structure.md V4). Recorded here, against the
+# rootfs, rather than in a backend: it is a fact about what pacstrap installed
+# and has nothing to do with how the thing boots. It lived in sunxi-gpt.sh
+# until 2026-09-19, which meant every sargo image ever built shipped without
+# one and V4 was quietly met on one device only.
+arch-chroot "$ROOTDIR" pacman -Q > "$OUT/$NAME.packages"
+info "$(wc -l < "$OUT/$NAME.packages") packages recorded in $NAME.packages"
 
 say "first-boot configuration"
 "$REPO/image/configure.sh" "$ROOTDIR"
@@ -340,6 +348,6 @@ info "after trim: $(du -sh "$ROOTDIR" | cut -f1)"
 
 # ---------------------------------------------------------------------------
 # The artifact itself: filesystems, partition table, bootloader, compression.
-# All of it differs completely between a PinePhone and an Android handset, so
-# all of it is the backend's (docs/devices.md D9, D10).
+# All of it is the backend's, because all of it is what differs between one
+# handset family and the next (docs/devices.md D9, D10).
 backend_image

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Verify a built image, in the same aarch64 container that built it.
 #
-#   ./scripts/verify-image.sh                 # newest image in images/
-#   ./scripts/verify-image.sh path/to.img.xz
+#   ./scripts/verify-image.sh                 # newest artifact in images/
+#   ./scripts/verify-image.sh path/to/moarchy-sargo-<ver>-<date>
 #
 # Structure, contents and the two first-boot scripts. It cannot prove the phone
 # boots -- that needs the phone -- but everything short of the hardware is here.
@@ -10,12 +10,10 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-# Newest artifact of EITHER shape (docs/devices.md D10): a PinePhone image is
-# one .img.xz, an Android image is a directory of boot.img, rootfs.img,
-# vbmeta.img and flash.sh. This globbed only moarchy-pinephone-*.img.xz until
-# the second device existed, and would have said "No image found" with a sargo
-# build sitting in images/.
-IMAGE="${1:-$(ls -td images/moarchy-*-*.img.xz images/moarchy-*-*/ 2>/dev/null | head -1)}"
+# The newest artifact, which is a DIRECTORY (docs/devices.md D10): boot.img,
+# rootfs.simg, vbmeta.img and flash.sh. The trailing slash in the glob is what
+# keeps the .tar.xz sitting beside it from being picked instead.
+IMAGE="${1:-$(ls -td images/moarchy-*-*/ 2>/dev/null | head -1)}"
 IMAGE="${IMAGE%/}"
 [ -n "$IMAGE" ] || { echo "No image found. Run ./scripts/build-image.sh first." >&2; exit 1; }
 # -e and not -f: an Android artifact is a directory.

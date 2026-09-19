@@ -140,7 +140,13 @@ pkgver=$_ver
 # moarchy-trigger and the four configurable gestures, the overview's bin, and
 # the drawer's launch hop reading occupancy from focus rather than from sway's
 # workspace representation.
-pkgrel=1
+#
+# 2: the PinePhone is gone. This package carries no hardware, so what actually
+#    moved is comment-level in bin/ and one rationale in moarchy.settings --
+#    but 0.5.0-1 IS published, so a build at 0.5.0-1 is skipped by
+#    docker/build-packages.sh and the tree would ship yesterday's bytes while
+#    reporting success. The bump is what makes the build happen.
+pkgrel=2
 pkgdesc="Omarchy's look, keybindings and theming on a phone, under Sway"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'

@@ -1,9 +1,9 @@
 # Devices — specification
 
-How moarchy stops being a PinePhone project and becomes a project that runs on
-phones, of which the PinePhone is one.
+What a device is, what varies between one and the next, and who owns that
+variation.
 
-Status: **the Pixel 3a is a phone (2026-09-15).**
+Status: **the Pixel 3a is the phone (2026-09-15).**
 `moarchy-sargo-0.2.2-20260915` was built by `image/build.sh`, verified (132
 checks), flashed over fastboot, and booted to the shell from a clean rootfs
 with nothing of postmarketOS's anywhere in it. Our kernel, our device and
@@ -20,8 +20,11 @@ What is open on this device is quality rather than absence: a matrix-only
 camera profile with no HueSatMap or look table, and telephony on an operator
 with no circuit-switched fallback, which needs a SIM nobody here has.
 
-**The PinePhone has not been re-verified** since D1–D6 — the ⚠ note below, and
-the one thing here still owed.
+**The PinePhone was dropped on 2026-09-19.** It was the only device that could
+not clear Hyprland's GLES 3.0 floor, and it had not been booted since D1–D6.
+[build-log.md](build-log.md) has the account. Every criterion below that named
+it is amended or deleted rather than left standing with its own obituary
+attached.
 
 The acceptance criteria are the contract to argue with; where one is my reading
 rather than your decision it is marked **?**.
@@ -30,61 +33,32 @@ Companion to [structure.md](structure.md), which decides what a package is and
 where packages come from. This file decides what a *device* is. It amends one
 of that file's non-goals, and §2 says so out loud rather than in a PKGBUILD.
 
-> ### ⚠ Outstanding: the PinePhone has not been re-verified
->
-> **Owed since 2026-09-13.** D1–D6 moved the PinePhone onto the device-package
-> abstraction — `default/sway/pinephone.conf` became a package-owned file at a
-> new path, `moarchy-meta` gained a dependency, `moarchy-firstboot` stopped
-> naming `eg25-manager`, and `image/build.sh` gained a `DEVICE` switch. **None
-> of it has been booted.** The packages build and the metadata is right, which
-> is not the same thing.
->
-> D8 (the backend split) then landed on top of that, deliberately and with the
-> risk understood: the decision was to focus on the Pixel 3a first. So a
-> PinePhone regression and a backend-split bug are currently
-> **indistinguishable** — two unverified changes to one pipeline.
->
-> What settles it, and what to do first when a PinePhone is free:
->
-> 1. `./scripts/provision.sh build` then build the image — it must produce
->    `moarchy-pinephone-<version>-<date>.img.xz` as before.
-> 2. `./scripts/verify-image.sh` — the GPT layout, the `eGON.BT0` assertion at
->    byte 131076, and "every absolute sway include resolves", which is the
->    check that covers D6 without modification.
-> 3. Flash it, boot it, run `moarchy-selftest`. W2 in particular: it now reads
->    `/usr/share/moarchy/device/sway.conf` instead of the old path.
-> 4. Confirm the modem still comes up — `eg25-manager` now arrives via
->    `DEVICE_SERVICES` in the device package rather than being hardcoded.
->
-> Until that is done, §9 AC 1 is open and this file should not claim otherwise.
-
 ---
 
 ## 1. What this decides
 
-The target list is PinePhone (shipping), Pixel 3a (`sargo`), and Fairphone
-later. The question is not "can moarchy run on a Pixel 3a" — §9 says it can —
-but **what varies per device, where that variation lives, and who owns it.**
+The target list is Pixel 3a (`sargo`, shipping) and Fairphone later. The
+question is not "can moarchy run on a phone" — §9 says it does — but **what
+varies per device, where that variation lives, and who owns it.**
 
-Get that wrong and the third device costs as much as the second. Get it right
-and it costs a package and two pins.
+Get that wrong and the next device costs as much as this one. Get it right and
+it costs a package and two pins.
 
-### 1.1 The PinePhone is the outlier, not the template
+### 1.1 The Android phone is the template
 
-It is tempting to treat the PinePhone as device #1 and generalise outward from
-it. That is backwards. Of the three targets it is the only one that:
+Every device this project targets is the same shape: Qualcomm, fastboot, an
+Android `boot.img`, A/B slots, AVB to defeat, non-removable storage, Adreno.
+The Pixel 3a and the Fairphone 4/5 differ in their pins, not in their pipeline.
 
-- boots from **raw sectors** (Allwinner BROM reads u-boot SPL at byte 131072)
-  rather than from a bootloader that understands partitions
-- ships on **removable media**, so the deliverable can be a whole-disk image
-- has a kernel, u-boot and firmware **already packaged for pacman**, by DanctNIX
-- has **no A/B slots** and no verified boot to defeat
-- has a GPU that **cannot exceed GLES 2.0**
-
-The Pixel 3a and the Fairphone 4/5 are the same shape as each other: Qualcomm,
-fastboot, Android `boot.img`, A/B slots, AVB, non-removable storage, Adreno.
-So the generic case is the Android-phone case, and the PinePhone is the special
-one to carve out. **D0** below is that decision.
+That is a decision rather than an observation, because it was once the other
+way round. moarchy shipped first on a PinePhone, which booted from **raw
+sectors** (the Allwinner BROM reads u-boot SPL at byte 131072), shipped on
+**removable media** so the deliverable was a whole-disk image, had its kernel,
+u-boot and firmware **already packaged for pacman** by DanctNIX, and had
+neither A/B slots nor verified boot. Generalising outward from that device
+would have made every one of those the default shape of something. **D0** is
+the decision not to, and it outlived the device that prompted it: what is left
+is the general case, and the next phone is an Android phone.
 
 ---
 
@@ -96,8 +70,9 @@ one to carve out. **D0** below is that decision.
 > kernel, u-boot, firmware, modem stack and ALSA UCM profiles are consumed as
 > packages from their repos, never rebuilt here.
 
-That holds for the PinePhone and should keep holding. It **cannot** hold for
-the Pixel 3a, and pretending otherwise is how this turns into a surprise.
+It held while DanctNIX packaged a whole device stack for us. It **cannot** hold
+for an Android phone, and pretending otherwise is how this turns into a
+surprise.
 
 postmarketOS has done the SDM670 bring-up and maintains it well — the kernel
 tree at `gitlab.com/sdm670-mainline/linux` was tagged `sdm670-v7.2.3_beta2` on
@@ -105,7 +80,7 @@ tree at `gitlab.com/sdm670-mainline/linux` was tagged `sdm670-v7.2.3_beta2` on
 of it is Alpine `.apk`. There is no pacman repo anywhere that carries an
 SDM670 kernel or the sargo firmware.
 
-So for every Android-family device, moarchy builds and publishes:
+So for every device it ships, moarchy builds and publishes:
 
 - a kernel package, from someone else's mainline fork, at a pinned tag
 - a firmware package, from publicly-downloadable vendor blobs
@@ -113,8 +88,8 @@ So for every Android-family device, moarchy builds and publishes:
 
 That is a distribution-shaped commitment: when the kernel tree moves, we move;
 when it stops being maintained, the device is dead and we are the ones who
-notice. It is the price of the second device and it does not get cheaper for
-the third.
+notice. It is the price of an Android phone and it does not get cheaper for the
+next one.
 
 **The amendment is narrow and stays narrow:** we package *what upstream has
 already brought up*, at a pin, for devices we ship. We do not do bring-up, we
@@ -122,14 +97,20 @@ do not carry patches of our own against a kernel, and we do not package for
 devices we do not ship. If a device needs us to write kernel code, it is out of
 scope and the answer is no.
 
+> We still consume from `[danctnix]` — `libdng` and `libmegapixels`, which
+> `pkgbuilds/megapixels` links against and Arch Linux ARM does not carry. The
+> repo outlived the phone it was added for.
+
 ### Other non-goals, unchanged
 
-- **Not a device-support matrix.** Three devices, chosen deliberately. A
-  half-working fourth helps nobody.
+- **Not a device-support matrix.** One device shipping and a second chosen
+  deliberately. A half-working third helps nobody.
 - **Not runtime device detection.** An image is built *for* a device and says
   which. Nothing probes the SoC at boot to decide what it is (D3 is about
   hardware *values*, which is a different thing).
-- **Not an Android app compatibility layer.** No Waydroid, no Halium.
+- **Not an Android app compatibility layer.** Amended by
+  [android.md](android.md) §1: Halium stays out, Waydroid comes in as an
+  optional package.
 
 ---
 
@@ -142,15 +123,19 @@ scope and the answer is no.
    moarchy-device-X ──►│  identical for every device │
                        └──────────────┬──────────────┘
                                       │
-                 ┌────────────────────┴────────────────────┐
-                 ▼                                         ▼
-        boot/sunxi-gpt.sh                       boot/android-bootimg.sh
-        GPT + SPL @ 131072                      mkbootimg + AVB
-        → moarchy-pinephone-*.img.xz            → boot.img + rootfs.img
-                                                  + flash.sh
+                                      ▼
+                            boot/android-bootimg.sh
+                            mkbootimg + AVB
+                            → boot.img + rootfs.img
+                              + flash.sh
 ```
 
-One rootfs builder. Two boot backends. N device packages.
+One rootfs builder. One boot backend today, chosen by name. N device packages.
+
+The indirection stays with a single backend in it. It was introduced with two
+and has been exercised by both, which is the only reason it is known to be a
+seam and not a guess; collapsing it back into `build.sh` now would throw away
+the one part of this pipeline that has been demonstrated rather than assumed.
 
 ---
 
@@ -161,7 +146,7 @@ Audited against the tree at `d258680`, not guessed. This is the whole list.
 | # | coupling | where it is today | verdict |
 |---|---|---|---|
 | 1 | kernel, bootloader, firmware | was `image/build.sh:203`, now the device package's `depends` | **device package** `depends` — *done* |
-| 2 | output scale, gaps, orientation | was `default/sway/pinephone.conf`, now `pkgbuilds/moarchy-device-pinephone/sway.conf` | **device package** file — *done* |
+| 2 | output scale, gaps, orientation | was a file in `default/sway/`, now `pkgbuilds/moarchy-device-sargo/sway.conf` | **device package** file — *done* |
 | 3 | modem daemon | was `bin/moarchy-firstboot:71` — `eg25-manager`, now `DEVICE_SERVICES` in `device.conf` | **device package** — *done* |
 | 4 | boot artifact + partitioning | `image/build.sh:287`–end | **boot backend** |
 | 5 | battery sysfs path | `moarchy.device/Device.qml:166-167` — `axp20x-battery` | **probe**, no key |
@@ -185,15 +170,15 @@ a wrong one fails at runtime on hardware you may not have, and nothing checks
 it. A probe is written once and is right on hardware nobody has tested yet.
 
 - **Battery** — scan `/sys/class/power_supply/*/` for `type == "Battery"` and
-  take the first. Correct on the PinePhone (`axp20x-battery`), on sargo, and on
-  a device with a differently-named PMIC that nobody has plugged in yet.
+  take the first. Correct on sargo, and on a device with a differently-named
+  PMIC that nobody has plugged in yet.
 - **Output** — ask sway. `swaymsg -t get_outputs` names the panel; the shell
   wants "the one output this phone has", not the string `DSI-1`.
 
 **D3** states the rule: a `device.conf` key is justified only when the value
 cannot be discovered at runtime. Scale (row 2) qualifies — nothing in sysfs
-knows that 440 ppi wants scale 3 and 270 ppi wants scale 2, because that is a
-judgement about thumbs. The battery path does not qualify.
+knows that 440 ppi wants scale 3, because that is a judgement about thumbs and
+not a fact about hardware. The battery path does not qualify.
 
 ---
 
@@ -201,7 +186,7 @@ judgement about thumbs. The battery path does not qualify.
 
 **D1** Each supported device has exactly one package, `moarchy-device-<codename>`,
 built from `pkgbuilds/moarchy-device-<codename>/`. Codenames are the upstream
-ones: `pinephone`, `sargo`, `FP4`.
+ones: `sargo`, `FP4`.
 
 **D2** It is the *only* place a device's hardware is named. It carries:
 
@@ -225,70 +210,47 @@ key list that grows past ~5 is a sign the probes are not being written.
 device-independent and names no hardware. A rootfs with no device package is a
 pacman error, not a phone that boots wrong.
 
-**D6** `config/sway/config:25` stops including
-`/usr/share/moarchy/default/sway/pinephone.conf` and includes
-`/usr/share/moarchy/device/sway.conf` instead. `default/sway/pinephone.conf`
-moves into `pkgbuilds/moarchy-device-pinephone/` and the `moarchy` package
-stops shipping it — two packages cannot own one path, and this is the boundary
-that makes that a build error rather than a decision.
-
-**D7** The PinePhone gets a device package in the same change that introduces
-the concept, and the shipping image is rebuilt from it before any second device
-is started. An abstraction with one implementation is a guess; with the
-PinePhone moved onto it first, the second device tests the abstraction rather
-than inventing it.
+**D6** `config/sway/config` includes `/usr/share/moarchy/device/sway.conf`, a
+fixed path owned by whichever `moarchy-device-*` package is installed. The
+`moarchy` package owns nothing under `device/` — two packages cannot own one
+path, and that is the boundary which makes a mistake here a build error rather
+than a decision.
 
 ---
 
 ## 6. Boot backends
 
-**D8** `image/build.sh` gets a backend, sourced from `image/boot/$BACKEND.sh`.
-The split is a move, not a rewrite — if the `sunxi-gpt` backend is not the
-existing lines verbatim, something has been changed that D7 cannot then test.
-
-*Amended 2026-09-13.* This AC previously said the file cut cleanly in two at
-`say "filesystem images"`, with everything above it device-independent. That
-was wrong, and implementing it as written would have shipped a PinePhone image
-with no initramfs. The device-specific work **interleaves**:
-
-| | what | where |
-|---|---|---|
-| 1 | initramfs + `mkscr`/`boot.scr` | `build.sh` 237–272 |
-| 2 | `/etc/fstab` — a vfat `/boot` labelled `BOOT` | `configure.sh` ≈296–302 |
-| 3 | filesystem images, GPT, SPL, compress | `build.sh` 304–end |
-
-Between (1) and (3) sit provenance, `configure.sh` and the rootfs trim, all
-device-independent. So a backend is **three hooks, not one tail**:
+**D8** `image/build.sh` sources its backend from `image/boot/$BACKEND.sh`. The
+device-specific work **interleaves** with the device-independent work rather
+than sitting in a tail that could simply be cut off — provenance,
+`configure.sh` and the rootfs trim all run between the kernel step and the
+image step. So a backend is **three hooks, not one tail**:
 
 - `backend_kernel` — after pacstrap: whatever this device needs doing to the
-  kernel. An initramfs and a boot script on the PinePhone; on sargo, checks
-  only, because that backend ships neither (D24)
+  kernel. On sargo, checks only, because this backend ships no initramfs (D24)
 - `backend_fstab`  — what `/etc/fstab` should say; the disk layout is the
   backend's business, and sargo has no separate `/boot` partition to mount
 - `backend_image`  — after the trim: assemble and compress the artifact
 
-Three hooks rather than reordering the file into two blocks, because the order
-is the one thing D7 is supposed to be able to vouch for. Moving the initramfs
-generation to sit after `configure.sh` would be a behaviour change smuggled in
-as a refactor, and the PinePhone image has not been re-verified since D1–D6.
+The hook order is load-bearing. Moving the kernel step to sit after
+`configure.sh` would be a behaviour change smuggled in as a refactor.
 
-**D9** Two backends initially:
+**D9** One backend today:
 
-- `sunxi-gpt` — today's code verbatim: `mkfs.ext4 -d`, sfdisk GPT, `dd` of
-  boot/root/SPL, the `eGON.BT0` assertion, `xz`. Output:
-  `moarchy-pinephone-<version>-<date>.img.xz`.
 - `android-bootimg` — `mkbootimg` with the DTB appended, a rootfs ext4, an
   AVB-disabling `vbmeta`. Output: a **directory** of `boot.img`, `rootfs.img`,
   `vbmeta.img` and a `flash.sh`, tarred and compressed.
 
-**D10** The two backends produce **different artifact shapes**, and that is not
-papered over. A PinePhone image is one file you `dd`; an Android image is three
-files and a script you run with the phone in fastboot. Forcing both into
-`.img.xz` would mean inventing a container nothing can read.
+*Amended 2026-09-19.* There were two; `sunxi-gpt` went with the PinePhone.
 
-**D11** The backend is chosen by `DEVICE=<codename>`, defaulting to `pinephone`
-until the second device ships. `scripts/build-image.sh` passes it through and
-refuses a codename with no `pkgbuilds/moarchy-device-<codename>/`.
+**D10** The artifact is a **directory, not an image file**, and that is not
+papered over. An Android image is three files and a script you run with the
+phone in fastboot; there is nothing to `dd`. Every script that consumes an
+artifact takes that shape, and none of them infer it from an extension.
+
+**D11** The backend is chosen by `DEVICE=<codename>`, defaulting to `sargo`.
+`scripts/build-image.sh` passes it through and refuses a codename with no
+`pkgbuilds/moarchy-device-<codename>/`.
 
 **D24** *Added 2026-09-14.* The `android-bootimg` backend ships **no
 initramfs**. The kernel mounts root itself: `root=PARTLABEL=` is resolved out
@@ -304,17 +266,12 @@ phone that shows two penguins and stops.
 > device in the project that cannot print (D23), where every failure looks
 > exactly like every other failure. `PARTLABEL=` needs no udev, so the
 > dependency and the debugging surface go together.
->
-> `sunxi-gpt` keeps `mkinitcpio -P`, and the asymmetry is not an inconsistency:
-> the PinePhone boots from a card of unknown geometry, which is the case an
-> initramfs is actually for.
 
-**D12** `image/verify.sh` splits the same way. Its partition-table and
-`eGON.BT0` assertions are `sunxi-gpt` facts; the Android backend asserts its
-own (boot.img magic, the DTB appended, vbmeta flags = 2, no ramdisk, and the
-cmdline read back out of the header), and the behavioural section — the
-first-boot scripts run in a chroot — stays shared because it is about the
-rootfs.
+**D12** `image/verify.sh` splits the same way. The backend asserts its own
+artifact facts (boot.img magic, the DTB appended, vbmeta flags = 2, no
+ramdisk, and the cmdline read back out of the header), and the behavioural
+section — the first-boot scripts run in a chroot — stays shared because it is
+about the rootfs.
 
 *Amended 2026-09-15.* `verify_artifact` and `verify_grow` are required;
 `verify_rootfs` is a third and **optional** hook, run against the mounted
@@ -360,8 +317,10 @@ Measured on the device (serial `987AY139XT`), not read off a wiki.
 | GPU | Adreno 615, freedreno — GLES 3.2 and Vulkan |
 
 The scale number is the whole reason row 2 of §4 is a key and not a probe:
-360×740 logical against the PinePhone's 360×720 means **the UI lands almost
-exactly where it already is**, and nothing in sysfs could have worked that out.
+1080×2220 at scale 3 is 360×740 logical, and **360 logical pixels wide is what
+every layout constant in the shell was tuned against** — the bar height, the
+drawer grid, the keyboard's exclusive zone, the home strip. Nothing in sysfs
+could have worked that out; it is a judgement about thumbs.
 
 ### 8.1 What was proven on the device, 2026-09-13
 
@@ -419,8 +378,7 @@ and the logical-partition machinery entirely. **?** — it also gives up the
 
 **D17** *Amended 2026-09-14.* We flash the current slot and leave the other
 alone, so a bad flash is recoverable by switching slots in the bootloader.
-Seamless updates are explicitly not a goal; `pacman -Syu` is the update path
-here as it is on the PinePhone.
+Seamless updates are explicitly not a goal; `pacman -Syu` is the update path.
 
 This AC used to open "A/B slots are not used", and that was wrong in a way that
 costs a phone. The slots are not optional machinery you can decline to operate
@@ -906,28 +864,34 @@ device by changing something and watching the screen. What works instead:
   cmdline back out of the artifact. On a device that cannot tell you what went
   wrong, a check before the flash is worth more than any amount of looking.
 
-**D18** The GLES 2.0 ceiling is a PinePhone fact, not a moarchy fact. The shell
-keeps targeting GLES 2.0 so one QML codebase serves every device — but this is
-now a *choice* with a reason, and `docs/style.md` should say so rather than
-leaving it as an unstated assumption that the next device silently violates.
+**D18** *Amended 2026-09-19.* **The GLES 2.0 ceiling left with the device that
+imposed it.** It was never a moarchy fact; it was an Allwinner A64 fact. Every
+device on the target list has an Adreno and clears GLES 3.2, which is what
+makes upstream Omarchy's own compositor reachable again.
+
+What the shell targets is therefore a *choice* from here on, and
+`docs/style.md` owns it: it must state the floor out loud rather than leave it
+as an assumption inherited from hardware nobody here still has. A motion budget
+sized for a Mali-400 is not wrong on an Adreno, but it is no longer forced, and
+the difference has to be written down or the next device silently violates it.
 
 ---
 
 ## 9. Acceptance criteria
 
-**D0** The Android-phone case is the general one; `sunxi-gpt` is the carve-out.
-A change that makes the PinePhone path the default shape of anything is wrong.
+**D0** The Android-phone case is the general one. A change that makes
+removable media, raw-sector boot, or a whole-disk `.img.xz` the default shape
+of anything is wrong: no device on the target list works that way, and the one
+that did is gone.
 
 Restated as a checklist, in build order. Each carries its state.
 
-1. **D7 — PARTIAL.** `moarchy-device-pinephone` exists and builds
-   (`0.2.2-1`, `arch=any`, three files under `/usr/share/moarchy/device/`).
-   **Not yet done:** no image has been rebuilt from it and nothing has booted,
-   so "no behaviour change from `d258680`" is still a claim. This is the gate
-   on everything below and it needs the PinePhone.
+1. **D1/D2/D3 — DONE.** `moarchy-device-sargo` is the only package naming
+   hardware, and `device.conf` carries the codename, the modem services and the
+   grow policy. Nothing else in the tree names a phone.
 2. **D6 — DONE.** `config/sway/config` includes `/usr/share/moarchy/device/sway.conf`;
-   `pacman -Qo` on the installed path names `moarchy-device-pinephone`, and the
-   `moarchy` package ships no `pinephone.conf` and owns nothing under `device/`.
+   `pacman -Qo` on the installed path names `moarchy-device-sargo`, and the
+   `moarchy` package owns nothing under `device/`.
    `image/verify.sh`'s existing "every absolute sway include resolves" check
    covers this in the image without modification.
 3. **D4/D5 — DONE, demonstrated.** Against a throwaway second device package:
@@ -937,17 +901,14 @@ Restated as a checklist, in build order. Each carries its state.
 4. **§4 rows 5-7 — NOT STARTED.** Battery and output are probed;
    `axp20x-battery` and `DSI-1` appear nowhere in the tree.
    `moarchy-has-keyboard`'s comment is corrected.
-5. **D8-D12 — DONE (code), not run.** `image/build.sh` sources
-   `image/boot/$BACKEND.sh` and calls `backend_kernel`, `backend_fstab` and
-   `backend_image`; it refuses a `DEVICE` with no device package and a device
-   with no backend. Both backends satisfy the hook contract, and the two
-   bodies moved into `sunxi-gpt.sh` were checked **byte-identical** (34 and 65
-   lines) against `build.sh` before the split — so a PinePhone failure points
-   at the structure, not at an edit. `image/verify.sh` splits the same way into
-   `image/verify/$BACKEND.sh` (`verify_artifact`, `verify_grow`), inferring the
-   device from the artifact name; its two moved bodies were checked verbatim
-   too (49 and 65 lines). *Run on sargo 2026-09-14; the PinePhone half is still
-   only built (AC 1).*
+5. **D8-D12 — DONE, run.** `image/build.sh` sources `image/boot/$BACKEND.sh`
+   and calls `backend_kernel`, `backend_fstab` and `backend_image`; it refuses
+   a `DEVICE` with no device package and a device with no backend.
+   `image/verify.sh` splits the same way into `image/verify/$BACKEND.sh`
+   (`verify_artifact`, `verify_grow`, and the optional `verify_rootfs`),
+   inferring the device from the artifact name. *Run on sargo since
+   2026-09-14.* The contract is exercised by `image/boot/test-backends.sh`,
+   which is what keeps it a contract now that one backend implements it.
 6. **D13 — DONE.** `manifest.toml` carries `[device.sargo]` with the kernel
    tag, real SHA256s and the config's provenance; `manifest_get` reads all five
    keys and the existing `manifest_components`/`manifest_aur_packages` scans
@@ -985,13 +946,14 @@ Restated as a checklist, in build order. Each carries its state.
    `pil-squasher` is packaged for Arch; each replacement is ~40 lines with a
    test that fails when broken.
 
-   **D22** Growth is a per-device policy, not a probe. `DEVICE_GROW=partition`
-   on the PinePhone (a card of unknown size, and the GPT being rewritten is the
-   one `sunxi-gpt.sh` wrote); `DEVICE_GROW=filesystem` on sargo, where the
-   rootfs sits in `userdata` inside a vendor GPT that also holds `xbl`, `abl`,
-   `tz` and the A/B slots. Running `sfdisk` there would rewrite a vendor
-   partition table on a phone with no removable storage and no recovery image
-   — the one irreversible thing this project could do to a device. The key
+   **D22** Growth is a per-device policy, not a probe. `DEVICE_GROW=filesystem`
+   on sargo, where the rootfs sits in `userdata` inside a vendor GPT that also
+   holds `xbl`, `abl`, `tz` and the A/B slots. Running `sfdisk` there would
+   rewrite a vendor partition table on a phone with no removable storage and no
+   recovery image — the one irreversible thing this project could do to a
+   device. `DEVICE_GROW=partition` existed for a device with removable media
+   and went with it; the key stays because the *next* device's answer is not
+   knowable from sysfs either. The key
    meets §4.1's bar because "is it safe to rewrite this table" is a policy
    about the hardware, not a fact readable from it, and
    `moarchy-grow-rootfs` defaults to the **safe** value so a device package

@@ -11,7 +11,7 @@
 # call site checks it.
 #
 # This runs in three places with three different bash versions -- macOS's 3.2
-# (flash-sd.sh, provision.sh), the aarch64 build container, and the phone --
+# (provision.sh, build-image.sh), the aarch64 build container, and the phone --
 # so: no associative arrays, no `mapfile`, nothing but POSIX awk.
 #
 # It parses the shape manifest.toml is written in, not TOML in general:
@@ -91,7 +91,7 @@ manifest_get() {
 #
 # `pkgbuilddir` is the marker because it is already the thing that makes a
 # section buildable: it says where in the clone the PKGBUILD lives. [aur.*]
-# pins, [repo], [danctnix] and [builder] do not have one and are not this.
+# pins, [repo] and [builder] do not have one and are not this.
 #
 # File order is load-bearing and cheap to keep: the keyboard is pinned first
 # and is built first, because it is the component whose absence leaves the
@@ -135,7 +135,7 @@ manifest_components() {
 # fine, because somebody had added the stanza there by hand.
 #
 # `server` is the marker because it is the thing that makes a section a repo:
-# [danctnix] has a `url` and is an image to flash, not a repo to sync.
+# a section with only a `url` is something to fetch, not a repo to sync.
 manifest_repos() {
   if [ ! -f "$MANIFEST_FILE" ]; then
     echo "manifest: no such file: $MANIFEST_FILE" >&2

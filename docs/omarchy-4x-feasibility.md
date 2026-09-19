@@ -7,6 +7,13 @@ the tense it was written in, on 2026-09-02, when the question was still open;
 the outcome is in the README and the port itself is
 `pkgbuilds/omarchy-config/port-4x.patch`.
 
+> **The PinePhone was dropped on 2026-09-19** and this file is now entirely
+> historical — including its title. It is kept unamended, because a record of
+> how a question was answered is worth nothing once it has been quietly edited
+> to be about a different question. The one claim in it with a future is §4's:
+> Hyprland was excluded because that device could not give it a GLES 3.0
+> context, and with the device gone so is the exclusion.
+
 ## What the earlier assessment got wrong
 
 The v3.8.4 pin was originally justified partly on the claim that *"4.x moved to

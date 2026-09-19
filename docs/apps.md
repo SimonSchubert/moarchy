@@ -9,10 +9,12 @@ criteria the terminal, the web apps and the camera are held to.
 here in the same commit. Names without versions, deliberately: a version in a
 table goes stale in silence and a package name does not.
 
-Everything below runs on a **Pine64 PinePhone Braveheart (1.1)** — Allwinner
-A64, 2 GB RAM, 720×1440 at `scale 2`, so a **360×720 logical** screen.
-Screenshots are straight off the device via `grim`, uncropped, so the bar is
-visible in each one.
+Everything below runs on a **Google Pixel 3a** (`sargo`) — SDM670, 4 GB RAM,
+1080×2220 at `scale 3`, so a **360×740 logical** screen. Screenshots are
+straight off the device via `grim`, uncropped, so the bar is visible in each
+one. Some were taken on the PinePhone this project shipped on until
+2026-09-19, at 360×720; they are the same logical width and are not retaken
+for the extra twenty rows.
 
 Rows marked **†** are in the set but have not been launched on the device yet.
 They are there on availability and fit; the dagger comes off when someone has
@@ -161,8 +163,8 @@ commented block at the foot of `pkgbuilds/moarchy-meta/PKGBUILD`.
 | `chipass` | Never listed, and installed anyway: Geary's `org.freedesktop.secrets` resolved to it while `gnome-keyring` came after `geary` in the list. See [GNOME](#gnome-libadwaita) |
 | `moarchy-keep`, `moarchy-vitals` | The GTK halves of Keep and Vitals. The plugins are the same apps (same notes file, same `/proc` reader) and two tiles for one job is the cut this list has been making since kclock |
 | `spot-client` | Spot, a native Spotify client over librespot — the reason there is no Spotify *web* app here (B3) |
-| `chromium`, `signal-desktop`, `libreoffice-fresh`, `nautilus`, `mpv`, `imv`, `kdenlive`, `gpu-screen-recorder` | Each is heavy for an A64 with 2 GB of RAM; none is needed for the phone to be a phone |
-| `waydroid` | Android in an LXC container. `waydroid init` pulls a ~1 GB image on first run and then shares 2 GB of RAM and a GLES 2.0 Mali-400 — not something a dependency should commit a fresh phone to |
+| `chromium`, `signal-desktop`, `libreoffice-fresh`, `nautilus`, `mpv`, `imv`, `kdenlive`, `gpu-screen-recorder` | Each is heavy for a phone SoC; none is needed for the phone to be a phone |
+| `waydroid` | Android in an LXC container, and **packaged as `moarchy-waydroid` since 0.4.0** — but still not a dependency: `waydroid init` pulls about a gigabyte on first run, and a default image should not commit a fresh phone to that. `sudo pacman -S moarchy-waydroid` installs it. See [android.md](android.md) |
 
 <p align="center">
   <img src="screenshots/apps/12-qmlkonsole.png" width="30%" alt="QMLKonsole">
@@ -226,7 +228,7 @@ much as one engine and two entries in the drawer beside it:
 `bin/moarchy-launch-tui` execs `foot` *by name* and `pkgbuilds/moarchy` declares
 it, so every TUI, every agent window, the config editor and the removal prompt
 were foot already. `alacritty` cost 7.75 MiB — eight times the other two
-together — to be an OpenGL terminal on a GLES 2.0 Mali-400 that nothing
+together — to be an OpenGL terminal on a GPU with nothing spare, that nothing
 launched, and `qmlkonsole`'s 935 KiB had won the xdg default by being the only
 `TerminalEmulator` that claimed it, which is why `omarchy-launch-about` answers
 `Unknown option 'render'`.
@@ -372,18 +374,23 @@ https://x.com/` still opens a window
 
 ## Camera
 
-**Megapixels** is the camera app. Verified on the device on 2026-09-06: both
-sensors stream, the camera switch works, the flash toggles, and a shutter press
-captures a three-frame burst at the rear sensor's full 2592×1944.
+**Megapixels** is the camera app, rebuilt here (`pkgbuilds/megapixels`) rather
+than taken from a repo: the packaged build cannot load a colour profile at all,
+which is [devices.md](devices.md) **D30**'s green preview.
 
-The reason it works where nothing else does is `libmegapixels`, which ships a
-`pine64,pinephone.conf` describing this device's media graph and **configures
-the links itself** before streaming. `sun6i-csi` on 6.18 requires that, and a
-generic app never does — which is the whole of the old "`VIDIOC_STREAMON` fails
-— pipeline links unconfigured" entry, and why **`snapshot` and `plasma-camera`
-cannot work here** at all.
+The reason it works where nothing else does is `libmegapixels`, which reads a
+device config describing the media graph and **configures the links itself**
+before streaming. A generic app never does — which is the whole of the old
+"`VIDIOC_STREAMON` fails — pipeline links unconfigured" entry, and why
+**`snapshot` and `plasma-camera` cannot work here** at all.
 
-`megapixels-findconfig` auto-detects from the devicetree (`pine64,pinephone-1.1`):
+`megapixels-findconfig` auto-detects the device config from the devicetree.
+
+> *Amended 2026-09-19.* The table and the measurements below were taken on the
+> PinePhone, whose sensors were an `ov5640` and a `gc2145` behind `sun6i-csi`.
+> They are kept as the record of how this was worked out; what ships now is a
+> Pixel 3a, whose cameras and colour profiles are D30's subject. The mechanism
+> above is what carried over unchanged, which is the point.
 
 | | Sensor | Flash | Modes |
 | --- | --- | --- | --- |
@@ -405,17 +412,14 @@ Three things bite:
    LED is added at boot before the rule exists. `moarchy-led-perms.service` runs
    `udevadm trigger --subsystem-match=leds` after `systemd-udevd` on every boot
    rather than editing someone else's udev rule.
-3. **The preview is software-rendered, by Megapixels' own choice.** It matches
-   the devicetree and forces `LIBGL_ALWAYS_SOFTWARE=1`, so the GLES preview runs
-   on the A53s, not the Mali. Usable, but the log fills with `Dropping frame`.
+3. **The preview can be software-rendered, by Megapixels' own choice.** It
+   matches the devicetree and may force `LIBGL_ALWAYS_SOFTWARE=1`, which puts
+   the GLES preview on the CPU. Worth checking per device rather than assuming.
 
-Unverified: whether the flash physically fires, and video recording. Megapixels
-ships `movie.sh` → `mpegize.py`, which is GStreamer `x264enc
-speed-preset=ultrafast` into `~/Videos/VID*.mkv` — software H.264, since the
-A64's `cedrus` is decode-only. Audio would be silent regardless while the
-microphone records RMS 0, and video needs `python-gobject`,
-`gst-plugins-good` and `gst-plugins-ugly`, none of which `megapixels` declares
-(they are `moarchy-meta`'s `optdepends`).
+Unverified: video recording. Megapixels ships `movie.sh` → `mpegize.py`, which
+is GStreamer `x264enc speed-preset=ultrafast` into `~/Videos/VID*.mkv`, and it
+needs `python-gobject`, `gst-plugins-good` and `gst-plugins-ugly`, none of
+which `megapixels` declares (they are `moarchy-meta`'s `optdepends`).
 
 ## Not working
 

@@ -9,7 +9,7 @@
 #
 # Sourced by image/build.sh, which calls the three hooks below. Produces a
 # DIRECTORY rather than a single file, and D10 says that asymmetry with
-# sunxi-gpt is kept rather than papered over: there is no container both a `dd`
+# the difference is kept rather than papered over: there is no container both a `dd`
 # workflow and a `fastboot flash` workflow could share that anything can read.
 #
 # Every offset, address and page size here was measured off a postmarketOS
@@ -78,7 +78,7 @@ info "kernel $KREL"
 #
 # Nothing in THIS hook needs DNS any more -- but image/configure.sh runs after
 # it and refreshes the package database in the same chroot, and it has no
-# resolv.conf handling of its own. sunxi-gpt.sh says what removing this costs:
+# resolv.conf handling of its own. Removing this costs:
 # an image whose moarchy.db has no signature, where nothing installs until
 # somebody runs `pacman -Sy` by hand.
 rm -f "$ROOTDIR/etc/resolv.conf"
@@ -205,7 +205,7 @@ python3 "$REPO/image/boot/android-image.py" vbmeta --out "$OUTDIR/vbmeta.img" ||
 info "vbmeta.img $(stat -c%s "$OUTDIR/vbmeta.img") bytes"
 
 say "rootfs image"
-# The same mkfs.ext4 -d trick sunxi-gpt uses: populate a filesystem image from
+# The mkfs.ext4 -d trick: populate a filesystem image from
 # a directory with no loop device and no mount, which is what lets the build
 # run in a container.
 local ROOT_USED_MIB ROOT_MIB

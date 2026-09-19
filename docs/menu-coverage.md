@@ -122,7 +122,7 @@ Native 2 · Bridged 6 · Unsupported 2
 | `learn` | Learn | Native | About phone > Help & docs |  |
 | `learn.keybindings` | Keybindings | Native | About phone > Keybindings | native list from `omarchy-menu-keybindings --print`; upstream's `less` fallback shows nothing |
 | `learn.omarchy` | Omarchy | Bridged | About phone > Help & docs | link via the `omarchy-launch-webapp` shim |
-| `learn.hyprland` | Hyprland | Unsupported | -- | Hyprland needs a GLES 3.0 context; the Mali-400 tops out at GLES 2.0 |
+| `learn.hyprland` | Hyprland | Unsupported | -- | the compositor here is sway, so upstream's Hyprland documentation is about software the phone is not running |
 | `learn.arch` | Arch | Bridged | About phone > Help & docs | link |
 | `learn.neovim` | Neovim | Bridged | About phone > Help & docs | link; neovim is installed |
 | `learn.bash` | Bash | Bridged | About phone > Help & docs | link |
@@ -157,7 +157,7 @@ Native 14 · Bridged 6 · Shade 1 · Unsupported 26
 | `trigger.tests` | Speed Test | Native | Tools > Speed tests |  |
 | `trigger.hardware.laptop-display` | Laptop Display | Unsupported | -- | `omarchy-hyprland-monitor-internal` is Hyprland-only; one fixed 720x1440 panel |
 | `trigger.hardware.mirror-display` | Mirror Display | Unsupported | -- | `omarchy-hyprland-monitor-internal-mirror` is Hyprland-only |
-| `trigger.hardware.hybrid-gpu` | Hybrid GPU | Unsupported | -- | `omarchy-hw-hybrid-gpu` is false; one Mali-400 |
+| `trigger.hardware.hybrid-gpu` | Hybrid GPU | Unsupported | -- | `omarchy-hw-hybrid-gpu` is false; a phone SoC has one GPU |
 | `trigger.hardware.touchpad` | Touchpad | Unsupported | -- | `omarchy-hw-touchpad` is false; no touchpad |
 | `trigger.hardware.touchpad-haptics` | Touchpad Haptics | Unsupported | -- | Dell XPS only |
 | `trigger.hardware.touchpad-haptics.low` | low | Unsupported | -- | `dell-xps-touchpad-haptics` is not installed |
@@ -219,7 +219,7 @@ Native 25 · Bridged 14 · Unsupported 23
 | id | label | class | lands at | note |
 | --- | --- | --- | --- | --- |
 | `setup` | Setup | Native | dissolved: Network, Apps & defaults, Security, Shell & plugins |  |
-| `setup.monitors` | Monitors | Unsupported | -- | edits `~/.config/hypr/monitors.lua`; the single output is set in `pkgbuilds/moarchy-device-pinephone/sway.conf` |
+| `setup.monitors` | Monitors | Unsupported | -- | edits `~/.config/hypr/monitors.lua`; the single output is set in `pkgbuilds/moarchy-device-sargo/sway.conf` |
 | `setup.keybindings` | Keybindings | Unsupported | -- | guard `[[ -f ~/.config/hypr/bindings.lua ]]` is false; bindings live in `default/sway/bindings.conf` |
 | `setup.input` | Input | Unsupported | -- | guard `[[ -f ~/.config/hypr/input.lua ]]` is false; input lives in `default/sway/input.conf` |
 | `setup.network` | Network | Native | Network & internet |  |
@@ -463,7 +463,7 @@ Native 6 · Bridged 8 · Unsupported 14
 | `update.themes` | Extra Themes | Bridged | Appearance > Get more | upstream `when: omarchy-theme-extras` kept |
 | `update.process` | Process | Native | Shell & plugins | only Shell survives |
 | `update.hardware` | Hardware | Native | System > Restart hardware |  |
-| `update.firmware` | Firmware | Unsupported | -- | fwupd is not installed and the PinePhone has no UEFI capsule path |
+| `update.firmware` | Firmware | Unsupported | -- | fwupd is not installed and a phone has no UEFI capsule path |
 | `update.password` | Password | Native | dissolved: Security | only the user password survives |
 | `update.timezone` | Timezone | Native | System > Date & time | region then city, two provider pages; the select box was a filter field over ~420 entries |
 | `update.time` | Time | Bridged | System > Date & time |  |

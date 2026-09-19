@@ -6,19 +6,17 @@
 #   ./scripts/provision.sh steps        # list steps
 #
 # Steps are independent and idempotent, so you can re-run any of them. The only
-# step that cannot be automated is `flash`: it needs `sudo dd`, and sudo on macOS
-# requires a real terminal. Everything after `flash` talks to the phone over SSH.
+# step that is not run from here is `flash`: the artifact ships its own
+# flash.sh, and it wants the phone in fastboot in front of you. Everything
+# after `flash` talks to the phone over SSH.
 #
 # Configuration (environment):
 #   PHONE       ssh target                (default moarchy@192.168.0.18, over wifi)
-#   DISK        SD card device            (e.g. /dev/disk28) -- required for `flash`
 #   WIFI_SSID   preseed this wifi network into the image we build (optional)
 #   WIFI_PSK    its password (pass via env, never as an argument)
 #
-# Wifi is the only way in. USB networking to a Mac does not work: DanctNIX's
-# gadget presents RNDIS, which macOS cannot drive, and switching it to CDC-ECM
-# gets the interface bound but never carrying. Preseeding saves one round trip
-# with a USB keyboard and `nmtui`; it is not otherwise required.
+# Wifi is the only way in. Preseeding saves one round trip with a USB keyboard
+# and `nmtui`; it is not otherwise required.
 
 set -euo pipefail
 
@@ -33,12 +31,6 @@ cd "$REPO_ROOT"
 # and publickey is the only way in. The stale default sent a second session
 # hunting for a key that would never work, for an account that was not there.
 PHONE="${PHONE:-moarchy@192.168.0.18}"
-# One pin, read here and in scripts/flash-sd.sh, rather than the same date
-# written out in both (docs/structure.md V1).
-RELEASE="${RELEASE:-$(manifest_get danctnix release)}"
-[[ -n $RELEASE ]] || exit 1
-CACHE="${CACHE:-$HOME/Downloads/moarchy}"
-IMG="$CACHE/archlinux-pinephone-barebone-${RELEASE}.img"
 SSH_OPTS=(-o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10)
 
 say()  { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
@@ -50,10 +42,9 @@ phone() { ssh "${SSH_OPTS[@]}" "$PHONE" "$@"; }
 # ---------------------------------------------------------------------------
 step_prereqs() {
   say "prerequisites"
-  command -v xz >/dev/null      || die "xz missing (brew install xz)"
-  [[ -x /opt/homebrew/opt/e2fsprogs/sbin/debugfs ]] ||
-    die "e2fsprogs missing (brew install e2fsprogs) -- needed to edit the ext4 rootfs"
-  info "xz, e2fsprogs present"
+  command -v xz >/dev/null       || die "xz missing (brew install xz)"
+  command -v fastboot >/dev/null || die "fastboot missing (brew install android-platform-tools)"
+  info "xz, fastboot present"
 
   if docker info >/dev/null 2>&1; then
     info "docker running ($(docker info --format '{{.Architecture}}')) -- packages will build natively"
@@ -65,10 +56,10 @@ step_prereqs() {
 
 step_image() {
   say "build the moarchy image"
-  # This used to run scripts/patch-image.sh, which edited DanctNIX's ext4 with
-  # debugfs to drop a wifi profile in. That was surgery on someone else's image
-  # and only worth doing while the image was not ours (docs/structure.md I9).
-  # Preseeding is a build input now.
+  # This used to run scripts/patch-image.sh, which edited someone else's ext4
+  # with debugfs to drop a wifi profile in. That was only ever worth doing
+  # while the image was not ours (docs/structure.md I9). Preseeding is a build
+  # input now.
   if [[ -n ${WIFI_SSID:-} && -n ${WIFI_PSK:-} ]]; then
     info "debug image: wifi '$WIFI_SSID' will be preseeded and sshd enabled"
     info "  do not publish the result"
@@ -79,18 +70,24 @@ step_image() {
 }
 
 step_flash() {
-  say "flash SD card"
-  [[ -n ${DISK:-} ]] || {
-    diskutil list external physical 2>/dev/null || diskutil list
-    die "set DISK=/dev/diskN (see listing above) and re-run"
-  }
+  say "flash the phone"
+  # The artifact carries its own flash.sh (docs/devices.md D10): it knows the
+  # partition names, the sparse rootfs and the --set-active that clears the A/B
+  # retry counter (D26). Printing it rather than running it is deliberate --
+  # this overwrites `boot` and `userdata`, and it wants the phone in front of
+  # you in fastboot.
+  local art
+  art=$(ls -td images/moarchy-*-*/ 2>/dev/null | head -1)
+  art="${art%/}"
+  [[ -n $art ]] || die "no artifact in images/ -- run '$0 image' first"
+  [[ -x $art/flash.sh ]] || die "$art has no executable flash.sh"
   cat <<EOS
-    This step needs 'sudo dd', which requires a real terminal.
-    Run it yourself in Terminal/iTerm:
+    Put the phone in fastboot -- power off, hold Volume Down, tap Power -- and
+    run this yourself. It overwrites 'boot' and 'userdata':
 
-      IMAGE_FILE="$IMG" ./scripts/flash-sd.sh $DISK
+      $art/flash.sh
 
-    Then put the card in the phone, boot it, and continue with:
+    Then boot it and continue with:
 
       ./scripts/provision.sh deploy
 EOS
@@ -123,7 +120,7 @@ step_build() {
 
 step_deploy() {
   say "ship the built packages to $PHONE"
-  phone true 2>/dev/null || die "cannot reach $PHONE -- set PHONE=moarchy@<ip>. The account has no password by design, so ssh-copy-id cannot work: authorise a key from the phone's own terminal, or with ./scripts/card-push.sh"
+  phone true 2>/dev/null || die "cannot reach $PHONE -- set PHONE=moarchy@<ip>. The account has no password by design, so ssh-copy-id cannot work: authorise a key from the phone's own terminal with ./scripts/authorize-ssh.sh"
 
   # Passwordless sudo, so the install does not stall on a prompt.
   if ! phone 'sudo -n true' 2>/dev/null; then

@@ -24,7 +24,7 @@ workspace's `rect`
 **W2** That is `gaps inner 0` doing it, not the border. Sway applies inner gaps
 at the workspace edge as well as between windows, so `gaps inner 3` cost 6px of
 a 360px width and 6px of a ~660px height on every app.
-→ `pkgbuilds/moarchy-device-pinephone/sway.conf` sets `gaps inner 0` and `gaps outer 0`
+→ `pkgbuilds/moarchy-device-sargo/sway.conf` sets `gaps inner 0` and `gaps outer 0`
 
 Worth knowing before you go looking for a bug: **`swaymsg reload` does not apply
 a changed `gaps` to workspaces that already exist.** The config value is what a
@@ -65,7 +65,7 @@ strip and claims the bottom exclusive zone the pill needs
 zones, so even a keyboard that stayed visible would cover the prompt instead of
 pushing it up. Fullscreen stays available on `$mod+Shift+f`, as a thing the
 user asks for and can undo.
-→ no `fullscreen enable` rule in `pkgbuilds/moarchy-device-pinephone/sway.conf`, and
+→ no `fullscreen enable` rule in `pkgbuilds/moarchy-device-sargo/sway.conf`, and
 `swaymsg -t get_tree` reports `fullscreen_mode: 0` for a window opened by
 `moarchy-launch-tui`; with its prompt focused, a tap on a key of the raised
 keyboard reaches the terminal
@@ -160,7 +160,7 @@ theme does not inherit, so Qt's themed lookup returns "" and so does upstream's
 **L8** The icon pulses, slowly, while it is up. **?** A static icon on the
 wallpaper reads as a stuck frame on hardware this slow; the pulse is what says
 the launch is still running. It is one transform on one textured quad, which is
-what the Mali-400 can afford.
+what the GPU can afford.
 
 **L9** The store's **Open** is a launch like any other, so it gets the splash
 too. Installing something and opening it is the one moment a phone owner is

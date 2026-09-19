@@ -28,7 +28,10 @@ fail=0
 ok()  { printf '  ok   %s\n' "$*"; }
 no()  { printf '  FAIL %s\n' "$*"; fail=1; }
 
-for backend in image/boot/sunxi-gpt.sh image/boot/android-bootimg.sh; do
+# Every backend in the directory, rather than a list: there is one today, and
+# a list is a second place to remember when there are two (docs/devices.md D9).
+for backend in image/boot/*.sh; do
+  case "$backend" in */test-*) continue ;; esac
   printf '\n%s\n' "$backend"
 
   # (1) Calls without definitions. Both are matched at the start of a line,
@@ -81,8 +84,8 @@ for backend in image/boot/sunxi-gpt.sh image/boot/android-bootimg.sh; do
     || no "root passno is 0 -- fsck-root never runs: $root_line"
 done
 
-# An unknown device must be refused. Only the Android backend resolves per-
-# device facts; sunxi-gpt has none to resolve.
+# An unknown device must be refused. This is the Android backend's check
+# because it is the one that resolves per-device facts.
 printf '\nunknown device\n'
 out=$(
   set -uo pipefail

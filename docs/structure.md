@@ -1,11 +1,10 @@
 # Project structure — specification
 
 How the three repos, the packages, the package repository and the image builder
-fit together, and what has to be true before a PinePhone image can be built at
-all.
+fit together, and what has to be true before an image can be built at all.
 
-Status: **M1, M2, M3 and M4 done (2026-09-06).** The image boots on a real
-PinePhone and `pacman -Syu` updates it without reflashing. The
+Status: **M1, M2, M3 and M4 done.** The image boots on a real phone and
+`pacman -Syu` updates it without reflashing. The
 acceptance criteria are the contract to argue with before any of them is; where
 one is my reading rather than your decision it is marked **?**. Each AC below
 carries its state, and §11 has the per-milestone summary.
@@ -37,23 +36,27 @@ of the answer.
 
 ### 1.1 The deliverable is not an ISO
 
-The PinePhone has no BIOS, no UEFI and no El Torito. It boots by having the
-Allwinner A64 BROM read u-boot SPL from raw sectors near the start of the boot
-medium. What ships is a GPT disk image, written with `dd`.
+A phone has no BIOS, no UEFI and no El Torito. On the devices this project
+targets (`devices.md` D0) the bootloader is Android's: it takes a `boot.img`
+over fastboot, checks it against AVB, and boots the slot it was told to.
 
-Measured on `archlinux-pinephone-barebone-20251224.img`, which is what
-moarchy installs onto today:
+So the artifact is a **directory**, not a disk image (`devices.md` D10):
 
 | | |
 | --- | --- |
-| u-boot SPL | `eGON.BT0` magic at byte **131072** (128 KiB), ahead of the GPT's first partition |
-| `boot` | FAT, LBA 16384, **122 MiB** |
-| `rootfs` | ext4, LBA 266240, **2906 MiB** |
-| Total | 3,183,512,064 bytes raw / 522 MB as `.img.xz` |
+| `boot.img` | Android v0 header + gzipped kernel with the DTB appended |
+| `vbmeta.img` | AVB header with verification disabled, or the bootloader refuses the kernel |
+| `rootfs.simg` | ext4 as an Android *sparse* image — fastboot cannot flash a raw one over 4 GiB |
+| `flash.sh` | the three `fastboot flash` calls and the `--set-active` that clears the A/B retry counter |
 
-The artifact this project ships is therefore
-`moarchy-pinephone-<version>-<date>.img.xz` plus a checksum. Wherever this
-document says "image", that is what it means.
+shipped as `moarchy-<device>-<version>-<date>.tar.xz`. Wherever this document
+says "image", that is what it means.
+
+> *Amended 2026-09-19.* It used to be a GPT disk image written with `dd`,
+> because the first device booted by having the Allwinner A64 BROM read u-boot
+> SPL from raw sectors at byte 131072. That is now the carve-out that does not
+> exist, and D0 says a change which makes it the default shape of anything is
+> wrong.
 
 ---
 
@@ -147,9 +150,9 @@ moarchy/
 ├── docker/                build container; the AUR rebuilds are cloned at the
 │                          [aur.*] pins rather than kept as PKGBUILDs here
 ├── repo/                  repo-add → moarchy.db → publish
-├── image/                 pacstrap a rootfs + boot chain → .img.xz
+├── image/                 pacstrap a rootfs + boot chain → a flashable artifact
 ├── bin/ default/ config/  packaged by pkgbuilds/moarchy
-├── scripts/               dev loop: provision.sh, flash-sd.sh
+├── scripts/               dev loop: provision.sh, build-image.sh
 └── docs/
 ```
 
@@ -283,13 +286,20 @@ build and by `image/Dockerfile` for the *builder*, not by any package, so a
 flashed phone never gets it.
 
 > Nothing breaks. `pacman -Syu` works and updates the phone UI, which is what
-> R4 promised. What it cannot do is move the device stack: `linux-megi`,
-> `uboot-pinephone`, `eg25-manager`, `megapixels`, `lisgd`, `mmsd-tng` and
-> `portfolio-file-manager` are installed from a repo the phone is not
-> configured for, so they are frozen at flash time and `pacman -Qm` lists them
-> as foreign. (`lisgd` has since left the set — `refactor.md` A2 — so a phone
-> flashed after that carries six of these, and one flashed before keeps a
-> seventh nothing runs.)
+> R4 promised.
+>
+> *Amended 2026-09-19.* It used to say the device stack could not move either,
+> because the kernel, u-boot, modem daemon and camera app all came from a repo
+> the phone is not configured for. That stopped being true when the device
+> became an Android handset: `linux-moarchy-sdm670`, `firmware-moarchy-sargo`,
+> `moarchy-qcom-modem`, `q6voiced`, `qbootctl`, `bootmac` and `megapixels` are
+> all **ours**, published in `[moarchy]`, so `pacman -Syu` moves the whole
+> device stack including the kernel — which is a larger promise than R4 made
+> and is the open question §10 raises about publishing kernels at all.
+>
+> What is still frozen is what `[danctnix]` alone carries: `libdng` and
+> `libmegapixels`, which `megapixels` links against and Arch Linux ARM does
+> not have. `pacman -Qm` lists those two as foreign.
 >
 > Six lines in `image/configure.sh` beside the `[moarchy]` block would fix it,
 > and `danctnix-keyring` is already pacstrapped so `SigLevel = Required` would
@@ -360,78 +370,63 @@ absent.
 
 ## 7. The image
 
-**I1** `image/` produces `moarchy-pinephone-<version>-<date>.img.xz` and a
-`.sha256`, from a single command, with no phone attached. **Met 2026-09-06:**
-`./scripts/build-image.sh` → **1,240.4 MiB compressed**, 6,405.0 MiB expanded,
-788 packages, and a `.packages` manifest beside it (V4). (0.2.1 measured the
-same three numbers, 0.2.0 was 1,242.8 MiB and 791, 0.1.1 1.25 GB and 771, 0.1.0
-1.2 GB and 747; the version is in the filename because several of them sit in
-`images/` at once.)
+**I1** *Amended 2026-09-19.* `image/` produces
+`moarchy-<device>-<version>-<date>/` — a **directory** of `boot.img`,
+`rootfs.simg`, `vbmeta.img` and `flash.sh`, plus a `.sha256`, a `.build-info`
+and a `.packages` manifest beside it (V4) — from a single command, with no
+phone attached. **Met:** `./scripts/build-image.sh`; 0.5.0 is **1,334.5 MiB**
+as the `.tar.xz` that ships.
 
-> 0.2.2 agrees with 0.2.1 to the tenth of a MiB and on all 788 packages, which
-> is what a release that swaps one QML file and a vendored tree of nearly the
-> same size looks like. The raw `.img.xz` differs by 6 KB.
+> The measurement used to be of a `.img.xz` for a different device, and the
+> numbers are not comparable, so they are not carried across. The version is in
+> the directory name because several of them sit in `images/` at once.
 >
-> They are still measured rather than carried across, and the distinction is
-> the whole point of the rule: two runs agreeing is a fact about the build,
-> while copying the digits forward would have produced the same line with
-> nothing behind it. Read off `xz -l` and the image's own `.packages` manifest,
-> which is the rule 5d43c9c wrote down after arithmetic on a stale number
-> produced a wrong one.
->
-> The three packages 0.2.1 dropped against 0.2.0 were alacritty, qmlkonsole and
-> what they alone pulled in (`docs/apps.md` T1).
+> The `.packages` manifest was written by the `sunxi-gpt` backend and by
+> nothing else, so **every sargo image ever built shipped without one** and V4
+> was quietly met on one device only. It moved into `image/build.sh` beside the
+> provenance block on 2026-09-19, where it belongs: what pacstrap installed is
+> a fact about the rootfs and has nothing to do with how the thing boots.
 
-**I2** The rootfs is built by `pacstrap`-ing into a directory: DanctNIX's base
-plus `moarchy-meta` from the `moarchy` repo. It is never produced by
-booting a phone and imaging the card back.
+**I2** The rootfs is built by `pacstrap`-ing into a directory: a base list that
+names no hardware, `moarchy-device-<codename>`, and `moarchy-meta` from the
+`moarchy` repo. It is never produced by booting a phone and imaging the
+storage back.
 
-> The base set is DanctNIX's own explicitly-installed list, read out of
-> `/var/lib/pacman/local` in their release image, rather than a reading of what
-> the device needs. Hand-picking it was tried and was wrong: `linux-megi
-> uboot-pinephone danctnix-tweaks` looks like the device stack and leaves out
-> `linux-firmware-realtek`, which is the wifi. `device-pine64-pinephone` is
-> their meta package and pulls all of it, so a device fix from them arrives
-> without an edit here.
+> *Amended 2026-09-19.* The base used to be another distribution's own
+> explicitly-installed list, read out of `/var/lib/pacman/local` in their
+> release image, because their meta package pulled a whole device stack and
+> hand-picking it had already lost the wifi once. That stopped being true when
+> the device stack became ours: the kernel, the firmware and the modem daemons
+> are `moarchy-device-<codename>`'s `depends` now (`devices.md` D2), so the
+> list here is the *general* phone — an init, a network stack, an audio stack,
+> and the filesystem tools — and the hardware is named exactly once.
 >
 > The repo is a local `file://` one built with `repo-add`, not a published
 > HTTP one — which is the only reason §7 could be done before §6. `pacstrap`
 > does not care which it is.
 
-**I3** The boot chain — u-boot SPL at 128 KiB, the FAT `boot` partition, the
-kernel and DTB — is reused from DanctNIX's packages, not rebuilt. **Resolved
-2026-09-06: assemblable from packages; nothing has to be copied verbatim.**
+**I3** *Amended 2026-09-19.* The boot chain is **assembled from packages**, and
+on an Android handset there is no bootloader in it at all: the vendor's `xbl`
+and `abl` stay where they are, and what this project produces is a `boot.img`
+carrying our kernel with its DTB appended, plus a `vbmeta.img` that disables
+verification. `linux-moarchy-<soc>` is ours and pinned (`devices.md` D13);
+nothing is copied verbatim out of somebody else's image.
 
-> Measured against the cached `archlinux-pinephone-barebone-20251224.img`:
->
-> | | |
-> | --- | --- |
-> | `uboot-pinephone` 2024.01-1 | `/boot/u-boot-sunxi-with-spl-pinephone-{492,528,552,624}.bin`, `boot.txt`, `mkscr`, and `/usr/bin/update-u-boot` |
-> | `linux-megi` 6.15.6-2 | `/boot/Image.gz` and the DTBs |
-> | `uboot-tools` | `mkimage`, which `mkscr` turns `boot.txt` into `boot.scr` with |
-> | mkinitcpio | `initramfs-linux.img`, from the preset `linux-megi` ships |
->
-> The SPL on the shipped image is a **byte-exact match** for the `528` variant —
-> `update-u-boot`'s `default_freq` — written at byte 131072, which is its
-> `bs=128k seek=1` for a GPT disk (`bs=8k seek=1` is the DOS-label path, and is
-> why the magic is not at 8 KiB).
->
-> `boot.txt` also settles a question §7 would otherwise have had to: it selects
-> the root device at boot with `root=/dev/mmcblk${linux_mmcdev}p${rootpart}`
-> and `rootwait`, choosing partition 2 when one exists, and handles SD vs eMMC
-> itself. So the image needs no UUID rewriting and no per-device boot script.
+> The original I3 was about reusing another distribution's u-boot SPL, FAT
+> `boot` partition, kernel and DTB, and it resolved on 2026-09-06. Kept as an
+> amendment rather than deleted because the *property* it asserts — the boot
+> chain comes from packages, not from a donor image — is the one that still
+> has to hold, and it is the reason `image/boot/android-image.py` reproduces
+> postmarketOS's boot image byte-for-byte instead of shipping theirs.
 
-**I4** The image boots to a Sway session on a real PinePhone with no SSH step in
-between. This is the acceptance test for the whole document. **MET 2026-09-06.**
+**I4** The image boots to a session on a real phone with no SSH step in
+between. This is the acceptance test for the whole document. **MET 2026-09-15**
+on the Pixel 3a (`docs/devices.md` §9 item 7): flashed over fastboot from a
+clean rootfs, the panel lit, tty1 autologin worked, the theme applied, the
+compositor started and the shell came up.
 
-> Flash, insert, power on. The A64 BROM accepted the SPL, megi's kernel booted,
-> the panel lit, `moarchy-firstboot` completed, tty1 autologin worked, the theme
-> applied, sway started, and the rootfs grew to fill a 64 GB card — partition 2
-> came back 63.7 GB with our `BOOT` label on partition 1, so I7 is confirmed on
-> the device and not only against a loop file.
->
-> **Both defects it found were composition bugs**, where every individual piece
-> was present, correct and verified:
+> The two defects the *first* such boot found were both composition bugs, where
+> every individual piece was present, correct and verified:
 >
 > 1. `moarchy-firstboot` wrote the autologin drop-in but raced `getty@tty1`, so
 >    the first boot stopped at a login prompt that a *locked password cannot
@@ -454,13 +449,18 @@ between. This is the acceptance test for the whole document. **MET 2026-09-06.**
 > nothing to read and the card had to come out and be read on the Mac with
 > `debugfs` to find a two-character sort-order bug.
 
-**I5** The USB gadget is left as DanctNIX ships it. Access to a running phone is
-over wifi. **Met:** `danctnix-usb-tethering` is installed unmodified.
+**I5** *Amended 2026-09-19.* **No USB network gadget is raised at all.** Access
+to a running phone is over wifi.
 
-> The RNDIS→CDC-ECM switch was tried and abandoned: the patch applied cleanly
-> and `usb_f_ecm` really is built into the kernel, but macOS binds the interface
-> and the gadget side never gains carrier. Carrying a gadget config that reads
-> like it should work costs more than it saves.
+> This used to say the gadget was left as the base image shipped it, which was
+> a statement about a package (`danctnix-usb-tethering`) that left with the
+> device that depended on it. Nothing raises a gadget on sargo today.
+>
+> If one is ever added, `devices.md` **D19** already decides its shape: CDC-ECM
+> or NCM, never RNDIS, because macOS binds no driver to RNDIS and a debug
+> network the only machine on the desk cannot speak to is not a debug network.
+> The pinned kernel config has `USB_CONFIGFS_ECM=y` and `USB_CONFIGFS_NCM=y`,
+> so it costs nothing but choosing correctly.
 
 **I6** The builder can produce a **debug image** with wifi credentials
 preseeded, so a freshly flashed card joins the network on first boot with no
@@ -469,19 +469,25 @@ keyboard. The PSK comes from the environment, never a flag or a checked-in file.
 **I6a** A published image carries no credentials, no preseeded network and no
 default password. Debug images are never published.
 
-**I7** The rootfs partition is sized to its contents plus slack, and grows to
-fill the card on first boot. **Met:** `moarchy-grow-rootfs.service` runs before
-`systemd-user-sessions`, grows the last partition with `sfdisk` and follows it
-with `resize2fs`, then stamps `/var/lib/moarchy/grown`.
+**I7** The rootfs is sized to its contents plus slack, and grows to fill the
+partition it was flashed to on first boot. **Met:**
+`moarchy-grow-rootfs.service` runs before `systemd-user-sessions`, calls
+`resize2fs`, and stamps `/var/lib/moarchy/grown`.
+
+> Only the filesystem grows. The partition is `userdata`, sized by the vendor
+> and sitting in a GPT beside `xbl`, `abl`, `tz` and the A/B slots — running
+> `sfdisk` there would rewrite a vendor partition table on a phone with no
+> recovery image, which is the one irreversible thing this project could do to
+> a device (`devices.md` D22). The partition-growing branch existed for a
+> device whose image was written to a card of unknown size and went with it.
 
 > The size is sensitive to one thing that is easy to miss: `pacstrap` leaves
 > every downloaded package in `/var/cache/pacman/pkg`, 1.26 GiB of it, and
 > sizing the partition before clearing it puts that straight into the download.
 
-**I8** First boot creates the user, and does not ship the default `123456`
-password of the DanctNIX image. **Met, by there being no password at all:** the
-account is created at build time with a *locked* password, and root is locked
-too.
+**I8** First boot creates the user and ships no default password. **Met, by
+there being no password at all:** the account is created at build time with a
+*locked* password, and root is locked too.
 
 > tty1 autologin does not consult a password, so the phone comes up usable with
 > no secret to leak or change; `sshd` is disabled and password authentication
@@ -577,8 +583,10 @@ phone that no package owns.
 over the top for iteration, and a way to tell from the phone that this has
 happened.
 
-**D4** `scripts/flash-sd.sh` keeps working, on our own images as well as
-DanctNIX's.
+**D4** *Annulled 2026-09-19.* It required `scripts/flash-sd.sh` to keep
+working on our own images as well as the base image it was written for. Both
+the script and the device that needed it are gone; the artifact carries its own
+`flash.sh` (D10) and `scripts/provision.sh flash` prints it.
 
 ---
 
@@ -672,17 +680,16 @@ same manifest now agree.
 > one. `/etc/profile.d/zz-moarchy-session.sh` names ours with `sway -c` instead.
 > Found by pacman refusing the transaction, which is the point of packaging.
 >
-> **Three packages are not from Arch Linux ARM.** `lisgd`, `mmsd-tng` and
-> `portfolio-file-manager` come from `[danctnix]`
+> **Some packages are not from Arch Linux ARM.** They come from `[danctnix]`
 > (`archmobile.mirror.danctnix.org`), not `archlinuxarm.org` as
 > `moarchy-base.packages` claimed at the top of the file for every entry. Found
 > by `pacman -U --print` failing to resolve in a bare ALARM container, and
 > settled by reading `/etc/pacman.conf` out of the shipped image rather than
 > guessing repo URLs.
 >
-> Two of them today: `lisgd` left with `bin/moarchy-gestures`
-> (`refactor.md` A2). The finding stands as written — the repo is still needed,
-> by one package fewer.
+> It was three — `lisgd`, `mmsd-tng` and `portfolio-file-manager` — and is now
+> `libdng` and `libmegapixels`, underneath `megapixels`. The finding stands as
+> written: the repo is still needed, for fewer things each time.
 >
 > Verified in the container: the whole set resolves as **one transaction of 564
 > packages**; `omarchy-config` and `moarchy` install together with no file

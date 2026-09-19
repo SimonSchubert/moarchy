@@ -1,16 +1,17 @@
 #!/bin/bash
 # Verify a built image without a phone.
 #
-#   ./scripts/verify-image.sh [path/to/moarchy-pinephone-<version>-<date>.img.xz]
+#   ./scripts/verify-image.sh [path/to/moarchy-sargo-<version>-<date>]
 #
 # Three layers, in order of how much they prove:
 #
-#   structure   the GPT, the SPL where the BROM reads it, the boot partition
+#   structure   the boot image header, the DTB, the AVB flags, the cmdline
 #   contents    what pacman placed, and what the image does NOT carry
 #   behaviour   the two first-boot scripts, actually run in a chroot
 #
-# What it cannot prove: that the A64 BROM accepts the SPL, that megi's kernel
-# brings up this panel, or that sway starts on a Mali-400. Those need hardware.
+# What it cannot prove: that the bootloader accepts the boot image, that this
+# kernel brings up this panel, or that the session starts on the Adreno. Those
+# need hardware.
 set -uo pipefail
 
 IMG_XZ=${1:?usage: verify.sh <image.img.xz>}
@@ -23,9 +24,9 @@ sec()  { printf '\n\033[1m== %s\033[0m\n' "$*"; }
 chk()  { if [ "$1" = 0 ]; then ok "$2"; else no "$2"; fi; }
 
 # Which artifact is this? Inferred from the name rather than passed in, so
-# `verify-image.sh <thing>` keeps working for both shapes without a flag
-# nobody would remember. Both backends name their output moarchy-<device>-...
-# (image/build.sh NAME), which is the one piece of structure they share.
+# `verify-image.sh <thing>` keeps working without a flag nobody would
+# remember. A backend names its output moarchy-<device>-... (image/build.sh
+# NAME), which is the one piece of structure every backend shares.
 #
 # DEVICE in the environment wins, and that is not a convenience flag.
 # image/negative-test.sh deliberately hands this a file called `bad.img` -- it
@@ -35,7 +36,6 @@ chk()  { if [ "$1" = 0 ]; then ok "$2"; else no "$2"; fi; }
 # itself have failed for a reason that has nothing to do with the image.
 _base=$(basename "$IMG_XZ")
 case "${DEVICE:-$_base}" in
-  pinephone|moarchy-pinephone-*) DEVICE=pinephone; BACKEND=sunxi-gpt ;;
   sargo|moarchy-sargo-*)         DEVICE=sargo;     BACKEND=android-bootimg ;;
   *) printf "  \033[31mFAIL\033[0m cannot tell what device %s is for; set DEVICE=\n" "$_base"; exit 1 ;;
 esac

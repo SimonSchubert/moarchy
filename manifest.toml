@@ -439,17 +439,6 @@ server  = "https://simonschubert.github.io/moarchy-apps/aarch64"
 keyid   = "3CA83612E7F3108F442006B418305B893569BAD3"
 
 # ---------------------------------------------------------------------------
-# The base image we flash and install onto, from DanctNIX (Pine64-Arch).
-# Consumed as a release, never rebuilt (docs/structure.md §2). Was written in
-# two places -- scripts/flash-sd.sh and scripts/provision.sh -- until it moved
-# here.
-# ---------------------------------------------------------------------------
-[danctnix]
-release = "20251224"
-url     = "https://github.com/dreemurrs-embedded/Pine64-Arch/releases/download"
-image   = "archlinux-pinephone-barebone-20251224.img.xz"
-
-# ---------------------------------------------------------------------------
 # The container that builds the aarch64 packages. A floating tag is a clone at
 # HEAD by another name, so it is pinned by digest; this one is a multi-arch
 # index that carries linux/arm64, which is what makes it run natively on Apple

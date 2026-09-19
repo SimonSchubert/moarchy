@@ -509,28 +509,30 @@ depends=(
   # wrong alternative for the reason that put secrets here: a Qt Widgets
   # desktop app that does not reflow to 360px.
 
-  # No songrec, and of the six that left the set this is the one with the
-  # strongest case for going. It is Shazam, open and offline-capable, and its
-  # headline feature does not work on this device and cannot: "listen to what is
-  # playing" needs a microphone, and this PinePhone's microphone records digital
-  # silence -- RMS 0 at PipeWire and at raw ALSA alike, with Mic1 on, boost 7
-  # and the ADC enabled (docs/apps.md, "Not working").
+  # No songrec -- and as of 2026-09-19 the reason has expired, which is worth
+  # saying out loud rather than leaving a stale exclusion to look deliberate.
+  # It went because "listen to what is playing" needs a microphone and the
+  # PinePhone's recorded digital silence (RMS 0 at PipeWire and raw ALSA
+  # alike). That device is gone, and sargo's microphone demonstrably works --
+  # D32 is a call with voice on it in both directions.
   #
-  # It was defensible while it was here: its other two paths do not touch the
-  # microphone, so it still recognises from a file or from a PipeWire source. But
-  # an app on a default image whose one famous feature silently matches nothing,
-  # forever, teaches the user that the phone is broken. It is in the store for
-  # anyone who wants the two paths that work, and if the microphone is ever fixed
-  # it is one name to put back.
+  # Deliberately NOT put back in the same change that removed the device: this
+  # release is a deletion and adding a package to the default set is a decision
+  # about what a phone ships with, not a consequence of dropping another phone.
+  # It is one name in `depends` when somebody decides. It is in the store
+  # meanwhile.
 
   # --- Camera -----------------------------------------------------------
-  # Megapixels, from [danctnix]. It is the only camera app that works on this
-  # device, and the reason is libmegapixels: it ships a pine64,pinephone.conf
+  # Megapixels, rebuilt here (pkgbuilds/megapixels) rather than taken from
+  # [danctnix]: the packaged build looks a profile up by a name this device
+  # does not have, which is D30's green preview. It is the only camera app that
+  # works here, and the reason is libmegapixels -- it reads a device config
   # describing the media graph and configures the links itself before
-  # streaming. sun6i-csi on 6.18 requires that, and a generic app never does --
-  # which is why `snapshot` and `plasma-camera` cannot work here at all, and
-  # why the old "VIDIOC_STREAMON fails" note was really "nothing was
-  # configuring the pipeline". See docs/apps.md.
+  # streaming. A generic app never does, which is why `snapshot` and
+  # `plasma-camera` cannot work at all, and why the old "VIDIOC_STREAMON fails"
+  # note was really "nothing was configuring the pipeline". libdng and
+  # libmegapixels still come from [danctnix]; Arch Linux ARM has neither.
+  # See docs/apps.md.
   'megapixels'
 
   # Required BY megapixels and declared by nothing. Without it ~/Pictures never

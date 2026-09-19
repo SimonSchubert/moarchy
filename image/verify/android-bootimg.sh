@@ -1,9 +1,9 @@
 #!/bin/bash
 # Verifying an Android image: the boot header, the appended DTB, AVB.
 #
-# docs/devices.md D12. The counterpart to image/verify/sunxi-gpt.sh, asserting
-# the things only this artifact shape can be asked about. Everything the two
-# have in common is about the rootfs and stays in image/verify.sh.
+# docs/devices.md D12. This asserts the things only this artifact shape can be
+# asked about; everything that is really about the rootfs stays in
+# image/verify.sh, so a second backend inherits it.
 #
 # The artifact is a DIRECTORY, not a file (D10): boot.img, vbmeta.img,
 # rootfs.simg and flash.sh. So "decompress" has no counterpart here -- but the
@@ -372,10 +372,9 @@ fi
 verify_grow() {
 sec "behaviour: the rootfs grows to fill userdata"
 
-# Half of I7 on this device, and the other half must NOT happen. The PinePhone
-# grows in two steps -- sfdisk extends the last partition, resize2fs follows.
-# Here the partition is `userdata`, sized by the vendor and sitting in a GPT
-# beside xbl, abl, tz and the A/B slots, so only the filesystem grows.
+# Half of I7 on this device, and the other half must NOT happen. The partition
+# is `userdata`, sized by the vendor and sitting in a GPT beside xbl, abl, tz
+# and the A/B slots, so only the filesystem grows -- never the partition.
 # docs/devices.md D22.
 #
 # The first check is the one that matters: sfdisk running on this device would

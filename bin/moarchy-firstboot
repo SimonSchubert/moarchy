@@ -78,7 +78,8 @@ systemctl enable --now NetworkManager bluetooth 2>/dev/null ||
 systemctl enable --now ModemManager.service 2>/dev/null ||
   echo "!! could not enable/start ModemManager" >&2
 
-# Whatever else THIS board needs (docs/devices.md D2). On a PinePhone that is
+# Whatever else THIS board needs (docs/devices.md D2). On a board with a
+# Quectel-style modem that is
 # eg25-manager, which owns the EG25-G's power rails and the GPIO startup dance;
 # on another device it is something else, or nothing. The list comes from the
 # installed device package, so adding a phone never means editing this script.

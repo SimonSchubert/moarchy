@@ -946,12 +946,10 @@ var PAGES = {
     label: "Restart hardware", covers: { "update.hardware": "N" } },
   // No `covers`. This is not upstream's `update.omarchy` under another label --
   // that one wants pkgs.omarchy.org's aarch64 tree, which 404s, and Snapper on
-  // btrfs, and it stays Unsupported. This is the plain upgrade, which
-  // structure.md R8a says works on this image and cannot move the device stack:
-  // linux-megi, uboot-pinephone and the rest are foreign packages from a repo
-  // the phone is not configured for, frozen at flash time. A row claiming the id
-  // would be promising the snapshots and migrations upstream's script does and
-  // delivering an upgrade. docs/settings.md says the same from the other side.
+  // btrfs, and it stays Unsupported. This is the plain upgrade. A row claiming
+  // the id would be promising the snapshots and migrations upstream's script
+  // does and delivering an upgrade. docs/settings.md says the same from the
+  // other side.
   { id: "update", type: "action", glyph: "󰚰", label: "Update system",
     detail: "pacman -Syu in a terminal", keywords: "upgrade pacman packages",
     run: "sudo pacman -Syu", launch: "tui" },

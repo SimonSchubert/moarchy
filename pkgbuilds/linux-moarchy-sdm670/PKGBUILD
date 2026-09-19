@@ -1,7 +1,7 @@
 # The Qualcomm SDM670 kernel, for the Pixel 3a and anything else on that SoC.
 #
 # This package is the concrete form of the non-goal docs/devices.md §2 amends.
-# For the PinePhone we consume DanctNIX's linux-megi and never build a kernel;
+# This project consumed a packaged kernel and never built one while the device
 # for sargo there is no pacman repo anywhere that carries one, so this is
 # moarchy being the packager. The amendment is deliberately narrow: we compile
 # a tree someone else brought up and maintains, at a pinned tag, with their

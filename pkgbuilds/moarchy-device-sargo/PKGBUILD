@@ -45,7 +45,13 @@ pkgver=$_ver
 # 1 for 0.5.0: pkgver moved, and 0.5.0-1 is newer than the 0.4.0-1 [moarchy]
 # serves, so the loudness stage reaches a phone holding it rather than waiting
 # on a pkgrel nobody published.
-pkgrel=1
+#
+# 2: sway.conf gained the "there is deliberately no fullscreen rule for moa-tui"
+#    block, which was the PinePhone profile's and had no second copy once that
+#    package was deleted -- a load-bearing WHY that would otherwise have gone
+#    with the device. Package content changed and 0.5.0-1 is published, so this
+#    has to move or the build is skipped.
+pkgrel=2
 pkgdesc="Google Pixel 3a (sargo) hardware support for moarchy"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'

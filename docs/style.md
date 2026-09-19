@@ -306,8 +306,19 @@ focused=` unchanged, and `drawer results` comes back empty
 
 ## G. Motion
 
-This is a Mali-400 at GLES 2.0. Half of these rules are about what the GPU can
-afford, and the other half about not making the phone feel slower than it is.
+**The floor these rules were written against is GLES 2.0**, and since
+2026-09-19 that is a *choice* rather than a hardware ceiling
+([devices.md](devices.md) D18): the device that could not exceed it is gone,
+and every device on the target list has an Adreno that does GLES 3.2.
+
+The choice stands, and it is stated here so the next device does not violate it
+by accident. One QML codebase serves every phone, and a motion budget sized for
+the weakest GPU any of them has is a budget that never needs a per-device
+branch. Nothing below is expensive on an Adreno; the point is that nothing
+below *becomes* cheap enough to stop thinking about either.
+
+Half of these rules are about what the GPU can afford, and the other half about
+not making the phone feel slower than it is.
 
 **G1** Durations by travel:
 

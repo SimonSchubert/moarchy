@@ -6,8 +6,8 @@
 # Why this exists: a reflash wipes /home/moarchy/.ssh, and the account has no
 # password -- image/configure.sh locks it, sshd runs with PasswordAuthentication
 # off, and publickey is the only thing that can work. So the way back in is
-# either the SD card (scripts/card-push.sh, which means taking the card out of
-# the phone) or one line typed on the phone itself. This is that line.
+# either a reflash (which means the phone in fastboot and a cable) or one line
+# typed on the phone itself. This is that line.
 #
 # The username is required and has NO default. This file lives in a public repo:
 # a default would mean every person who pastes the line out of the README

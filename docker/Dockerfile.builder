@@ -2,7 +2,7 @@
 # moarchy-keyboard, yay, xdg-terminal-exec, ttf-ia-writer, cbonsai.
 #
 # On Apple Silicon this container runs NATIVELY (linux/arm64), so these build at
-# full speed rather than at PinePhone speed (4x Cortex-A53 @ 1.15GHz, 2-3 GB).
+# full speed rather than at handset speed (a phone SoC with 2-4 GB).
 #
 #   docker build --platform linux/arm64 -f docker/Dockerfile.builder -t moarchy-builder .
 #   docker run --rm -v "$PWD/packages:/out" moarchy-builder

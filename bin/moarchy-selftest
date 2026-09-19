@@ -4862,9 +4862,9 @@ print(" ".join(out))'; }
   # window opened on top of it. `moarchy-one-app-per-workspace` must move the
   # second one away and follow it, exactly as it does for a tiled pair.
   #
-  # Floated with a dispatch rather than by launching a real Android app: this
-  # runs on the PinePhone too, waydroid is on one of the two phones, and what
-  # is being checked is the daemon's reading of the tree and not Waydroid.
+  # Floated with a dispatch rather than by launching a real Android app: what
+  # is being checked is the daemon's reading of the tree, not Waydroid, and a
+  # container that takes a minute to start would be measuring something else.
   # What it cannot stand in for is `for_window` applying the rule at map time,
   # which android.md AC 5 owns.
   #

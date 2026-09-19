@@ -41,15 +41,18 @@ fresh phone to that. §4 is how that objection is answered rather than ignored.
 
 ## 2. Device scope
 
-**sargo only.** Not the PinePhone, and this is not a "later" — it is a no.
-
-The PinePhone has 2 GB of RAM to share with an Android container, and a
-Mali-400 that is GLES 2.0 against LineageOS 20's expectations. Waydroid picks
+**Every device moarchy ships on.** *Amended 2026-09-19:* this section used to
+read "sargo only, and this is not a later — it is a no", because the other
+device had 2 GB of RAM to share with an Android container and a Mali-400 that
+is GLES 2.0 against LineageOS 20's expectations. Waydroid picks
 `gralloc=gbm, egl=mesa` the moment it sees a DRI render node
-(`tools/helpers/lxc.py:268-286`), so it will try the Mali and the only fallback
-is `swiftshader` — software rendering on four A53s. That is a demo, not a phone.
+(`tools/helpers/lxc.py:268-286`), so it would have tried that GPU with
+`swiftshader` — software rendering on four A53s — as the only fallback.
 
-sargo is the opposite: `ro.hardware.vulkan=freedreno` and
+That constraint left with the device, and the bar it set is worth keeping for
+the next one: **an Android container needs a GPU Waydroid will actually use.**
+
+sargo clears it: `ro.hardware.vulkan=freedreno` and
 `ro.opengles.version=196610` (GLES 3.2) land in `waydroid_base.prop` without
 help, and the hwcomposer reads `wp_fractional_scale_v1` and sets
 `lcd_density = 180 × scale` — 540 at our scale 3, so Android renders at native
