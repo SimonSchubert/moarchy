@@ -16,7 +16,13 @@ verify_artifact() {
 sec "artifact"
 # A directory, and saying so plainly beats "cannot open file" three checks later.
 [ -d "$IMG_XZ" ] || { no "$IMG_XZ is not a directory -- an Android artifact is a directory of images (D10)"; return 1; }
-for f in boot.img vbmeta.img rootfs.simg flash.sh; do
+# vbmeta.img is NOT in this list, because whether one exists is a device fact
+# (android-bootimg.sh's NEEDS_VBMETA) rather than a property of the artifact
+# shape. The Fairphone takes none, and demanding one here reported a correct
+# image as broken. The "verified boot" section below is where it is asked
+# about, in both directions: present-and-wrong on a device that takes one,
+# present-at-all on a device that does not.
+for f in boot.img rootfs.simg flash.sh; do
   [ -e "$IMG_XZ/$f" ] && ok "$f present" || no "$f missing from the artifact"
 done
 [ -x "$IMG_XZ/flash.sh" ] && ok "flash.sh is executable" || no "flash.sh is not executable"
@@ -115,15 +121,37 @@ else
 fi
 
 sec "verified boot"
-# Flag 2 is AVB_VBMETA_IMAGE_FLAGS_VERIFICATION_DISABLED. Without it an
-# Android 12 bootloader refuses an unsigned kernel, and the error it gives does
-# not mention verification -- which is why this is asserted rather than assumed.
-vmagic=$(dd if="$IMG_XZ/vbmeta.img" bs=4 count=1 status=none 2>/dev/null)
-[ "$vmagic" = "AVB0" ] && ok "vbmeta magic AVB0" || no "vbmeta.img is not an AVB image (got '$vmagic')"
-# Flags are a big-endian u32 at byte 120 of the header.
-vflags=$(od -An -tu4 --endian=big -j120 -N4 "$IMG_XZ/vbmeta.img" 2>/dev/null | tr -d ' ')
-[ "$vflags" = 2 ] && ok "vbmeta flags = 2 (verification disabled)" \
-                  || no "vbmeta flags = ${vflags:-?}, not 2 -- the bootloader will refuse this kernel"
+# Whether there is a vbmeta at all is a device fact (android-bootimg.sh's
+# NEEDS_VBMETA), so this section asks the image rather than assuming one.
+#
+# The two cases are checked in OPPOSITE directions on purpose. On a device that
+# takes one, a missing or wrong vbmeta is a phone that refuses the kernel. On a
+# device that does not -- the Fairphone 4, whose vbmeta partition is critical
+# and stays locked under a plain bootloader unlock -- a vbmeta.img sitting in
+# the output directory IS the hazard, because the obvious thing to do with one
+# is flash it, and that fails the transaction. So its absence is the assertion.
+if [ -f "$IMG_XZ/vbmeta.img" ]; then
+  case "$DEVICE" in
+    fp4)
+      no "this image carries a vbmeta.img and $DEVICE does not take one -- flashing it would fail against a locked critical partition" ;;
+    *)
+      # Flag 2 is AVB_VBMETA_IMAGE_FLAGS_VERIFICATION_DISABLED. Without it an
+      # Android 12 bootloader refuses an unsigned kernel, and the error it
+      # gives does not mention verification -- hence asserted, not assumed.
+      vmagic=$(dd if="$IMG_XZ/vbmeta.img" bs=4 count=1 status=none 2>/dev/null)
+      [ "$vmagic" = "AVB0" ] && ok "vbmeta magic AVB0" || no "vbmeta.img is not an AVB image (got '$vmagic')"
+      # Flags are a big-endian u32 at byte 120 of the header.
+      vflags=$(od -An -tu4 --endian=big -j120 -N4 "$IMG_XZ/vbmeta.img" 2>/dev/null | tr -d ' ')
+      [ "$vflags" = 2 ] && ok "vbmeta flags = 2 (verification disabled)" \
+                        || no "vbmeta flags = ${vflags:-?}, not 2 -- the bootloader will refuse this kernel"
+      ;;
+  esac
+else
+  case "$DEVICE" in
+    fp4) ok "no vbmeta.img, which is correct for $DEVICE (pmOS flashes none either)" ;;
+    *)   no "no vbmeta.img -- an Android 12 bootloader will refuse this unsigned kernel" ;;
+  esac
+fi
 
 sec "rootfs"
 # Sparse, and checked for it. A raw image here would flash fine while it is
@@ -140,6 +168,128 @@ simg2img "$IMG_XZ/rootfs.simg" "$WORK/root.img" 2>/dev/null || {
   no "simg2img could not expand rootfs.simg"; return 1; }
 printf '  rootfs %s sparse -> %s raw\n' \
   "$(du -h "$IMG_XZ/rootfs.simg" | cut -f1)" "$(du -h "$WORK/root.img" | cut -f1)"
+}
+
+# ---------------------------------------------------------------------------
+# The Fairphone 4's hardware chains.
+#
+# Kept as a separate function rather than as more branches inside sargo's
+# checks, because almost nothing lines up: a different firmware directory, no
+# mba.mbn, no ACDB blob, a different UCM vendor path, and no camera profile at
+# all. Interleaving them would produce a block of conditionals in which
+# neither device's chain could be read end to end, and reading a chain end to
+# end is the entire value of these sections (D27's lesson: every link fails
+# quietly, so each is asserted separately).
+#
+# UNBOOTED. Every path below was derived from postmarketOS's own packages for
+# this device and from what pkgbuilds/firmware-moarchy-fp4 installs, not from
+# a phone. See docs/fairphone-4.md.
+_verify_hw_fp4() {
+
+sec "the Wi-Fi chain (D27, fp4)"
+# Same shape as sargo's and for the same reason: Wi-Fi here is not one
+# component failing loudly, it is a chain going quiet. The WCN3990 firmware
+# executes on the MODEM DSP, so a phone with no modem firmware has no Wi-Fi --
+# which is why modem.mbn is in this section and not in a telephony one.
+#
+# No mba.mbn in this list, and that is a real difference rather than an
+# oversight: sargo needs the modem boot authenticator as a separate image,
+# and FairBlobs/FP4-firmware ships none -- pmaports' firmware-fairphone-fp4
+# installs no mba.mbn either.
+_fwd=$R/usr/lib/firmware/qcom/sm7225/fairphone4
+for _f in modem.mbn wlanmdsp.mbn adsp.mbn cdsp.mbn; do
+  if [ -s "$_fwd/$_f" ]; then ok "firmware $_f present"
+  else no "no $_fwd/$_f -- the DSP never boots, so what runs on it never runs"; fi
+done
+
+# The protection-domain mapper, which is the KERNEL's on this SoC too --
+# CONFIG_QCOM_PD_MAPPER=m in the vendored config. A missing module here is
+# silent: the WLAN domain lookup simply never resolves.
+_kver=$(ls "$R/usr/lib/modules" 2>/dev/null | head -1)
+if [ -n "$_kver" ] && \
+   find "$R/usr/lib/modules/$_kver" -name 'qcom_pd_mapper.ko*' | grep -q .; then
+  ok "the in-kernel protection-domain mapper is present ($_kver)"
+else
+  no "no qcom_pd_mapper module in the image -- nothing answers the WLAN domain lookup"
+fi
+
+# The userspace half: rmtfs is what actually starts the modem DSP, because
+# nothing in the kernel does (qcom_q6v5_mss sets rproc->auto_boot = false).
+[ -x "$R/usr/bin/rmtfs" ] \
+  && ok "rmtfs is installed (it is what starts the modem DSP)" \
+  || no "no /usr/bin/rmtfs -- the modem remoteproc is never told to start, so there is no Wi-Fi"
+
+sec "the audio chain (fp4)"
+# Shorter than sargo's, and the omissions are the finding rather than gaps in
+# the checking.
+#
+# No Global_cal.acdb: that is an SDM670 q6core requirement. This SoC's
+# calibration lives in the hexagonfs tree instead, which is served over
+# FastRPC by hexagonrpcd -- a daemon that is not packaged for Arch. So the
+# tree is checked for, and the thing that would read it is known to be absent.
+[ -d "$R/usr/share/qcom/sm7225/Fairphone/fp4" ] \
+  && ok "the hexagonfs tree is installed" \
+  || no "no /usr/share/qcom/sm7225/Fairphone/fp4 -- the DSPs have no filesystem to read"
+
+# The use-case profile. Without it the card exists and PipeWire shows no sink,
+# because WirePlumber will not expose a card it cannot route. The conf.d name
+# has to be the card's long name exactly -- "Fairphone 4", space included.
+[ -s "$R/usr/share/alsa/ucm2/Fairphone/fp4/HiFi.conf" ] \
+  && ok "the fp4 ALSA use-case profile is installed" \
+  || no "no ucm2/Fairphone/fp4/HiFi.conf -- the card would expose no sink"
+# -L, not -e. This is a symlink whose target is ABSOLUTE
+# (/usr/share/alsa/ucm2/Fairphone/fp4/fp4.conf), which is correct on the phone
+# and unresolvable here: -e follows it and lands on the CONTAINER's /usr,
+# where it does not exist, so a perfectly good package reads as missing. The
+# target is checked as a string instead, which is the thing that has to be
+# right anyway.
+_ucmlink="$R/usr/share/alsa/ucm2/conf.d/sm7225/Fairphone 4.conf"
+if [ -L "$_ucmlink" ] || [ -e "$_ucmlink" ]; then
+  ok "ALSA can find it by card name (conf.d/sm7225)"
+  _t=$(readlink "$_ucmlink" 2>/dev/null)
+  case "$_t" in
+    /usr/share/alsa/ucm2/Fairphone/fp4/fp4.conf|"")
+      [ -n "$_t" ] && ok "the lookup points at the profile this package ships" ;;
+    *) no "conf.d link points at '$_t', not the fp4 profile" ;;
+  esac
+else
+  no "no conf.d/sm7225/'Fairphone 4'.conf -- the profile exists and nothing looks it up"
+fi
+
+# The speaker amplifier's firmware, in both of the two places
+# firmware-moarchy-fp4 installs it. Which one the aw88264 driver asks for is
+# not settled off the config alone, so the package ships both and this checks
+# both are really there rather than that one of them is.
+for _f in aw882xx_spk_reg_l.bin aw882xx_spk_reg_r.bin; do
+  if [ -s "$R/usr/lib/firmware/postmarketos/$_f" ] && [ -e "$R/usr/lib/firmware/$_f" ]; then
+    ok "amplifier firmware $_f is reachable by both names"
+  else
+    no "$_f is not present under both /usr/lib/firmware and .../postmarketos -- the speaker may stay silent"
+  fi
+done
+
+# The WirePlumber format override. Upstream carries it because the amplifier's
+# I2S link does not accept what WirePlumber negotiates by default, and the
+# symptom is silence rather than an error anyone can read.
+[ -s "$R/usr/share/wireplumber/wireplumber.conf.d/52-fairphone-fp4.conf" ] \
+  && ok "the S32LE format override for this card is installed" \
+  || no "no 52-fairphone-fp4.conf -- WirePlumber may negotiate a format the amplifier refuses"
+
+# --- and what is KNOWN not to work, asserted so it cannot be forgotten -----
+#
+# These are not failures of this image. They are upstream limits, recorded
+# here as notes so that a passing run does not read as "audio works".
+grep -q 'SectionDevice."Mic' "$R/usr/share/alsa/ucm2/Fairphone/fp4/HiFi.conf" 2>/dev/null \
+  && ok "the UCM profile defines a capture device" \
+  || note "the UCM profile defines playback only -- the built-in microphone does not work upstream either"
+
+sec "the camera (fp4)"
+# Nothing to check, and saying so is the point. sargo ships two DCP colour
+# profiles; this device ships none, because its sensors do not stream yet --
+# the imx576 driver was still on the mailing list in May 2026 and nothing
+# configures the media graph. A colour profile here would be a correction
+# applied to no image.
+note "no camera profiles on $DEVICE -- the sensors do not stream on mainline yet"
 }
 
 # What has to be true of THIS device's rootfs (the optional hook in verify.sh).
@@ -173,6 +323,13 @@ else
   no "the unit's ExecStart is not /usr/bin/qbootctl -m"
 fi
 
+# The hardware chains below are per device, and are guarded rather than
+# generalised. sargo and the Fairphone share a boot backend and almost no
+# hardware: different SoC, different firmware layout, different UCM vendor
+# path, different storage. What they do share is already above this line.
+case "$DEVICE" in
+  fp4) _verify_hw_fp4 ;;
+  *)
 sec "the Wi-Fi chain (D27)"
 # Every link, because on this SoC Wi-Fi is not one component failing loudly but
 # a chain going quiet: ath10k_snoc binds, the interface never appears, and
@@ -366,6 +523,8 @@ if [ -s "$R/usr/share/q6voiced/q6voiced.conf" ]; then
 else
   no "no /usr/share/q6voiced/q6voiced.conf -- q6voiced's unit is condition-skipped silently"
 fi
+    ;;
+esac
 }
 
 # The rootfs growing to fill its partition.
@@ -415,7 +574,53 @@ case "$loop" in
       no "resize2fs failed on $loop -- the growth half of I7 is NOT tested"
     fi ;;
   *)
-    # Never silently skip: this is the half that reclaims 50 GB of a phone.
-    no "rootfs is not on a loop device (got '${loop:-none}') -- growth NOT tested" ;;
+    # No loop device. That is expected under rootless podman, where the rootfs
+    # is mounted through fuse2fs -- and it means the ONLINE grow above cannot
+    # be run, because there is no block device for resize2fs to act on.
+    #
+    # Rather than skip the half of I7 that reclaims 100 GB of this phone, do
+    # the OFFLINE equivalent on a COPY: grow the backing file and resize the
+    # unmounted filesystem in it. That still proves this filesystem can be
+    # grown -- the geometry, the feature flags and resize2fs's willingness are
+    # all the same. What it does not prove is the online path, which is the one
+    # moarchy-grow-rootfs actually takes on the phone.
+    #
+    # Said out loud, because "grew" and "grew while mounted" are not the same
+    # claim and a run that made the weaker one silently would be the worst
+    # outcome here.
+    if [ "${ROOT_MOUNT_KIND:-}" = fuse ]; then
+      note "no loop device (fuse2fs mount) -- testing the OFFLINE grow instead"
+      cp "$WORK/root.img" "$WORK/grow.img"
+      # fuse2fs does not replay or clear the journal, so the copy looks
+      # unclean and resize2fs refuses it with "Please run e2fsck -f first".
+      # -f forces, -y answers; both are safe on a throwaway copy and neither
+      # touches the image that gets flashed.
+      e2fsck -fy "$WORK/grow.img" >/dev/null 2>&1 || true
+      before=$(dumpe2fs -h "$WORK/grow.img" 2>/dev/null | awk -F: '/Block count/{gsub(/ /,"",$2); print $2}')
+      # The block size is READ, not assumed to be 4096. mke2fs picks it from
+      # the filesystem's size -- 1024 for a small one -- so a hardcoded 4096
+      # reports a 32M image as 128M, which was measured on a test image before
+      # this line said so. The rootfs this normally runs against is large
+      # enough to get 4096 either way; the point is that the number printed is
+      # the filesystem's rather than this script's guess about it.
+      bs=$(dumpe2fs -h "$WORK/grow.img" 2>/dev/null | awk -F: '/Block size/{gsub(/ /,"",$2); print $2}')
+      bs=${bs:-4096}
+      truncate -s +64M "$WORK/grow.img"
+      if resize2fs "$WORK/grow.img" >/dev/null 2>&1; then
+        after=$(dumpe2fs -h "$WORK/grow.img" 2>/dev/null | awk -F: '/Block count/{gsub(/ /,"",$2); print $2}')
+        if [ -n "${before:-}" ] && [ -n "${after:-}" ] && [ "$after" -gt "$before" ]; then
+          ok "resize2fs grew the rootfs offline $(( before * bs / 1048576 ))M -> $(( after * bs / 1048576 ))M"
+          note "the ONLINE grow -- what the phone actually does -- was not exercised"
+        else
+          no "resize2fs did not grow the filesystem (${before:-?} -> ${after:-?} blocks)"
+        fi
+      else
+        no "resize2fs failed on $WORK/grow.img -- the growth half of I7 is NOT tested"
+      fi
+      rm -f "$WORK/grow.img"
+    else
+      # Never silently skip: this is the half that reclaims 50 GB of a phone.
+      no "rootfs is not on a loop device (got '${loop:-none}') -- growth NOT tested"
+    fi ;;
 esac
 }

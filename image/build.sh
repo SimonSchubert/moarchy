@@ -44,6 +44,12 @@ DEVICE=${DEVICE:-sargo}
 # is the general one).
 case "$DEVICE" in
   sargo)     BACKEND=android-bootimg ;;
+  # The second handset, and the line that made the indirection above worth
+  # keeping: fastboot, an Android boot image, A/B slots, AVB, non-removable
+  # storage. D0 predicted the next phone would be this shape and it is -- the
+  # only per-device work was a DTB name, a kernel flavor, a storage-driver
+  # list and one `fastboot erase dtbo`, all of them in android-bootimg.sh.
+  fp4)       BACKEND=android-bootimg ;;
   *) printf '\033[31m!! DEVICE=%s has no boot backend; add one to the case in %s\033[0m\n' \
        "$DEVICE" "$0" >&2; exit 1 ;;
 esac
