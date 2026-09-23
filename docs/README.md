@@ -150,8 +150,8 @@ Thirteen plugins and one directory that is not a plugin, all under
 | Plugin | Kind | What it owns | Contract |
 | --- | --- | --- | --- |
 | `moarchy.gestures` | panel | the bottom strip, the home pill, the back edge — every touch gesture, and the shell's only compositor-dispatch seam | [`gestures.md`](gestures.md) |
-| `moarchy.app-app drawer` | overlay | the app grid, its search field, the uninstall card | [`gestures.md`](gestures.md) §N, [`apps.md`](apps.md) |
-| `moarchy.workspace-workspace overview` | overlay | every workspace as a card, dragging a window from one to another, and the bin that closes one | [`gestures.md`](gestures.md) §P |
+| `moarchy.app-drawer` | overlay | the app grid, its search field, the uninstall card | [`gestures.md`](gestures.md) §N, [`apps.md`](apps.md) |
+| `moarchy.workspace-overview` | overlay | every workspace as a card, dragging a window from one to another, and the bin that closes one | [`gestures.md`](gestures.md) §P |
 | `moarchy.control-center` | overlay | the pull-down: quick tiles, brightness and volume, media, notification history | [`control-center.md`](control-center.md) |
 | `moarchy.settings` | overlay | the settings screen tree and the IPC it answers on | [`settings.md`](settings.md) |
 | `moarchy.themes` | overlay | the theme picker, as a grid of live swatches | [`settings.md`](settings.md) §theme |

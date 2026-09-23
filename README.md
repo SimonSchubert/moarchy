@@ -1,8 +1,8 @@
 # moarchy
 
 <p align="center">
-  <img src="docs/screenshots/system-app drawer-open.png" width="16%" alt="The app drawer at rest: a search field over a grid of app icons">
-  <img src="docs/screenshots/system-app drawer.png" width="16%" alt="The app drawer, filtered as you type, with the on-screen keyboard up">
+  <img src="docs/screenshots/system-drawer-open.png" width="16%" alt="The app drawer at rest: a search field over a grid of app icons">
+  <img src="docs/screenshots/system-drawer.png" width="16%" alt="The app drawer, filtered as you type, with the on-screen keyboard up">
   <img src="docs/screenshots/system-center.png" width="16%" alt="The control centre: quick tiles, brightness and volume, the media player and notifications">
   <img src="docs/screenshots/system-settings.png" width="16%" alt="The Settings suite's top level">
   <img src="docs/screenshots/app-web.png" width="16%" alt="GNOME Web on omarchy.org, URL bar at the bottom, keyboard up">
