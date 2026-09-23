@@ -24,6 +24,8 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 . "$REPO_ROOT/scripts/manifest.sh"
+# Which container engine, and the flags that differ between docker and podman.
+. "$REPO_ROOT/scripts/container.sh"
 
 # moarchy, not alarm. `alarm` is DanctNIX's stock user and was right while this
 # project provisioned on top of their image; the image built here creates
@@ -98,8 +100,13 @@ step_build() {
   # list in a progress message is still a list, and it is the one nobody
   # updates. cbonsai was missing from it for exactly that reason.
   say "build aarch64 packages (moarchy-keyboard, $(manifest_aur_packages | tr '\n' ' ' | sed 's/ $//'))"
-  docker info >/dev/null 2>&1 || die "Docker is not running"
-  docker build --platform linux/arm64 -f docker/Dockerfile.builder -t moarchy-builder . >/dev/null
+  # DEVICES=fp4 builds only that handset's device-exclusive packages and skips
+  # the others'. Unset builds everything, which is what a release does.
+  # docker/build-packages.sh explains why it matters (two phones, two kernels).
+  if [ -n "${DEVICES:-}" ]; then info "targeting device(s): ${DEVICES}"; fi
+  ctr_require
+  info "engine: $(ctr_describe)"
+  "$CTR" build --platform linux/arm64 -f docker/Dockerfile.builder -t moarchy-builder . >/dev/null
   mkdir -p packages
   # The commit goes in, because .dockerignore excludes .git and the container
   # has no repository to ask. packages/.build-manifest records it beside the
@@ -109,8 +116,17 @@ step_build() {
   _commit=$(git rev-parse HEAD 2>/dev/null || echo unknown)
   _dirty=0; [ -n "$(git status --porcelain 2>/dev/null)" ] && _dirty=1
   [ "$_dirty" = 1 ] && info "!! the working tree is dirty; these packages match no commit"
-  docker run --rm --platform linux/arm64 -v "$PWD/packages:/out" \
+  # No --userns mapping here, and that is the conclusion of having tried one.
+  # The container runs as root and drops to `builder` per makepkg
+  # (docker/Dockerfile.builder says why), so under rootless podman the host
+  # user IS container root -- and build-packages.sh lends packages/ to
+  # `builder` for the build and restores its original owner on the way out.
+  # A keep-id mapping would take root away again, and root is what installs
+  # the build dependencies.
+  "$CTR" run --rm --platform linux/arm64 \
+    -v "$PWD/packages:/out" \
     -e "COMMIT=$_commit" -e "DIRTY=$_dirty" -e "REBUILD=${REBUILD:-0}" \
+    -e "DEVICES=${DEVICES:-}" \
     moarchy-builder
   info "built: $(ls -1 packages/*.pkg.tar.* 2>/dev/null | wc -l | tr -d ' ') packages"
   info "  (the components, the AUR rebuilds, and pkgbuilds/: moarchy,"

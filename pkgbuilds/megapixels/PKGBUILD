@@ -59,7 +59,16 @@ license=('GPL-3.0-or-later')
 # Arch's own runtime list, read off the installed package rather than guessed.
 depends=('feedbackd' 'glib2' 'gtk4' 'imagemagick' 'libdng' 'libepoxy'
          'libjpeg-turbo' 'libmegapixels' 'libraw' 'zbar')
-makedepends=('meson' 'ninja' 'pkgconf' 'gtk4' 'libdng' 'libmegapixels'
+# gperf is megapixels' and was never declared. Its meson.build calls
+# find_program('gperf') at line 29, and without it the build stops with
+#
+#   meson.build:29:8: ERROR: Program 'gperf' not found or not executable
+#
+# It went unnoticed while the builder image happened to carry everything by
+# hand; it surfaced the moment dependencies started coming from what the
+# recipe declares. Declared here rather than added to the image, because the
+# recipe is where the answer belongs and this one travels upstream.
+makedepends=('gperf' 'meson' 'ninja' 'pkgconf' 'gtk4' 'libdng' 'libmegapixels'
              'libepoxy' 'zbar' 'feedbackd' 'libjpeg-turbo')
 
 # Replaces Arch's package rather than sitting beside it: two packages cannot

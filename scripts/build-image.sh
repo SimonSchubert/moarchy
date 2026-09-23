@@ -16,8 +16,9 @@ cd "$REPO_ROOT"
 
 OUTDIR="${OUTDIR:-$REPO_ROOT/images}"
 
-command -v docker >/dev/null || { echo "docker is not installed" >&2; exit 1; }
-docker info >/dev/null 2>&1 || { echo "Docker is not running" >&2; exit 1; }
+# Which container engine, and the flags that differ between docker and podman.
+. "$REPO_ROOT/scripts/container.sh"
+ctr_require
 compgen -G "packages/*.pkg.tar.*" >/dev/null || {
   echo "No packages built yet. Run: ./scripts/provision.sh build" >&2; exit 1; }
 
@@ -54,8 +55,8 @@ fi
 
 mkdir -p "$OUTDIR"
 
-echo "==> building the image container"
-docker build --platform linux/arm64 -f image/Dockerfile -t moarchy-image . >/dev/null
+echo "==> building the image container ($(ctr_describe))"
+"$CTR" build --platform linux/arm64 -f image/Dockerfile -t moarchy-image . >/dev/null
 
 # --privileged: arch-chroot bind-mounts /proc, /sys and /dev so configure.sh
 # can run useradd, locale-gen and a pacman refresh inside the rootfs.
@@ -70,7 +71,11 @@ docker build --platform linux/arm64 -f image/Dockerfile -t moarchy-image . >/dev
 CACHE="${PACMAN_CACHE:-$REPO_ROOT/.cache/pacman}"
 mkdir -p "$CACHE"
 
-docker run --rm --privileged --platform linux/arm64 \
+# No --userns here, unlike the package builder: this container runs as root,
+# and rootless podman already maps container root to the host user -- so what
+# lands in $OUTDIR is owned by whoever ran the build. Adding keep-id would
+# break that rather than fix it.
+"$CTR" run --rm --privileged --platform linux/arm64 \
   -v "$REPO_ROOT:/repo:ro" \
   -v "$CACHE:/var/cache/pacman/pkg" \
   -v "$REPO_ROOT/packages:/pkgs:ro" \

@@ -189,3 +189,32 @@ manifest_aur_packages() {
 
   printf '%s\n' "$_manifest_pkgs"
 }
+
+# manifest_devices -- every device codename the manifest describes, one per
+# line, from its [device.*] sections.
+#
+# Same shape as manifest_aur_packages above, and here for the same reason: the
+# alternative is a hand-kept list of handsets in a script, which is the list
+# nobody updates when a third phone lands. docker/build-packages.sh reads this
+# to work out whose packages to skip when DEVICES names a target.
+#
+# Unlike the other readers this does NOT fail on an empty result. A tree with
+# no [device.*] sections is a tree with nothing to skip, and the caller's
+# correct behaviour there is to build everything -- which is what an empty
+# list gives it.
+manifest_devices() {
+  if [ ! -f "$MANIFEST_FILE" ]; then
+    echo "manifest: no such file: $MANIFEST_FILE" >&2
+    return 1
+  fi
+
+  awk '
+    /^[ \t]*#/ { next }
+    /^[ \t]*\[device\./ {
+      sec = $0
+      sub(/^[ \t]*\[device\./, "", sec)
+      sub(/\][ \t]*$/, "", sec)
+      print sec
+    }
+  ' "$MANIFEST_FILE"
+}
