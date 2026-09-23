@@ -90,8 +90,28 @@ var TOGGLES = [
     cmdOff: "omarchy-toggle-idle allow-idle" },
   { id: "keyboard",   name: "Keyboard",    glyph: "󰌌", on: false,
     cmdOn: "moarchy-toggle-keyboard" },
-  { id: "screenshot", name: "Screenshot",  glyph: "",     on: false,
-    cmdOn: "moarchy-capture-screenshot" }
+  // Three things were wrong with this tile, and together they meant the phone
+  // could not take a screenshot at all (measured on an fp4 2026-09-22).
+  //
+  //   the command did not exist   `moarchy-capture-screenshot` is not a
+  //                               binary. The wrapper is omarchy's, and
+  //                               `omarchy-capture-screenshot fullscreen save`
+  //                               writes a PNG to ~/Pictures. A tile calling a
+  //                               missing command fails silently, because
+  //                               execDetached does not report.
+  //   no glyph                    an empty string, so the tile drew blank.
+  //   off by default              which, with the other two, is why nobody
+  //                               noticed them.
+  //
+  // It closes the control centre before capturing. Not politeness: the panel
+  // fills the screen when the tile is tapped, so without the close every
+  // screenshot is a picture of the screenshot button -- verified by capturing
+  // the phone with the panel open, which is exactly what came out. The 0.4s is
+  // the close animation. `control-center` is the IpcHandler target and NOT the
+  // plugin id: `moarchy.control-center` is what `shell summon` takes, and
+  // answers "Target not found." here.
+  { id: "screenshot", name: "Screenshot",  glyph: "󰄀", on: true,
+    cmdOn: "omarchy-shell control-center close; sleep 0.4; omarchy-capture-screenshot fullscreen save" }
 ]
 
 // ---------------------------------------------------------------------------
