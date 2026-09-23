@@ -1,0 +1,63 @@
+# IMS, for a network that carries no circuit-switched voice.
+#
+# LTE has no CS voice channel. On a network that has switched 2G and 3G off,
+# the modem cannot fall back, so it must register with IMS and place the call
+# over the packet network instead -- and it will not register until something
+# answers its request for an IMS PDN. Nothing in mainline answers that. This
+# is the something.
+#
+# Concretely: 81voltd implements the server side of the QMI IMS Data service,
+# listening on QRTR, and translates the modem's bearer requests into
+# ModemManager D-Bus calls. Without it, on a VoLTE-only network, a dial gets
+# as far as the modem and no further.
+#
+# WHY IT IS HERE EVEN THOUGH THIS HANDSET'S SIM MAY NOT NEED IT
+#
+# Whether a given SIM needs IMS is a property of the operator, not of the
+# phone. The SIM in the device today (T-Mobile NL) is registered on LTE/5G but
+# the modem still lists gsm-umts as supported, so CS fallback may well work
+# for it. Shipping only what that one SIM needs would make the phone work for
+# its owner and fail for everybody else, in a way nobody could diagnose from
+# the outside. So it is packaged unconditionally -- on a network with CS
+# fallback the daemon simply never gets asked for a PDN and sits idle.
+#
+# Upstream moved: it was gitlab.com/flamingradian/81voltd and is now hosted by
+# postmarketOS at gitlab.postmarketos.org/modem/81voltd. The pin below follows
+# the move; v1.2.0 is the current tag (2026-04-29).
+
+. "$startdir/../../scripts/manifest.sh"
+
+pkgname=81voltd
+_ver=1.2.0
+pkgver=$_ver
+pkgrel=1
+pkgdesc='Server-side QMI IMS Data service, so a VoLTE-only network can carry calls'
+arch=('aarch64')
+url='https://gitlab.postmarketos.org/modem/81voltd'
+license=('BSD-3-Clause')
+# mm-glib comes from modemmanager, qmi-glib from libqmi, qrtr from
+# libqrtr-glib. Named as packages rather than as pkg-config modules because
+# that is what pacman resolves.
+depends=('modemmanager' 'libqmi' 'libqrtr-glib' 'glib2')
+makedepends=('meson' 'ninja' 'pkgconf')
+
+# qmic is optional upstream: with it the QMI bindings are regenerated from
+# imsd.qmi, without it the pre-generated qmi_imsd.c/h in the tarball are used.
+# We do not build-depend on it -- the checked-in copies are what upstream
+# ships for exactly this case, and adding a code generator to the build for no
+# behavioural difference is the wrong trade.
+
+source=("$pkgname-$_ver.tar.gz::$url/-/archive/v$_ver/$pkgname-v$_ver.tar.gz")
+sha256sums=('bb0e9774463fb4964067bf70f10cc316afc1c8ed163ff7969b3fd3ae3dc2e937')
+
+build() {
+  cd "$srcdir/$pkgname-v$_ver"
+  meson setup build --prefix=/usr --buildtype=release
+  ninja -C build
+}
+
+package() {
+  cd "$srcdir/$pkgname-v$_ver"
+  DESTDIR="$pkgdir" ninja -C build install
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

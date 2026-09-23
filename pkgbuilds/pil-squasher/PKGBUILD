@@ -1,0 +1,99 @@
+# pil-squasher -- rebuild a whole Qualcomm firmware image from its split form.
+#
+# Qualcomm ships signed firmware as a header (`modem.mdt`) plus one file per
+# ELF segment (`modem.b00`, `modem.b01`, ...). Linux's PIL loader wants the
+# single merged `modem.mbn`. This ~200-line C program does that merge, and
+# pkgbuilds/firmware-moarchy-fp4 runs it once per image at build time.
+#
+# Why this exists as a package in this repo at all -- three answers, because
+# each of the obvious alternatives was considered and is worse:
+#
+#   Use the AUR.        The AUR has `pil-squasher-git` only. A VCS package has
+#                       no pin: it builds whatever the default branch holds on
+#                       the day the container runs, which is the thing
+#                       manifest.toml exists to prevent. This project already
+#                       rebuilds several AUR packages precisely so their
+#                       versions are pinned; adding an unpinned one back would
+#                       undo that.
+#
+#   Reimplement it.     Tempting -- it is a small program, and a Python port
+#                       inside the firmware PKGBUILD would remove a package.
+#                       But then this repo owns a reimplementation of a
+#                       signing-adjacent tool, and a bug in it corrupts a
+#                       firmware blob in a way that shows up as hardware that
+#                       does not initialise. Running upstream's code is the
+#                       cheaper kind of trust.
+#
+#   Ship .mbn directly. Not ours to ship. The blobs are redistributed from
+#                       FairBlobs at a pin; converting them at build time on
+#                       the user's machine keeps this repo carrying no vendor
+#                       firmware of its own.
+#
+# The qbootctl precedent (manifest.toml [qbootctl]) is the model: an upstream C
+# project, pinned, packaged, and we are the ones who notice when it moves.
+
+. "$startdir/../../scripts/manifest.sh"
+_ver=$(manifest_get pil-squasher version) || return 1
+_url=$(manifest_get pil-squasher url) || return 1
+_ref=$(manifest_get pil-squasher ref) || return 1
+
+pkgname=pil-squasher
+pkgver=$_ver
+pkgrel=1
+pkgdesc="Merge split Qualcomm PIL firmware (.mdt + .bNN) into a single .mbn"
+arch=('aarch64')
+url="$_url"
+license=('BSD-3-Clause')
+makedepends=('gcc' 'git' 'make')
+# A git source at a pinned commit, rather than a release tarball, and the
+# checksum is SKIP -- which in this one case is stronger than a hash, not
+# weaker.
+#
+# Upstream has never tagged a release, so there is no tarball with a stable
+# name to pin. What there is, is a commit, and `#commit=` makes makepkg check
+# out exactly that object and fail if it cannot. The commit id IS the content
+# hash: a repository that hands back a different tree under that name cannot,
+# because the id is derived from the tree.
+#
+# This is the same reasoning docker/build-packages.sh already applies to every
+# component and AUR package -- clone_pinned() clones, detaches at the ref, and
+# then re-reads HEAD to confirm it got what it asked for. structure.md P10
+# objects to SKIP on a TARBALL, where the name is all that is pinned and the
+# bytes can move under it. That is not this.
+source=("$pkgname::git+$_url#commit=$_ref")
+sha256sums=('SKIP')
+
+build() {
+  cd "$pkgname"
+  # Upstream's Makefile has no ./configure and honours CC/CFLAGS. Building
+  # both binaries is what `make` does by default; the splitter is unused here
+  # and costs nothing.
+  make
+
+  # Prove it runs rather than trusting that it linked. With no arguments it
+  # prints its usage line, so the test is on the text rather than on the exit
+  # status.
+  #
+  # Matched on "<mbn output>" and not on the word "usage", because it does not
+  # print one -- the whole of it is:
+  #
+  #   pil-squasher: <mbn output> <mdt header>
+  #
+  # Checked against the binary rather than assumed. A `case` looking for
+  # *usage* here passes nothing and fails a perfectly good build.
+  local _out
+  _out=$(./pil-squasher 2>&1 || true)
+  case "$_out" in
+    *"<mbn output>"*) echo "==> pil-squasher runs: ${_out%%$'\n'*}" ;;
+    *) echo "!! pil-squasher built but does not execute -- got: $_out"; return 1 ;;
+  esac
+  readelf -h ./pil-squasher | grep -q 'AArch64' ||
+    { echo "!! pil-squasher is not an AArch64 binary"; return 1; }
+}
+
+package() {
+  cd "$pkgname"
+  install -Dm755 pil-squasher "$pkgdir/usr/bin/pil-squasher"
+  install -Dm755 pil-splitter "$pkgdir/usr/bin/pil-splitter"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

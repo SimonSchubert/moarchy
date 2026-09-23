@@ -1,0 +1,278 @@
+# Fairphone 4 hardware support: the package that ties the kernel, the firmware
+# and the device facts together.
+#
+# The counterpart of moarchy-device-sargo. `provides=moarchy-device` is what
+# makes it interchangeable with it -- moarchy-meta depends on the VIRTUAL name
+# (docs/devices.md D5), so the image builder installs `moarchy-device-$DEVICE`
+# and nothing else in the package set has to know which phone it is.
+#
+# READ docs/fairphone-4.md BEFORE RELYING ON THIS.
+#
+# The built-in microphone works as of 2026-09-23, and this package is what
+# makes it work: the capture path is in ucm-HiFi.conf, the node format and the
+# ACP workaround are in 53-fp4-ucm.conf, and moarchy-fp4-mic-route.service
+# puts the route back after WirePlumber clears it. No kernel patch is involved
+# -- mainline's wcd938x needed nothing. What it did need was the device tree,
+# which lives in ~/Personal/fp4-mic-capture and is not part of this package.
+#
+# Two things upstream does not have working -- audio on cellular calls, and
+# Wi-Fi that stays up -- are still not things this package can fix.
+#
+# --- What is here that sargo's has not -------------------------------------
+#
+# Three files that come from postmarketOS's device-fairphone-fp4 rather than
+# from this project, vendored byte-for-byte and verified against the sha512s
+# pmaports publishes for them:
+#
+#   ucm/fp4.conf, ucm/HiFi.conf    the ALSA use-case profile
+#   52-fairphone-fp4.conf          a WirePlumber format override
+#   81-libssc-fairphone-fp4.rules  the accelerometer mount matrix
+#
+# They are vendored rather than depended on because there is no Arch package
+# that carries them -- the same hole `alsa-ucm-conf-moarchy-sdm670` fills for
+# sargo, solved here by copying four small files instead of by repackaging
+# someone's whole UCM tree, because upstream keeps the Fairphone's profile in
+# the device package rather than in a separate repo.
+#
+# --- What is here that sargo's has, and is NOT ------------------------------
+#
+#   no megapixels .dcp    sargo ships camera colour profiles built by
+#                         make-dcp.py. This originally said the FP4 also
+#                         needed a sensor driver still on the mailing list;
+#                         measured on hardware 2026-09-22, that has moved on.
+#                         imx582 (x2) and imx576 all bind on v7.2.0-sm6350,
+#                         /dev/media0 comes up with the full csiphy-csid-vfe
+#                         graph and every sensor link ENABLED. What is missing
+#                         is a megapixels profile: it matches on the DT
+#                         compatible (fairphone,fp4), finds none, and falls
+#                         back to uvc. See docs/fp4-defects.md D6. A colour
+#                         profile still waits on a camera that streams, but
+#                         the thing standing in the way is now one config
+#                         file, not a driver.
+#
+#   no loudness.conf      sargo's PipeWire filter-chain compensates for a
+#                         specific speaker's response, measured on that
+#                         handset. Shipping sargo's curve here would be
+#                         equalising for the wrong speaker; the honest default
+#                         is none until one is measured on an FP4.
+#
+#   q6voiced.conf         IS here as of 2026-09-23. It was absent because
+#                         there was no call-audio graph to hold open; there
+#                         is now. The voice DAIs were ported into the kernel
+#                         and the card exposes CS-VOICE and VoiceMMode1, so
+#                         the daemon has a PCM to hold. See device.conf.
+
+. "$startdir/../../scripts/manifest.sh"
+_ver=$(manifest_get moarchy version) || return 1
+
+pkgname=moarchy-device-fp4
+pkgver=$_ver
+pkgrel=1
+pkgdesc="Fairphone 4 (fp4) hardware support for moarchy"
+arch=('any')
+url='https://github.com/SimonSchubert/moarchy'
+license=('MIT')
+provides=('moarchy-device')
+conflicts=('moarchy-device')
+depends=(
+  'linux-moarchy-sm6350'
+  # Holds VoiceMMode1 open for the duration of a call. Without it a dial is
+  # torn down the moment it connects, because the DSP's voice session has no
+  # owner. Only useful since the voice DAIs exist on this device.
+  'q6voiced'
+  'linux-firmware'
+  'linux-firmware-qcom'
+  'firmware-moarchy-fp4'
+  # The Wi-Fi firmware runs on the modem DSP here exactly as it does on sargo
+  # (devices.md D27), so this is the price of Wi-Fi and not a telephony
+  # nicety. qrtr/rmtfs/tqftpserv, all three.
+  'moarchy-qcom-modem'
+  # A/B slots and a retry counter, same as sargo. Without this the phone stops
+  # booting a few reboots in, and the unit below is enabled at package time so
+  # that it is true before moarchy-firstboot runs (D26).
+  'qbootctl'
+  # No local-bd-address in the DT means Bluetooth comes up with a random MAC
+  # each boot and pairings do not survive. pmOS gives this to every Qualcomm
+  # device; sargo needs it for the same reason.
+  'bootmac'
+  # --- sensors -------------------------------------------------------------
+  # Every motion and environment sensor on this phone lives on the ADSP's
+  # sensor core rather than on a bus Linux can see. Without these three the
+  # kernel exposes three PMIC ADCs, three thermal zones, and no accelerometer,
+  # gyroscope, magnetometer, light or proximity sensor at all.
+  #
+  #   hexagonrpc         the FastRPC bridge to the DSP
+  #   libssc             speaks the sensor core's protocol over it
+  #   iio-sensor-proxy   publishes the result on D-Bus, and is the thing that
+  #                      reads 81-libssc-fairphone-fp4.rules below for the
+  #                      mount matrix
+  'hexagonrpc'
+  'libssc'
+  'iio-sensor-proxy'
+  # --- camera --------------------------------------------------------------
+  # megapixels matches a profile on the devicetree compatible and falls back
+  # to uvc -- i.e. to nothing -- when it finds none. The profile is below.
+  #
+  # libmegapixels-moarchy rather than libmegapixels: the stock one pads a raw
+  # row to 8 bytes where qcom-camss pads to 16, and this sensor's only mode is
+  # 4000 px wide, which is where those two disagree. megapixels then asserts
+  # and dumps core before drawing a frame. See pkgbuilds/libmegapixels-moarchy.
+  'megapixels'
+  'libmegapixels-moarchy'
+)
+# The two UCM files are prefixed rather than kept in a ucm/ subdirectory,
+# because makepkg takes the BASENAME of a local source: 'ucm/fp4.conf' is
+# looked up as `fp4.conf` in this directory and fails with
+#
+#   ERROR: fp4.conf was not found in the build directory and is not a URL.
+#
+# The prefix also stops HiFi.conf -- a name every UCM profile uses -- from
+# being ambiguous here. package() installs them under their real names.
+source=('hypr-device.lua' 'device.conf'
+        'qbootctl-mark-successful.service'
+        '52-fairphone-fp4.conf'
+        '81-libssc-fairphone-fp4.rules'
+        'ucm-fp4.conf' 'ucm-HiFi.conf'
+        'usb-debug.sh' 'moarchy-usb-debug.service'
+        'hexagonrpcd-sensors-root.conf' 'megapixels-fp4.conf'
+        '53-fp4-ucm.conf' 'moarchy-fp4-mic-route.service'
+        'fp4-audio-route.sh' 'q6voiced.conf')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
+            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+package() {
+  install -Dm644 "$srcdir/device.conf" "$pkgdir/usr/share/moarchy/device/device.conf"
+  install -Dm644 "$srcdir/hypr-device.lua" \
+    "$pkgdir/usr/share/moarchy/device/hypr/device.lua"
+  printf 'codename=fp4\n' > "$srcdir/build-info"
+  install -Dm644 "$srcdir/build-info" "$pkgdir/usr/share/moarchy/device/build-info"
+
+  # --- audio ----------------------------------------------------------------
+  #
+  # The UCM profile, at the path alsa-lib resolves for this card. The symlink
+  # under conf.d/sm7225/ is how it is found: alsa-lib looks up
+  # conf.d/$driver/$card_longname, and the card long name on this device is
+  # "Fairphone 4" -- hence a filename with a space in it, which is upstream's
+  # and not a mistake here.
+  install -Dm644 "$srcdir/ucm-fp4.conf" \
+    "$pkgdir/usr/share/alsa/ucm2/Fairphone/fp4/fp4.conf"
+  install -Dm644 "$srcdir/ucm-HiFi.conf" \
+    "$pkgdir/usr/share/alsa/ucm2/Fairphone/fp4/HiFi.conf"
+  install -d "$pkgdir/usr/share/alsa/ucm2/conf.d/sm7225"
+  ln -s /usr/share/alsa/ucm2/Fairphone/fp4/fp4.conf \
+    "$pkgdir/usr/share/alsa/ucm2/conf.d/sm7225/Fairphone 4.conf"
+
+  # WirePlumber: force S32LE on this card's sinks. Upstream carries it because
+  # the amplifier's I2S link does not accept what WirePlumber negotiates by
+  # default, and the symptom is silence rather than an error.
+  install -Dm644 "$srcdir/52-fairphone-fp4.conf" \
+    -t "$pkgdir/usr/share/wireplumber/wireplumber.conf.d"
+
+  # WirePlumber, capture side. Two things this card needs that the defaults
+  # get wrong, both measured on hardware 2026-09-23:
+  #
+  #   use-acp=false   ACP offers this card only an "off" profile -- no sink and
+  #                   no source at all -- so nothing can record. Dropping to
+  #                   the raw-PCM node factory produces both. (Why ACP rejects
+  #                   the UCM is not yet understood: the verb's control exists
+  #                   and alsaucm applies the profile by hand without error.
+  #                   fp4-defects.md D13.)
+  #
+  #   the format      the capture PCM accepts S16_LE/S24_LE, 1-4 channels. With
+  #                   nothing pinned, PipeWire probes 64 channels, logs
+  #                   "given audio.channels 64 out of range:4-4", creates the
+  #                   node as s16le 4ch anyway, and then stalls 96ms into every
+  #                   stream with no error. Pinning S24_32LE/2ch/48k -- which
+  #                   is what the hardware actually does -- makes it record.
+  #                   S24_32LE, not S24LE: ALSA's S24_LE is 24 bits in a 32-bit
+  #                   container, and naming it S24LE here makes the node fail
+  #                   to appear at all rather than fail loudly.
+  install -Dm644 "$srcdir/53-fp4-ucm.conf" \
+    -t "$pkgdir/usr/share/wireplumber/wireplumber.conf.d"
+
+  # ...and the capture route itself. WirePlumber clears this card's mixer when
+  # it starts, which undoes what alsa-restore set at boot, so the route has to
+  # go back afterwards. A user unit rather than a system one because it is
+  # ordered against WirePlumber; PartOf/BindsTo make it re-run on every
+  # WirePlumber restart rather than only at login.
+  install -Dm755 "$srcdir/fp4-audio-route.sh" \
+    "$pkgdir/usr/lib/moarchy/bin/fp4-audio-route"
+
+  # --- call audio ------------------------------------------------------------
+  #
+  # q6voiced's unit ConditionPathExists on this file, so shipping it is what
+  # turns the daemon on for this device. It is a hardware fact -- which PCM
+  # carries a call -- so it belongs here rather than in the daemon's package.
+  install -Dm644 "$srcdir/q6voiced.conf" \
+    "$pkgdir/usr/share/q6voiced/q6voiced.conf"
+  install -Dm644 "$srcdir/moarchy-fp4-mic-route.service" \
+    "$pkgdir/usr/lib/systemd/user/moarchy-fp4-mic-route.service"
+  install -d "$pkgdir/usr/lib/systemd/user/wireplumber.service.wants"
+  ln -s ../moarchy-fp4-mic-route.service \
+    "$pkgdir/usr/lib/systemd/user/wireplumber.service.wants/moarchy-fp4-mic-route.service"
+
+  # --- sensors --------------------------------------------------------------
+  #
+  # The accelerometer's mount matrix, for iio-sensor-proxy. Shipped even
+  # though nothing serves the sensors yet (device.conf explains: hexagonrpcd
+  # is not packaged for Arch) -- it is a static fact about how the part is
+  # soldered in, it costs 156 bytes, and having it already right is what makes
+  # packaging hexagonrpcd later a one-package change rather than two.
+  install -Dm644 "$srcdir/81-libssc-fairphone-fp4.rules" \
+    -t "$pkgdir/usr/lib/udev/rules.d"
+
+  # --- a way to read a phone that will not say why -------------------------
+  #
+  # A USB gadget with a serial console on it, enabled at package time for the
+  # same reason qbootctl's unit is: a first-boot script that can fail is not
+  # where a recovery path belongs.
+  #
+  # This device has no console anyone can reach -- the bootloader appends
+  # console=null, and the only UART is three test points inside the case. The
+  # image's other answer, a debug build with preseeded wifi and an ssh key,
+  # needs the network to work, which on this handset is both unproven and
+  # upstream-unstable. The cable is already attached; this uses it.
+  #
+  # usb-debug.sh says at length why it is safe to run unconditionally: it
+  # cannot affect fastboot, it tolerates every failure, and it grants no access
+  # the locked-password/tty1-autologin design does not already give.
+  install -Dm755 "$srcdir/usb-debug.sh" \
+    "$pkgdir/usr/lib/moarchy/bin/moarchy-usb-debug"
+  install -Dm644 "$srcdir/moarchy-usb-debug.service" \
+    "$pkgdir/usr/lib/systemd/system/moarchy-usb-debug.service"
+  install -d "$pkgdir/usr/lib/systemd/system/multi-user.target.wants"
+  ln -s ../moarchy-usb-debug.service \
+    "$pkgdir/usr/lib/systemd/system/multi-user.target.wants/moarchy-usb-debug.service"
+
+  # --- camera ---------------------------------------------------------------
+  #
+  # Installed under the name megapixels looks for: it reads
+  # /proc/device-tree/compatible, which is `fairphone,fp4` here, and opens
+  # /usr/share/megapixels/config/<that>.conf.
+  install -Dm644 "$srcdir/megapixels-fp4.conf" \
+    "$pkgdir/usr/share/megapixels/config/fairphone,fp4.conf"
+
+  # --- sensors --------------------------------------------------------------
+  #
+  # hexagonrpcd's own unit serves upstream's vendor-wide default root. This
+  # points it at the device's own tree, which is where firmware-moarchy-fp4
+  # puts the sensor configuration. Enabled here rather than by firstboot for
+  # the same reason qbootctl's unit is: a recovery path does not belong in a
+  # script that can fail.
+  install -Dm644 "$srcdir/hexagonrpcd-sensors-root.conf" \
+    "$pkgdir/usr/lib/systemd/system/hexagonrpcd-adsp-sensorspd.service.d/10-device-root.conf"
+  install -d "$pkgdir/usr/lib/systemd/system/multi-user.target.wants"
+  ln -s ../hexagonrpcd-adsp-sensorspd.service \
+    "$pkgdir/usr/lib/systemd/system/multi-user.target.wants/hexagonrpcd-adsp-sensorspd.service"
+
+  # --- A/B slots ------------------------------------------------------------
+  #
+  # Enabled here, at package time, rather than by moarchy-firstboot. D26: a
+  # slot that goes unmarked stops the phone booting a few reboots later, and
+  # firstboot is a script that can fail.
+  install -Dm644 "$srcdir/qbootctl-mark-successful.service" \
+    "$pkgdir/usr/lib/systemd/system/qbootctl-mark-successful.service"
+  install -d "$pkgdir/usr/lib/systemd/system/multi-user.target.wants"
+  ln -s ../qbootctl-mark-successful.service \
+    "$pkgdir/usr/lib/systemd/system/multi-user.target.wants/qbootctl-mark-successful.service"
+}

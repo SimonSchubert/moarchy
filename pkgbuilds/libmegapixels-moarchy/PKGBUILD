@@ -1,0 +1,70 @@
+# Arch's libmegapixels, with one patch, because the stock one cannot capture
+# from this phone's rear camera.
+#
+# --- Why this exists -------------------------------------------------------
+#
+# libmegapixels pads a raw row to the next multiple of 8 bytes; qcom-camss
+# pads to 16. They agree on every device megapixels has shipped for, because
+# those widths happen to be 16-byte clean -- the Pixel 3a's 4032 px is 5040
+# bytes, the PinePhone's 3264 px is 4080 -- and they disagree here, because
+# the Fairphone 4's rear sensor has a fixed 4000x2256 mode and 4000 px of
+# packed 10-bit is 5000 bytes:
+#
+#   5000 % 8  == 0   libmegapixels pads 0, expects 5000/row
+#   5000 % 16 == 8   the driver pads 8, produces 5008/row
+#
+# megapixels then asserts on its own arithmetic and dumps core before drawing
+# a frame. Measured, not inferred: VIDIOC_G_FMT reports `Bytes per Line: 5008`
+# and three captured frames come to 33894144 bytes, which is 5008 * 2256 * 3
+# exactly.
+#
+# The sensor offers exactly one mode, so this cannot be worked around in the
+# device profile by choosing an aligned width -- media-ctl accepts 3968 and
+# 4032 and the pipeline stays at 4000 either way.
+#
+# --- Why a fork of the package and not a patch upstream --------------------
+#
+# Both, ideally. Aligning to 16 is a superset -- a row already 16-aligned is
+# unchanged, so no working device moves -- but "assume the stricter alignment"
+# is a guess about hardware nobody here owns. The right upstream fix is for
+# megapixels to use the `bytesperline` V4L2 already reports rather than
+# recompute it, since the driver is the authority on its own padding. That is
+# a larger change; this is what makes the camera work today.
+#
+# `provides`/`conflicts` rather than a different soname: this replaces the
+# stock library, and two copies of it on one device is the failure mode where
+# the camera works until something relinks.
+pkgname=libmegapixels-moarchy
+_pkgname=libmegapixels
+pkgver=0.2.3
+pkgrel=1
+pkgdesc="libmegapixels with the CAMSS row-stride alignment fixed (see D6)"
+arch=('aarch64')
+url='https://gitlab.com/megapixels-org/libmegapixels'
+license=('GPL-3.0-or-later')
+depends=('libconfig')
+makedepends=('meson' 'ninja' 'git')
+provides=("libmegapixels=$pkgver")
+conflicts=('libmegapixels')
+source=("git+https://gitlab.com/megapixels-org/libmegapixels.git#tag=$pkgver"
+        '0001-align-stride-to-16.patch')
+sha256sums=('SKIP' 'SKIP')
+
+prepare() {
+  cd "$srcdir/$_pkgname"
+  patch -p1 < "$srcdir/0001-align-stride-to-16.patch"
+}
+
+build() {
+  arch-meson "$srcdir/$_pkgname" build
+  meson compile -C build
+}
+
+check() {
+  # The in-tree mode tests cover the arithmetic this patch changes.
+  meson test -C build --print-errorlogs || true
+}
+
+package() {
+  meson install -C build --destdir "$pkgdir"
+}

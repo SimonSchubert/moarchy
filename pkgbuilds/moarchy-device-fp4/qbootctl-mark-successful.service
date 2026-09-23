@@ -1,0 +1,29 @@
+[Unit]
+Description=Tell the bootloader this boot worked
+Documentation=https://wiki.postmarketos.org/wiki/Android_AB_Slots
+# The bootloader decrements a retry counter every time it hands off to a slot
+# and marks the slot UNBOOTABLE when it hits zero with no callback. So this has
+# to run on every boot, and it has to run early enough that a phone which hangs
+# later still keeps its next boot -- but late enough that the eMMC is there,
+# because qbootctl rewrites GPT headers on it.
+After=local-fs.target
+# Not Before=anything: nothing waits on this, and a phone that boots slowly
+# should not also boot unmarked.
+ConditionPathExists=/usr/bin/qbootctl
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# -m with no slot means the current one. Marking the slot we are running from
+# is the only correct answer; naming a slot here would be a way to bless a
+# boot that never happened.
+ExecStart=/usr/bin/qbootctl -m
+# A failure here is not fatal to THIS boot -- it is fatal to the third one
+# after it, silently. So it is logged loudly rather than ignored, and the unit
+# is allowed to fail rather than hold up a boot that is otherwise fine.
+SuccessExitStatus=0
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

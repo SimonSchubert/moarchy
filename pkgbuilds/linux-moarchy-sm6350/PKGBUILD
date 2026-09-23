@@ -1,0 +1,264 @@
+# The Qualcomm SM6350/SM7225 kernel, for the Fairphone 4.
+#
+# The sibling of linux-moarchy-sdm670, and deliberately NOT a generalisation of
+# it. Read that file first: it explains at length why this project packages a
+# kernel at all (docs/devices.md §2 -- no pacman repo anywhere carries one for
+# these SoCs), and that reasoning is not repeated here. What IS here is every
+# place the Fairphone differs from the Pixel, because those differences are the
+# whole content of this file.
+#
+# Upstream is github.com/sm6350-mainline/linux -- mainline plus the SM6350
+# enablement that has not landed yet. v7.2.0-sm6350 is the newest tag and is
+# what pmaports pins for `linux-postmarketos-qcom-sm6350`. SM7225 is a binned
+# SM6350, which is why one tree and one config serve both and why this package
+# is named after the family rather than after the phone.
+#
+# Same narrow scope as sargo's: a tree someone else brought up, at a pinned
+# tag, with their config, and no patches of our own. If this file ever grows a
+# patch against the kernel, the scope has been exceeded.
+#
+# --- Difference 1: THIS KERNEL NEEDS CLANG ----------------------------------
+#
+# linux-moarchy-sdm670 builds with GCC. This one cannot, and it is not a
+# preference. The vendored config answers:
+#
+#   CONFIG_CC_IS_CLANG=y
+#   CONFIG_LTO_CLANG=y / CONFIG_LTO_CLANG_THIN=y
+#   CONFIG_SHADOW_CALL_STACK=y     (arm64 SCS is a clang-only feature)
+#   CONFIG_CLANG_VERSION=220108    (GCC_VERSION is 0)
+#
+# So build() passes LLVM=1, exactly as pmaports' APKBUILD does, and clang, lld
+# and llvm are makedepends. Building this config with GCC does not produce a
+# slightly different kernel; `make` rejects it, because SHADOW_CALL_STACK and
+# LTO_CLANG both depend on the compiler the config says is in use.
+#
+# The cost is that the two kernel packages in this repo no longer share a
+# toolchain, and a build container that only has GCC builds one of them. The
+# container already carries clang -- docker/Dockerfile.builder installs
+# base-devel and the AUR helper's dependency set -- but if that ever changes,
+# THIS is the package that breaks and this paragraph is why.
+#
+# --- Difference 2: the root device is UFS, not eMMC -------------------------
+#
+# sargo mounts root off mmc (sdhci-msm). The Fairphone 4 has UFS storage, and
+# the whole no-initramfs design (devices.md D24) rests on the driver for it
+# being built IN rather than shipped as a module. Audited against the vendored
+# config before this package was written:
+#
+#   CONFIG_SCSI=y                 CONFIG_SCSI_UFSHCD=y
+#   CONFIG_BLK_DEV_SD=y           CONFIG_SCSI_UFSHCD_PLATFORM=y
+#   CONFIG_EXT4_FS=y              CONFIG_SCSI_UFS_QCOM=y
+#   CONFIG_EFI_PARTITION=y        CONFIG_PHY_QCOM_QMP_UFS=y
+#
+# All built in, so this kernel can find /dev/sda11 and mount ext4 on it with no
+# initramfs, the same way sargo's finds mmcblk0p72. image/boot/android-bootimg.sh
+# asserts this again at image-build time against modules.builtin, per device,
+# because a config symbol flipping to =m would otherwise present as a mute
+# phone rather than as an error.
+#
+# --- Difference 3: SECURITY_LANDLOCK, and what it means that it was wrong here too
+#
+# The vendored config has ONE symbol changed from upstream: SECURITY_LANDLOCK,
+# `is not set` upstream, =y here. linux-moarchy-sdm670 carries the identical
+# change for the identical reason -- pacman sandboxes its download user with
+# Landlock and has no fallback, so without it every `pacman -S` on the phone
+# fails with:
+#
+#   error: restricting filesystem access failed because Landlock is not
+#          supported by the kernel!
+#
+# and an image full of packages still installs and boots perfectly, because
+# `pacman -U` on a local file does not take that path. The defect only appears
+# the first time somebody installs something.
+#
+# Finding it ALREADY WRONG in a config for a different SoC, maintained by a
+# different person, is the useful part: it is not an SDM670 quirk, it is what
+# every postmarketOS config looks like, because Alpine has no reason to enable
+# what Arch's package manager requires. Any third device this project packages
+# a kernel for will need the same line, and should be checked for it before the
+# first `pacman -S` rather than after.
+#
+# It is a one-symbol config change and not a patch: the tree is untouched, and
+# CONFIG_SECURITY=y with "landlock" already first in CONFIG_LSM, so nothing
+# else has to move. prepare() diffs the built .config against the vendored file
+# and says so out loud if olddefconfig moves anything else.
+
+. "$startdir/../../scripts/manifest.sh"
+_url=$(manifest_get device.fp4 kernel-url) || return 1
+_tag=$(manifest_get device.fp4 kernel-ref) || return 1
+_commit=$(manifest_get device.fp4 kernel-commit) || return 1
+
+pkgname=linux-moarchy-sm6350
+# The tag IS the version: v7.2.0-sm6350 -> 7.2.0. Derived rather than written
+# twice, so a moved pin cannot leave a package claiming the old number.
+_v=${_tag%-sm6350}
+pkgver=${_v#v}
+pkgrel=1
+pkgdesc="Mainline Linux for Qualcomm SM6350/SM7225 (Fairphone 4)"
+arch=('aarch64')
+url="$_url"
+license=('GPL-2.0-only')
+# No mkinitcpio and no preset for it, for the reasons linux-moarchy-sdm670
+# spells out: this kernel mounts root on its own, the android-bootimg backend
+# builds no initramfs, and shipping a preset would have the phone spend a
+# minute of CPU per upgrade writing a file no bootloader reads.
+depends=('coreutils' 'kmod')
+# clang/lld/llvm rather than gcc -- see "Difference 1" above. bison, flex,
+# openssl, perl, python, bc and the compressors are the same set sargo needs.
+# git because the source is a git clone now, not a tarball.
+makedepends=('bc' 'bison' 'clang' 'cpio' 'flex' 'git' 'kmod' 'lld' 'llvm'
+             'openssl' 'perl' 'python' 'tar' 'xz' 'zstd')
+# !strip because stripping kernel modules with the default flags removes what
+# modinfo needs; modules_install strips them properly instead.
+options=('!strip' '!debug')
+
+_flavor=moarchy-sm6350
+
+# The directory GitHub's tarball extracts to, and it is NOT derived from the
+# tag the way the tarball's own name is. The tag is v7.2.0-sm6350; the archive
+# is named for the tag, but the directory inside it drops the leading `v`:
+#
+#   linux-v7.2.0-sm6350.tar.gz   ->   linux-7.2.0-sm6350/
+#
+# Checked with `tar tzf`, after a `cd` built from the tag failed with
+# "No such file or directory" during prepare() -- three lines into a build
+# that had just spent a minute downloading 266 MB. pkgver already has the `v`
+# stripped, so it is the right thing to build this from.
+_srcdir="linux-$pkgver-sm6350"
+
+# A tarball, and the sha512 postmarketOS publishes for it.
+#
+# This was briefly a git source, and the episode is worth keeping because the
+# reasoning was half right. GitHub rate-limits archive downloads per source
+# network, and during one such window every attempt here returned
+#
+#   curl: (22) The requested URL returned error: 429
+#
+# from codeload and /archive alike, authenticated and not -- including
+# `gh api`'s tarball endpoint, because archive generation is a separate
+# service that does not consult the API quota (which read 5000/5000
+# throughout). Only `git ls-remote` answered, so the source moved to git.
+#
+# That window EXPIRED. The same URL now returns 200 and 266 MB, measured in
+# the same session. So the limit is transient and not a property of this
+# repository, and a git source bought immunity to it at the price of a ~6 GB
+# --mirror clone on every build host, in place of one 266 MB download.
+#
+# The tarball is kept for what the checksum below is: pmaports' published
+# sha512 for this exact tag, copied rather than computed. A build that passes
+# it has provably the same bytes postmarketOS builds and tests. A commit pin
+# proves the tree is what its id names -- true, and the weaker claim, because
+# it ties this package to GitHub rather than to pmOS.
+#
+# manifest.toml still records kernel-commit beside kernel-ref, so if the limit
+# returns this is a two-line change and the pin is already resolved.
+source=("linux-$_tag.tar.gz::$_url/archive/$_tag/linux-$_tag.tar.gz"
+        'config')
+# The config hash is real and IS computed here, because the vendored file is
+# not upstream's -- it is upstream's with SECURITY_LANDLOCK flipped. Upstream's
+# own sha512 was checked against the fetched copy BEFORE that edit and matched
+# (e20a5b49...51631), which is what makes the vendored file traceable to
+# pmaports even though this package no longer downloads anything from them.
+sha512sums=('2247377b260eba48a3bc2840fe8a55cec82c391949b59dc83093af27cdec66245efb8f3c7fc4e105fa8b1da090335cacad8bcc6cfa128dd25ff7b473297f2530'
+            '5ca59a057386d8cf18cfeffa0db0b17a169b814c9e2864e77274861b9e173b7fb2d84238db26dd537a652eeee2233c10b49f73e0e1ed7236c1adc10ae39a96fe')
+
+# Do not build this on a case-insensitive filesystem -- the kernel carries both
+# net/netfilter/xt_TCPMSS.c and xt_tcpmss.c, and APFS keeps one of them. The
+# check in prepare() turns that into one sentence instead of a link error.
+# docker/build-packages.sh copies /repo into the container's own filesystem
+# before building, so the packaged path is already safe.
+prepare() {
+  cd "$_srcdir"
+
+  if [ ! -f net/netfilter/xt_TCPMSS.c ] || [ ! -f net/netfilter/xt_tcpmss.c ]; then
+    echo "!! net/netfilter/xt_TCPMSS.c and xt_tcpmss.c do not both exist."
+    echo "!! This filesystem is case-insensitive (macOS?). Build on a"
+    echo "!! case-sensitive one."
+    return 1
+  fi
+
+  cp "$srcdir/config" .config
+  # Non-interactive by construction: a .config that does not answer every
+  # symbol this tree asks about makes `make` prompt on stdin, and in a
+  # container with no tty that hangs rather than fails. LLVM=1 here too, or
+  # olddefconfig resolves the compiler-dependent symbols (LTO_CLANG,
+  # SHADOW_CALL_STACK) against GCC and silently turns them off -- which would
+  # produce a kernel that builds and is not the audited one.
+  make ARCH=arm64 LLVM=1 olddefconfig
+  if ! diff -q "$srcdir/config" .config >/dev/null; then
+    echo "==> NOTE: olddefconfig changed the config; the audited file is not what builds:"
+    diff "$srcdir/config" .config | head -40 || true
+  fi
+
+  # The one symbol this package is responsible for. Asserted after
+  # olddefconfig rather than before, because olddefconfig is the thing that
+  # could turn it back off -- and a kernel that boots fine and cannot
+  # `pacman -S` is the failure this is here to prevent.
+  grep -qx 'CONFIG_SECURITY_LANDLOCK=y' .config ||
+    { echo "!! SECURITY_LANDLOCK is not enabled in the resolved config."
+      echo "!! pacman on the phone would fail on every install; refusing to build."
+      return 1; }
+}
+
+build() {
+  cd "$_srcdir"
+  # LDFLAGS from makepkg.conf are userspace flags and break the kernel link.
+  unset LDFLAGS CFLAGS CXXFLAGS CPPFLAGS
+
+  # Without these the kernel bakes in the build host and the wall clock, and
+  # the host is the BUILD CONTAINER'S ID -- a fresh random hex string every
+  # run. The timestamp is the PINNED TAG and not a date: makepkg sets
+  # SOURCE_DATE_EPOCH to the moment this build started, so using it makes two
+  # builds six minutes apart differ by exactly six minutes. A tag involves no
+  # clock at all.
+  #
+  # This does not make the package byte-reproducible, and cannot: with
+  # CONFIG_MODULE_SIG=y and an autogenerated signing key the kernel mints an
+  # RSA key at build time and embeds the certificate. linux-moarchy-sdm670
+  # measured the difference at 1099 bytes and nothing else. Same here, same
+  # reasons not to "fix" it.
+  export KBUILD_BUILD_HOST=moarchy
+  export KBUILD_BUILD_USER=moarchy
+  export KBUILD_BUILD_TIMESTAMP="$_tag"
+
+  make ARCH=arm64 LLVM=1 -j"$(nproc)" Image.gz modules dtbs
+}
+
+package() {
+  cd "$_srcdir"
+  local _rel
+  _rel=$(make ARCH=arm64 LLVM=1 -s kernelrelease)
+
+  # Image.gz, not vmlinuz and not linux.efi. pmaports installs all three
+  # because pmOS boots this device through systemd-boot off a FAT32 boot
+  # partition; moarchy's android-bootimg backend does not -- it appends a DTB
+  # to the compressed image and hands the result to mkbootimg, the same path
+  # sargo uses. CONFIG_KERNEL_GZIP=y in the vendored config is what makes
+  # arch/arm64/boot/Image.gz the right file to take.
+  install -Dm644 arch/arm64/boot/Image.gz "$pkgdir/boot/Image.gz"
+
+  # Pruned to sm7225-* and sm6350-*: `make dtbs` with this config builds the
+  # whole Qualcomm platform, tens of MiB of boards this kernel will never be
+  # asked to boot, and the boot backend appends exactly ONE of them. Both
+  # prefixes, because the family is one tree and a sibling SM6350 handset
+  # costs nothing to keep.
+  make ARCH=arm64 LLVM=1 INSTALL_DTBS_PATH="$pkgdir/boot/dtbs" dtbs_install
+  find "$pkgdir/boot/dtbs" -name '*.dtb' \
+    ! -name 'sm7225-*' ! -name 'sm6350-*' -delete
+  find "$pkgdir/boot/dtbs" -type d -empty -delete
+  # An empty result means the prune pattern stopped matching what the tree
+  # builds, which ships a kernel with no device tree -- a black screen with
+  # nothing in the build to explain it.
+  [ -f "$pkgdir/boot/dtbs/qcom/sm7225-fairphone-fp4.dtb" ] ||
+    { echo "!! sm7225-fairphone-fp4.dtb missing after prune"; return 1; }
+
+  make ARCH=arm64 LLVM=1 INSTALL_MOD_PATH="$pkgdir/usr" INSTALL_MOD_STRIP=1 modules_install
+  # Symlinks into the build tree, which does not exist on a phone.
+  rm -f "$pkgdir/usr/lib/modules/$_rel/build" "$pkgdir/usr/lib/modules/$_rel/source"
+
+  # So the boot backend can ask what this kernel is called without parsing a
+  # directory listing. backend_kernel reads it to find modules.builtin, which
+  # is where it checks that ext4 and the UFS stack really are built in.
+  install -Dm644 include/config/kernel.release \
+    "$pkgdir/usr/share/kernel/$_flavor/kernel.release"
+}

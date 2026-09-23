@@ -1,0 +1,49 @@
+From: Tim auf der Landwehr <tadl-git@taufderl.de>
+Subject: [PATCH] mode: align the row stride to 16 bytes, not 8
+
+libmegapixels pads a raw row up to the next multiple of 8 bytes. The
+Qualcomm CAMSS driver pads to 16, and the two disagree whenever the packed
+row length is a multiple of 8 but not of 16 -- at which point megapixels
+computes a frame size 8 bytes per row short of what the driver produces and
+dies on its own assertion:
+
+  mp_camera_capture_buffer: Assertion `bytesused ==
+      (libmegapixels_mode_width_to_bytes(format, width)
+       + libmegapixels_mode_width_to_padding(format, width)) * height' failed
+
+Measured on a Fairphone 4 (sm7225, qcom-camss). Its rear sensor offers a
+fixed 4000x2256 mode, and 4000 px of packed 10-bit is 5000 bytes:
+
+  5000 % 8  == 0   ->  libmegapixels pads 0, expects 5000/row
+  5000 % 16 == 8   ->  the driver pads 8, produces 5008/row
+
+which VIDIOC_G_FMT confirms as `Bytes per Line : 5008`, and a capture
+confirms again: three frames of 33894144 bytes total is exactly
+5008 * 2256 * 3.
+
+This is invisible on every device supported so far because their widths
+happen to be 16-byte clean. The Pixel 3a's 4032 px is 5040 bytes and the
+PinePhone's 3264 px is 4080, both multiples of 16, so the two rules agree
+and no device has yet disagreed with this one.
+
+Aligning to 16 is a superset: any row already 16-aligned is unchanged, so
+no currently working device moves.
+
+The tidier fix is for megapixels to take the stride from the
+`bytesperline` V4L2 already reports rather than recompute it, since the
+driver is the authority on its own padding. That is a larger change than
+this, and this is what makes the camera work today.
+---
+--- a/src/mode.c
++++ b/src/mode.c
+@@ -330,10 +330,10 @@
+ 	}
+ 	uint64_t bytes_per_width = libmegapixels_mode_width_to_bytes(index, width);
+-	uint64_t remainder = bytes_per_width % 8;
++	uint64_t remainder = bytes_per_width % 16;
+ 	if (remainder == 0)
+ 		return remainder;
+ 
+-	return 8 - remainder;
++	return 16 - remainder;
+ }

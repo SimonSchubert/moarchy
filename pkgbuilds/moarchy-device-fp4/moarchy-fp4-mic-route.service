@@ -1,0 +1,21 @@
+[Unit]
+Description=Keep the Fairphone 4 capture and playback routes connected
+Documentation=https://github.com/taufderl/moarchy
+After=wireplumber.service
+PartOf=wireplumber.service
+BindsTo=wireplumber.service
+
+# The capture route is cleared whenever a capture stream ends, and a stream
+# that starts with it down delivers zero frames without reporting an error.
+# So it is asserted once and then re-asserted after every teardown, which
+# leaves it armed for whatever opens the microphone next. See the script, and
+# docs/fp4-defects.md D13 for why the UCM profile is not doing this job.
+
+[Service]
+Type=exec
+ExecStart=/usr/lib/moarchy/bin/fp4-audio-route --watch
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=wireplumber.service
