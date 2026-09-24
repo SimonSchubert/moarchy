@@ -14,7 +14,7 @@
 # WHY IT IS HERE EVEN THOUGH THIS HANDSET'S SIM MAY NOT NEED IT
 #
 # Whether a given SIM needs IMS is a property of the operator, not of the
-# phone. The SIM in the device today (T-Mobile NL) is registered on LTE/5G but
+# phone. The SIM in the device today is registered on LTE/5G but
 # the modem still lists gsm-umts as supported, so CS fallback may well work
 # for it. Shipping only what that one SIM needs would make the phone work for
 # its owner and fail for everybody else, in a way nobody could diagnose from
