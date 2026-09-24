@@ -88,6 +88,10 @@ var TOGGLES = [
     read: "omarchy-toggle-idle status | jq -r .enabled",
     cmdOn: "omarchy-toggle-idle stay-awake",
     cmdOff: "omarchy-toggle-idle allow-idle" },
+  { id: "location",   name: "Location",    glyph: "󰆤", on: true,
+    read: "moarchy-toggle-location --status | jq -r .enabled",
+    cmdOn: "moarchy-toggle-location on",
+    cmdOff: "moarchy-toggle-location off" },
   { id: "keyboard",   name: "Keyboard",    glyph: "󰌌", on: false,
     cmdOn: "moarchy-toggle-keyboard" },
   // Three things were wrong with this tile, and together they meant the phone
