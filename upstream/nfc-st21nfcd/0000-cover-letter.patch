@@ -1,0 +1,53 @@
+From b34652bb3eb709f2421314a26290bb19cd4fc250 Mon Sep 17 00:00:00 2001
+From: Tim auf der Landwehr <tadl-git@taufderl.de>
+Date: Thu, 24 Sep 2026 12:10:59 +0200
+Subject: [RFC PATCH 0/3] nfc: add STMicroelectronics ST21NFCD support
+
+The Fairphone 4 has an ST21NFCD NFC controller that nothing in mainline
+drives, so NFC is listed as unsupported for the device. This adds a driver
+for it and wires it up on the FP4.
+
+Sending as RFC because two constants in the driver were reverse-engineered
+from one handset rather than read from a datasheet -- ST does not publish
+one for this part -- and I would rather have them looked at by anyone with
+better information than present them as settled:
+
+  - 0x7e, the byte the controller returns on an I2C read when it has
+    nothing to send (the idle indication);
+  - 0x90, the proprietary RF protocol number it reports for MIFARE
+    Classic, which the NCI core drops as unmappable without the
+    get_rfprotocol hook.
+
+The part speaks plain NCI over I2C with no link layer, which is what makes
+it a separate driver from st-nci (ST21NFCB/C, NDLC-wrapped) rather than an
+addition to it. The transport is correspondingly thin.
+
+Tested on a Fairphone 4: NCI 2.0 init completes, RF discovery runs, and a
+MIFARE Classic 4K card is detected and reported to userspace with its
+SENS_RES/SEL_RES and UID. Not yet exercised: card emulation, tag types
+beyond ISO 14443-A, and suspend/resume -- feedback on what a reviewer would
+want covered before a non-RFC posting is welcome.
+
+Patch 1 is the binding, patch 2 the driver, patch 3 the FP4 device tree.
+The DT patch depends on the driver's compatible and is included for
+context; it would go via the qcom/arm-soc tree once the binding is settled.
+
+
+Tim auf der Landwehr (3):
+  dt-bindings: net: nfc: add STMicroelectronics ST21NFCD
+  nfc: st21nfcd: add STMicroelectronics ST21NFCD driver
+  arm64: dts: qcom: sm7225-fairphone-fp4: add NFC
+
+ .../bindings/net/nfc/st,st21nfcd.yaml         |  58 ++++
+ MAINTAINERS                                   |   7 +
+ .../boot/dts/qcom/sm7225-fairphone-fp4.dts    |  12 +-
+ drivers/nfc/Kconfig                           |  11 +
+ drivers/nfc/Makefile                          |   1 +
+ drivers/nfc/st21nfcd.c                        | 267 ++++++++++++++++++
+ 6 files changed, 355 insertions(+), 1 deletion(-)
+ create mode 100644 Documentation/devicetree/bindings/net/nfc/st,st21nfcd.yaml
+ create mode 100644 drivers/nfc/st21nfcd.c
+
+-- 
+2.55.0
+
