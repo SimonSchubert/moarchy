@@ -67,7 +67,13 @@ _ver=$(manifest_get moarchy version) || return 1
 
 pkgname=moarchy-device-fp4
 pkgver=$_ver
-pkgrel=1
+# pkgrel 3: megapixels-fp4.conf rear camera stays on the ultra-wide
+# (csiphy0 / imx582 1-001a). The main sensor (csiphy2, from Fairphone's board
+# device tree) was tested on the handset and came out soft -- mainline
+# qcom-camss has no autofocus actuator, so the main's lens is stuck at rest
+# focus, while the ultra-wide is fixed-focus and sharp. Config comment records
+# the finding so it is not re-tried blind. See docs/fp4-fixes.md D6.
+pkgrel=3
 pkgdesc="Fairphone 4 (fp4) hardware support for moarchy"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
@@ -176,7 +182,7 @@ package() {
   #                   the raw-PCM node factory produces both. (Why ACP rejects
   #                   the UCM is not yet understood: the verb's control exists
   #                   and alsaucm applies the profile by hand without error.
-  #                   fp4-defects.md D13.)
+  #                   fp4-fixes.md D13.)
   #
   #   the format      the capture PCM accepts S16_LE/S24_LE, 1-4 channels. With
   #                   nothing pinned, PipeWire probes 64 channels, logs

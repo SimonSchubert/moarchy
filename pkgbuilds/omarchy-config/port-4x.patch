@@ -24,7 +24,7 @@ index e6202da..548f01a 100644
            "verticalFormat": "HH\n\u2014\nmm"
          },
          {
-@@ -60,7 +60,99 @@
+@@ -60,7 +60,102 @@
            "id": "omarchy.power"
          }
        ]
@@ -69,6 +69,9 @@ index e6202da..548f01a 100644
 +    },
 +    {
 +      "id": "moarchy.volume"
++    },
++    {
++      "id": "moarchy.nfc"
 +    },
 +    {
 +      "id": "moarchy.calculator"
@@ -435,3 +438,138 @@ index 0cc0575..235daf6 100644
      var key = String(manifest.id || "")
      if (!key) return null
      if (_pluginBarWidgetRegistryApis[key]) return _pluginBarWidgetRegistryApis[key]
+--- a/install/user/first-run/enable-user-units.sh
++++ b/install/user/first-run/enable-user-units.sh
+@@ -12,10 +12,19 @@
+ set -euo pipefail
+ 
+ systemctl --user daemon-reload
+-systemctl --user enable --now \
++
++# Enable each unit only if it is installed. A build that ships a subset -- the
++# moarchy phone build ships none of these desktop units -- must not abort the
++# whole step, and hence first-run, on the first missing one (fp4-defects D15).
++for unit in \
+   bt-agent.service \
+   omarchy-recover-internal-monitor.service \
+   omarchy-sleep-lock.service \
+   omarchy-migrate-notify.service \
+   omarchy-fcitx5.service \
+   omarchy-crash-watch.service
++do
++  if systemctl --user cat "$unit" >/dev/null 2>&1; then
++    systemctl --user enable --now "$unit"
++  fi
++done
+--- a/shell/plugins/lock/LockView.qml
++++ b/shell/plugins/lock/LockView.qml
+@@ -32,6 +32,14 @@
+   readonly property real passwordDotScale: dotMetrics.advanceWidth > 0
+     ? Math.min(1, (passwordInput.width - 4) / dotMetrics.advanceWidth)
+     : 1
++  // PIN pad sizing, derived from the actual surface width (360 logical px on
++  // the FP4) so the three columns never run off-screen. Capped at the field
++  // width so it never grows wider than the field above it.
++  readonly property real padGutter: 22
++  readonly property real padWidth: Math.min(root.fieldWidth, root.width - 2 * padGutter)
++  readonly property real padSpacing: Math.round(padWidth * 0.06)
++  readonly property real padKeyW: (padWidth - 2 * padSpacing) / 3
++  readonly property real padKeyH: Math.round(padKeyW * 0.8)
+   readonly property bool showPasswordCursor: inputEnabled && !authenticatingPassword && failureMessage.length === 0
+   readonly property bool errorState: failureMessage.length > 0
+   readonly property var inputBorderSpec: errorState
+@@ -119,11 +127,16 @@
+       onPositionChanged: root.wakeRequested()
+     }
+ 
++    Column {
++      id: lockColumn
++      anchors.centerIn: parent
++      spacing: Math.round(root.fieldHeight * 0.55)
++
+     BorderSurface {
+       id: inputField
+       width: root.fieldWidth
+       height: root.fieldHeight
+-      anchors.centerIn: parent
++      anchors.horizontalCenter: parent.horizontalCenter
+       color: Color.lock.background
+       borderSpec: root.inputBorderSpec
+       radius: Style.cornerRadius
+@@ -215,5 +228,76 @@
+         verticalAlignment: Text.AlignVCenter
+       }
+     }
++
++      // On-screen PIN pad. The lock is an ext-session-lock surface, under which
++      // the compositor hides every other client -- the on-screen keyboard
++      // included -- so the digits have to be part of the locker's own surface.
++      // Each key drives the same signals the text field does, so Service.qml
++      // needs no change: a tap edits passwordText, OK submits it.
++      Grid {
++        id: pinPad
++        anchors.horizontalCenter: parent.horizontalCenter
++        columns: 3
++        width: root.padWidth
++        columnSpacing: root.padSpacing
++        rowSpacing: root.padSpacing
++        opacity: root.inputEnabled && !root.authenticatingPassword ? 1 : 0.4
++        enabled: root.inputEnabled && !root.authenticatingPassword
++
++        Repeater {
++          model: ["1","2","3","4","5","6","7","8","9","⌫","0","OK"]
++          Rectangle {
++            id: key
++            required property int index
++            required property string modelData
++            readonly property bool isOk: modelData === "OK"
++            readonly property bool isBack: modelData === "⌫"
++            readonly property bool actionable:
++              key.isBack ? root.passwordText.length > 0
++                         : key.isOk ? root.passwordText.length > 0
++                                    : true
++            width: root.padKeyW
++            height: root.padKeyH
++            radius: Style.cornerRadius
++            opacity: key.actionable ? 1 : 0.35
++            color: key.isOk ? Color.lock.borderActive
++                 : keyTap.pressed ? Color.lock.selection
++                 : Color.lock.background
++            border.width: root.outlineThickness
++            border.color: Color.lock.borderActive
++
++            Text {
++              anchors.centerIn: parent
++              text: key.modelData
++              color: key.isOk ? Color.lock.background : Color.lock.text
++              font.family: Style.font.family
++              font.pixelSize: key.isOk || key.isBack
++                ? root.fieldFontSize
++                : Math.round(root.fieldFontSize * 1.25)
++              font.weight: Font.DemiBold
++            }
++
++            MouseArea {
++              id: keyTap
++              anchors.fill: parent
++              enabled: key.actionable
++              onClicked: {
++                root.wakeRequested()
++                if (root.failureMessage.length > 0) root.clearFailureRequested()
++                if (key.isOk) {
++                  var submitted = root.passwordText
++                  root.passwordTextEdited("")
++                  if (submitted.length > 0) root.submitPassword(submitted)
++                } else if (key.isBack) {
++                  root.passwordTextEdited(root.passwordText.slice(0, -1))
++                } else {
++                  root.passwordTextEdited(root.passwordText + key.modelData)
++                }
++              }
++            }
++          }
++        }
++      }
++    }
+   }
+ }

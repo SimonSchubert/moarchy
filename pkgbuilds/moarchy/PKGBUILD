@@ -183,7 +183,19 @@ pkgver=$_ver
 #    so this package ships strictly less and upstream answers for more. The
 #    payload changed in both directions, which is exactly what
 #    docker/build-packages.sh needs a new pkgver-pkgrel to notice.
-pkgrel=6
+# 7: the flash LED's V4L2 attributes made writable (73-moarchy-torch.rules),
+#    so a camera can strobe it; NFC -- bin/moarchy-nfc and the moarchy.nfc
+#    plugin, which needs omarchy-config 7 to be enabled; a Location quick
+#    toggle -- bin/moarchy-toggle-location and its catalogue entry in
+#    moarchy.common/Widgets.js; and the app-store polkit rule
+#    (default/polkit/49-moarchy-store.rules) corrected to match the action's
+#    real id org.moarchy.store.manage, so installs no longer hit a password
+#    prompt the phone cannot answer.
+# 8: the lock screen. bin/moarchy-lock arms the ext-session-lock; moarchy-screen
+#    arms it whenever the panel blanks (idle or power) so the next wake shows
+#    the PIN pad; and default/pam.d/omarchy-lock-{password,fingerprint} give the
+#    lock a PAM stack to authenticate against (it had none, so it never could).
+pkgrel=8
 pkgdesc="Omarchy's look, keybindings and theming on a phone, under Hyprland"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
@@ -248,6 +260,12 @@ package() {
   for f in "$_repo"/bin/*; do
     [ -f "$f" ] && install -Dm755 "$f" "$pkgdir/usr/lib/moarchy/bin/$(basename "$f")"
   done
+
+    # moarchy-nfc reads its card table from here first (its fallback is a
+    # copy under the plugin dir). Installed out of the plugin source so the
+    # path the helper trusts and the source of truth never drift.
+    install -Dm644 "$_repo"/default/omarchy/plugins/moarchy.nfc/tag-types.json \
+      "$pkgdir/usr/share/moarchy/nfc/tag-types.json"
 
   # --- default/ and config/ ------------------------------------------------
   # config/hypr/ is passed to Hyprland with -c by /etc/profile.d/zz-moarchy.sh
@@ -328,7 +346,7 @@ package() {
     install -d "$dest"
     find "$dir" -maxdepth 1 \( \
         -name '*.qml' -o -name '*.js' -o -name '*.svg' \
-        -o -name 'manifest.json' -o -name '*.desktop' \
+        -o -name '*.json' -o -name '*.desktop' \
       \) ! -name 'shell.qml' -exec cp -a {} "$dest/" \;
 
     # docs/widgets.md W34. The widgets are a subdirectory of the kit and the
@@ -456,6 +474,16 @@ package() {
   # override path stays free.
   install -Dm644 "$_repo/default/udev/73-moarchy-torch.rules" \
     "$pkgdir/usr/lib/udev/rules.d/73-moarchy-torch.rules"
+
+  # The lock screen's PAM stacks. Omarchy's quickshell lock plugin authenticates
+  # through PamContext services named omarchy-lock-password / -fingerprint, and
+  # nothing on this image shipped them, so the lock could never authenticate
+  # (fp4-fixes: lock screen). `auth include login` is the same stack swaylock
+  # uses. These go in /etc so the user can override them.
+  install -Dm644 "$_repo/default/pam.d/omarchy-lock-password" \
+    "$pkgdir/etc/pam.d/omarchy-lock-password"
+  install -Dm644 "$_repo/default/pam.d/omarchy-lock-fingerprint" \
+    "$pkgdir/etc/pam.d/omarchy-lock-fingerprint"
 
   # Mobile data, which is one file and no script. A NetworkManager profile has
   # a system path of its own, and P8's rule is that a thing with a system path

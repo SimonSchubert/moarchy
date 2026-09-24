@@ -110,7 +110,17 @@ pkgver=${_ver#v}
 #    owner, and it blanks without ever locking.
 #
 #    Same two edits as every entry above: the sha256sum and this number.
-pkgrel=6
+# 7: moarchy.nfc in shell.json. The plugin reads one NFC tag and shows what it
+#    is; on a phone with no NFC controller it says so and does nothing else.
+# 8: enable-user-units.sh enables each user unit only if installed. The phone
+#    ships none of the six desktop units it lists, and a single combined
+#    `systemctl --user enable` under set -e aborted on the first missing one,
+#    so first-run never completed and re-emitted its notifications every boot
+#    (fp4-defects D15).
+# 9: LockView.qml gains an on-screen PIN pad, so the ext-session-lock screen is
+#    usable on a touch device -- the compositor hides the on-screen keyboard
+#    under the locker, so the digits must be part of the lock surface itself.
+pkgrel=9
 pkgdesc="Omarchy's configuration and theme layer, with moarchy's plugins hosted"
 arch=('any')
 url="$_url"
@@ -121,7 +131,7 @@ source=("omarchy-$_ref.tar.gz::$_url/archive/$_ref.tar.gz"
         'port-4x.patch'
         'notification-popups-bar-opt-out.patch')
 sha256sums=('8cc6b1d9d903c606600395e3b3d80ad9f15bd3ab78f0f19b0f49041b1df82013'
-            '3b562e93dbe65fd5aff211285891df51149eaca967136a7a06d5aac997b112e6'
+            '984b53a96c29d049fd17244799f978c2f0685171ccfa576e14d4200516b95bb1'
             'e2e3425600b71ae016a8d63439a60dbbb2b42eb51f95516089ebd7d9610d67c5')
 
 # Two patches, and they are different kinds of thing.
