@@ -21,7 +21,7 @@
 # Upstream this belongs in the UCM profile's EnableSequence, which ALSA runs
 # on device open. That needs PipeWire's ACP layer to offer this card a
 # profile, and it offers only "off" and "pro-audio" -- see
-# docs/fp4-defects.md D13. When that is solved, delete this.
+# docs/fp4-fixes.md D13. When that is solved, delete this.
 #
 #   fp4-audio-route            assert once and exit
 #   fp4-audio-route --watch    assert, then keep re-asserting (the service)
