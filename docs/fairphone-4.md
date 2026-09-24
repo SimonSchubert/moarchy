@@ -185,7 +185,7 @@ it here.
   records. The pmOS wiki says otherwise and upstream's UCM profile still has
   no capture device, both of which were true when this was written; what was
   missing was the device tree, and after that a UCM capture device and two
-  PipeWire corrections. See §10.1 and `docs/fp4-defects.md` D13.
+  PipeWire corrections. See §10.1 and `docs/fp4-fixes.md` D13.
 - **Cellular calls connect with no audio.** SIP calls work (GNOME Calls is in
   the image).
 - **Wi-Fi is not continually usable.** It associates, then degrades with
@@ -447,7 +447,7 @@ microphone first.
 > `~/Personal/fp4-mic-capture`; the configuration that goes with it is in
 > `moarchy-device-fp4` (`ucm-HiFi.conf`, `53-fp4-ucm.conf`,
 > `moarchy-fp4-mic-route.service`) and the PipeWire side is written up as
-> `docs/fp4-defects.md` D13. Which of the other three analogue microphones
+> `docs/fp4-fixes.md` D13. Which of the other three analogue microphones
 > work is still unmeasured. The rest of this section is kept as the reasoning
 > that got there.
 

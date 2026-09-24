@@ -46,9 +46,9 @@ download mode — that flashing it is something to do deliberately, with the
 recovery path read first.
 
 [`docs/fairphone-4.md`](docs/fairphone-4.md) is the status: what runs, what was
-verified and how. [`docs/fp4-defects.md`](docs/fp4-defects.md) is the register
-of everything found by running it, including what is still broken and how to
-get out of EDL without touching the phone.
+verified and how. [`docs/fp4-defects.md`](docs/fp4-defects.md) is what is
+still broken, and [`docs/fp4-fixes.md`](docs/fp4-fixes.md) the defects already
+closed, including how to get out of EDL without touching the phone.
 
 Three gaps that looked like port bugs turned out to be missing kernel support,
 and went upstream rather than into this tree: the microphone and the speaker
