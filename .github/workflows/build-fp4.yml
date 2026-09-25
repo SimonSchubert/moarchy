@@ -1,0 +1,120 @@
+# Build, verify and publish a Fairphone 4 image.
+#
+# MANUAL ONLY — the sole trigger is workflow_dispatch. There is no push, no
+# pull_request and no schedule trigger, so this never runs on its own; someone
+# has to start it from the Actions tab (or `gh workflow run build-fp4.yml`).
+# That is deliberate: image builds are long and produce large artifacts.
+#
+# It runs the repository's own documented build flow, unchanged, with DEVICE=fp4:
+#   ./scripts/provision.sh build     # aarch64 packages (incl. the kernel)
+#   ./scripts/build-image.sh         # -> images/moarchy-fp4-<ver>-<date>/
+#   ./scripts/verify-image.sh        # the checks against that image
+#
+# Runner: a NATIVE arm64 GitHub-hosted runner (ubuntu-24.04-arm), free for
+# public repositories. Native aarch64 means the containers run at full speed
+# with no qemu emulation — the difference between a ~1h kernel build and a
+# multi-hour emulated one. If arm64 runners are ever unavailable, switch
+# `runs-on` to `ubuntu-latest` and add a `docker/setup-qemu-action` step before
+# the build, accepting the emulation slowdown.
+#
+# Note (GitHub mechanic): a workflow_dispatch workflow is only offered in the
+# Actions UI once this file exists on the repository's DEFAULT branch. Until
+# then it can still be started against a specific branch via the API/CLI.
+
+name: Build FP4 image
+
+on:
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: "Also publish the image as a GitHub Release (otherwise it is a workflow artifact only)"
+        type: boolean
+        default: false
+      artifact_retention_days:
+        description: "How many days to keep the workflow artifact"
+        type: string
+        default: "14"
+
+# One build at a time; a second manual run waits for the first rather than
+# cancelling it (killing a long in-flight build would waste the work).
+concurrency:
+  group: build-fp4
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # needed only for the optional release; artifacts need no extra scope
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 300      # cap well under the 6h hard limit so a hang fails cleanly
+    env:
+      DEVICE: fp4
+      DEVICES: fp4            # build only the FP4 device packages, not sargo's
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        # A clean checkout keeps the working tree clean, which build-image.sh
+        # requires (it refuses a dirty tree). Built packages and images are
+        # gitignored, so they do not dirty it.
+
+      - name: Show build environment
+        run: |
+          echo "arch:    $(uname -m)"
+          docker version --format '{{.Server.Version}}' | sed 's/^/docker:  /'
+          echo "--- disk before ---"
+          df -h / /mnt 2>/dev/null || df -h /
+
+      - name: Reclaim disk space (best effort)
+        run: |
+          # The kernel build, the 1.26 GiB pacstrap and the image together want
+          # room. Drop large preinstalled toolchains if present; never fail on it.
+          sudo rm -rf /opt/hostedtoolcache /usr/local/lib/android /usr/share/dotnet 2>/dev/null || true
+          df -h / | sed 's/^/  /'
+
+      - name: Build aarch64 packages
+        run: ./scripts/provision.sh build
+
+      - name: Build the FP4 image
+        run: ./scripts/build-image.sh
+
+      - name: Verify the image
+        run: |
+          IMG=$(ls -td images/moarchy-fp4-*/ 2>/dev/null | head -1)
+          [ -n "$IMG" ] || { echo "no images/moarchy-fp4-* was produced" >&2; exit 1; }
+          echo "verifying ${IMG%/}"
+          ./scripts/verify-image.sh "${IMG%/}"
+
+      - name: Identify the built image
+        id: img
+        run: |
+          IMG=$(ls -td images/moarchy-fp4-*/ 2>/dev/null | head -1)
+          IMG="${IMG%/}"
+          NAME=$(basename "$IMG")
+          echo "dir=$IMG"   >> "$GITHUB_OUTPUT"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "Built: $NAME"
+
+      - name: Upload the image as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.img.outputs.name }}
+          path: ${{ steps.img.outputs.dir }}
+          retention-days: ${{ fromJSON(inputs.artifact_retention_days) }}
+          if-no-files-found: error
+
+      - name: Publish a GitHub Release (optional)
+        if: ${{ inputs.create_release }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          NAME='${{ steps.img.outputs.name }}'
+          DIR='${{ steps.img.outputs.dir }}'
+          TARBALL="${NAME}.tar.gz"
+          tar -czf "$TARBALL" -C "$(dirname "$DIR")" "$(basename "$DIR")"
+          TAG="fp4-image-$(date +%Y%m%d)-${GITHUB_SHA::7}"
+          gh release create "$TAG" "$TARBALL" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "FP4 image $NAME" \
+            --notes "Automated FP4 image build from ${GITHUB_SHA::7}. Not an official release; built by the manual build-fp4 workflow."
