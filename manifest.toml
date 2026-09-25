@@ -673,7 +673,7 @@ firmware-ref  = "222756885ff5eb24ee89684ef8cfe860a45a54ec"
 # edge in this tree, and a sort that is never exercised on more than one edge
 # is a sort nobody knows is correct.
 [build]
-install-first = "pil-squasher"
+install-first = "pil-squasher moarchy-qcom-modem"
 
 [pil-squasher]
 url     = "https://github.com/linux-msm/pil-squasher"

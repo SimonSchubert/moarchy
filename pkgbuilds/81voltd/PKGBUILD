@@ -35,10 +35,10 @@ pkgdesc='Server-side QMI IMS Data service, so a VoLTE-only network can carry cal
 arch=('aarch64')
 url='https://gitlab.postmarketos.org/modem/81voltd'
 license=('BSD-3-Clause')
-# mm-glib comes from modemmanager, qmi-glib from libqmi, qrtr from
-# libqrtr-glib. Named as packages rather than as pkg-config modules because
-# that is what pacman resolves.
-depends=('modemmanager' 'libqmi' 'libqrtr-glib' 'glib2')
+# mm-glib comes from modemmanager, qmi-glib from libqmi, and qrtr from the
+# in-repo qrtr package (moarchy-qcom-modem provides it). Named as packages
+# rather than as pkg-config modules because that is what pacman resolves.
+depends=('modemmanager' 'libqmi' 'qrtr' 'glib2')
 makedepends=('meson' 'ninja' 'pkgconf')
 
 # qmic is optional upstream: with it the QMI bindings are regenerated from
