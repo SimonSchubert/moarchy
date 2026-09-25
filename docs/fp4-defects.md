@@ -727,3 +727,52 @@ live keystroke, which cannot be done over SSH.
 **The datapoint that splits it:** does the OSK type in another field (a browser
 URL bar, the Wi-Fi passphrase)? If yes, it is drawer-specific focus; if no, the
 OSK's key delivery to shell surfaces is broken everywhere. Pending that.
+
+## D28 — the phone never suspends on idle; it only blanks the screen {#d28}
+
+**Status: OPEN, diagnosed 2026-09-25 (read-only); the enablement is all present,
+two steps remain.** This is Track A1 in [`fp4-roadmap.md`](./fp4-roadmap.md) and
+the reason battery is rated `P`: "screen off" is not "asleep", so the phone
+drains while it looks off.
+
+**What is already there** (checked on the handset, read-only):
+
+- s2idle is the supported mode: `/sys/power/state` = `freeze mem`,
+  `/sys/power/mem_sleep` = `[s2idle]` (there is no deep/S3 on this SoC in
+  mainline, which is normal).
+- Wake sources are enabled where it matters: the power-button PMIC pwrkey
+  (`pon@800:pwrkey`), all three remoteprocs including `remoteproc1: modem`
+  (so an incoming call/SMS can wake the AP), and the RTC alarm (`rtc@6100`).
+- The fuel gauge works: `qcom_qg` reports capacity and voltage
+  (99 %, 4.39 V). `current_now` reads 0 while on USB, so idle drain cannot be
+  measured until the phone is unplugged.
+- Nothing is holding a wakelock: no `/sys/kernel/debug/wakeup_sources` entry has
+  `prevent_suspend_time > 0`, so s2idle should be enterable.
+- `rtcwake` is installed (util-linux 2.42.3) with a working
+  `/sys/class/rtc/rtc0/wakealarm`.
+
+**The actual defect.** Nothing triggers a system suspend:
+
+- `logind` has `IdleAction=ignore` (the default), so it never suspends.
+- swayidle runs a single rule, `timeout 600 moarchy-idle-blank`, which blanks
+  the panel and stops there. The CPU, modem and buses stay fully powered with
+  the screen dark.
+
+So after ten minutes the display goes off and the phone keeps running at full
+idle power. That is the battery finding.
+
+**What remains, in order:**
+
+1. **Prove s2idle resumes cleanly.** `sudo rtcwake -m mem -s 30` on the handset
+   — it arms the RTC to self-wake, so it cannot hang asleep, but a botched
+   resume still needs a power-button press, so it must be run with someone
+   watching the phone (not unattended). Read `dmesg` for a clean
+   "suspend entry (s2idle) -> suspend exit" and any driver resume errors.
+   *(Postponed until the owner is with the phone.)*
+2. **Wire idle -> suspend, once (1) passes.** Extend the idle chain so that some
+   time after the blank (and the lock) the system enters s2idle — e.g. a second
+   swayidle timeout running `systemctl suspend`, waking on power button / call /
+   alarm. This must NOT be enabled before (1): an idle timeout that suspends into
+   a broken resume would strand the phone (cf. D1/D3, the same class of trap).
+3. **Measure idle drain** in s2idle vs screen-blank-only, which needs the phone
+   unplugged (USB masks `current_now`), same constraint as GPS testing.
