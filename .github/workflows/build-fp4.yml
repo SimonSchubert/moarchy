@@ -30,6 +30,10 @@ on:
         description: "Also publish the image as a GitHub Release (otherwise it is a workflow artifact only)"
         type: boolean
         default: false
+      prerelease:
+        description: "Mark the release as a pre-release (snapshot). Uncheck ONLY for an official cut, after bumping [moarchy] version in manifest.toml."
+        type: boolean
+        default: true
       artifact_retention_days:
         description: "How many days to keep the workflow artifact"
         type: string
@@ -53,7 +57,7 @@ jobs:
       DEVICES: fp4            # build only the FP4 device packages, not sargo's
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         # A clean checkout keeps the working tree clean, which build-image.sh
         # requires (it refuses a dirty tree). Built packages and images are
         # gitignored, so they do not dirty it.
@@ -90,15 +94,20 @@ jobs:
         run: |
           IMG=$(ls -td images/moarchy-fp4-*/ 2>/dev/null | head -1)
           IMG="${IMG%/}"
-          NAME=$(basename "$IMG")
-          echo "dir=$IMG"   >> "$GITHUB_OUTPUT"
-          echo "name=$NAME" >> "$GITHUB_OUTPUT"
-          echo "Built: $NAME"
+          NAME=$(basename "$IMG")                 # moarchy-fp4-<version>-<date>
+          # One identity used everywhere: image name + short commit, so the
+          # artifact and any release name the exact commit unambiguously and
+          # match each other. e.g. moarchy-fp4-0.5.0-20260925-9b8af81
+          VERSION_ID="${NAME}-${GITHUB_SHA::7}"
+          echo "dir=$IMG"              >> "$GITHUB_OUTPUT"
+          echo "name=$NAME"            >> "$GITHUB_OUTPUT"
+          echo "version_id=$VERSION_ID" >> "$GITHUB_OUTPUT"
+          echo "Built: $VERSION_ID"
 
       - name: Upload the image as a workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: ${{ steps.img.outputs.name }}
+          name: ${{ steps.img.outputs.version_id }}
           path: ${{ steps.img.outputs.dir }}
           retention-days: ${{ fromJSON(inputs.artifact_retention_days) }}
           if-no-files-found: error
@@ -109,12 +118,34 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          NAME='${{ steps.img.outputs.name }}'
+          # Same identity as the artifact: moarchy-fp4-<version>-<date>-<sha>.
+          # The version segment comes from [moarchy] version in manifest.toml
+          # (via the image name); bump that for an official cut. The date+sha
+          # keep every build unique and pinned to a commit between bumps.
+          VERSION_ID='${{ steps.img.outputs.version_id }}'
           DIR='${{ steps.img.outputs.dir }}'
-          TARBALL="${NAME}.tar.gz"
+          TARBALL="${VERSION_ID}.tar.gz"
           tar -czf "$TARBALL" -C "$(dirname "$DIR")" "$(basename "$DIR")"
-          TAG="fp4-image-$(date +%Y%m%d)-${GITHUB_SHA::7}"
-          gh release create "$TAG" "$TARBALL" \
+
+          # Snapshot unless the trigger explicitly said this is an official cut.
+          if [ '${{ inputs.prerelease }}' = 'true' ]; then
+            PRE=(--prerelease); KIND="snapshot pre-release"
+          else
+            PRE=(--latest); KIND="official release"
+          fi
+
+          # Build the notes with no leading indentation, so the markdown renders
+          # as a list rather than an indented code block.
+          NOTES=$(printf '%s\n' \
+            "FP4 image built by the manual build-fp4 workflow." \
+            "" \
+            "- version identity: \`$VERSION_ID\`" \
+            "- commit: $GITHUB_SHA" \
+            "- kind: $KIND" \
+            "" \
+            "The version segment is \`[moarchy] version\` from manifest.toml; date and short SHA make each build unique and traceable.")
+
+          gh release create "$VERSION_ID" "$TARBALL" "${PRE[@]}" \
             --repo "$GITHUB_REPOSITORY" \
-            --title "FP4 image $NAME" \
-            --notes "Automated FP4 image build from ${GITHUB_SHA::7}. Not an official release; built by the manual build-fp4 workflow."
+            --title "$VERSION_ID" \
+            --notes "$NOTES"
