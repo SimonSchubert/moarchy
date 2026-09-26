@@ -17,14 +17,30 @@
 # image/boot/test-android-image.py reproduces that image byte-for-byte from its
 # own parts. None of it came from a wiki.
 
-# The two device-specific strings in the whole backend, which is the point -- a
-# second Qualcomm phone adds a line here and changes nothing else.
+# The device-specific facts, and the whole of them -- a second Qualcomm phone
+# adds a stanza here and changes nothing else in this file. It was two strings
+# when sargo was the only handset; adding the Fairphone 4 took it to six, and
+# every one of the four new ones is a place the two phones genuinely differ
+# rather than a place the abstraction leaked.
 #
 #   DTB_NAME        the device tree appended to the kernel
 #   ROOT_PARTLABEL  the GPT partition the rootfs is flashed to, and the name the
 #                   kernel is given to find it again at boot (D24). A vendor
 #                   fact: we do not choose it, we read it -- `blkid` on the
-#                   handset reports PARTLABEL="userdata" for /dev/mmcblk0p72.
+#                   handset reports PARTLABEL="userdata" for /dev/mmcblk0p72,
+#                   and the Fairphone reports the same name for /dev/sda11.
+#   KFLAVOR         the kernel package's flavor, which is the directory
+#                   /usr/share/kernel/<flavor>/kernel.release lives in. Two
+#                   phones on two SoCs cannot share one, and reading the sargo
+#                   path on a Fairphone is a "no kernel.release in the rootfs"
+#                   that blames a missing package.
+#   ROOT_BUILTINS   the modules that MUST be built in for D24 to hold on this
+#                   device. The storage driver differs per phone -- eMMC on
+#                   sargo, UFS on the Fairphone -- and this is the list
+#                   backend_kernel asserts against modules.builtin.
+#   ERASE_DTBO      whether flash.sh clears the dtbo partition.
+#   NEEDS_VBMETA    whether this bootloader takes a verification-disabling
+#                   vbmeta, and therefore whether one is built at all.
 #
 # Resolved in a function called BY THE HOOKS, not at source time. It was a bare
 # `case` with a ${DTB_NAME:?} default, which meant sourcing this file with an
@@ -35,7 +51,54 @@
 # defines functions and does nothing else.
 _set_device_facts() {
   case "${DEVICE:-}" in
-    sargo) DTB_NAME=sdm670-google-sargo; ROOT_PARTLABEL=userdata ;;
+    sargo)
+      DTB_NAME=sdm670-google-sargo; ROOT_PARTLABEL=userdata
+      KFLAVOR=moarchy-sdm670
+      # eMMC: root is mmcblk0p72, reached through sdhci-msm.
+      ROOT_BUILTINS='fs/ext4/ext4.ko drivers/mmc/core/mmc_block.ko drivers/mmc/host/sdhci-msm.ko'
+      ERASE_DTBO=no
+      # An Android 12 bootloader that refuses an unsigned kernel unless the
+      # vbmeta it holds says verification is off. Measured on sargo: without
+      # it the phone rejects the boot image with an error that never mentions
+      # verification.
+      NEEDS_VBMETA=yes
+      ;;
+    fp4)
+      DTB_NAME=sm7225-fairphone-fp4; ROOT_PARTLABEL=userdata
+      KFLAVOR=moarchy-sm6350
+      # UFS, not eMMC: root is /dev/sda11, reached through the SCSI disk layer
+      # and ufs-qcom. Naming sargo's mmc modules here would assert that a
+      # driver this phone does not boot from is built in -- which it is,
+      # because the config enables both, so the check would PASS and prove
+      # nothing while the driver that actually matters went unexamined. That
+      # is the failure mode this per-device list exists to prevent.
+      # Names taken from the built kernel's modules.builtin, not guessed: the
+      # UFS host driver is ufs-qcom.ko with a HYPHEN, and a first attempt at
+      # ufs_qcom.ko failed this check on a kernel that had it built in all
+      # along. ufshcd-core is listed too -- ufs-qcom without it is a host
+      # driver with no transport.
+      ROOT_BUILTINS='fs/ext4/ext4.ko drivers/scsi/sd_mod.ko drivers/ufs/core/ufshcd-core.ko drivers/ufs/host/ufs-qcom.ko'
+      # The Fairphone's bootloader reads the dtbo partition and overlays what
+      # it finds onto the device tree in the boot image -- Android's overlays,
+      # onto a mainline DT they were never written against. postmarketOS's
+      # install instructions for this device end with `fastboot erase dtbo`
+      # for exactly that reason. sargo's do not, because sargo has no dtbo
+      # partition at all, which is why this is a key and not a step.
+      ERASE_DTBO=yes
+      # NOT flashed on this device, and that is upstream's answer rather than
+      # a guess. postmarketOS's manual install for the Fairphone 4 is three
+      # commands -- `flash boot`, `flash userdata`, `erase dtbo` -- with no
+      # vbmeta among them, and its own page says "You do not need to unlock
+      # critical partitions". vbmeta IS a critical partition here, so flashing
+      # one on a phone that has only had its bootloader unlocked would fail
+      # the transaction rather than disable anything.
+      #
+      # If an FP4 turns out not to boot and nothing else explains it, this is
+      # the first thing to try: set this to yes, rebuild, and the existing
+      # vbmeta path does the rest. It is one word precisely so that experiment
+      # costs nothing.
+      NEEDS_VBMETA=no
+      ;;
     *) die "android-bootimg: no DTB known for DEVICE=${DEVICE:-unset}" ;;
   esac
 }
@@ -64,8 +127,8 @@ backend_kernel() {
 _set_device_facts
 say "kernel"
 
-KREL=$(cat "$ROOTDIR/usr/share/kernel/moarchy-sdm670/kernel.release" 2>/dev/null) ||
-  die "no kernel.release in the rootfs -- is linux-moarchy-sdm670 installed?"
+KREL=$(cat "$ROOTDIR/usr/share/kernel/$KFLAVOR/kernel.release" 2>/dev/null) ||
+  die "no kernel.release in the rootfs -- is linux-$KFLAVOR installed?"
 info "kernel $KREL"
 
 [ -f "$ROOTDIR/boot/Image.gz" ] || die "no /boot/Image.gz in the rootfs"
@@ -95,11 +158,16 @@ cp /etc/resolv.conf "$ROOTDIR/etc/resolv.conf" ||
 # is precisely the question being asked.
 local _builtin="$ROOTDIR/usr/lib/modules/$KREL/modules.builtin"
 [ -f "$_builtin" ] || die "no modules.builtin for $KREL -- cannot check what is built in"
-for _ko in fs/ext4/ext4.ko drivers/mmc/core/mmc_block.ko drivers/mmc/host/sdhci-msm.ko; do
+#
+# The list is per device (ROOT_BUILTINS, set in _set_device_facts) because the
+# storage driver is: sargo boots off eMMC and the Fairphone off UFS. A shared
+# list would have to be the union, which on a kernel that enables both would
+# pass on either phone while checking the wrong half on one of them.
+for _ko in $ROOT_BUILTINS; do
   grep -qF "$_ko" "$_builtin" ||
     die "$_ko is a module, not built in -- this kernel cannot mount root without an initramfs (D24)"
 done
-info "ext4, mmc_block and sdhci-msm are built in; no initramfs needed"
+info "built in on $DEVICE: $(echo "$ROOT_BUILTINS" | tr ' ' '\n' | sed 's|.*/||;s|\.ko$||' | paste -sd, -); no initramfs needed"
 }
 
 # ---------------------------------------------------------------------------
@@ -195,14 +263,22 @@ rdsz=$(od -An -tu4 -j16 -N4 "$OUTDIR/boot.img" | tr -d " ")
 [ "$rdsz" = 0 ] || die "boot.img carries a $rdsz-byte ramdisk; this backend ships none (D24)"
 info "boot.img $(stat -c%s "$OUTDIR/boot.img") bytes, no ramdisk"
 
+if [ "$NEEDS_VBMETA" = yes ]; then
 say "vbmeta"
 # An Android 12 bootloader refuses an unsigned kernel unless the vbmeta it has
 # says verification is disabled. This emits exactly what
 # `avbtool make_vbmeta_image --flags 2 --padding_size 4096` emits, and
 # test-android-image.py checks that byte-for-byte rather than asserting it.
+#
+# Not generated at all on a device that does not flash one -- an unused
+# vbmeta.img in the output directory is a file somebody eventually flashes by
+# hand to a partition the bootloader guards.
 python3 "$REPO/image/boot/android-image.py" vbmeta --out "$OUTDIR/vbmeta.img" ||
   die "vbmeta generation failed"
 info "vbmeta.img $(stat -c%s "$OUTDIR/vbmeta.img") bytes"
+else
+info "no vbmeta on $DEVICE -- its bootloader does not take one"
+fi
 
 say "rootfs image"
 # The mkfs.ext4 -d trick: populate a filesystem image from
@@ -255,13 +331,25 @@ cat > "$OUTDIR/flash.sh" <<FLASH
 # unquoted one would expand \$(dirname "\$0") and \$unlocked below at build
 # time and write a script that flashes from whatever directory built it.
 ROOTPART=$ROOT_PARTLABEL
+# Whether this device's bootloader has a dtbo partition that has to be cleared.
+# Interpolated for the same reason ROOTPART is: a device fact, decided at build
+# time, in a script whose body must stay a quoted heredoc.
+ERASE_DTBO=$ERASE_DTBO
+NEEDS_VBMETA=$NEEDS_VBMETA
+# Named so the messages below can say which phone this is for, rather than
+# every image claiming to be a Pixel.
+DEVICE=$DEVICE
 FLASH
 cat >> "$OUTDIR/flash.sh" <<'FLASH'
-# Flash moarchy to a Pixel 3a (sargo) over fastboot.
+# Flash moarchy over fastboot. Which phone is in $DEVICE, just above.
 #
-# The phone must be UNLOCKED and in fastboot: power off, then hold Volume Down
-# and tap Power. If `fastboot getvar unlocked` says no, `fastboot flashing
-# unlock` sets it -- and ERASES THE DEVICE.
+# The phone must be UNLOCKED and in fastboot. How you get there differs:
+#
+#   sargo  power off, then hold Volume Down and tap Power.
+#   fp4    hold Volume Down and, still holding it, plug the USB cable in.
+#
+# If `fastboot getvar unlocked` says no, `fastboot flashing unlock` sets it --
+# and ERASES THE DEVICE.
 #
 # This overwrites boot and userdata. The Android install does not survive it.
 set -euo pipefail
@@ -276,8 +364,10 @@ unlocked=$(fastboot getvar unlocked 2>&1 | sed -n 's/^unlocked: *//p' | head -1)
 # Order is load-bearing. vbmeta disables Android Verified Boot; flash it AFTER
 # the kernel and the bootloader rejects the kernel it already has, with an
 # error that does not mention verification.
-echo "==> vbmeta (disables verified boot)"
-fastboot flash vbmeta vbmeta.img
+if [ "$NEEDS_VBMETA" = yes ]; then
+  echo "==> vbmeta (disables verified boot)"
+  fastboot flash vbmeta vbmeta.img
+fi
 
 echo "==> boot"
 fastboot flash boot boot.img
@@ -288,6 +378,34 @@ echo "==> $ROOTPART (the rootfs -- this is the slow one)"
 # A SPARSE image. fastboot refuses a raw one over 4 GiB with "Failed reading
 # from userdata", which sounds like a read error and is a size limit.
 fastboot flash "$ROOTPART" rootfs.simg
+
+# Clear the Android device-tree overlays, on the devices that have them.
+#
+# The bootloader applies whatever is in `dtbo` on top of the device tree the
+# boot image carries. Ours is mainline; the overlays there were written against
+# the vendor DT that shipped with Android and describe nodes that either do not
+# exist in it or mean something else. postmarketOS's install instructions for
+# the Fairphone 4 end with this step, and the symptom of skipping it is
+# hardware that is mis-described rather than an error anyone can read.
+#
+# `erase`, not `flash`: there is nothing to put there. An empty dtbo partition
+# means "no overlays", which is what a mainline DT wants.
+if [ "$ERASE_DTBO" = yes ]; then
+  echo "==> erasing dtbo (Android's DT overlays do not apply to a mainline DT)"
+  # NOT fatal, and the ordering is why. This script runs under `set -e`, and
+  # everything above it has already been written -- so aborting here would
+  # leave a phone with a new boot and rootfs whose slot was never marked
+  # bootable, which D26 says stops it booting after a few tries. That is a
+  # worse outcome than a dtbo that is still populated.
+  #
+  # A failure here is worth seeing, though: stale Android overlays on a
+  # mainline device tree are a plausible cause of hardware that is described
+  # wrongly, so it says so rather than passing quietly.
+  fastboot erase dtbo || {
+    echo "!! could not erase dtbo -- continuing so the slot still gets marked." >&2
+    echo "   If the phone boots oddly, try:  fastboot erase dtbo" >&2
+  }
+fi
 
 # Reset the slot's retry counter and clear any "unbootable" flag.
 #
@@ -320,7 +438,7 @@ FLASH
 chmod +x "$OUTDIR/flash.sh"
 
 say "done"
-( cd "$OUTDIR" && sha256sum boot.img vbmeta.img rootfs.simg > "$NAME.sha256" )
+( cd "$OUTDIR" && sha256sum boot.img rootfs.simg $([ -f vbmeta.img ] && echo vbmeta.img) > "$NAME.sha256" )
 ls -lh "$OUTDIR" | awk 'NR>1 {print "    " $9 "  " $5}'
 info "flash with: $OUTDIR/flash.sh"
 }

@@ -101,6 +101,7 @@ alongside the change that made them untrue.
 | File | What it is |
 | --- | --- |
 | [`naming-convention.md`](naming-convention.md) | Orientation — what each part of the screen is called, the four swipes, and the four kinds of thing quickshell draws |
+| [`architecture.md`](architecture.md) | Orientation — every layer of the FP4 build and where each piece comes from; what an ARM Omarchy could replace (graphical: [`architecture.html`](architecture.html)) |
 | [`gestures.md`](gestures.md) | Contract — every touch gesture: the strip, the edges, the app drawer, long-press |
 | [`settings.md`](settings.md) | Contract — the Settings screens, their rows, and the IPC they answer on |
 | [`control-center.md`](control-center.md) | Contract — the pull-down: tiles, sliders, media, notifications |
@@ -111,6 +112,9 @@ alongside the change that made them untrue.
 | [`menu-coverage.md`](menu-coverage.md) | All 333 upstream menu entries, classified Native / Bridged / Control Center / Unsupported |
 | [`structure.md`](structure.md) | Decisions — repos, packages, the package repository, the image |
 | [`devices.md`](devices.md) | Decisions — what a second device would need, and what is device-specific |
+| [`fairphone-4.md`](fairphone-4.md) | Status — the Fairphone 4 port: what runs on the handset, what was verified and how |
+| [`fp4-defects.md`](fp4-defects.md) | Register — what is still broken on the Fairphone 4, with status and evidence |
+| [`fp4-fixes.md`](fp4-fixes.md) | Register — the defects that are fixed, kept for why each one was wrong |
 | [`upstream.md`](upstream.md) | Decisions — the boundary with Omarchy, and what a version bump may break |
 | [`refactor.md`](refactor.md) | Contract — what has to be true when the duplication is gone. Cited by ~29 comments |
 | [`build-log.md`](build-log.md) | How this went, including the dead ends. The archaeology lives here |
@@ -148,8 +152,8 @@ Thirteen plugins and one directory that is not a plugin, all under
 | Plugin | Kind | What it owns | Contract |
 | --- | --- | --- | --- |
 | `moarchy.gestures` | panel | the bottom strip, the home pill, the back edge — every touch gesture, and the shell's only compositor-dispatch seam | [`gestures.md`](gestures.md) |
-| `moarchy.app-app drawer` | overlay | the app grid, its search field, the uninstall card | [`gestures.md`](gestures.md) §N, [`apps.md`](apps.md) |
-| `moarchy.workspace-workspace overview` | overlay | every workspace as a card, dragging a window from one to another, and the bin that closes one | [`gestures.md`](gestures.md) §P |
+| `moarchy.app-drawer` | overlay | the app grid, its search field, the uninstall card | [`gestures.md`](gestures.md) §N, [`apps.md`](apps.md) |
+| `moarchy.workspace-overview` | overlay | every workspace as a card, dragging a window from one to another, and the bin that closes one | [`gestures.md`](gestures.md) §P |
 | `moarchy.control-center` | overlay | the pull-down: quick tiles, brightness and volume, media, notification history | [`control-center.md`](control-center.md) |
 | `moarchy.settings` | overlay | the settings screen tree and the IPC it answers on | [`settings.md`](settings.md) |
 | `moarchy.themes` | overlay | the theme picker, as a grid of live swatches | [`settings.md`](settings.md) §theme |

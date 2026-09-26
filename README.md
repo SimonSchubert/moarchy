@@ -1,8 +1,8 @@
 # moarchy
 
 <p align="center">
-  <img src="docs/screenshots/system-app drawer-open.png" width="16%" alt="The app drawer at rest: a search field over a grid of app icons">
-  <img src="docs/screenshots/system-app drawer.png" width="16%" alt="The app drawer, filtered as you type, with the on-screen keyboard up">
+  <img src="docs/screenshots/system-drawer-open.png" width="16%" alt="The app drawer at rest: a search field over a grid of app icons">
+  <img src="docs/screenshots/system-drawer.png" width="16%" alt="The app drawer, filtered as you type, with the on-screen keyboard up">
   <img src="docs/screenshots/system-center.png" width="16%" alt="The control centre: quick tiles, brightness and volume, the media player and notifications">
   <img src="docs/screenshots/system-settings.png" width="16%" alt="The Settings suite's top level">
   <img src="docs/screenshots/app-web.png" width="16%" alt="GNOME Web on omarchy.org, URL bar at the bottom, keyboard up">
@@ -31,6 +31,33 @@ overwrites `boot` and `userdata`; the Android install does not survive it.
 tar -xJf moarchy-sargo-*.tar.xz
 cd moarchy-sargo-*
 ./flash.sh
+```
+
+## Other phones
+
+The Pixel 3a is the phone this ships on. A **Fairphone 4** port lives in the
+tree and **runs on the handset**: it boots, and it works as a phone — display,
+touch and rotation, camera, sensors, the built-in microphone, both speaker
+amplifiers, and cellular calls with audio in both directions.
+
+It is not in Releases. Enough is still open — Wi-Fi latency, a boot race that
+can take all audio with it, and occasional drops into the SoC's emergency
+download mode — that flashing it is something to do deliberately, with the
+recovery path read first.
+
+[`docs/fairphone-4.md`](docs/fairphone-4.md) is the status: what runs, what was
+verified and how. [`docs/fp4-defects.md`](docs/fp4-defects.md) is what is
+still broken, and [`docs/fp4-fixes.md`](docs/fp4-fixes.md) the defects already
+closed, including how to get out of EDL without touching the phone.
+
+Three gaps that looked like port bugs turned out to be missing kernel support,
+and went upstream rather than into this tree: the microphone and the speaker
+amplifier as pull requests against `sm6350-mainline/linux` (#11 and #12), and
+the call-audio findings onto the Fairphone 5's q6voice work, which already
+covers the same ground.
+
+```bash
+./scripts/deploy-fp4.sh      # preflight, packages, image, verify, flash
 ```
 
 ## Why not just run Omarchy?
@@ -250,6 +277,11 @@ first boot, or to the u-boot SPL — that lives outside any partition, at byte
 ./scripts/build-image.sh          # -> images/moarchy-sargo-<version>-<date>/
 ./scripts/verify-image.sh         # 93 checks against the image just built
 ```
+
+The build runs in aarch64 containers and needs **no root**: with podman
+installed it uses rootless podman by default, so there is no daemon to start
+and no group to join. `MOARCHY_CONTAINER=docker` forces the other engine;
+`scripts/container.sh` documents what differs between them.
 
 Everything comes from the commits pinned in `manifest.toml`, so two runs a
 month apart produce the same image. The package build produces the

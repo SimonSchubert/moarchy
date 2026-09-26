@@ -192,11 +192,28 @@ Item {
     //
     // Transform is an integer here where sway used words: 0 is normal and 1 is
     // 90 degrees.
+    //
+    // The TOUCH DEVICES get the same transform, and that is not optional.
+    // Hyprland does not carry an output's transform across to the touchscreen
+    // pointed at it: a touch device has its own, and until it is set the touch
+    // coordinate space stays in the panel's native orientation. The screen
+    // turns, the touches do not, and everything lands 90 degrees out --
+    // reported on an fp4 2026-09-22 (defects.md D2).
+    //
+    // Enumerated, not named. The touchscreen here is `himax-touchscreen-1`,
+    // which is an fp4 fact and has no business in a file every device shares
+    // -- the same reason the output name is read back rather than written as
+    // DSI-1. Note the panel ALSO registers a keyboard called
+    // `himax-touchscreen`; only the touch device is in devices.touch, which is
+    // what this iterates.
     Quickshell.execDetached(["bash", "-c",
       "s=$(hyprctl monitors -j | python3 -c 'import json,sys;d=json.load(sys.stdin)[0];print(d[\"name\"], d[\"transform\"], d[\"scale\"])'); " +
       "set -- $s; " +
       "case $2 in 0) n=1;; *) n=0;; esac; " +
-      "hyprctl eval \"hl.monitor({ output = \\\"$1\\\", mode = \\\"preferred\\\", position = \\\"auto\\\", scale = $3, transform = $n })\""])
+      "hyprctl eval \"hl.monitor({ output = \\\"$1\\\", mode = \\\"preferred\\\", position = \\\"auto\\\", scale = $3, transform = $n })\"; " +
+      "for d in $(hyprctl devices -j | python3 -c 'import json,sys;[print(t[\"name\"]) for t in json.load(sys.stdin).get(\"touch\", [])]'); do " +
+      "hyprctl eval \"hl.device({ name = \\\"$d\\\", transform = $n })\"; " +
+      "done"])
   }
 
   // The tiles that will actually be drawn, after the absent ones are dropped.

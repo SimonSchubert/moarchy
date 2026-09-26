@@ -1,0 +1,21 @@
+[Unit]
+Description=USB gadget with a serial console, for a phone that cannot say why it failed
+Documentation=https://wiki.postmarketos.org/wiki/Fairphone_4_(fairphone-fp4)
+# After local-fs so /sys/kernel/config can be mounted and modules are readable,
+# and after the getty it copies the autologin user from has been written.
+After=local-fs.target systemd-modules-load.service
+# Not Before= anything. Nothing waits on a debug channel, and a phone that
+# boots slowly should not also boot late because of one.
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/moarchy/bin/moarchy-usb-debug
+# A debug aid must never be the reason a boot fails. The script exits 0 on
+# every path it cannot complete; this is the second belt.
+SuccessExitStatus=0 1
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

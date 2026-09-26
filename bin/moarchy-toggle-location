@@ -1,0 +1,57 @@
+#!/bin/bash
+# Location on/off for a quick toggle, over ModemManager's GNSS.
+#
+#   moarchy-toggle-location --status   {"enabled":bool}
+#   moarchy-toggle-location on|off
+#
+# "Location" here means the modem's own GPS receiver: --location-enable-gps-nmea
+# and gps-raw, which is what GNOME Maps and mmcli read. It is not the 3gpp
+# cell-based source, which the modem keeps on regardless and which needs no sky.
+#
+# --status answers the {"enabled":bool} shape the shell's toggles read (the same
+# contract as moarchy-toggle-nightlight), so the tile needs no special case.
+#
+# mmcli's location setup is a Modem.Location.Setup call, which polkit guards, so
+# on/off go through `sudo -n` -- passwordless on this phone by design
+# (docs/structure.md), the same way moarchy-sim reaches the modem. --status is a
+# plain read and takes no privilege.
+#
+# `-m any`, never an index: ModemManager renumbers the modem when it
+# re-enumerates (a SIM insert took this phone from Modem/0 to Modem/1), so an
+# index captured a moment ago names nothing.
+set -uo pipefail
+
+MMCLI=/usr/bin/mmcli
+
+# The GPS sources this toggle owns. 3gpp-lac-ci is deliberately not touched.
+GPS_SOURCES="gps-nmea gps-raw"
+
+enabled() {
+	# "enabled" is true when both GPS sources are in the modem's enabled list.
+	local status
+	status=$("$MMCLI" -m any --location-status 2>/dev/null) || return 1
+	local line
+	line=$(printf '%s\n' "$status" | grep -iE 'enabled:')
+	printf '%s' "$line" | grep -q 'gps-nmea' && printf '%s' "$line" | grep -q 'gps-raw'
+}
+
+case "${1:-}" in
+--status)
+	if enabled; then echo '{"enabled":true}'; else echo '{"enabled":false}'; fi
+	;;
+on)
+	sudo -n "$MMCLI" -m any --location-enable-gps-nmea --location-enable-gps-raw \
+		>/dev/null 2>&1
+	# Report the resulting state, not the exit code: the tile reads state back.
+	enabled && echo '{"enabled":true}' || echo '{"enabled":false}'
+	;;
+off)
+	sudo -n "$MMCLI" -m any --location-disable-gps-nmea --location-disable-gps-raw \
+		>/dev/null 2>&1
+	enabled && echo '{"enabled":true}' || echo '{"enabled":false}'
+	;;
+*)
+	echo "usage: moarchy-toggle-location --status | on | off" >&2
+	exit 2
+	;;
+esac

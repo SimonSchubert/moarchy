@@ -21,6 +21,16 @@ FAIL=0
 ok()   { printf '  \033[32mok\033[0m   %s\n' "$*"; }
 no()   { printf '  \033[31mFAIL\033[0m %s\n' "$*"; FAIL=1; }
 sec()  { printf '\n\033[1m== %s\033[0m\n' "$*"; }
+# A line that is neither a pass nor a failure: something true of this image
+# that the reader should know and that no image could currently make false.
+#
+# It exists because the alternative is worse in both directions. Reporting a
+# known upstream limitation with no() makes every run of a correct image fail,
+# and a suite that always fails is a suite nobody reads. Reporting it with ok()
+# -- or not at all -- lets "93 checks passed" be read as "the microphone
+# works", which on the Fairphone 4 it does not. So: printed, uncoloured, and
+# it does not touch FAIL.
+note() { printf '  note %s\n' "$*"; }
 chk()  { if [ "$1" = 0 ]; then ok "$2"; else no "$2"; fi; }
 
 # Which artifact is this? Inferred from the name rather than passed in, so
@@ -37,6 +47,7 @@ chk()  { if [ "$1" = 0 ]; then ok "$2"; else no "$2"; fi; }
 _base=$(basename "$IMG_XZ")
 case "${DEVICE:-$_base}" in
   sargo|moarchy-sargo-*)         DEVICE=sargo;     BACKEND=android-bootimg ;;
+  fp4|moarchy-fp4-*)             DEVICE=fp4;       BACKEND=android-bootimg ;;
   *) printf "  \033[31mFAIL\033[0m cannot tell what device %s is for; set DEVICE=\n" "$_base"; exit 1 ;;
 esac
 _here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -68,8 +79,56 @@ mkdir -p "$R"
 # Read-write on purpose: root.img is a copy carved out of the image, so the
 # behavioural section below can actually run the first-boot scripts in it. The
 # published .img.xz is untouched.
-mount -o loop "$WORK/root.img" "$R" 2>/dev/null || {
-  no "could not mount the rootfs"; exit 1; }
+#
+# Two ways to mount it, and which one is available is a property of the
+# CONTAINER ENGINE rather than of the image.
+#
+# A loop mount is the better one and is tried first: it puts a real block
+# device under the filesystem, which is what lets verify_grow exercise an
+# ONLINE resize2fs -- the thing that actually happens on the phone.
+#
+# Rootless podman cannot do it. `mount -o loop` returns EPERM and
+# /dev/loop-control is owned by nobody inside the user namespace, because
+# setting up a loop device needs CAP_SYS_ADMIN in the INITIAL namespace and a
+# rootless container has it only in its own. That is a real restriction, not a
+# missing flag, and no amount of --privileged changes it.
+#
+# So fall back to fuse2fs, which implements ext4 in userspace over /dev/fuse
+# and needs no block device at all. -o fakeroot makes it report the ownership
+# recorded in the filesystem rather than mapping everything to the caller,
+# which every `have`/ownership check below depends on.
+#
+# allow_other is not optional here, and the reason is easy to miss. A FUSE
+# mount is PRIVATE to the user that mounted it: every other uid gets EACCES,
+# including one this script switches to itself. The behavioural checks below
+# run parts of the first-boot path as the phone's own user, and without
+# allow_other that fails as
+#
+#   runuser: failed to execute env: Permission denied
+#
+# which reads like a broken binary or a noexec mount, and is neither -- root
+# can execute the very same file. It needs `user_allow_other` in
+# /etc/fuse.conf, which image/Dockerfile sets.
+#
+# ROOT_MOUNT_KIND is read by verify_grow, which cannot do an online grow
+# through FUSE and says so rather than silently testing something weaker.
+ROOT_MOUNT_KIND=
+if mount -o loop "$WORK/root.img" "$R" 2>/dev/null; then
+  ROOT_MOUNT_KIND=loop
+elif command -v fuse2fs >/dev/null 2>&1 &&
+     fuse2fs -o fakeroot,allow_other,default_permissions "$WORK/root.img" "$R" >/dev/null 2>&1 &&
+     [ -d "$R/usr" ]; then
+  ROOT_MOUNT_KIND=fuse
+  ok "rootfs mounted with fuse2fs (no loop device in a rootless container)"
+else
+  no "could not mount the rootfs"
+  if ! command -v fuse2fs >/dev/null 2>&1; then
+    printf "       no loop device and no fuse2fs either -- install fuse2fs in image/Dockerfile\n" >&2
+  else
+    printf "       loop mount refused and fuse2fs failed; is /dev/fuse passed into the container?\n" >&2
+  fi
+  exit 1
+fi
 
 have() { [ -e "$R$1" ] && ok "$1" || no "$1 missing"; }
 have /usr/bin/Hyprland
@@ -84,7 +143,7 @@ have /usr/share/moarchy/config/hypr/hyprland.lua
 have /usr/share/moarchy/device/hypr/device.lua
 have /usr/share/omarchy/config/omarchy/shell.json
 have /usr/share/fonts/omarchy/omarchy.ttf
-have /usr/share/applications/moarchy.device.desktop
+have /usr/share/applications/org.moarchy.Device.plugin.desktop
 # A dozen runtime omarchy-* scripts source out of upstream's install/ tree.
 have /usr/share/omarchy/install/helpers/browser-policy.sh
 have /usr/share/omarchy/shell/shell.qml
@@ -332,10 +391,19 @@ for _pdir in /repo/default/omarchy/plugins/*/; do
 done
 unset _pdir _pid _shelljson _tile
 
+# Which compositor seam the shell is on.
+#
+# This asked the OPPOSITE question until now -- that Quickshell.I3 was present
+# and Quickshell.Hyprland gone -- because it was written when the port ran on
+# Sway (b267021). The tree moved back to Hyprland afterwards, in bbc1fa0 and
+# 827f362, and this check was not turned round with it: it then failed every
+# image, on every device, by asserting the state the project had deliberately
+# left. A check that cannot pass is worse than no check, because it teaches
+# people to skim the failures.
 hy=$(grep -rl 'import Quickshell.Hyprland' "$R/usr/share/omarchy/shell" --include=*.qml 2>/dev/null | wc -l)
 i3=$(grep -rl 'import Quickshell.I3'       "$R/usr/share/omarchy/shell" --include=*.qml 2>/dev/null | wc -l)
-[ "$i3" -gt 0 ] && ok "$i3 QML files on Quickshell.I3" || no "no I3 imports -- the port is not in the image"
-[ "$hy" -eq 0 ] && ok "0 QML files left on Quickshell.Hyprland" || no "$hy files still import Quickshell.Hyprland"
+[ "$hy" -gt 0 ] && ok "$hy QML files on Quickshell.Hyprland" || no "no Hyprland imports -- the shell has no compositor seam"
+[ "$i3" -eq 0 ] && ok "0 QML files left on Quickshell.I3 (the sway port is gone)" || no "$i3 files still import Quickshell.I3"
 
 grep -q '"id": "moarchy.bar"' "$R/usr/share/omarchy/config/omarchy/shell.json" \
   && ok "packaged shell.json selects moarchy.bar" || no "shell.json does not select moarchy.bar"
@@ -446,7 +514,18 @@ sec "behaviour: the first-boot scripts"
 mount --bind /proc "$R/proc" 2>/dev/null
 mount --bind /sys  "$R/sys"  2>/dev/null
 mount --bind /dev  "$R/dev"  2>/dev/null
-cleanup() { umount -l "$R/proc" "$R/sys" "$R/dev" 2>/dev/null; umount -l "$R" 2>/dev/null; }
+# A FUSE mount is not unmounted by `umount -l` reliably -- the helper owns it,
+# and fusermount is what tells it to let go. Tried in that order so the loop
+# case is unchanged and the FUSE case does not leave a mount behind that makes
+# the next run's `rm -rf "$WORK"` hang on a live filesystem.
+cleanup() {
+  umount -l "$R/proc" "$R/sys" "$R/dev" 2>/dev/null
+  if [ "${ROOT_MOUNT_KIND:-}" = fuse ]; then
+    fusermount -u "$R" 2>/dev/null || fusermount3 -u "$R" 2>/dev/null || umount -l "$R" 2>/dev/null
+  else
+    umount -l "$R" 2>/dev/null
+  fi
+}
 trap cleanup EXIT
 
 # --- moarchy-firstboot -----------------------------------------------------
@@ -561,10 +640,20 @@ grep -q 'shown_boxes = "cpu mem"' "$R/home/moarchy/.config/btop/btop.conf" 2>/de
 # The theme's compositor colours. Upstream generates hyprland.lua itself and
 # config/hypr/hyprland.lua requires it -- moarchy no longer ships a template.
 THEME="$R/home/moarchy/.local/state/omarchy/current/theme"
-[ -e "$THEME/hyprland.lua" ] && ok "theme generated hyprland.lua" \
-                             || no "no hyprland.lua generated -- omarchy-theme-set did not run"
-[ -e "$THEME/colors.toml" ] && ok "theme colors.toml (the keyboard reads this)" \
-                            || no "no colors.toml -- moarchy-keyboard has no palette"
+# Generated by omarchy-theme-set, which user-setup runs AS THE PHONE'S USER --
+# so under fuse2fs it cannot execute anything and produces nothing, for the
+# same access(X_OK) reason the PATH checks above explain. user-setup itself
+# still reports success, which is why this is scoped rather than deleted:
+# on a loop mount an empty theme directory is a real defect.
+_theme_blind=0
+[ "${ROOT_MOUNT_KIND:-}" = fuse ] && _theme_blind=1
+if [ -e "$THEME/hyprland.lua" ]; then ok "theme generated hyprland.lua"
+elif [ "$_theme_blind" = 1 ]; then note "no hyprland.lua -- omarchy-theme-set cannot run through a fuse2fs mount"
+else no "no hyprland.lua generated -- omarchy-theme-set did not run"; fi
+# Same origin as hyprland.lua above, same scoping.
+if [ -e "$THEME/colors.toml" ]; then ok "theme colors.toml (the keyboard reads this)"
+elif [ "$_theme_blind" = 1 ]; then note "no colors.toml -- omarchy-theme-set cannot run through a fuse2fs mount"
+else no "no colors.toml -- moarchy-keyboard has no palette"; fi
 [ -f "$R/home/moarchy/.local/state/moarchy/user-setup-done" ] \
   && ok "user-setup stamped itself" || no "no user-setup stamp -- it would run again"
 
@@ -601,10 +690,46 @@ else
   # The stub only runs if the session block was reached at all.
   echo "$login_env" | grep -q '^PATH=' \
     && ok "the login shell execs Hyprland" || no "Hyprland was not exec'd from profile.d"
+  _pathline=$(echo "$login_env" | sed -n 's/^PATH=//p' | head -1)
+  _anymissing=0
+  # Under FUSE this question cannot be answered, and pretending otherwise in
+  # either direction is worse than saying so.
+  #
+  # `command -v` decides with access(X_OK), and fuse2fs refuses that for any
+  # uid other than the one that mounted it -- even with allow_other and
+  # default_permissions, and even on a root-owned 0755 file the mounting user
+  # executes perfectly well. This check runs as the phone's own user by
+  # design, so it hits exactly that case.
+  #
+  # So: if the PATH carries both directories the binaries live in, the thing
+  # this check exists to catch -- a directory that never got prepended -- is
+  # demonstrably not happening, and the failure is the verifier's. That is
+  # reported as a note. If the PATH is missing one of them, it is still a
+  # hard failure, because that is the real bug and it is visible either way.
+  #
+  # Under a loop mount -- docker, or anything running as real root -- none of
+  # this applies and every check below stays hard.
+  _fuse_blind=0
+  if [ "${ROOT_MOUNT_KIND:-}" = fuse ]; then
+    case ":$_pathline:" in
+      *:/usr/lib/moarchy/bin:*) case ":$_pathline:" in *:/usr/bin:*) _fuse_blind=1 ;; esac ;;
+    esac
+  fi
   for c in moarchy-restart-shell moarchy-keyboard omarchy-theme-set hyprctl; do
     if echo "$login_env" | grep -q "^resolves $c$"; then ok "Hyprland would find $c"
-    else no "Hyprland would NOT find $c -- it is not on the session PATH"; fi
+    elif [ "$_fuse_blind" = 1 ]; then
+      note "cannot test whether Hyprland finds $c -- fuse2fs denies access(X_OK) to another uid; both PATH entries are present"
+    else no "Hyprland would NOT find $c -- it is not on the session PATH"; _anymissing=1; fi
   done
+  # Say what the session PATH actually was. "not on the session PATH" is a
+  # conclusion, and without the PATH beside it there is no way to tell a
+  # missing package from a directory that never got prepended -- which is two
+  # very different bugs in two different files.
+  if [ "$_anymissing" = 1 ]; then
+    printf '       session PATH: %s\n' "${_pathline:-<none>}"
+    printf '       (the binaries are in /usr/lib/moarchy/bin and /usr/bin;\n'
+    printf '        if both are on that PATH, this is the verifier and not the image)\n'
+  fi
   for v in OMARCHY_PATH MOARCHY_PATH; do
     val=$(echo "$login_env" | sed -n "s/^$v=//p")
     [ "$val" != "<unset>" ] && [ -n "$val" ] \

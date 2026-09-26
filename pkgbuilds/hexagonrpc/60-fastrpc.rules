@@ -1,0 +1,7 @@
+# The kernel creates /dev/fastrpc-* as root:root 0600. hexagonrpcd runs as
+# `fastrpc` (its own units say so), so without this it cannot open the node it
+# exists to talk to.
+#
+# Group rather than world: opening a fastrpc node lets the caller ask a DSP to
+# map memory, which is not a permission to hand out broadly.
+SUBSYSTEM=="misc", KERNEL=="fastrpc-*", GROUP="fastrpc", MODE="0660"

@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# Test the Fairphone 4 speaker at a chosen, deliberately low level.
+#
+#   fp4-speaker-test            a short bell at -75.5 dB
+#   fp4-speaker-test 60         ...at -65.5 dB
+#   fp4-speaker-test 60 left    only the left amplifier (spoken "front left")
+#
+# WHY THIS SCRIPT EXISTS, AND WHY IT IS CAUTIOUS
+#
+# This speaker has been mistaken for a fire alarm: a sustained tone at -18 dB
+# on this handset was loud enough that the fire brigade was called.
+#
+# Calibrated by ear on 2026-09-23, which changes the reading of that:
+#
+#     level   dB      how it sounds (1.1s chime)
+#     100     -45.5   inaudible
+#     120     -35.5   "veeeery faint"
+#     151     -20.0   quiet
+#     157     -17.0   normal listening volume, and the default the phone keeps
+#     191      0.0    full output
+#
+# So -18 dB is *not* "near full output" -- it is an ordinary volume for a
+# short sound. What made the original incident an alarm was that it was a
+# SUSTAINED SINE at that level, not the level by itself. A continuous tone
+# reads as a warning signal; a 1.1s chime at the same level reads as a
+# notification.
+#
+# The caution in this script is therefore about waveform as much as level:
+#
+#   * the volume scale is 0..191 in 0.5 dB steps, 191 being full output.
+#   * the default here is 40, which is -75.5 dB -- start there, not at the
+#     number someone told you was fine.
+#   * anything above 165 (-13 dB) is refused unless FP4_SPEAKER_FORCE=1.
+#   * the sound is a short chime, never a sustained tone. Do not substitute
+#     a sine here without thinking about who is in the building.
+#   * the volume is put back to 0 afterwards, including on Ctrl-C.
+#
+# It also enables the MultiMedia1 -> QUIN_MI2S_RX route itself. WirePlumber
+# clears this card's mixer when it starts, and without that route the
+# amplifiers are powered and unmuted with nothing arriving -- which looks
+# exactly like a dead speaker. See moarchy docs/fp4-defects.md D13.
+#
+# Turn it up one step at a time, and never leave it up.
+set -euo pipefail
+
+PHONE=${FP4_HOST:-moarchy@172.16.42.1}
+KEY=${FP4_KEY:-$HOME/.ssh/id_ed25519}
+LEVEL=${1:-40}
+WHICH=${2:-both}
+CAP=165
+MAX=191
+
+db() { awk -v m="$MAX" -v v="$1" 'BEGIN{printf "%.1f", -0.5*(m-v)}'; }
+
+case "$LEVEL" in ''|*[!0-9]*) echo "level must be a number 0..$MAX" >&2; exit 1;; esac
+if [ "$LEVEL" -gt "$MAX" ]; then echo "level above $MAX" >&2; exit 1; fi
+if [ "$LEVEL" -gt "$CAP" ] && [ "${FP4_SPEAKER_FORCE:-0}" != "1" ]; then
+    printf 'Refusing level %s (%s dB). The cap is %s (%s dB).\n' \
+        "$LEVEL" "$(db "$LEVEL")" "$CAP" "$(db "$CAP")" >&2
+    echo 'Set FP4_SPEAKER_FORCE=1 if you really mean it, and hold the phone away from you.' >&2
+    exit 1
+fi
+
+printf 'Level %s of %s = %s dB.  (-18 dB, the fire-alarm level, is 155.)\n' \
+    "$LEVEL" "$MAX" "$(db "$LEVEL")"
+
+case "$WHICH" in
+    left)  SND=audio-channel-front-left.oga;  L=$LEVEL; R=0 ;;
+    right) SND=audio-channel-front-right.oga; L=0;      R=$LEVEL ;;
+    both)  SND=bell.oga;                      L=$LEVEL; R=$LEVEL ;;
+    *) echo "second argument must be left, right or both" >&2; exit 1 ;;
+esac
+
+# What the controls were before this ran, so they can be put back exactly.
+# Not wound down to 0: these controls carry a dB scale, so WirePlumber reads
+# them back as the route's hardware volume and persists what it finds. Leaving
+# 0 behind once made the speakers silent across every subsequent boot.
+read -r PREV_L PREV_R < <(ssh -o ConnectTimeout=8 -i "$KEY" "$PHONE" '
+    for c in "Left Speaker Volume" "Right Speaker Volume"; do
+        amixer -c 0 cget name="$c" 2>/dev/null |
+            sed -n "s/.*: values=\([0-9]*\).*/\1/p" | head -1 | tr "\n" " "
+    done' 2>/dev/null)
+PREV_L=${PREV_L:-157}; PREV_R=${PREV_R:-157}
+
+# Always put the volume back, whatever happens.
+restore() {
+    ssh -o ConnectTimeout=8 -i "$KEY" "$PHONE" "
+        amixer -c 0 cset name='Left Speaker Volume' $PREV_L >/dev/null 2>&1
+        amixer -c 0 cset name='Right Speaker Volume' $PREV_R >/dev/null 2>&1" 2>/dev/null || true
+    echo "Volume returned to where it was (L=$PREV_L R=$PREV_R)."
+}
+trap restore EXIT INT TERM
+
+ssh -o ConnectTimeout=8 -i "$KEY" "$PHONE" \
+    "amixer -c 0 cset name='QUIN_MI2S_RX Audio Mixer MultiMedia1' 1 >/dev/null 2>&1
+     amixer -c 0 cset name='Left Speaker Volume' $L >/dev/null 2>&1
+     amixer -c 0 cset name='Right Speaker Volume' $R >/dev/null 2>&1
+     paplay /usr/share/sounds/freedesktop/stereo/$SND 2>&1 | tail -2"
+echo 'Played. Heard nothing? Run it again one step louder -- try 60, then 80.'

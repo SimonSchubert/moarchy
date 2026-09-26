@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>moarchy FP4 stack</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --surface: #ffffff;
+    --surface-2: #eceef1;
+    --ink: #1a1d21;
+    --ink-soft: #4a4f57;
+    --ink-faint: #767c86;
+    --line: #d9dce1;
+    --accent: #b4531f;           /* our own work — burnt amber */
+
+    /* origin hues, tuned to read on both themes */
+    --o-arch: #1f6fb2;           /* Arch Linux ARM base */
+    --o-arch-bg: #e4eef7;
+    --o-kernel: #7a4bc4;         /* kernel source */
+    --o-kernel-bg: #ece3f8;
+    --o-pmos: #2e8b57;           /* postmarketOS */
+    --o-pmos-bg: #e0f0e6;
+    --o-qc: #c0392b;             /* linux-msm / Qualcomm platform */
+    --o-qc-bg: #f7e2df;
+    --o-blob: #6b7078;           /* proprietary firmware */
+    --o-blob-bg: #e7e9ec;
+    --o-desktop: #b4531f;        /* Omarchy + moarchy desktop layer */
+    --o-desktop-bg: #f6e7dc;
+    --o-ours: #16151a;           /* built/patched here */
+    --o-ours-bg: #ffe9b8;
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #14161a; --surface: #1c1f24; --surface-2: #23272e;
+      --ink: #e9ebee; --ink-soft: #b3b8c0; --ink-faint: #838a94;
+      --line: #30353d; --accent: #e8853f;
+      --o-arch: #6cb6ec; --o-arch-bg: #17303f;
+      --o-kernel: #b998ea; --o-kernel-bg: #2a2140;
+      --o-pmos: #63c48d; --o-pmos-bg: #163527;
+      --o-qc: #e8776b; --o-qc-bg: #3a201d;
+      --o-blob: #a2a9b3; --o-blob-bg: #2a2e34;
+      --o-desktop: #e8853f; --o-desktop-bg: #38241629;
+      --o-desktop-bg: #3a2617;
+      --o-ours: #ffe9b8; --o-ours-bg: #4a3a13;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #14161a; --surface: #1c1f24; --surface-2: #23272e;
+    --ink: #e9ebee; --ink-soft: #b3b8c0; --ink-faint: #838a94;
+    --line: #30353d; --accent: #e8853f;
+    --o-arch: #6cb6ec; --o-arch-bg: #17303f;
+    --o-kernel: #b998ea; --o-kernel-bg: #2a2140;
+    --o-pmos: #63c48d; --o-pmos-bg: #163527;
+    --o-qc: #e8776b; --o-qc-bg: #3a201d;
+    --o-blob: #a2a9b3; --o-blob-bg: #2a2e34;
+    --o-desktop: #e8853f; --o-desktop-bg: #3a2617;
+    --o-ours: #ffe9b8; --o-ours-bg: #4a3a13;
+  }
+  body { background: var(--bg); color: var(--ink); margin: 0; line-height: 1.5; }
+  .wrap { max-width: 940px; margin: 0 auto; padding-inline: 20px; padding-block: 40px 64px; }
+  h1 { font-size: clamp(1.7rem, 4vw, 2.4rem); font-weight: 700; letter-spacing: -0.02em; margin: 0 0 6px; text-wrap: balance; }
+  h2 { font-size: 1.05rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-soft); margin: 44px 0 14px; }
+  .lede { color: var(--ink-soft); font-size: 1.05rem; max-width: 62ch; margin: 0 0 4px; }
+  .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+  code { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 0.85em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+
+  /* stack */
+  .stack { display: flex; flex-direction: column; gap: 10px; }
+  .layer { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .layer-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .layer-name { font-weight: 600; font-size: 1rem; }
+  .layer-note { color: var(--ink-faint); font-size: 0.85rem; }
+  .arrow { text-align: center; color: var(--ink-faint); font-size: 0.8rem; letter-spacing: 0.05em; margin: 2px 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    display: inline-flex; flex-direction: column; gap: 1px;
+    border-radius: 8px; padding: 7px 11px; border: 1px solid;
+    font-size: 0.86rem; min-width: 0;
+  }
+  .chip b { font-weight: 600; }
+  .chip span { font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; opacity: 0.85; }
+  /* origin styling */
+  .arch   { background: var(--o-arch-bg);   border-color: var(--o-arch);   color: var(--ink); }
+  .kernel { background: var(--o-kernel-bg); border-color: var(--o-kernel); color: var(--ink); }
+  .pmos   { background: var(--o-pmos-bg);   border-color: var(--o-pmos);   color: var(--ink); }
+  .qc     { background: var(--o-qc-bg);     border-color: var(--o-qc);     color: var(--ink); }
+  .blob   { background: var(--o-blob-bg);   border-color: var(--o-blob);   color: var(--ink); }
+  .desktop{ background: var(--o-desktop-bg);border-color: var(--o-desktop);color: var(--ink); }
+  .ours   { background: var(--o-ours-bg);   border-color: var(--accent);   color: var(--ink); }
+
+  /* legend */
+  .legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; margin-top: 14px; }
+  .leg { display: flex; gap: 10px; align-items: flex-start; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .sw { width: 14px; height: 14px; border-radius: 4px; border: 1px solid; flex: none; margin-top: 3px; }
+  .leg div { min-width: 0; }
+  .leg b { font-size: 0.9rem; }
+  .leg p { margin: 2px 0 0; font-size: 0.8rem; color: var(--ink-faint); }
+  .leg .mono { font-size: 0.72rem; color: var(--ink-faint); word-break: break-all; }
+
+  /* dragon table */
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 640px) { .split { grid-template-columns: 1fr; } }
+  .col { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .col h3 { margin: 0 0 4px; font-size: 1rem; }
+  .col .tag { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
+  .col.keep .tag { color: var(--o-qc); }
+  .col.maybe .tag { color: var(--o-desktop); }
+  .col ul { margin: 12px 0 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  .col li { font-size: 0.88rem; }
+  .col li b { display: block; }
+  .col li span { color: var(--ink-faint); font-size: 0.82rem; }
+  .conf { font-family: 'IBM Plex Mono', monospace; font-size: 0.68rem; padding: 1px 5px; border-radius: 4px; border: 1px solid var(--line); color: var(--ink-soft); margin-left: 6px; white-space: nowrap; }
+
+  .note { background: var(--surface-2); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; padding: 12px 16px; font-size: 0.9rem; color: var(--ink-soft); margin-top: 16px; }
+  .note b { color: var(--ink); }
+  a { color: var(--accent); }
+  .foot { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--ink-faint); font-size: 0.8rem; }
+</style>
+<style>
+  html{color-scheme:light}
+  body{margin:0}
+  img{max-width:100%}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>What the FP4 build is made of</h1>
+  <p class="lede">Every layer of the moarchy Fairphone 4 image, and where each piece is pulled from. Read bottom to top: silicon at the base, the phone UI at the top. Colour marks the origin.</p>
+
+  <h2>The stack</h2>
+  <div class="stack">
+
+    <div class="layer">
+      <div class="layer-head"><span class="layer-name">Phone shell &amp; apps</span><span class="layer-note">the mobile UI — what you actually touch</span></div>
+      <div class="chips">
+        <div class="chip desktop"><b>moarchy</b><span>Simon Schubert · port of Omarchy</span></div>
+        <div class="chip desktop"><b>Omarchy 4.0.4</b><span>basecamp/omarchy · config + theming</span></div>
+        <div class="chip desktop"><b>moarchy-keyboard</b><span>on-screen keyboard</span></div>
+        <div class="chip desktop"><b>moarchy-store / keep / apps</b><span>store, notes, vitals</span></div>
+        <div class="chip ours"><b>moarchy.nfc + moarchy-nfc</b><span>built here</span></div>
+        <div class="chip ours"><b>Location toggle</b><span>built here</span></div>
+      </div>
+    </div>
+    <div class="arrow">▲ renders on</div>
+
+    <div class="layer">
+      <div class="layer-head"><span class="layer-name">Compositor &amp; toolkit</span><span class="layer-note">Wayland session</span></div>
+      <div class="chips">
+        <div class="chip arch"><b>Hyprland</b><span>Arch Linux ARM pkg</span></div>
+        <div class="chip arch"><b>quickshell</b><span>Arch Linux ARM pkg · QML shell</span></div>
+        <div class="chip arch"><b>Qt6 / Wayland / PipeWire</b><span>Arch Linux ARM pkgs</span></div>
+      </div>
+    </div>
+    <div class="arrow">▲ runs on</div>
+
+    <div class="layer">
+      <div class="layer-head"><span class="layer-name">Base OS userland</span><span class="layer-note">the distro — this is Arch, not postmarketOS</span></div>
+      <div class="chips">
+        <div class="chip arch"><b>Arch Linux ARM</b><span>menci/archlinuxarm · pacstrap rootfs</span></div>
+        <div class="chip arch"><b>DanctNIX mobile repo</b><span>archmobile.mirror.danctnix.org</span></div>
+        <div class="chip arch"><b>systemd · NetworkManager · ModemManager</b><span>Arch Linux ARM pkgs</span></div>
+      </div>
+    </div>
+    <div class="arrow">▲ device services &amp; media</div>
+
+    <div class="layer">
+      <div class="layer-head"><span class="layer-name">Device services</span><span class="layer-note">making the phone act like a phone</span></div>
+      <div class="chips">
+        <div class="chip qc"><b>qrtr · rmtfs · tqftpserv</b><span>linux-msm · modem/DSP IPC</span></div>
+        <div class="chip qc"><b>qbootctl</b><span>linux-msm · A/B slots</span></div>
+        <div class="chip pmos"><b>q6voiced</b><span>postmarketOS · call audio PCM</span></div>
+        <div class="chip pmos"><b>81voltd</b><span>postmarketOS · VoLTE IMS</span></div>
+        <div class="chip pmos"><b>bootmac</b><span>postmarketOS · WiFi/BT MAC</span></div>
+        <div class="chip arch"><b>hexagonrpc</b><span>packaged here · sensor DSP</span></div>
+        <div class="chip arch"><b>megapixels + libmegapixels</b><span>megapixels-org · camera</span></div>
+        <div class="chip ours"><b>libmegapixels stride fix</b><span>patched here</span></div>
+      </div>
+    </div>
+    <div class="arrow">▲ talks to</div>
+
+    <div class="layer">
+      <div class="layer-head"><span class="layer-name">Kernel</span><span class="layer-note">Linux 7.2, mainline + SoC enablement</span></div>
+      <div class="chips">
+        <div class="chip kernel"><b>sm6350-mainline/linux</b><span>7.2.0 · mainline + SM6350 patches</span></div>
+        <div class="chip pmos"><b>kernel .config</b><span>postmarketOS pmaports</span></div>
+        <div class="chip ours"><b>aw88264 amp driver</b><span>written here → upstream PR #12</span></div>
+        <div class="chip ours"><b>st21nfcd NFC driver</b><span>written here → RFC ready</span></div>
+        <div class="chip ours"><b>mic + call-audio DT</b><span>written here → PR #11</span></div>
+      </div>
+    </div>
+    <div class="arrow">▲ loads</div>
+
+    <div class="layer">
+      <div class="layer-head"><span class="layer-name">Firmware &amp; silicon</span><span class="layer-note">proprietary blobs on Qualcomm SM7225 (lagoon)</span></div>
+      <div class="chips">
+        <div class="chip blob"><b>FP4-firmware</b><span>FairBlobs · adsp/cdsp/modem/wlan/venus</span></div>
+        <div class="chip qc"><b>pil-squasher</b><span>linux-msm · blob format tool</span></div>
+        <div class="chip blob"><b>Snapdragon 750G (SM7225)</b><span>the hardware</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <h2>Where each colour comes from</h2>
+  <div class="legend">
+    <div class="leg"><span class="sw" style="background:var(--o-arch-bg);border-color:var(--o-arch)"></span><div><b>Arch Linux ARM</b><p>The actual distribution. Base userland, compositor, Qt, camera app.</p><p class="mono">menci/archlinuxarm + danctnix</p></div></div>
+    <div class="leg"><span class="sw" style="background:var(--o-kernel-bg);border-color:var(--o-kernel)"></span><div><b>Kernel source</b><p>Mainline Linux with the SM6350 out-of-tree patch set.</p><p class="mono">github.com/sm6350-mainline/linux</p></div></div>
+    <div class="leg"><span class="sw" style="background:var(--o-pmos-bg);border-color:var(--o-pmos)"></span><div><b>postmarketOS</b><p>Not the OS here — the donor. The kernel config and three modem/call daemons come from pmaports.</p><p class="mono">gitlab.postmarketos.org</p></div></div>
+    <div class="leg"><span class="sw" style="background:var(--o-qc-bg);border-color:var(--o-qc)"></span><div><b>linux-msm</b><p>Qualcomm's upstream Linux team. The modem/DSP plumbing every msm phone needs.</p><p class="mono">github.com/linux-msm</p></div></div>
+    <div class="leg"><span class="sw" style="background:var(--o-desktop-bg);border-color:var(--o-desktop)"></span><div><b>Omarchy + moarchy</b><p>The desktop identity (Omarchy) and its mobile port with the phone shell (moarchy).</p><p class="mono">basecamp/omarchy · SimonSchubert</p></div></div>
+    <div class="leg"><span class="sw" style="background:var(--o-blob-bg);border-color:var(--o-blob)"></span><div><b>Proprietary firmware</b><p>Signed vendor blobs the SoC will not run without. Not open, not replaceable.</p><p class="mono">FairBlobs/FP4-firmware</p></div></div>
+    <div class="leg"><span class="sw" style="background:var(--o-ours-bg);border-color:var(--accent)"></span><div><b>Built or patched here</b><p>Kernel drivers (audio, NFC), the NFC app, the location toggle, the FP4 device package.</p><p class="mono">fp4-claude · upstream PRs #11/#12/RFC</p></div></div>
+  </div>
+
+  <div class="note"><b>So what is postmarketOS in this build?</b> Not the operating system. This is Arch Linux ARM. pmOS shows up as three things: the kernel <code>.config</code>, a few modem/call daemons (<code>q6voiced</code>, <code>81voltd</code>, <code>bootmac</code>), and — off the page — the wiki and pmaports that document how to make FP4 hardware work. It is a knowledge and parts donor, not the base.</div>
+
+  <h2>If Omarchy ships official ARM (“dragon”)</h2>
+  <p class="lede">Dragon is the presumed Omarchy-on-ARM effort — it isn't in this tree, so this maps what it could plausibly own against what it structurally cannot. The dividing line is simple: dragon is a <em>desktop</em> layer, and almost everything hard here is <em>below</em> the desktop.</p>
+  <div class="split">
+    <div class="col maybe">
+      <div class="tag">Could converge on dragon</div>
+      <h3>The desktop identity</h3>
+      <ul>
+        <li><b>Omarchy config &amp; theming <span class="conf">likely</span></b><span>If dragon publishes ARM packages, moarchy's <code>port-4x</code> patch — the work of making x86 Omarchy build for aarch64 — largely goes away. Track dragon instead of porting each release.</span></li>
+        <li><b>Package sourcing <span class="conf">likely</span></b><span>Today Omarchy is fetched and rebuilt for ARM locally. Dragon would provide that as a first-class target.</span></li>
+        <li><b>Compositor defaults <span class="conf">partial</span></b><span>Hyprland tuning and keybinds could come from dragon — but a phone needs gestures and rotation a desktop config won't carry.</span></li>
+      </ul>
+    </div>
+    <div class="col keep">
+      <div class="tag">Stays ours / upstream regardless</div>
+      <h3>Everything below the desktop</h3>
+      <ul>
+        <li><b>The whole phone shell <span class="conf">stays</span></b><span>Gestures, on-screen keyboard, dialer, control center, SIM — moarchy-specific. A desktop ARM Omarchy has no mobile UI to hand us.</span></li>
+        <li><b>Kernel + all drivers <span class="conf">stays</span></b><span>The SM6350 kernel and our audio/NFC/mic work are hardware enablement. No compositor project touches this; it belongs in mainline.</span></li>
+        <li><b>Firmware &amp; Qualcomm stack <span class="conf">stays</span></b><span>Blobs, qrtr, rmtfs, qbootctl, the modem daemons — SoC-level, identical whatever renders on top.</span></li>
+        <li><b>Sensors, camera, modem, GPS <span class="conf">stays</span></b><span>hexagonrpc, megapixels, ModemManager glue — device plumbing, not desktop.</span></li>
+      </ul>
+    </div>
+  </div>
+  <div class="note">The honest headline: dragon could let us stop maintaining the <b>desktop port</b> and theming, and maybe the base package sourcing. It would not replace the phone shell, and it touches <b>none</b> of the hard hardware work — kernel drivers, firmware, modem, audio, NFC, sensors. Becoming “independent of postmarketOS” is a separate question: even with dragon, the pmOS-derived pieces (kernel config, call-audio daemons) and the SoC enablement knowledge stay in play until that work lands in mainline.</div>
+
+  <p class="foot">Sources verified against <code>manifest.toml</code> and the pkgbuilds on branch <code>fp4-claude</code>. The dragon column is reasoning, not a repo fact — no dragon deliverables were available to check against.</p>
+</div>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "moarchy.nfc",
+  "name": "NFC",
+  "version": "1.0.0",
+  "author": "moarchy",
+  "description": "Read an NFC tag or contactless card and show what it is.",
+  "kinds": [
+    "overlay"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "Nfc.qml"
+  }
+}

@@ -261,6 +261,11 @@ version = "2.1.0"
 # VoiceMMode1 a dial goes `unknown -> terminated` immediately. Calls got worse
 # before they got better, from a change that fixed sound.
 # ---------------------------------------------------------------------------
+[81voltd]
+url = https://gitlab.postmarketos.org/modem/81voltd
+ref = v1.2.0
+version = 1.2.0
+
 [q6voiced]
 url     = "https://gitlab.postmarketos.org/postmarketOS/q6voiced"
 ref     = "0.3.1"
@@ -484,6 +489,14 @@ digest = "sha256:f7c6f64c0f246f41775e01793340c49f8e9abf3991141c25405361d56b100cc
 # 7.1.3 misbehaves, sdm670-v7.0.10 is the tag with evidence behind it.
 # ---------------------------------------------------------------------------
 [device.sargo]
+# The in-repo packages that exist ONLY for this phone, so a build targeting a
+# different one can skip them (scripts/provision.sh DEVICES=...). Derived from
+# this device package's `depends`, restricted to names pkgbuilds/ actually
+# defines, plus the device package itself.
+#
+# Getting this wrong costs a rebuild rather than a broken image: the default is
+# to build everything, and DEVICES= is opt-in.
+exclusive-packages = "linux-moarchy-sdm670 firmware-moarchy-sargo alsa-ucm-conf-moarchy-sdm670 moarchy-device-sargo"
 kernel-url    = "https://gitlab.com/sdm670-mainline/linux"
 kernel-ref    = "sdm670-v7.1.3"
 # Where the kernel config is vendored FROM, recorded so a config refresh is a
@@ -553,3 +566,116 @@ acdb-path     = "acdbdata/OEM/sdm670-intcodec-s4-snd-card/Global_cal.acdb"
 # VoiceCall verb as well as HiFi, which is what call audio needs.
 ucm-url       = "https://gitlab.com/sdm670-mainline/alsa-ucm-conf"
 ucm-ref       = "1e39c9fce12cb521bb53a6422532822b2e4faa10"
+
+# ---------------------------------------------------------------------------
+# Fairphone 4 (fp4, Qualcomm SM7225 "lagoon", a binned SM6350).
+#
+# docs/devices.md §10 listed "Fairphone codename and tier" as undecided. This
+# section is the decision, and every value in it was read off the live service
+# rather than assumed -- pmaports `main`, 2026-09-21:
+#
+#   codename  fairphone-fp4, community tier, maintained by Luca Weiss
+#   kernel    linux-postmarketos-qcom-sm6350, v7.2.0-sm6350
+#   firmware  firmware-fairphone-fp4, FairBlobs/FP4-firmware @ 2227568
+#   dtb       qcom/sm7225-fairphone-fp4
+#
+# READ docs/fairphone-4.md BEFORE BUILDING FROM THESE PINS. The port is
+# untested on hardware, and three things upstream does not have working are
+# not things this repo can fix: the built-in microphone, audio on cellular
+# calls, and Wi-Fi that stays up (pmaports#2841).
+# ---------------------------------------------------------------------------
+[device.fp4]
+# As [device.sargo]'s key above. pil-squasher is here because nothing else in
+# the tree uses it -- firmware-moarchy-fp4 is its only consumer, since sargo's
+# firmware upstream ships whole .mbn files and needs no merging.
+exclusive-packages = "linux-moarchy-sm6350 firmware-moarchy-fp4 moarchy-device-fp4 pil-squasher"
+# github.com/sm6350-mainline/linux -- mainline plus the SM6350/SM7225
+# enablement that has not landed yet. v7.2.0-sm6350 is the newest tag (checked
+# against the GitHub tag list, not against a wiki) and is what pmaports pins.
+#
+# A GitHub tarball, so the URL shape differs from sargo's GitLab one and the
+# PKGBUILD cannot share a template with linux-moarchy-sdm670. Recorded as the
+# full archive URL for that reason.
+kernel-url    = "https://github.com/sm6350-mainline/linux"
+kernel-ref    = "v7.2.0-sm6350"
+# The commit that tag points at, and what the PKGBUILD actually checks out.
+#
+# It fetches over GIT rather than as a release tarball, and that is forced
+# rather than chosen: GitHub rate-limits tarball downloads per source network
+# (`HTTP 429` from both codeload and the /archive path, for hours), while the
+# git endpoint keeps serving. A build that cannot fetch its kernel is not a
+# build, so the transport that works is the one used.
+#
+# Pinning the commit as well as the tag is strictly stronger than the tarball
+# checksum it replaces: a tag can be moved, a commit id cannot, because it is
+# derived from the tree it names. Resolved with `git ls-remote --tags` against
+# the tag above; if the two ever disagree, the tag moved and this is what
+# stops the build rather than a hash mismatch nobody can explain.
+kernel-commit = "6f7453cecfda8794cd101bb1b3bab064e245e2a8"
+
+# Where the kernel config is vendored FROM, on the same terms as sargo's: not
+# fetched at build time, so a build needs no network to know what it compiles.
+#
+# The vendored copy was verified byte-for-byte against upstream before being
+# modified -- its sha512 matched the one pmaports publishes in the kernel
+# APKBUILD's sha512sums. The ONE symbol changed afterwards is SECURITY_LANDLOCK,
+# and pkgbuilds/linux-moarchy-sm6350/PKGBUILD says why at length. It is the
+# same one-symbol change linux-moarchy-sdm670 carries, for the same reason, and
+# finding it already wrong here is the evidence that it is an Alpine-vs-Arch
+# difference and not an SDM670 quirk.
+config-url    = "https://gitlab.postmarketos.org/postmarketOS/pmaports"
+config-ref    = "main"
+config-path   = "device/community/linux-postmarketos-qcom-sm6350/config-postmarketos-qcom-sm6350.aarch64"
+
+# The proprietary firmware. Unlike sargo -- which needs four upstreams, because
+# TheMuppets' vendor dump has no modem images and no ACDB -- the FP4's blobs
+# are all in ONE repo, FairBlobs/FP4-firmware, including modem.mbn and the
+# hexagonfs tree. That is a real simplification and not an oversight: pmaports'
+# firmware-fairphone-fp4 has exactly one `source=` line too.
+#
+# A commit, not a branch, for the reason sargo's firmware pin gives: these are
+# signed blobs whose contents must not move under a phone.
+firmware-url  = "https://github.com/FairBlobs/FP4-firmware"
+firmware-ref  = "222756885ff5eb24ee89684ef8cfe860a45a54ec"
+
+# ---------------------------------------------------------------------------
+# pil-squasher -- merges Qualcomm's split firmware (`foo.mdt` + `foo.b00`,
+# `foo.b01`, ...) back into the single `foo.mbn` the kernel's PIL loader wants.
+#
+# Needed by pkgbuilds/firmware-moarchy-fp4 and by nothing else today. sargo
+# does not need it: TheMuppets' vendor dump already carries whole .mbn files,
+# while FairBlobs/FP4-firmware ships the split form, so this is a Fairphone
+# cost rather than a general one.
+#
+# Packaged here rather than taken from the AUR deliberately. The AUR has only
+# `pil-squasher-git`, which is a VCS package with no pin -- it builds whatever
+# the default branch says today, which is exactly what manifest.toml exists to
+# prevent. This follows the qbootctl precedent instead: an upstream C project,
+# pinned at a commit, at the price of being the ones who notice when it moves.
+#
+# A commit rather than a tag because upstream has never tagged a release.
+# 3c9f8b8 is HEAD as of 2026-09-21 and dates from 2024-06-11 -- the project is
+# finished rather than abandoned; it does one thing.
+#
+# `andersson/pil-squasher` redirects here; linux-msm is the canonical name now.
+# ---------------------------------------------------------------------------
+# Built and INSTALLED before the rest of pkgbuilds/, because another in-repo
+# package needs it at build time. docker/build-packages.sh reads this key.
+#
+# The in-repo loop walks pkgbuilds/ alphabetically, which puts pil-squasher
+# (16th) long after firmware-moarchy-fp4 (3rd) -- the package whose build()
+# calls it. Alphabetical order is not dependency order and nothing was making
+# it one, so the firmware build would fail with `pil-squasher: command not
+# found` on a clean builder, while succeeding on any machine that happened to
+# have run the build before.
+#
+# A list rather than a general topological sort: there is exactly one such
+# edge in this tree, and a sort that is never exercised on more than one edge
+# is a sort nobody knows is correct.
+[build]
+install-first = "pil-squasher moarchy-qcom-modem"
+
+[pil-squasher]
+url     = "https://github.com/linux-msm/pil-squasher"
+ref     = "3c9f8b8756ba6e4dbf9958570fd4c9aea7a70cf4"
+version = "r3.3c9f8b8"

@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Listen to the Fairphone 4's microphone live, on this machine's speakers.
+#
+# The point of this one is the round trip: talk at the phone, hear it here.
+# Expect a fraction of a second of lag -- it is ssh, not a low-latency link.
+#
+# NOTE: this plays sound out of THIS computer, at whatever volume it is
+# already set to. Nothing is played on the phone; its amplifiers stay muted.
+#
+# Ctrl-C to stop.
+set -euo pipefail
+
+PHONE=${FP4_HOST:-moarchy@172.16.42.1}
+KEY=${FP4_KEY:-$HOME/.ssh/id_ed25519}
+
+# Capture lives on MultiMedia2 (hw:0,1); playback has MultiMedia1 to
+# itself, which is what lets the two run at the same time.
+# The capture route is torn down when the front-end PCM closes -- PipeWire
+# suspends the idle source a few seconds after anything stops using it, and
+# the route goes with it. So assert it here rather than relying on it having
+# survived since boot. (moarchy docs/fp4-defects.md D13: the UCM profile does
+# exactly this in its EnableSequence, but PipeWire's ACP layer offers this
+# card no profile, so nothing applies it.)
+ROUTE="amixer -c 0 cset name='MultiMedia2 Mixer TX_CODEC_DMA_TX_3' 1 >/dev/null 2>&1
+       amixer -c 0 cset name='ADC1 Switch' 1 >/dev/null 2>&1"
+
+printf 'Phone mic -> this machine. Check your volume first. Ctrl-C to stop.\n'
+ssh -o ConnectTimeout=8 -i "$KEY" "$PHONE" \
+    "$ROUTE
+     arecord -D hw:0,1 -f S24_LE -r 48000 -c 2 -t raw" 2>/dev/null \
+  | aplay -f S24_LE -r 48000 -c 2 -t raw -
