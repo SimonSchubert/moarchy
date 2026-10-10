@@ -498,11 +498,11 @@ config-path   = "device/community/linux-postmarketos-qcom-sdm670/config-postmark
 # and not a branch: these are signed blobs whose contents must not move under a
 # phone, and TheMuppets rebases.
 #
-# pkgbuilds/firmware-moarchy-sargo fetches fourteen individual files from this
-# ref rather than the whole tarball, and carries a sha256 for each -- so the
-# pin and the checksums have to agree or makepkg stops. Moving this ref means
-# regenerating those hashes, which is the intended amount of friction for
-# changing what firmware a phone runs.
+# REFERENCE ONLY since devices.md D35: nothing downloads from these pins any
+# more. The firmware is Google's and may not be redistributed, so the phone
+# copies it off its own partitions (moarchy-firmware-extract). They stay as the
+# record of which upstream dumps the file list and paths were read from, and
+# as the fixture source for test-pil-squash.py.
 #
 # Same commit postmarketOS's firmware-google-sargo uses, which is where the
 # file list came from.

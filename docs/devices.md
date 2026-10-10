@@ -790,6 +790,34 @@ on `swh-plugins` and carries the filter graph it runs.
 > against music, and they are live-adjustable with `pw-cli s <id> Props` for
 > exactly that reason.
 
+**D35** *Added 2026-10-10, NOT YET BUILT OR MEASURED.* **The proprietary
+firmware is no longer redistributed; the phone copies it off its own
+partitions.** `firmware-moarchy-sargo` is gone. `moarchy-device-sargo` carries
+`moarchy-firmware-extract` and enables its unit before `sysinit.target`.
+
+> Google's licence for the sargo vendor binaries allows use on the device and
+> "non-commercial redistribution for academic purposes only"; publishing the
+> blobs in images and in the `repo` release was neither. The firmware package
+> was pulled from the `repo` release on 2026-10-10, and `repo/build.sh` now
+> leaves it out.
+>
+> `flash.sh` writes boot, vbmeta and userdata only, so a phone that ever ran
+> stock Android still holds every file the old package shipped: `vendor_<slot>`
+> carries `/firmware` (TheMuppets' tree is a dump of it), `modem_<slot>` carries
+> `image/` (where flamingradian's modem repo was squashed from). On first boot
+> the extractor mounts both read-only, squashes `a615_zap`, `ipa_fws` and
+> `modem` with the same `pil-squash.py`, writes to `/usr/lib/firmware/updates/`
+> -- searched before `/usr/lib/firmware/`, owned by no package, so a phone that
+> still has the old package installed has no conflict -- and reboots once so
+> the DSPs that auto-boot come up with their firmware.
+>
+> To measure on the handset before this ships: (1) where stock keeps
+> `Global_cal.acdb` -- searched for under the vendor `etc/`, preferring the
+> `sdm670-intcodec-s4-snd-card` directory LineageOS copies it from; (2) that
+> `pil-squash.py` reproduces `modem.mbn` as flamingradian's repo has it
+> (proven so far on `a615_zap` only); (3) that the vendor partition mounts
+> read-only as ext4; (4) Wi-Fi, sound and GPU after the one reboot. **?**
+
 **D30** *Added 2026-09-15, fixed the same day.* **The camera's colour needed a
 profile and a patched megapixels.** `moarchy-device-sargo` generates
 `google,b4s4-sdm670,{Rear,Front}.dcp`; `pkgbuilds/megapixels` carries a

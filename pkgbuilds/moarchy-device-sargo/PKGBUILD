@@ -51,7 +51,10 @@ pkgver=$_ver
 #    package was deleted -- a load-bearing WHY that would otherwise have gone
 #    with the device. Package content changed and 0.5.0-1 is published, so this
 #    has to move or the build is skipped.
-pkgrel=2
+# 3: firmware-moarchy-sargo is gone; this package now carries
+#    moarchy-firmware-extract, which copies the blobs off the phone's own vendor
+#    and modem partitions on first boot instead of redistributing them.
+pkgrel=3
 pkgdesc="Google Pixel 3a (sargo) hardware support for moarchy"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
@@ -79,10 +82,12 @@ conflicts=('moarchy-device')
 # postmarketOS was the same missing file and was misread at the time as merely
 # an artifact of their minimal initramfs.
 #
-# firmware-moarchy-sargo carries the proprietary half: the a615_zap shader the
-# Adreno needs on top of that free microcode, plus adsp, cdsp, ipa_fws, venus,
-# wlanmdsp and -- since 0.2.2-2 -- mba and modem. That is every path the device
-# tree names, with nothing held back.
+# The proprietary half -- the a615_zap shader the Adreno needs on top of that
+# free microcode, plus adsp, cdsp, ipa_fws, venus, wlanmdsp, mba and modem --
+# is no longer a package. Google's licence does not allow redistributing it, so
+# moarchy-firmware-extract (below) copies it off the phone's own vendor and
+# modem partitions on first boot. That is still every path the device tree
+# names, with nothing held back; python is for the pil-squash it runs.
 #
 # moarchy-qcom-modem is Wi-Fi, which is not what its name suggests and is the
 # reason that package's header is as long as it is. The short version: WCN3990's
@@ -105,7 +110,7 @@ conflicts=('moarchy-device')
 # Measured on the handset, and measured fixed (D28).
 #
 # alsa-ucm-conf-moarchy-sdm670 is the second half of audio. The first half is
-# Global_cal.acdb in firmware-moarchy-sargo, without which qcom-q6core will not
+# Global_cal.acdb, extracted by moarchy-firmware-extract, without which qcom-q6core will not
 # probe and there is no sound card at all; this is what makes the card, once it
 # exists, appear to PipeWire as an earpiece, a speaker and a microphone rather
 # than as nothing. Arch's alsa-ucm-conf has sdm845 and sc7180 and no sdm670.
@@ -139,7 +144,7 @@ depends=(
   'linux-moarchy-sdm670'
   'linux-firmware'
   'linux-firmware-qcom'
-  'firmware-moarchy-sargo'
+  'python'
   'moarchy-qcom-modem'
   'bootmac'
   'alsa-ucm-conf-moarchy-sdm670'
@@ -150,8 +155,10 @@ depends=(
 
 source=('hypr-device.lua' 'device.conf'
         'qbootctl-mark-successful.service' 'q6voiced.conf'
-        'make-dcp.py' 'loudness.conf')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+        'make-dcp.py' 'loudness.conf'
+        'moarchy-firmware-extract' 'moarchy-firmware-extract.service'
+        'pil-squash.py')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 # The camera colour profiles are GENERATED, not committed. make-dcp.py's header
 # says why: a .dcp is a small TIFF whose payload is nine numbers twice over, and
@@ -162,6 +169,18 @@ build() {
 }
 
 package() {
+  # The firmware, from the phone itself (see moarchy-firmware-extract's
+  # header). Enabled by symlink for the same reason qbootctl's unit is: it must
+  # hold from the moment the package is installed, including in an image that
+  # never completes a first boot -- without it there is no Wi-Fi to fix it with.
+  install -Dm755 "$srcdir/moarchy-firmware-extract" "$pkgdir/usr/bin/moarchy-firmware-extract"
+  install -Dm644 "$srcdir/pil-squash.py" "$pkgdir/usr/lib/moarchy/pil-squash.py"
+  install -Dm644 "$srcdir/moarchy-firmware-extract.service" \
+    "$pkgdir/usr/lib/systemd/system/moarchy-firmware-extract.service"
+  install -d "$pkgdir/usr/lib/systemd/system/sysinit.target.wants"
+  ln -s ../moarchy-firmware-extract.service \
+    "$pkgdir/usr/lib/systemd/system/sysinit.target.wants/moarchy-firmware-extract.service"
+
   install -Dm644 "$srcdir/device.conf" "$pkgdir/usr/share/moarchy/device/device.conf"
 
   # This device's hardware profile for the compositor (docs/devices.md D6). A

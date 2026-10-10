@@ -256,7 +256,8 @@ say "pacstrap the rootfs"
 #
 # The hardware is named ONCE, in moarchy-device-$DEVICE, and this line installs
 # that package rather than its contents (docs/devices.md D2): the kernel, the
-# firmware and the modem stack are all in its depends.
+# firmware extractor and the modem stack are all in its depends. The
+# proprietary firmware itself is never in an image (devices.md D35).
 #
 # moarchy-meta depends on the VIRTUAL name `moarchy-device` (D5), so naming the
 # concrete package here is what decides which phone this image is for. It is

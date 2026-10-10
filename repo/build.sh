@@ -57,9 +57,13 @@ gpg --list-secret-keys "$KEYID" >/dev/null 2>&1 ||
 say "assembling $DIST"
 rm -rf "$DIST"; mkdir -p "$DIST"
 cp "$PKGDIR"/*.pkg.tar.* "$DIST/"
+# The Pixel 3a firmware is Google/Qualcomm's, and its licence allows use on the
+# device, not redistribution, so it is no longer built (devices.md D35). This
+# guards against a stale file left in packages/ by an older build.
+rm -f "$DIST"/firmware-moarchy-sargo-*
 # Named, not counted. Eleven is eleven whether or not one of them is last
 # week's; the names are what make a stale one visible before it is signed.
-pkgset_list "$PKGDIR" | sed 's/^/    /'
+pkgset_list "$DIST" | sed 's/^/    /'
 
 # The armored public key, published beside the packages.
 #

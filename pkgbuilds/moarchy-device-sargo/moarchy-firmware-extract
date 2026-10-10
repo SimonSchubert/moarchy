@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+# Copy the Pixel 3a's proprietary firmware off the phone's own partitions.
+#
+#   moarchy-firmware-extract            # extract, if not already done
+#   moarchy-firmware-extract --force    # extract again
+#   moarchy-firmware-extract --reboot   # and reboot if anything was extracted
+#
+# WHY THIS EXISTS INSTEAD OF A PACKAGE. The blobs are Google's and Qualcomm's,
+# and Google's licence for them allows use on the device, not redistribution.
+# moarchy used to ship them as firmware-moarchy-sargo, in every image and in the
+# public pacman repo. It no longer does: flash.sh writes boot, vbmeta and
+# userdata and nothing else, so the stock vendor and modem partitions are still
+# on the phone, carrying exactly these files. They are read from there.
+#
+# WHERE EACH FILE LIVES, from the same dumps the old package pinned:
+#   vendor_<slot> (ext4)  firmware/  a615_zap.mdt+bNN, ipa_fws.mdt+bNN, adsp.mbn,
+#                                    cdsp.mbn, venus.mbn, wlanmdsp.mbn,
+#                                    adspr/adspua/cdspr/modemuw.jsn
+#                         etc/acdbdata/  Global_cal.acdb, for sdm670-intcodec-s4-snd-card
+#   modem_<slot> (vfat)   image/     mba.mbn, modem.mdt+bNN, modemr.jsn
+#
+# UNVERIFIED ON HARDWARE: the vendor path of Global_cal.acdb (LineageOS keeps
+# it in its device repo, copied from stock; it is searched for rather than
+# assumed), and pil-squash.py on modem.mdt (proven only on a615_zap).
+#
+# WHERE IT GOES: /usr/lib/firmware/updates/, which the kernel searches before
+# /usr/lib/firmware/. No package owns that path, so a phone that still carries
+# the old firmware-moarchy-sargo has no file conflict, and these copies win.
+set -euo pipefail
+
+DEST=${MOARCHY_FW_DEST:-/usr/lib/firmware/updates/qcom/sdm670/sargo}
+STAMP=$DEST/.complete
+SQUASH=${MOARCHY_SQUASH:-/usr/lib/moarchy/pil-squash.py}
+# Overridable only so the script can be tested against loop devices.
+PARTS=${MOARCHY_PARTDIR:-/dev/disk/by-partlabel}
+
+FORCE=0 REBOOT=0
+for a in "$@"; do
+  case $a in
+    --force) FORCE=1 ;;
+    --reboot) REBOOT=1 ;;
+    *) echo "usage: $0 [--force] [--reboot]" >&2; exit 2 ;;
+  esac
+done
+
+say() { printf '%s\n' "$*"; }
+die() { printf '!! %s\n' "$*" >&2; exit 1; }
+
+[ "$FORCE" = 1 ] || [ ! -e "$STAMP" ] || { say "already extracted ($STAMP)"; exit 0; }
+[ "$(id -u)" = 0 ] || die "run as root"
+
+WORK=$(mktemp -d)
+cleanup() {
+  for m in "$WORK"/mnt-*; do mountpoint -q "$m" 2>/dev/null && umount "$m"; done
+  rm -rf "$WORK"
+}
+trap cleanup EXIT
+
+# The slot we booted from first, then the other one. Both normally hold the
+# same vendor and modem; trying both covers a phone whose inactive slot is the
+# only one Android ever finished writing.
+cur=$(sed -n 's/.*androidboot\.slot_suffix=\(_[ab]\).*/\1/p' /proc/cmdline)
+case $cur in _a) slots="_a _b" ;; _b) slots="_b _a" ;; *) slots="_a _b" ;; esac
+
+mount_part() { # <label> <mountpoint>
+  local dev=$PARTS/$1
+  [ -e "$dev" ] || return 1
+  mkdir -p "$2"
+  # noload: an Android ext4 may want a journal replay, which a read-only
+  # mount must not attempt. vfat ignores it, so it is only tried for ext4.
+  mount -o ro,noload "$dev" "$2" 2>/dev/null || mount -o ro "$dev" "$2" 2>/dev/null
+}
+
+STAGE=$WORK/stage
+mkdir -p "$STAGE"
+
+VENDOR="" MODEM=""
+for s in $slots; do
+  if [ -z "$VENDOR" ] && mount_part "vendor$s" "$WORK/mnt-vendor$s"; then
+    if [ -f "$WORK/mnt-vendor$s/firmware/a615_zap.mdt" ]; then VENDOR=$WORK/mnt-vendor$s
+    else umount "$WORK/mnt-vendor$s"; fi
+  fi
+  if [ -z "$MODEM" ] && mount_part "modem$s" "$WORK/mnt-modem$s"; then
+    if [ -f "$WORK/mnt-modem$s/image/modem.mdt" ]; then MODEM=$WORK/mnt-modem$s
+    else umount "$WORK/mnt-modem$s"; fi
+  fi
+done
+[ -n "$VENDOR" ] || die "no vendor partition with firmware/ -- was stock Android ever installed on this phone?"
+[ -n "$MODEM" ]  || die "no modem partition with image/modem.mdt -- Wi-Fi and calls need it"
+
+fw=$VENDOR/firmware
+python3 "$SQUASH" "$fw/a615_zap.mdt" "$STAGE/a615_zap.mbn"
+python3 "$SQUASH" "$fw/ipa_fws.mdt"  "$STAGE/ipa_fws.mbn"
+python3 "$SQUASH" "$MODEM/image/modem.mdt" "$STAGE/modem.mbn"
+for f in adsp.mbn cdsp.mbn venus.mbn wlanmdsp.mbn adspr.jsn adspua.jsn cdspr.jsn modemuw.jsn; do
+  cp "$fw/$f" "$STAGE/$f"
+done
+cp "$MODEM/image/mba.mbn" "$MODEM/image/modemr.jsn" "$STAGE/"
+
+# Searched for, not assumed: the card's own directory if it exists, otherwise
+# the only Global_cal.acdb on the partition. Ambiguity is an error, because the
+# wrong calibration is a phone with sound in the wrong places.
+acdb=$(find "$VENDOR/etc" -path '*sdm670-intcodec-s4-snd-card*' -name Global_cal.acdb 2>/dev/null | head -1)
+if [ -z "$acdb" ]; then
+  mapfile -t found < <(find "$VENDOR/etc" -name Global_cal.acdb 2>/dev/null)
+  [ "${#found[@]}" = 1 ] || die "expected one Global_cal.acdb under vendor/etc, found ${#found[@]} -- without it there is no sound card"
+  acdb=${found[0]}
+fi
+cp "$acdb" "$STAGE/Global_cal.acdb"
+
+# Shape checks before anything replaces a working set. A squash that produced
+# nothing, or a modem image that is not a Hexagon ELF, fails here and names the
+# file -- not at boot as a black screen or a phone with no Wi-Fi.
+for f in "$STAGE"/*; do [ -s "$f" ] || die "$(basename "$f") is empty"; done
+for f in mba.mbn modem.mbn; do
+  [ "$(od -An -c -N4 "$STAGE/$f" | tr -d ' ')" = "177ELF" ] &&
+  [ "$(od -An -tx1 -N2 -j18 "$STAGE/$f" | tr -d ' ')" = "a400" ] ||
+    die "$f is not a Hexagon ELF"
+done
+
+install -d "$DEST"
+install -m644 "$STAGE"/* "$DEST/"
+date -u +%Y-%m-%dT%H:%M:%SZ > "$STAMP"
+say "extracted $(ls "$STAGE" | wc -l) files to $DEST"
+
+# The DSPs that auto-boot did so before this ran, and failed for want of these
+# files; the rest of the audio chain deferred behind them. One reboot, once,
+# is the reliable way to bring every link up in order.
+if [ "$REBOOT" = 1 ]; then
+  say "rebooting so the DSPs start with their firmware"
+  systemctl --no-block reboot
+fi

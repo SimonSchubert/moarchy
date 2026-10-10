@@ -13,7 +13,7 @@ image/boot/android-image.py makes against mkbootimg, and for the same reason.
 
 It is not trusted on its say-so. The vendor tree ships `a615_zap.elf` beside
 the split pieces, which is the unsplit original, and
-pkgbuilds/firmware-moarchy-sargo/test-pil-squash.py checks that squashing the
+pkgbuilds/moarchy-device-sargo/test-pil-squash.py checks that squashing the
 pieces reproduces that file byte-for-byte.
 """
 

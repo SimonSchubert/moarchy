@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Prove pil-squash.py against the vendor's own unsplit blob.
 
-Run: python3 pkgbuilds/firmware-moarchy-sargo/test-pil-squash.py
+Run: python3 pkgbuilds/moarchy-device-sargo/test-pil-squash.py
 
 pil-squash.py replaces postmarketOS's `pil-squasher`, which is packaged for
 Alpine and not for Arch. Replacing a tool is only defensible if the replacement

@@ -1,0 +1,21 @@
+[Unit]
+Description=Copy the Pixel 3a firmware from the phone's own partitions
+# Before sysinit, so on the first boot the reboot it asks for happens before
+# moarchy-firstboot or a login, not in the middle of either.
+DefaultDependencies=no
+After=local-fs.target
+Before=sysinit.target shutdown.target
+Conflicts=shutdown.target
+# Once per phone. Deleting the stamp, or `moarchy-firmware-extract --force`,
+# extracts again.
+ConditionPathExists=!/usr/lib/firmware/updates/qcom/sdm670/sargo/.complete
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/moarchy-firmware-extract --reboot
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=sysinit.target

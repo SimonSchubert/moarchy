@@ -180,11 +180,21 @@ sec "the Wi-Fi chain (D27)"
 # producing that exact picture, so each is asserted separately.
 #
 # 1. The firmware the modem DSP boots from, and the WLAN image that runs on it.
-_fwd=$R/usr/lib/firmware/qcom/sdm670/sargo
-for _f in mba.mbn modem.mbn wlanmdsp.mbn; do
-  if [ -s "$_fwd/$_f" ]; then ok "firmware $_f present"
-  else no "no $_fwd/$_f -- the modem DSP never boots, so the WLAN firmware never runs"; fi
-done
+# Not in the image: Google's licence does not allow redistributing it, so
+# moarchy-firmware-extract copies it off the phone's own partitions on first
+# boot. What the image must carry is that extractor, enabled -- and must NOT
+# carry is any of the blobs themselves.
+[ -x "$R/usr/bin/moarchy-firmware-extract" ] && [ -s "$R/usr/lib/moarchy/pil-squash.py" ] \
+  && ok "moarchy-firmware-extract present" \
+  || no "no moarchy-firmware-extract -- the modem DSP never gets its firmware, so neither does WLAN"
+[ -L "$R/usr/lib/systemd/system/sysinit.target.wants/moarchy-firmware-extract.service" ] \
+  && ok "moarchy-firmware-extract.service enabled" \
+  || no "moarchy-firmware-extract.service not enabled -- first boot never extracts the firmware"
+_blobs=$(find "$R/usr/lib/firmware/qcom/sdm670" "$R/usr/lib/firmware/updates" \
+  \( -name '*.mbn' -o -name '*.jsn' -o -name '*.acdb' \) 2>/dev/null | head -5)
+[ -z "$_blobs" ] \
+  && ok "no proprietary sargo firmware in the image" \
+  || no "proprietary firmware in the image, which must not be redistributed: $_blobs"
 
 # 2. The protection-domain mapper, which is the KERNEL's on this SoC: the
 # sdm670 table in qcom_pd_mapper.c names the WLAN domain ath10k looks up, and
@@ -257,9 +267,8 @@ sec "the audio chain (D29, D32)"
 #
 # 1. The calibration blob. qcom-q6core will not probe without it, q6afe sits on
 # q6core, and the end of that is /proc/asound/cards reading "no soundcards".
-[ -s "$R/usr/lib/firmware/qcom/sdm670/sargo/Global_cal.acdb" ] \
-  && ok "Global_cal.acdb present (q6core probes, so there is a sound card)" \
-  || no "no Global_cal.acdb -- qcom-q6core will not probe and the phone is silent"
+# Extracted on first boot with the rest (see the Wi-Fi chain above), so there
+# is nothing for the image to carry and nothing to check here.
 
 # 2. The use-case profile. Without it the card exists and PipeWire shows no
 # sink and no source, because WirePlumber will not expose a card it cannot
