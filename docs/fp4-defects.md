@@ -535,16 +535,22 @@ standby drains the battery. That is the next session's focus; the "Holder of
 **Findings 2026-10-11 (timed suspends via RTC alarm + `systemctl suspend`, on
 battery unless noted; counters from `/sys/kernel/debug/qcom_stats`).**
 
-- **The night that prompted it:** 100% -> 27% overnight; one s2idle stretch of
+- **The night that prompted it** (WoWLAN on, so WiFi stayed associated all night):
+  100% -> 27% overnight; one s2idle stretch of
   395 min took 87% -> 34%, i.e. **~8%/h while suspended** (D28 had measured
   ~1%/h in September). s2idle itself holds (the D29 abort fix works); the SoC
   never collapses: `aosd`/`cxsd`/`ddr` 0 after 11 h, `adsp` and `modem` sleep
   Count 0, only `cdsp` counts.
-- **WoWLAN costs about half of that.** 30-min runs: WoWLAN on 14.7%/h, WoWLAN
-  set to `none` 7.3%/h (low-battery gauge, so the absolute numbers are rough,
-  the ratio is not). WoWLAN keeps WiFi associated through suspend with radio
-  power-save off (D5), and the WLAN firmware runs on the modem DSP. Not shipped
-  in the image; the test setting on the phone is now `none`.
+- **WoWLAN's cost is NOT yet measured (correction).** Run B was meant to turn it
+  off with `wake-on-wlan none`, but `none` is not a valid nmcli value; the command
+  failed and the connection kept `magic,disconnect`, so A (14.7%/h) and B (7.3%/h)
+  both ran with WiFi associated through suspend; the gap is gauge noise at low
+  charge, not WoWLAN. The value that restores the original behaviour is
+  `default`: then mac80211 deauthenticates before `PM: suspend entry` (checked in
+  dmesg order) and reassociates ~5 s after resume. On the phone a local policy
+  (`/usr/local/sbin/fp4-wowlan-policy`, udev on `pm7250b-charger` change + a boot
+  unit) now sets `magic,disconnect` only while the charger is online and
+  `default` on battery. Not in the image.
 - **Holder of `cx` found: the Bluetooth UART.** `pm_genpd_summary` showed exactly
   one consumer of `cx` at perf 256: `884000.serial` (the `hci_uart` serdev,
   `active`), in suspend too. `rfkill block bluetooth` runtime-suspends it and
@@ -562,7 +568,8 @@ battery unless noted; counters from `/sys/kernel/debug/qcom_stats`).**
   has 20 s2idle entries, so the apps RSC does hand over its sleep votes.
 - **All three removed (BT blocked, QCE unbound, GCC synced), unplugged:** still
   `aosd`/`cxsd`/`ddr` +0, `adsp`/`modem` +0 over 16 min; battery 39 -> 38%
-  (~4%/h, weak at 1% resolution, vs 7.3%/h without them). The same outcome as
+  (~4%/h, weak at 1% resolution; that run also still had WiFi associated
+  through suspend, see the correction above). The same outcome as
   SM8550 (portare-ch/portareos#505: sync_state fixed, counters still 0). What
   still blocks the collapse is on the DSP side (ADSP/modem never record a sleep,
   even with audio, sensors, ModemManager and WiFi off) or a firmware bandwidth
