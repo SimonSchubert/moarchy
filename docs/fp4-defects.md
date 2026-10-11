@@ -532,6 +532,42 @@ reason the phone is not yet useful to carry:** the SoC never reaches deep sleep
 standby drains the battery. That is the next session's focus; the "Holder of
 `cx` NOT yet pinned" and "Ruled out" notes below are the starting point.
 
+**Findings 2026-10-11 (timed suspends via RTC alarm + `systemctl suspend`, on
+battery unless noted; counters from `/sys/kernel/debug/qcom_stats`).**
+
+- **The night that prompted it:** 100% -> 27% overnight; one s2idle stretch of
+  395 min took 87% -> 34%, i.e. **~8%/h while suspended** (D28 had measured
+  ~1%/h in September). s2idle itself holds (the D29 abort fix works); the SoC
+  never collapses: `aosd`/`cxsd`/`ddr` 0 after 11 h, `adsp` and `modem` sleep
+  Count 0, only `cdsp` counts.
+- **WoWLAN costs about half of that.** 30-min runs: WoWLAN on 14.7%/h, WoWLAN
+  set to `none` 7.3%/h (low-battery gauge, so the absolute numbers are rough,
+  the ratio is not). WoWLAN keeps WiFi associated through suspend with radio
+  power-save off (D5), and the WLAN firmware runs on the modem DSP. Not shipped
+  in the image; the test setting on the phone is now `none`.
+- **Holder of `cx` found: the Bluetooth UART.** `pm_genpd_summary` showed exactly
+  one consumer of `cx` at perf 256: `884000.serial` (the `hci_uart` serdev,
+  `active`), in suspend too. `rfkill block bluetooth` runtime-suspends it and
+  `cx`/`mx` drop to `off-0` even awake. Real fix still to find (the UART should
+  release `cx` while BT is idle or across suspend, as 0007 does for the console).
+- **A permanent DDR vote: the crypto engine.** `1dfa000.crypto` (`qcrypto`, built
+  in, runtime PM `unsupported`) holds 393600 on gemnoc/llcc forever. Unbinding it
+  (`echo 1dfa000.crypto > /sys/bus/platform/drivers/qcrypto/unbind`) removes it.
+  Kernel crypto has the ARM CE instructions, so QCE is likely dispensable.
+- **GCC never reaches `sync_state()`:** `gcc-sm6350 100000.clock-controller:
+  sync_state() pending due to 3d6a000.gmu` (the GMU has no driver of its own; the
+  "drm/msm: Attach a driver to GMU" series addresses it). Forced at runtime with
+  `printf 1 > /sys/bus/platform/devices/100000.clock-controller/state_synced`.
+- **CPU side is fine:** `power-domain-cpu-cluster0` state S2 (`cluster_aoss_sleep`)
+  has 20 s2idle entries, so the apps RSC does hand over its sleep votes.
+- **All three removed (BT blocked, QCE unbound, GCC synced), unplugged:** still
+  `aosd`/`cxsd`/`ddr` +0, `adsp`/`modem` +0 over 16 min; battery 39 -> 38%
+  (~4%/h, weak at 1% resolution, vs 7.3%/h without them). The same outcome as
+  SM8550 (portare-ch/portareos#505: sync_state fixed, counters still 0). What
+  still blocks the collapse is on the DSP side (ADSP/modem never record a sleep,
+  even with audio, sensors, ModemManager and WiFi off) or a firmware bandwidth
+  requirement; or the ADSP/modem firmware does not publish its stats at all.
+
 **Status: OPEN (found 2026-10-01, on the flashed 0.5.0 public build).** The
 suspend path works but the SoC never stays in s2idle: it enters and exits in
 ~0.5-1.5 s every time. This is why battery is `P` and why D28's overnight figures
