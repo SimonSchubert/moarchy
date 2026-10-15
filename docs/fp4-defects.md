@@ -24,6 +24,7 @@ configuring. `WONTFIX` — understood and deliberately left.
 | [D22](#d22) | The touchscreen controller logs recurring i2c failures | **OPEN** |
 | [D23](#d23) | The camera's CSI PHY supplies are undescribed, and a clock sticks on | **OPEN** |
 | [D29](#d29) | s2idle aborts in ~2s: serial-console RX wakeup (irq 172). Fixed by mainline `d0cd9c8d0fd5` (qcom-geni force-suspend), VALIDATED on FP4 (holds 21s). udev rule is the stopgap until the kernel carries it. Deep-collapse depth cap is a separate open bug | **abort FIXED (mainline fix validated); depth open** |
+| [D33](#d33) | No modem after the first suspend: ModemManager 1.24.2 aborts on every suspend/stop on IPA modems (multiplexed-bearer assertion), so calls broke from the 10-10 image on | **FIX APPLIED -- verify on next image** |
 
 ---
 
@@ -575,6 +576,26 @@ battery unless noted; counters from `/sys/kernel/debug/qcom_stats`).**
   even with audio, sensors, ModemManager and WiFi off) or a firmware bandwidth
   requirement; or the ADSP/modem firmware does not publish its stats at all.
 
+**Findings 2026-10-15 (battery, timed suspends):**
+
+- **Every measured night had WoWLAN on.** The 10-11 udev/boot policy never ran
+  after the first plug-in (no uevent on unplug; at boot WiFi was not up yet), so
+  the connection kept `magic,disconnect`. Replaced by a `system-sleep` hook that
+  sets the kernel's WoWLAN right before each suspend from the charger state
+  (NM set to `ignore`; mac80211 deauthenticates when no trigger is configured).
+- **Nights:** 10-11 (BT blocked, QCE unbound, GCC synced, but WoWLAN on) 8.7%/h,
+  ran flat at 04:30; 10-14 day 9.1%/h; 10-14/15 night 7.4%/h while continuously
+  suspended for 8.5 h. So the drain is in suspend itself, not frequent waking.
+- **WoWLAN off, modem connected (M1): 4.7%/h. Plus modem radio in low power
+  (M2b, 63 min): 4.7%/h.** The modem radio is not the drain (its sleep counter
+  moves once the radio is low, +8, but the battery does not care).
+- **In suspend the CPUs are quiet:** a 10-min s2idle added only ~8900 IPIs incl.
+  resume and WiFi reconnect. (Awake idle, by contrast, runs ~3400 function-call
+  IPIs/s and ~860 apps_rsc interrupts/s -- a separate awake-power problem.)
+- So ~4.7%/h (~180 mA) is a quiet SoC that never leaves the nominal corner, which
+  points back at the Linux-side holders (BT UART `cx`, QCE DDR vote, GCC
+  sync_state) that have only ever been tested together with WoWLAN on.
+
 **Status: OPEN (found 2026-10-01, on the flashed 0.5.0 public build).** The
 suspend path works but the SoC never stays in s2idle: it enters and exits in
 ~0.5-1.5 s every time. This is why battery is `P` and why D28's overnight figures
@@ -816,3 +837,36 @@ so the fork/pmaports pull it, with our FP4 validation as the justification - a n
 issue, not an MR of an under-review patch. Separate open item: the deep-collapse
 depth cap (what still holds `cx`/blocks `cxsd`), and the compositor not keeping the panel
 dpms-off.
+
+## D33 -- no modem after the first suspend: ModemManager aborts on IPA modems {#d33}
+
+**Status: FIX APPLIED 2026-10-15 -- verify on the next image.** Found when calls
+stopped working: `mmcli -L` said "No modems were found" while the modem
+remoteproc, rmtfs, tqftpserv and q6voiced were all up.
+
+**Cause.** ModemManager 1.24.2 (pulled in by the 10-10 image build; earlier
+images had an older one) aborts in its cleanup:
+
+    Bail out! ERROR:../ModemManager/src/mm-iface-modem.c:6779:mm_iface_modem_count_bearers: assertion failed: (max >= ctx.count)
+
+70 times between 10-10 and 10-15 -- at nearly every suspend, and on every
+`systemctl stop`. systemd restarts it, but the restarted daemon's modem setup is
+cancelled by the suspend in progress ("[device qcom-soc] error initializing:
+Operation was cancelled") and never retried, so the modem stays gone until the
+daemon is restarted by hand. Read from the 1.24.2 source:
+`modem_create_bearer_list()` gives IPA (multiplex-only) modems
+`max_active_bearers = 0`, and the bearer count that commit `01208cc6`
+("base-manager: increase suspend timeout for each active bearer") added to every
+cleanup path counts the connected multiplexed bearer against that 0. Upstream:
+issue #1013 ("Assertion failing on resume from suspend on Beryllium", the Poco
+F1, also IPA), fixed by MR !1401 / commit `0edcb916` ("base-manager: fix cleanup
+of multiplexed bearers"), not in any 1.24.x release.
+
+**Fix.** `--test-no-suspend-resume`, which skips ModemManager's sleep handling (the
+modem stays registered through suspend, which a phone wants anyway).
+`--test-quick-suspend-resume` (what postmarketOS ships) was tried first and does
+NOT avoid it: its terse path runs the same count. Shipped as
+`default/systemd/system/ModemManager.service.d/10-moarchy-no-suspend-resume.conf`
+in `moarchy` pkgrel 16; on the handset as an /etc drop-in. Verified: two timed
+suspends, same ModemManager PID, modem `connected` after each. Drop it once a
+ModemManager containing `0edcb916` is in the repos.

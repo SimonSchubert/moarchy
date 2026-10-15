@@ -244,7 +244,7 @@ pkgver=$_ver
 #    boot was a new device to the router; on the FP4 the router's pool filled
 #    and DHCPv4 refused the phone outright. Verified: derived MAC, identical
 #    across reconnects.
-pkgrel=15
+pkgrel=16
 pkgdesc="Omarchy's look, keybindings and theming on a phone, under Hyprland"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
@@ -558,6 +558,9 @@ package() {
     "$pkgdir/usr/lib/NetworkManager/conf.d/30-moarchy-wifi-mac.conf"
 
   # --- systemd -------------------------------------------------------------
+  # ModemManager 1.24.2 crashes on suspend on IPA modems; see the drop-in.
+  install -Dm644 "$_repo/default/systemd/system/ModemManager.service.d/10-moarchy-no-suspend-resume.conf" \
+    "$pkgdir/usr/lib/systemd/system/ModemManager.service.d/10-moarchy-no-suspend-resume.conf"
   install -Dm644 "$_repo/default/systemd/system/moarchy-firstboot.service" \
     "$pkgdir/usr/lib/systemd/system/moarchy-firstboot.service"
   install -Dm644 "$_repo/default/systemd/system/moarchy-led-perms.service" \
