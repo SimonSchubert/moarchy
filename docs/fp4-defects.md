@@ -580,9 +580,14 @@ battery unless noted; counters from `/sys/kernel/debug/qcom_stats`).**
 
 - **Every measured night had WoWLAN on.** The 10-11 udev/boot policy never ran
   after the first plug-in (no uevent on unplug; at boot WiFi was not up yet), so
-  the connection kept `magic,disconnect`. Replaced by a `system-sleep` hook that
-  sets the kernel's WoWLAN right before each suspend from the charger state
-  (NM set to `ignore`; mac80211 deauthenticates when no trigger is configured).
+  the connection kept `magic,disconnect`. Replaced by a `system-sleep` hook
+  (`/usr/lib/systemd/system-sleep/fp4-wowlan`) that decides right before each
+  suspend from the charger state. NetworkManager must keep `magic,disconnect`:
+  with `ignore`/`default` NM itself takes WiFi down at PrepareForSleep (before
+  any hook), which is what the earlier "WiFi drops before suspend entry" was,
+  and WoWLAN can then never wake it. On battery the hook disables the triggers
+  and disconnects WiFi itself; on the charger it leaves it associated. Verified:
+  on the charger a magic packet woke the phone in 10 s.
 - **Nights:** 10-11 (BT blocked, QCE unbound, GCC synced, but WoWLAN on) 8.7%/h,
   ran flat at 04:30; 10-14 day 9.1%/h; 10-14/15 night 7.4%/h while continuously
   suspended for 8.5 h. So the drain is in suspend itself, not frequent waking.
@@ -867,6 +872,10 @@ modem stays registered through suspend, which a phone wants anyway).
 `--test-quick-suspend-resume` (what postmarketOS ships) was tried first and does
 NOT avoid it: its terse path runs the same count. Shipped as
 `default/systemd/system/ModemManager.service.d/10-moarchy-no-suspend-resume.conf`
-in `moarchy` pkgrel 16; on the handset as an /etc drop-in. Verified: two timed
-suspends, same ModemManager PID, modem `connected` after each. Drop it once a
+in `moarchy` pkgrel 16; on the handset as an /etc drop-in. Verified (17:45):
+three suspends, same ModemManager PID, modem `connected` after each. (A first
+"verification" that morning was invalid: the drop-in write had silently failed
+while the phone slept, the quick-mode drop-in stayed, and that one crashed at
+four more suspends that day.) The shutdown path still hits the assertion, so a
+stop or reboot leaves a core dump; harmless until 0edcb916 lands. Drop it once a
 ModemManager containing `0edcb916` is in the repos.
