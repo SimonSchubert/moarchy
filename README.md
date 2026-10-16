@@ -108,6 +108,14 @@ https://pkgs.omarchy.org/stable/x86_64/omarchy.db  ->  200  (211 packages)
 https://pkgs.omarchy.org/stable/aarch64/omarchy.db ->  200  (34 packages, app catalog only)
 ```
 
+> **Update 2026-10-16:** no longer true on the edge channel. Upstream now
+> supports aarch64 (Apple Silicon, Snapdragon laptops, NVIDIA N1x/GB10, generic
+> ARM), and `edge/aarch64` carries 196 packages including the `omarchy` base
+> package; stable aarch64 has 80 and still no base. See
+> [`docs/omarchy-arm-scan-2026-10.md`](docs/omarchy-arm-scan-2026-10.md), which
+> also covers why upstream's platform detection would treat the FP4 as a
+> Snapdragon laptop.
+
 The aarch64 tree appeared after this was first measured, but it is an app
 catalog (browsers, editors, a few omarchy-branded apps) with no `omarchy`
 metapackage or `omarchy-config`, no keyring, and an unsigned database, so it
