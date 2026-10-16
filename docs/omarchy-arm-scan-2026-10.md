@@ -85,3 +85,6 @@ Repo DBs fetched with curl and read as tar archives (`%NAME%`/`%VERSION%` from
 each `desc`); upstream read from a depth-300 clone of `quattro` at `51bfd1db`.
 Nothing was installed or executed. Raw lists were kept in the session scratch
 directory only.
+
+The follow-up plan, gated on these packages reaching stable, is
+[`omarchy-aarch64-migration-plan.md`](./omarchy-aarch64-migration-plan.md).
