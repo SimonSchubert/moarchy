@@ -579,6 +579,8 @@ point, and the default is now 15.
 
 ## D17 — calls had no audio path, because the kernel had no voice DSP {#d17}
 
+**Regressed: see [D34](./fp4-defects.md#d34)** (2026-10-16): the fix was a hand-built kernel and never reached the packaged one.
+
 **Status: FIXED 2026-09-23, proven by a call.** The handset's owner placed a
 call and confirmed audio in both directions. Kernel driver port plus
 a device-tree change, `boot` reflashed. Patch:

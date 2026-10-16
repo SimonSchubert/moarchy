@@ -25,6 +25,7 @@ configuring. `WONTFIX` — understood and deliberately left.
 | [D23](#d23) | The camera's CSI PHY supplies are undescribed, and a clock sticks on | **OPEN** |
 | [D29](#d29) | s2idle aborts in ~2s: serial-console RX wakeup (irq 172). Fixed by mainline `d0cd9c8d0fd5` (qcom-geni force-suspend), VALIDATED on FP4 (holds 21s). udev rule is the stopgap until the kernel carries it. Deep-collapse depth cap is a separate open bug | **abort FIXED (mainline fix validated); depth open** |
 | [D33](#d33) | No modem after the first suspend: ModemManager 1.24.2 aborts on every suspend/stop on IPA modems (multiplexed-bearer assertion), so calls broke from the 10-10 image on | **FIX APPLIED -- verify on next image** |
+| [D34](#d34) | Calls have no audio again: the packaged kernel never carried D17's q6voice stack, so there is no voice PCM for `q6voiced` | **OPEN - important** |
 
 ---
 
@@ -79,6 +80,19 @@ blueprint — `RXD = TP1102`, `TXD = TP1104`, `GND = TP4810`.
 ---
 
 ## D8 — GPS runs but never reaches a fix; no A-GPS assistance {#d8}
+
+**2026-10-16, worse than in September: no standard NMEA at all.** On the 10-10
+image ModemManager logs `couldn't setup required NMEA traces: Operation timed out`
+when location is enabled, and the LOC service's NMEA types stay `none`, so only
+Qualcomm's `$PQ...` sentences flow (week 65535: no GPS time); no `$GPGSA`/`$GPGSV`
+as on 09-24, and geoclue/Maps never get a sentence they can use. Setting the
+types directly works (`qmicli -d qrtr://0 --loc-set-nmea-types="gga|rmc|gsv|gsa|vtg"`
+succeeds and reads back), so the LOC service answers requests; it is MM's
+indication wait that times out, the same signature as the assistance failure
+below. Nothing in the image turns location on either: MM had no source enabled
+and geoclue starts on demand and exits after 60 s. GNOME Maps was also
+OOM-killed at 19:00 that day (no swap/zram on the image, ~700 MB available with
+quickshell at ~750 MB RSS), which is a separate problem.
 
 **Status: OPEN, REFRAMED 2026-09-28.** The receiver runs and streams NMEA but
 never reaches a fix indoors because it has no assistance data. The earlier
@@ -923,3 +937,50 @@ while the phone slept, the quick-mode drop-in stayed, and that one crashed at
 four more suspends that day.) The shutdown path still hits the assertion, so a
 stop or reboot leaves a core dump; harmless until 0edcb916 lands. Drop it once a
 ModemManager containing `0edcb916` is in the repos.
+
+**2026-10-16: the SIGSEGV is not rare.** Four in one boot with
+`--test-no-suspend-resume` (12:57 at startup, 15:49, 16:39, 17:13), all
+`SEGV_MAPERR`, frame #0 at 0x30 (a NULL member call), #1 `ModemManager+0x19759c`.
+The 15:49 one came right after `simple connect` created `qmapmux0.0` (mux id 1),
+i.e. while bringing up the multiplexed data bearer again. Each one drops the
+modem for a few seconds and loses any location setup. Not yet symbolized
+(needs the debug package).
+
+---
+
+## D34 -- calls have no audio again: no voice stack in the packaged kernel {#d34}
+
+**Status: OPEN - important, found 2026-10-16.** A regression of
+[D17](./fp4-fixes.md#d17), which is recorded as fixed.
+
+D17 was fixed on 2026-09-23 by a **hand-built** kernel: a port of the QDSP6
+voice services (`q6voice`, `q6mvm`, `q6cvs`, `q6cvp`, `q6voice-dai`) plus a DT
+change adding the voice DAI links, which gave `00-02 CS-VOICE` and
+`00-03 VoiceMMode1` and let `q6voiced` (configured for `hw:0,3`) hold the voice
+session. That work lives only in `~/Personal/fp4-mic-capture` (commits
+`c8aa42c` "Port the QDSP6 voice services", `b867d72` "Wire the CODEC_DMA ports
+into the voice mixers"; `wip/0005-second-front-end.patch`,
+`wip/0006-call-audio-voice-services.patch`). It was deliberately left out of
+the mic PR #11 to converge on sc7280-mainline's port instead
+([`fairphone-4.md`](./fairphone-4.md) section 1).
+
+The packaged kernel (`linux-moarchy-sm6350`, pin `sm6350-7.2.y` @ `5ba18a1`,
+patches 0000-0008) has none of it: no q6voice sources in the tree, no
+`CONFIG_SND_SOC_QDSP6_Q6VOICE` in `config`, no voice link in the FP4 DTS. Every
+image built from the package, which is what the phone runs since the move to CI
+images, therefore has no call audio. On the handset:
+
+```
+/proc/asound/pcm:  00-00 MultiMedia1, 00-01 MultiMedia2   (no 00-02 / 00-03)
+q6voice modules:   0
+q6voiced:          Failed to open tx: No such file or directory
+```
+
+**Fix path.** Either carry the port as package patches (against the
+patch-free intent of the package, like 0007/0008) until it is upstream, or port
+it onto sm6350-mainline following sc7280-mainline/linux#35 and land it there,
+then bump the pin. The second is the stated plan; the first gets calls back
+now. Either way: rebase `c8aa42c` + `b867d72` and the DT links onto `5ba18a1`,
+add the Q6VOICE config symbols, transient-boot it (matching modules, see
+AGENTS.md), check `/proc/asound/pcm` for VoiceMMode1, then place a call.
+Check `q6voiced.conf`'s device number against the new PCM list.
