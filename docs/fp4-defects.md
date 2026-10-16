@@ -631,6 +631,16 @@ battery unless noted; counters from `/sys/kernel/debug/qcom_stats`).**
   for panel and touch): rebinding fails with -5 while the panel is off, and the
   unbind took the shared supply/reset down so the panel would not come back
   either (dpms stayed Off, power button did nothing). Only a reboot recovered it.
+- **Userspace diff and audio ruled out (2026-10-16).** The 10-06 image (`d7f57bf`,
+  old kernel + old userspace) and the 10-10 image differ in only ~15 packages:
+  ModemManager 1.24.2 was already in 10-06; the rest are our own packages
+  (`moarchy-device-fp4` -6 -> -10: D32 audio routes, D31 softdep, UCM; `moarchy`
+  -14 -> -15; new `alsa-utils`) and trivial libs. Prime suspect was the D32
+  capture routes keeping LPASS/ADSP up, but with the phone idle both PCMs are
+  `closed`, nothing holds `/dev/snd/*`, and every codec/DSP DAPM context reports
+  bias level `Off` with no widget powered: audio is fully idle. Still open: flash
+  the 10-06 image as a full A/B (artifact available until 2026-10-20) and read
+  the drain >= 10 min after wake, to settle whether userspace changed anything.
 
 **Status: OPEN (found 2026-10-01, on the flashed 0.5.0 public build).** The
 suspend path works but the SoC never stays in s2idle: it enters and exits in
@@ -904,7 +914,10 @@ modem stays registered through suspend, which a phone wants anyway).
 NOT avoid it: its terse path runs the same count. Shipped as
 `default/systemd/system/ModemManager.service.d/10-moarchy-no-suspend-resume.conf`
 in `moarchy` pkgrel 16; on the handset as an /etc drop-in. Verified (17:45):
-three suspends, same ModemManager PID, modem `connected` after each. (A first
+three suspends, same ModemManager PID, modem `connected` after each. A separate,
+milder bug remains: an occasional SIGSEGV right after boot (2026-10-16 10:58,
+one minute in; also the restart loops seen 10-14). systemd restarts it within a
+second and the modem comes up; not the suspend assertion. (A first
 "verification" that morning was invalid: the drop-in write had silently failed
 while the phone slept, the quick-mode drop-in stayed, and that one crashed at
 four more suspends that day.) The shutdown path still hits the assertion, so a
