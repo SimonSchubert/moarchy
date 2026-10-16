@@ -1992,6 +1992,10 @@ suspend on idle. What is left, s2idle not staying asleep and the SoC never
 reaching deep sleep, is tracked in D29. Moved here from the open register so it
 no longer reads as a second open bug.
 
+**Correction (2026-10-16):** the ~1 %/h below is very likely a fuel-gauge
+artifact (the gauge is stale at the moment of resume; see D29 "Not a
+regression"). Idle-suspend itself works; s2idle drains ~5-7 %/h on this phone.
+
 **Status (2026-09-27): FIXED, s2idle drain measured (~1 %/h, ~7x better than
 screen-blank); pending only the pkgrel-13 reflash to put the same config on the
 phone.** The idle->suspend wiring

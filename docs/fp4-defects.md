@@ -612,20 +612,18 @@ battery unless noted; counters from `/sys/kernel/debug/qcom_stats`).**
   touch. Next: per-component bisection on the charger (touch controller, panel
   supplies, cameras, sensors, regulators left on by the bootloader), using the
   regulator and genpd summaries rather than the 1%-step gauge.
-- **It is a regression, not a never-worked (logs, 2026-10-16).** upower's rate
-  log shows awake screen-off idle at 0.6-1.0 W, and the suspend drain (~6-10%/h
-  of ~15 Wh) is about the same power: s2idle currently saves nothing. D28
-  measured **~1%/h** in s2idle (5 h stretch, 2026-09-27, ~7x better than
-  screen-off) on kernel `v7.2.0-sm6350` @ `6f7453cecfda` with the pmOS config.
-  Since 10-08 the pin is `sm6350-7.2.y` @ `5ba18a1da713`, which among others
-  swapped the touchscreen to the mainline `hx83112b` driver and changed PMK8350
-  PON; userspace changed too. Suspects, cheapest first: (1) the touch controller
-  not suspended (its i2c errors appear right after every resume; unbind
-  `himax-hx83112b` before a suspend and compare), (2) the USB PHY: every suspend
-  (22/22) logs `dwc3-qcom-legacy a6f8800.usb: port-1 HS-PHY not in L2` (unbind
-  the gadget's UDC before a suspend), (3) bisect the kernel bump itself
-  (`6f7453cec..5ba18a1`) with transient boots, keeping Image, modules and DTB
-  from one tree.
+- **Not a regression (2026-10-16, tested).** The September kernel D28 measured
+  on (`v7.2.0-sm6350` @ `16337c9dd348`, its 09-23 config, `LOCALVERSION=-sept`,
+  own modules in `/lib/modules/7.2.0-sept`, transient boot) drains the same:
+  two suspends on battery, 77% -> 66% in 96 min (~7%/h), `aosd`/`cxsd`/`ddr` 0.
+  **The fuel gauge reports a stale value at the moment of resume** and catches up
+  over the next minutes awake (76% at wake -> 73% 2.5 min later). D28's ~1%/h
+  read 57% at wake and dismissed the drop to 49% within 5 min as "re-settle"; the
+  49% was the real value, so D28's figure is very likely this artifact and FP4
+  s2idle has probably always drained ~5-7%/h. Measure across-suspend drain only
+  with a reading taken >= 10 min after wake, or over a full night. The real
+  problem remains the missing deep collapse; stock Android on the FP4 sits well
+  under 1%/h in standby.
 - **Touch ruled out while awake, and a warning (2026-10-16).** Live
   `current_now` on battery, screen off: 174 mA baseline, 188 mA with the
   `Himax-hx83112b-TS` driver unbound (noise), so the touch controller is not the
