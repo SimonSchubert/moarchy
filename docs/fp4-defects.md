@@ -626,6 +626,13 @@ battery unless noted; counters from `/sys/kernel/debug/qcom_stats`).**
   the gadget's UDC before a suspend), (3) bisect the kernel bump itself
   (`6f7453cec..5ba18a1`) with transient boots, keeping Image, modules and DTB
   from one tree.
+- **Touch ruled out while awake, and a warning (2026-10-16).** Live
+  `current_now` on battery, screen off: 174 mA baseline, 188 mA with the
+  `Himax-hx83112b-TS` driver unbound (noise), so the touch controller is not the
+  awake drain. **Do not unbind that driver.** The hx83112a is a TDDI chip (one IC
+  for panel and touch): rebinding fails with -5 while the panel is off, and the
+  unbind took the shared supply/reset down so the panel would not come back
+  either (dpms stayed Off, power button did nothing). Only a reboot recovered it.
 
 **Status: OPEN (found 2026-10-01, on the flashed 0.5.0 public build).** The
 suspend path works but the SoC never stays in s2idle: it enters and exits in
