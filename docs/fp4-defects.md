@@ -600,6 +600,18 @@ battery unless noted; counters from `/sys/kernel/debug/qcom_stats`).**
 - So ~4.7%/h (~180 mA) is a quiet SoC that never leaves the nominal corner, which
   points back at the Linux-side holders (BT UART `cx`, QCE DDR vote, GCC
   sync_state) that have only ever been tested together with WoWLAN on.
+- **Clean combination, first try (2026-10-15 night, cut short):** WoWLAN off and
+  WiFi disconnected by the new hook (verified in its log), Bluetooth blocked, QCE
+  unbound, GCC synced, ModemManager on `--test-no-suspend-resume`. Unplugged
+  ~22:20 UTC, suspended 22:25-23:43 without a break; gauge 66% -> 52% in 85 min.
+  The 66% is charging-inflated (the gauge settles several points lower after
+  unplug), so the true rate is roughly 6-10%/h -- not better than 4.7%/h without
+  the three. Plugged back in to keep the phone usable, so no long curve. Working
+  conclusion: the Linux-side holders are not the drain either; something draws
+  ~150-250 mA in s2idle that none of WoWLAN, the modem radio, BT, QCE or GCC
+  touch. Next: per-component bisection on the charger (touch controller, panel
+  supplies, cameras, sensors, regulators left on by the bootloader), using the
+  regulator and genpd summaries rather than the 1%-step gauge.
 
 **Status: OPEN (found 2026-10-01, on the flashed 0.5.0 public build).** The
 suspend path works but the SoC never stays in s2idle: it enters and exits in
