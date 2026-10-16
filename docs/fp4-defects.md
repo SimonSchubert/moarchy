@@ -612,6 +612,20 @@ battery unless noted; counters from `/sys/kernel/debug/qcom_stats`).**
   touch. Next: per-component bisection on the charger (touch controller, panel
   supplies, cameras, sensors, regulators left on by the bootloader), using the
   regulator and genpd summaries rather than the 1%-step gauge.
+- **It is a regression, not a never-worked (logs, 2026-10-16).** upower's rate
+  log shows awake screen-off idle at 0.6-1.0 W, and the suspend drain (~6-10%/h
+  of ~15 Wh) is about the same power: s2idle currently saves nothing. D28
+  measured **~1%/h** in s2idle (5 h stretch, 2026-09-27, ~7x better than
+  screen-off) on kernel `v7.2.0-sm6350` @ `6f7453cecfda` with the pmOS config.
+  Since 10-08 the pin is `sm6350-7.2.y` @ `5ba18a1da713`, which among others
+  swapped the touchscreen to the mainline `hx83112b` driver and changed PMK8350
+  PON; userspace changed too. Suspects, cheapest first: (1) the touch controller
+  not suspended (its i2c errors appear right after every resume; unbind
+  `himax-hx83112b` before a suspend and compare), (2) the USB PHY: every suspend
+  (22/22) logs `dwc3-qcom-legacy a6f8800.usb: port-1 HS-PHY not in L2` (unbind
+  the gadget's UDC before a suspend), (3) bisect the kernel bump itself
+  (`6f7453cec..5ba18a1`) with transient boots, keeping Image, modules and DTB
+  from one tree.
 
 **Status: OPEN (found 2026-10-01, on the flashed 0.5.0 public build).** The
 suspend path works but the SoC never stays in s2idle: it enters and exits in
