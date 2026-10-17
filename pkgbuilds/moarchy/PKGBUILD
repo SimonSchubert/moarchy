@@ -244,7 +244,11 @@ pkgver=$_ver
 #    boot was a new device to the router; on the FP4 the router's pool filled
 #    and DHCPv4 refused the phone outright. Verified: derived MAC, identical
 #    across reconnects.
-pkgrel=16
+# 17: geoclue agent in the session (config/hypr/autostart.lua) plus geoclue and
+#    libnotify as dependencies. Without an agent geoclue refused every client,
+#    so no app ever got a location and the modem GPS was never switched on (D8).
+#    Verified: where-am-i gets GeoIP then WiFi (33 m) and MM enables gps-nmea.
+pkgrel=17
 pkgdesc="Omarchy's look, keybindings and theming on a phone, under Hyprland"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
@@ -295,8 +299,11 @@ license=('MIT')
 # (Qt5Compat.GraphicalEffects), and python is Mail's: bin/moarchy-mail is
 # Python's standard library and nothing else. Both arrived with the apps when
 # moarchy-qml-apps was folded in (docs/structure.md B6).
+# geoclue and libnotify are config/hypr/autostart.lua's geoclue agent
+# (/usr/lib/geoclue-2.0/demos/agent, which links libnotify; geoclue only lists
+# it as optional). Without the agent no app gets a location (D8).
 depends=('bash' 'hyprland' 'omarchy-config' 'foot' 'polkit-gnome' 'upower' 'feedbackd'
-         'qt6-5compat' 'python')
+         'qt6-5compat' 'python' 'geoclue' 'libnotify')
 source=()
 
 package() {

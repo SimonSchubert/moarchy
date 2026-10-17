@@ -83,7 +83,9 @@ pkgver=$_ver
 # pkgrel 10: UCM Earpiece uses aw882xx_pa_switch_r (the old 'Right Speaker
 #   Volume' control does not exist); Speaker re-enables both amps and now
 #   outranks Earpiece, so media defaults to the loudspeaker.
-pkgrel=10
+# pkgrel 11: moarchy-fp4-gnss-nmea sets the modem's NMEA mask at boot, which
+#   ModemManager cannot (D8); depends on libqmi for qmicli.
+pkgrel=11
 pkgdesc="Fairphone 4 (fp4) hardware support for moarchy"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
@@ -141,6 +143,10 @@ depends=(
   # and dumps core before drawing a frame. See pkgbuilds/libmegapixels-moarchy.
   'megapixels'
   'libmegapixels-moarchy'
+  # --- GPS -------------------------------------------------------------------
+  # qmicli, for moarchy-fp4-gnss-nmea below (D8). Arrives with ModemManager
+  # anyway; named because the unit execs it.
+  'libqmi'
 )
 # The two UCM files are prefixed rather than kept in a ucm/ subdirectory,
 # because makepkg takes the BASENAME of a local source: 'ucm/fp4.conf' is
@@ -161,9 +167,10 @@ source=('hypr-device.lua' 'device.conf'
         'fp4-audio-route.sh' 'q6voiced.conf'
         'wifi-powersave.conf'
         'pd-mapper-softdep.conf'
-        '82-fp4-serial-wakeup.rules')
+        '82-fp4-serial-wakeup.rules'
+        'fp4-gnss-nmea.sh' 'moarchy-fp4-gnss-nmea.service')
 sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
-            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm644 "$srcdir/device.conf" "$pkgdir/usr/share/moarchy/device/device.conf"
@@ -321,4 +328,16 @@ package() {
   # ADSP finds the PD locator when it boots instead of racing it (D31).
   install -Dm644 "$srcdir/pd-mapper-softdep.conf" \
     "$pkgdir/usr/lib/modprobe.d/moarchy-fp4-pd-mapper.conf"
+
+  # --- GPS ------------------------------------------------------------------
+  #
+  # D8: ModemManager cannot switch the GNSS engine to standard NMEA on this
+  # modem (its Set NMEA Types times out), so geoclue never gets a sentence it
+  # can read. This sets the mask once per boot; see fp4-gnss-nmea.sh.
+  install -Dm755 "$srcdir/fp4-gnss-nmea.sh" \
+    "$pkgdir/usr/lib/moarchy/fp4-gnss-nmea"
+  install -Dm644 "$srcdir/moarchy-fp4-gnss-nmea.service" \
+    "$pkgdir/usr/lib/systemd/system/moarchy-fp4-gnss-nmea.service"
+  ln -s ../moarchy-fp4-gnss-nmea.service \
+    "$pkgdir/usr/lib/systemd/system/multi-user.target.wants/moarchy-fp4-gnss-nmea.service"
 }
