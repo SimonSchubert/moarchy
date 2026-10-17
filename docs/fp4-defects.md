@@ -959,7 +959,20 @@ ModemManager containing `0edcb916` is in the repos.
 `SEGV_MAPERR`, frame #0 at 0x30 (a NULL member call), #1 `ModemManager+0x19759c`.
 The 15:49 one came right after `simple connect` created `qmapmux0.0` (mux id 1),
 i.e. while bringing up the multiplexed data bearer again. Each one drops the
-modem for a few seconds and loses any location setup. Not yet symbolized
+modem for a few seconds and loses any location setup.
+
+**2026-10-17: it costs incoming calls, and the trigger is the reconnect.**
+NetworkManager deactivates the mobile connection at every suspend (`qrtr0`
+`activated -> deactivating (reason 'sleeping')`, MM `connected -> registered`)
+and reactivates it on wake. An incoming call woke the phone at 00:23:19; NM's
+reconnect ran MM's `simple connect`, `qmapmux0.0` was created, and MM died with
+SIGSEGV one second later, taking the ringing call with it (the user saw it as
+"the phone was locked"). The second call, with MM already restarted, rang and
+connected. The boot-time crashes fit the same shape: the first connect of a
+process works, a connect after a disconnect in the same process crashes. So
+this is very likely the multiplexed-bearer cleanup bug that `0edcb916`
+(MR !1401) fixes for the suspend assertion. Next: build ModemManager with
+`0edcb916` backported and check that suspend/resume no longer kills it. Not yet symbolized
 (needs the debug package).
 
 ---
@@ -973,7 +986,9 @@ modem for a few seconds and loses any location setup. Not yet symbolized
 `SND_SOC_QDSP6_Q6VOICE{,_DAI}=m` in `config`. Transient boot of the same tree
 (`7.2.0-voice`, own modules): `00-02 CS-VOICE`, `00-03 VoiceMMode1`, 204 voice
 mixer controls, `q6voiced` active, media sink/source unchanged, modem
-connected. Move to fixes after a call carries audio both ways. Note WirePlumber
+connected. **Call verified on that kernel 2026-10-17 00:24**: an incoming call,
+answered, carried audio both ways (the two handsets fed back acoustically within
+seconds). Move to fixes once the CI image is on the phone and repeats it. Note WirePlumber
 also lists `VoiceMMode1` as a source; the default stays MultiMedia2.
 
 Found 2026-10-16. A regression of
