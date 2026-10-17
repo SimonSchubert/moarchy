@@ -82,6 +82,12 @@
 # CONFIG_SECURITY=y with "landlock" already first in CONFIG_LSM, so nothing
 # else has to move. prepare() diffs the built .config against the vendored file
 # and says so out loud if olddefconfig moves anything else.
+#
+# --- Difference 4: the voice services (pkgrel 13)
+#
+# CONFIG_SND_SOC_QDSP6_Q6VOICE=m and CONFIG_SND_SOC_QDSP6_Q6VOICE_DAI=m, added
+# next to the other QDSP6 symbols. They exist only with patch 0009 applied and
+# go with it: call audio (D34). Remove both lines when 0009 is dropped.
 
 . "$startdir/../../scripts/manifest.sh"
 _url=$(manifest_get device.fp4 kernel-url) || return 1
@@ -94,7 +100,7 @@ pkgname=linux-moarchy-sm6350
 # from the tag (v7.2.0-sm6350 -> 7.2.0), but the pin is now a commit on the
 # sm6350-7.2.y branch, and a branch name carries no version.
 pkgver=$_kver
-pkgrel=12
+pkgrel=13
 pkgdesc="Mainline Linux for Qualcomm SM6350/SM7225 (Fairphone 4)"
 arch=('aarch64')
 url="$_url"
@@ -165,20 +171,28 @@ source=("linux-$_commit.tar.gz::$_url/archive/$_commit.tar.gz"
         '0005-nfc-st-nci-restart-the-reference-clock-on-power-up.patch'
         '0006-nfc-st-nci-treat-the-idle-0x7e-read-as-no-data.patch'
         '0007-d29-geni-force-suspend.patch'
-        '0008-d11-mdss-quiesce-before-reset.patch')
+        '0008-d11-mdss-quiesce-before-reset.patch'
+        '0009-call-audio-q6voice.patch')
 # 0008 is D11 (docs/fp4-d11-mdss-reset.md): the MDSS core reset hangs the SoC
 # on ~1 boot in 6 when it meets the bootloader's running splash. It stops the
 # CTL-active INTF and gates the MDP/AXI clocks before the reset. Carried until
 # it lands in sm6350-mainline; drop it when the pin includes it.
+# 0009 is call audio (D17, regressed as D34): the QDSP6 voice services
+# (q6voice/q6mvm/q6cvs/q6cvp, ported from sdm670-mainline), their APR nodes and
+# the FP4's CS-VOICE / VoiceMMode1 links, plus SND_SOC_QDSP6_Q6VOICE{,_DAI}=m in
+# config. Without it there is no voice PCM and q6voiced cannot carry a call.
+# D17's fix only ever lived in a hand-built kernel and never reached this
+# package. Carried until the port lands in sm6350-mainline (converging on
+# sc7280-mainline/linux#35); drop it when the pin includes it.
 # The config hash is real and IS computed here, because the vendored file is
 # not upstream's -- it is upstream's with SECURITY_LANDLOCK flipped. Upstream's
 # own sha512 was checked against the fetched copy BEFORE that edit and matched
 # (e20a5b49...51631), which is what makes the vendored file traceable to
 # pmaports even though this package no longer downloads anything from them.
 sha512sums=('c79d83a9145a71b0486e8911c9db11c266bd4b0ae468818adbe300e90e5fabeecd4b0a827a99148e88855cf47bdac42bb8d90b2c2589f6136edcbce824100a6f'
-            '02120c2987817e974b7bf2b687e980f3a1ab4ddd65caa67c839b77780cac528b3c6ecf72728e04d9c65dee147f1fe22a0050ee4d2da3acf7995645b18e851327'
+            '8fbc6d5d03a3664b5ed59a1e8770b9cd06ac85a6f4c4645a22b65bd5285237b1e616cfec712626a8597ef71f2c6434176cbf7363ba392f25f4344d5552212e41'
             '2ae75b0c62247abfca811d2c3ce1ae94f5b2dbadcd486f7936b050b7ec36dc3737db09acf63e60e1123eb1e3261faca515ca6d20448852f4311039d002661976'
-            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 # Do not build this on a case-insensitive filesystem -- the kernel carries both
 # net/netfilter/xt_TCPMSS.c and xt_tcpmss.c, and APFS keeps one of them. The
