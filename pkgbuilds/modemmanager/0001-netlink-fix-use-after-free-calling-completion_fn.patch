@@ -1,0 +1,49 @@
+From 9317cbc4702c7d6283e42a498cd9812e19eeccf3 Mon Sep 17 00:00:00 2001
+From: Dan Williams <dan@ioncontrol.co>
+Date: Sun, 4 Oct 2026 23:03:32 -0500
+Subject: [PATCH] netlink: fix use-after-free calling completion_fn on
+ transaction completion
+
+'tr' is freed when removed from the hash table so we must cache any of its
+member values that we need after removal.
+
+Re-implementation of https://gitlab.freedesktop.org/mobile-broadband/ModemManager/-/merge_requests/1442
+
+Signed-off-by: Dan Williams <dan@ioncontrol.co>
+---
+ src/mm-netlink.c | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/src/mm-netlink.c b/src/mm-netlink.c
+index a71b699f..004b4d4f 100644
+--- a/src/mm-netlink.c
++++ b/src/mm-netlink.c
+@@ -227,11 +227,14 @@ transaction_complete (Transaction     *tr,
+                       struct nlmsghdr *hdr,
+                       gint             saved_errno)
+ {
+-    GTask *task;
+-    guint32 sequence_id;
++    GTask   *task;
++    guint32  sequence_id;
++    MsgFunc  completion_fn;
+ 
++    /* tr is freed by hashtable remove; cache values we need after */
+     task = g_steal_pointer (&tr->completion_task);
+     sequence_id = tr->sequence_id;
++    completion_fn = tr->completion_fn;
+ 
+     g_hash_table_remove (tr->self->transactions,
+                          GUINT_TO_POINTER (tr->sequence_id));
+@@ -239,7 +242,7 @@ transaction_complete (Transaction     *tr,
+     if (!saved_errno) {
+         GError *error = NULL;
+ 
+-        if (!tr->completion_fn (task, hdr, &error))
++        if (!completion_fn (task, hdr, &error))
+             g_task_return_error (task, error);
+     } else {
+         g_task_return_new_error (task, G_IO_ERROR, g_io_error_from_errno (saved_errno),
+-- 
+2.55.0
+

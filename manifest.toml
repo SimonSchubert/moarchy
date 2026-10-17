@@ -272,6 +272,28 @@ ref     = "0.3.1"
 version = "0.3.1"
 
 # ---------------------------------------------------------------------------
+# ModemManager, rebuilt: Arch Linux ARM's 1.24.2 plus two upstream fixes that
+# are on main and in no release yet (fp4-defects.md D33).
+#
+#   9317cbc4  netlink: fix use-after-free calling completion_fn. After MM
+#             creates the multiplexed data link (qmapmux0.0) it calls a
+#             function pointer out of the freed netlink transaction. On the
+#             FP4 that is a SIGSEGV on roughly one reconnect in four or five,
+#             and NetworkManager reconnects mobile data after EVERY resume, so
+#             an incoming call that wakes the phone could kill MM and the call.
+#   0edcb916  base-manager: fix cleanup of multiplexed bearers -- the
+#             mm_iface_modem_count_bearers assertion on suspend/stop.
+#
+# Same package name as Arch's so everything that depends on it is satisfied;
+# [moarchy] sits ahead of [extra] in pacman.conf, so this build wins. Drop the
+# package when Arch ships a release containing both commits.
+# ---------------------------------------------------------------------------
+[modemmanager]
+url     = "https://gitlab.freedesktop.org/mobile-broadband/ModemManager"
+ref     = "1.24.2"
+version = "1.24.2"
+
+# ---------------------------------------------------------------------------
 # Stable MAC addresses for both radios, which on this SoC is not cosmetic for
 # Bluetooth -- it is the difference between having Bluetooth and not.
 #

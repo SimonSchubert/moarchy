@@ -1,0 +1,41 @@
+From 0edcb916ad2b7267caf73bbd9a31e46da0727a00 Mon Sep 17 00:00:00 2001
+From: Daniele Palmas <dnlplm@gmail.com>
+Date: Fri, 3 Oct 2025 10:49:46 +0200
+Subject: [PATCH] base-manager: fix cleanup of multiplexed bearers
+
+Cleaning up multiple active multiplexed bearers causes an assert in
+mm_iface_modem_count_bearers since the max number of active bearers
+is not properly determined.
+
+Rework the management of the flags in order to better match their
+intents, considering that MULTIPLEXED is a subset of ACTIVE/CONNECTED.
+
+Signed-off-by: Daniele Palmas <dnlplm@gmail.com>
+---
+ src/mm-iface-modem.c | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/src/mm-iface-modem.c b/src/mm-iface-modem.c
+index af37ca2b..bb81cfdd 100644
+--- a/src/mm-iface-modem.c
++++ b/src/mm-iface-modem.c
+@@ -6834,10 +6834,13 @@ mm_iface_modem_count_bearers (MMIfaceModem                   *self,
+         return FALSE;
+     }
+ 
+-    if (flags & MM_IFACE_MODEM_COUNT_BEARERS_FLAG_MULTIPLEXED)
+-        max = mm_bearer_list_get_max_active_multiplexed (list);
+-    else
++    /* If only MULTIPLEXED is requested, only return max multiplexed bearers */
++    if (flags & ~MM_IFACE_MODEM_COUNT_BEARERS_FLAG_MULTIPLEXED)
+         max = mm_bearer_list_get_max_active (list);
++    /* multiplexed is a subset of ACTIVE/CONNECTED */
++    if (flags & (MM_IFACE_MODEM_COUNT_BEARERS_FLAG_ACTIVE | MM_IFACE_MODEM_COUNT_BEARERS_FLAG_CONNECTED |
++                 MM_IFACE_MODEM_COUNT_BEARERS_FLAG_MULTIPLEXED))
++        max += mm_bearer_list_get_max_active_multiplexed (list);
+ 
+     mm_bearer_list_foreach (list, (MMBearerListForeachFunc)bearer_count, &ctx);
+     g_assert (max >= ctx.count);
+-- 
+2.55.0
+

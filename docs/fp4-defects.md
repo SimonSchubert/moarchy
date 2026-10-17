@@ -970,9 +970,26 @@ SIGSEGV one second later, taking the ringing call with it (the user saw it as
 "the phone was locked"). The second call, with MM already restarted, rang and
 connected. The boot-time crashes fit the same shape: the first connect of a
 process works, a connect after a disconnect in the same process crashes. So
-this is very likely the multiplexed-bearer cleanup bug that `0edcb916`
-(MR !1401) fixes for the suspend assertion. Next: build ModemManager with
-`0edcb916` backported and check that suspend/resume no longer kills it. Not yet symbolized
+I first suspected the multiplexed-bearer cleanup bug that `0edcb916`
+(MR !1401) fixes; the crash turned out to be a different one, fixed upstream too.
+
+**Root cause, 2026-10-17: a use-after-free in MM's netlink code, fixed on main
+by `9317cbc4`** ("netlink: fix use-after-free calling completion_fn", not in
+any release). After the `qmapmux0.0` link is created, `transaction_complete()`
+removes the transaction from its hash table (which frees it) and then calls
+`tr->completion_fn`. The stock binary's crashing frame is exactly that call:
+`ldr x3, [x28, #32]; ... blr x3; cbz w0, ...`, i.e.
+`if (!tr->completion_fn (task, hdr, &error))`, jumping to whatever the freed
+memory holds (`0x30`). Same phone, same night, 5 suspend/resume cycles each:
+stock 1.24.2 crashed once (cycle 3, frame #1 `ModemManager+0x19759c`); 1.24.2
+with `9317cbc4` + `0edcb916` built on the phone, 0 crashes, same PID through
+all five reconnects; then the PACKAGE (`makepkg` of `pkgbuilds/modemmanager`
+on the phone, installed as `modemmanager 1.24.2-1.1`) through 5 more, 0
+crashes. **Fix:** `pkgbuilds/modemmanager` (Arch's recipe, 1.24.2
+plus the two patches, pkgrel 1.1, pinned in `manifest.toml` `[modemmanager]`).
+On the handset now as that package (the `/usr/local/bin` test binary is
+unused). Once the package is on the phone, also retest without
+`--test-no-suspend-resume` (`0edcb916` should make that workaround unnecessary). Not yet symbolized
 (needs the debug package).
 
 ---
