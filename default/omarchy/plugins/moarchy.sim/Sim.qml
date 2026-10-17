@@ -26,6 +26,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui as Ui
 import "../moarchy.common/Theme.js" as Theme
 import "../moarchy.common" as Shared
@@ -48,12 +49,12 @@ Item {
   // Where Back goes, set by whoever summoned this screen.
   property string returnTo: ""
 
-  readonly property color surface: Color.popups.background
-  readonly property color textOnSurface: Color.popups.text
-  readonly property color container: Util.alpha(Color.popups.text, 0.08)
-  readonly property color containerHigh: Util.alpha(Color.popups.text, 0.14)
-  readonly property color accent: Color.accent
-  readonly property color textOnAccent: Color.background
+  readonly property color surface: Commons.Color.popups.background
+  readonly property color textOnSurface: Commons.Color.popups.text
+  readonly property color container: Util.alpha(Commons.Color.popups.text, 0.08)
+  readonly property color containerHigh: Util.alpha(Commons.Color.popups.text, 0.14)
+  readonly property color accent: Commons.Color.accent
+  readonly property color textOnAccent: Commons.Color.background
 
   // style.md B3 and D1. This screen was written without either, which is what
   // the checker's header says happened to moarchy.device once: every comment in
@@ -61,11 +62,11 @@ Item {
   readonly property int textWeight: Font.DemiBold
   Shared.UiFile { id: ui }
   readonly property int radiusTile: ui.radiusTile
-  // The theme's own red, not a chosen one: `Color.urgent` is what upstream's
+  // The theme's own red, not a chosen one: `Commons.Color.urgent` is what upstream's
   // polkit error text falls back to, so a theme that sets a red gets its red
   // here (style.md C4 -- this was a literal, and the only one left in the
   // plugins).
-  readonly property color danger: Color.urgent
+  readonly property color danger: Commons.Color.urgent
 
   // ---------------------------------------------------------------- state
   // Straight out of `moarchy-sim status`, which is the only thing that talks to

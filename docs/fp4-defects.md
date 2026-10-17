@@ -26,6 +26,7 @@ configuring. `WONTFIX` — understood and deliberately left.
 | [D29](#d29) | s2idle aborts in ~2s: serial-console RX wakeup (irq 172). Fixed by mainline `d0cd9c8d0fd5` (qcom-geni force-suspend), VALIDATED on FP4 (holds 21s). udev rule is the stopgap until the kernel carries it. Deep-collapse depth cap is a separate open bug | **abort FIXED (mainline fix validated); depth open** |
 | [D33](#d33) | No modem after the first suspend: ModemManager 1.24.2 aborts on every suspend/stop on IPA modems (multiplexed-bearer assertion), so calls broke from the 10-10 image on | **FIX APPLIED -- verify on next image** |
 | [D34](#d34) | Calls have no audio again: the packaged kernel never carried D17's q6voice stack. Fixed in kernel pkgrel 13 (patch 0009), awaiting a call on the CI image | **OPEN - important** |
+| [D35](#d35) | The whole shell UI broke on the 10-17 image (black menus, no app names): Qt 6.12 shadows the palette singleton. Fixed in omarchy-config pkgrel 11 + moarchy pkgrel 18, hotfixed on the handset | **OPEN - important** |
 
 ---
 
@@ -1042,3 +1043,52 @@ now. Either way: rebase `c8aa42c` + `b867d72` and the DT links onto `5ba18a1`,
 add the Q6VOICE config symbols, transient-boot it (matching modules, see
 AGENTS.md), check `/proc/asound/pcm` for VoiceMMode1, then place a call.
 Check `q6voiced.conf`'s device number against the new PCM list.
+
+---
+
+## D35 -- the shell UI broke on the 10-17 image: Qt 6.12 shadows `Color` {#d35}
+
+**Status: FIX IN THE PACKAGES, hotfixed on the handset (2026-10-17).** Move to
+fixes once an image carrying it is on the phone.
+
+The first image built on 10-17 (`fp4` @ `22c0726`) came up with the dropdown
+menu solid black and the app drawer showing icons with no names. Nothing of
+ours changed: `omarchy-config` was the same 4.0.4-10, and `moarchy` only gained
+the geoclue agent line. The image build ran `pacman -Syu` against Arch Linux
+ARM, which had moved from **Qt 6.11.2 to 6.12.0** and **quickshell 0.3.1 to
+0.3.2** since the 10-10 image.
+
+Qt 6.12 adds a `Color` type to QtQuick. In every QML file that imports QtQuick
+and writes a bare `Color.x`, that name now resolves to Qt's type instead of the
+shell's palette singleton (`qs.Commons` `Color`), so every colour is
+`undefined`. The shell log:
+
+```
+@shell.qml[1640]: TypeError: Property 'loadColors' of object QQuickColor(...) is not a function
+moarchy.gestures/Service.qml[2088:9]: Unable to assign [undefined] to QColor   (x131)
+plugins/lock/LockView.qml[265]: TypeError: Cannot read property 'background' of undefined
+```
+
+Upstream Omarchy fixed its own tree on 2026-10-08 in `b83d3df0` ("Qualify
+shell palette references for Qt 6.12", #14553): import `qs.Commons as Commons`
+and write `Commons.Color`. Our `[omarchy]` pin predates it, and our plugins
+needed the same change.
+
+**Fix.** `scripts/qt612-qualify-color.py` makes that change mechanically; run
+on `b83d3df0`'s parent it reproduces `b83d3df0` byte for byte (66 files, no
+difference). From it:
+- `omarchy-config` pkgrel 11: `qt612-qualify-color.patch` (54 files at our
+  pin, applied after the other two with no offset or fuzz), plus a `prepare()`
+  guard that fails the build if any bare `Color.` survives.
+- `moarchy` pkgrel 18: the 16 plugin files under `default/omarchy/plugins`.
+
+On the handset the script was run over `/usr/share/omarchy/shell` and
+`/usr/share/moarchy/plugins` and the shell restarted: no palette errors left
+(only Qt 6.12 deprecation warnings about signal-parameter injection).
+
+**Lesson.** The image takes whatever Arch Linux ARM ships on the day it is
+built, and `manifest.toml` pins none of the Qt/quickshell stack. A toolkit
+minor release changed the UI without one line of ours changing. Worth either
+pinning the stack in the image build or a smoke test of the shell log in
+`image/verify.sh`.
+

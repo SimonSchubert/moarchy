@@ -248,7 +248,12 @@ pkgver=$_ver
 #    libnotify as dependencies. Without an agent geoclue refused every client,
 #    so no app ever got a location and the modem GPS was never switched on (D8).
 #    Verified: where-am-i gets GeoIP then WiFi (33 m) and MM enables gps-nmea.
-pkgrel=17
+# 18: Qt 6.12 palette fix in the plugins (D35). Qt 6.12 adds a QtQuick `Color`
+#    type that shadows the shell's palette singleton, so every bare `Color.x`
+#    in default/omarchy/plugins was undefined (black menus, no labels). 16
+#    files now import qs.Commons as Commons and write Commons.Color, the same
+#    change upstream made in b83d3df0 (scripts/qt612-qualify-color.py).
+pkgrel=18
 pkgdesc="Omarchy's look, keybindings and theming on a phone, under Hyprland"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
