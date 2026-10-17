@@ -25,7 +25,7 @@ configuring. `WONTFIX` — understood and deliberately left.
 | [D23](#d23) | The camera's CSI PHY supplies are undescribed, and a clock sticks on | **OPEN** |
 | [D29](#d29) | s2idle aborts in ~2s: serial-console RX wakeup (irq 172). Fixed by mainline `d0cd9c8d0fd5` (qcom-geni force-suspend), VALIDATED on FP4 (holds 21s). udev rule is the stopgap until the kernel carries it. Deep-collapse depth cap is a separate open bug | **abort FIXED (mainline fix validated); depth open** |
 | [D33](#d33) | No modem after the first suspend: ModemManager 1.24.2 aborts on every suspend/stop on IPA modems (multiplexed-bearer assertion), so calls broke from the 10-10 image on | **FIX APPLIED -- verify on next image** |
-| [D34](#d34) | Calls have no audio again: the packaged kernel never carried D17's q6voice stack, so there is no voice PCM for `q6voiced` | **OPEN - important** |
+| [D34](#d34) | Calls have no audio again: the packaged kernel never carried D17's q6voice stack. Fixed in kernel pkgrel 13 (patch 0009), awaiting a call on the CI image | **OPEN - important** |
 
 ---
 
@@ -80,6 +80,22 @@ blueprint — `RXD = TP1102`, `TXD = TP1104`, `GND = TP4810`.
 ---
 
 ## D8 — GPS runs but never reaches a fix; no A-GPS assistance {#d8}
+
+**2026-10-17: the two reasons apps never got a position are fixed (pending the
+image).** (1) **No geoclue agent.** geoclue answers only clients whose session
+has an agent (GNOME/Phosh ship one; this Hyprland session had none), so every
+client - GNOME Maps, the browser, `where-am-i` - timed out with "Failed to
+connect to GeoClue2 service", and geoclue never asked MM for GPS. Its bundled
+agent was there but exits at once without `libnotify`. With `libnotify` and the
+agent running, `where-am-i` gets GeoIP, then WiFi at 33 m, and geoclue enables
+MM's `gps-nmea` itself. Shipped: `config/hypr/autostart.lua` execs
+`/usr/lib/geoclue-2.0/demos/agent`, `moarchy` depends on `geoclue` and
+`libnotify` (pkgrel 17). (2) **The NMEA mask** (below): set by
+`moarchy-fp4-gnss-nmea.service` at boot (`moarchy-device-fp4` pkgrel 11); MM's
+Get then sees GGA and skips its Set. Verified with the mask set: MM serves
+`$GPGGA/$GPRMC/$GPGSA/$GPVTG` and four `$GPGSV`, 13 satellites in view, one
+tracked indoors at 27 dB-Hz, no fix indoors (expected). Still open: a first fix
+is a cold start without xtra (12-15 min of sky, below).
 
 **2026-10-16, worse than in September: no standard NMEA at all.** On the 10-10
 image ModemManager logs `couldn't setup required NMEA traces: Operation timed out`
@@ -950,7 +966,17 @@ modem for a few seconds and loses any location setup. Not yet symbolized
 
 ## D34 -- calls have no audio again: no voice stack in the packaged kernel {#d34}
 
-**Status: OPEN - important, found 2026-10-16.** A regression of
+**Status: FIX IN THE PACKAGE, awaiting a call on the CI image (2026-10-17).**
+`linux-moarchy-sm6350` pkgrel 13 carries the port as
+`0009-call-audio-q6voice.patch` (drivers, APR nodes, FP4 links, TX topology
+`NONE` as the default instead of the uncalibrated `SM_ECNS`) plus
+`SND_SOC_QDSP6_Q6VOICE{,_DAI}=m` in `config`. Transient boot of the same tree
+(`7.2.0-voice`, own modules): `00-02 CS-VOICE`, `00-03 VoiceMMode1`, 204 voice
+mixer controls, `q6voiced` active, media sink/source unchanged, modem
+connected. Move to fixes after a call carries audio both ways. Note WirePlumber
+also lists `VoiceMMode1` as a source; the default stays MultiMedia2.
+
+Found 2026-10-16. A regression of
 [D17](./fp4-fixes.md#d17), which is recorded as fixed.
 
 D17 was fixed on 2026-09-23 by a **hand-built** kernel: a port of the QDSP6
