@@ -1,0 +1,26 @@
+[Unit]
+Description=moarchy pacman keyring (generated on this phone)
+# The image ships no /etc/pacman.d/gnupg. A keyring built into the image would
+# carry one master secret key shared by every phone flashed from it, and anyone
+# holding the image could sign a key all of those phones then trust. This makes
+# the phone's own, then imports and trusts the packaged keys, moarchy's
+# included, so SigLevel = Required works from first boot.
+ConditionPathExists=!/etc/pacman.d/gnupg
+After=time-set.target
+# Retried until it succeeds, chiefly while the clock is still behind (see the
+# script); a failed attempt leaves no keyring, so the condition stays true.
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/moarchy/bin/moarchy-pacman-init
+Restart=on-failure
+RestartSec=30
+# Quick retries for the clock, backing off to 15 minutes for anything that keeps
+# failing, so a broken keyring cannot regenerate an RSA key every 30 seconds.
+RestartSteps=5
+RestartMaxDelaySec=15min
+
+[Install]
+WantedBy=multi-user.target

@@ -394,6 +394,8 @@ absent.
 > `/usr/share/pacman/keyrings` cannot see it: pacman validates against
 > `/etc/pacman.d/gnupg`, and nothing imports into that on its own.
 
+*Amended 2026-10-18.* The keyring that trusts it is now the **phone's own**, not the image's. pacstrap copied the build container's keyring into every image, master secret key included, so every phone flashed from one image shared that key, and anyone holding the image could certify a key all of those phones then trusted. The image now ships no `/etc/pacman.d/gnupg`; `moarchy-pacman-init.service` generates one on first boot and populates it, which trusts the same eight keys the copied keyring did. `image/verify.sh` fails an image that carries one, then runs the script in the chroot (from a planted half-made `gnupg.new`, as a power cut would leave) and asks the generated keyring the same three-way question as before.
+
 ---
 
 ## 7. The image

@@ -338,6 +338,11 @@ say "trim the rootfs"
 # download for no reason. The first `pacman -Syu` refills it as needed.
 rm -rf "${ROOTDIR:?}/var/cache/pacman/pkg/"*
 rm -f  "$ROOTDIR/etc/resolv.conf"          # the builder's, not the phone's
+# The build's keyring, master secret key included. Shipped, it would be one
+# secret shared by every phone flashed from this image; moarchy-pacman-init
+# makes each phone its own on first boot. Last, because configure.sh's
+# `pacman -Sy` above still needed it.
+rm -rf "${ROOTDIR:?}/etc/pacman.d/gnupg"
 # Put back the symlink `filesystem` ships, rather than handing over an image
 # with a packaged file missing. Nothing resolves through it -- nsswitch sends
 # lookups to resolved directly, which is why this went unnoticed -- but

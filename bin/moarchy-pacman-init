@@ -1,0 +1,54 @@
+#!/bin/bash
+# The phone's own pacman keyring, made once (moarchy-pacman-init.service).
+#
+# Built beside the real path and renamed into place last, so a reboot or power
+# loss mid-run leaves only gnupg.new, which the next run deletes. Created in
+# place, a half-made keyring would satisfy the unit's ConditionPathExists and
+# never be repaired, and every `pacman -Syu` would be refused.
+set -euo pipefail
+
+dir=/etc/pacman.d/gnupg
+new=$dir.new
+
+# gpg refuses every packaged key as "created in the future" when the clock is
+# behind, and the master key would carry that date. sargo's rtc-pm8xxx resets
+# the clock to its own 1970 value after systemd has applied the floor below,
+# so wait until the clock is no earlier than it; the unit retries until NTP
+# has set it. The packaged keyrings' own dates count too, in case the floor
+# file was rewritten while the clock was wrong.
+floor=$({ stat -c %Y /var/lib/systemd/timesync/clock /usr/share/pacman/keyrings/*.gpg 2>/dev/null || true; } | sort -n | tail -1)
+floor=${floor:-0}
+if [ "$(date +%s)" -lt "$floor" ]; then
+  echo "clock is behind $(date -ud "@$floor") -- retrying once it is set" >&2
+  exit 75
+fi
+
+# Started from moarchy.install, this runs inside a pacman transaction, and a
+# keyring package extracted after --populate has read /usr/share/pacman/keyrings
+# would be missed, revocations included. Wait for the transaction to end.
+for _ in $(seq 180); do [ -e /var/lib/pacman/db.lck ] || break; sleep 5; done
+[ ! -e /var/lib/pacman/db.lck ] || { echo "pacman is still running -- retrying" >&2; exit 75; }
+
+rm -rf "$new"
+pacman-key --gpgdir "$new" --init
+pacman-key --gpgdir "$new" --populate
+
+# Only a keyring that trusts the moarchy key is put in place and marked; one
+# that does not would refuse every update and, marked, never be replaced.
+fpr=$(sed -n '1s/:.*//p' /usr/share/pacman/keyrings/moarchy-trusted 2>/dev/null)
+validity=
+[ -n "$fpr" ] &&
+  validity=$(gpg --homedir "$new" --batch --with-colons --list-keys "$fpr" 2>/dev/null | awk -F: '$1=="pub"{print $2; exit}')
+case "$validity" in
+  f|u) ;;
+  *) echo "the moarchy key ${fpr:-?} is not trusted in the new keyring (validity '${validity:-none}')" >&2
+     gpgconf --homedir "$new" --kill all; exit 1 ;;
+esac
+gpgconf --homedir "$new" --kill all
+# On disk before the rename makes it count, and the rename on disk after.
+sync
+mv -T "$new" "$dir"
+# Marks the keyring as this phone's own, which moarchy.install's post_upgrade
+# reads to tell it from one that came built into an older image.
+install -Dm644 /dev/null /var/lib/moarchy/pacman-keyring-generated
+sync

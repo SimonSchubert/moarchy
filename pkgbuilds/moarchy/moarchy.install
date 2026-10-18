@@ -1,0 +1,24 @@
+# Replace a pacman keyring that came built into the image.
+#
+# Images from before moarchy-pacman-init shipped the build container's keyring,
+# master secret key included, so every phone flashed from one image shares a key
+# that anyone holding the image can certify keys with. moarchy-pacman-init marks
+# a keyring it generated; one without the mark came from an image, and is
+# replaced by one this phone generates. Keys added by hand with
+# `pacman-key --lsign-key` go with it and have to be added again.
+#
+# post_upgrade only. post_install runs inside pacstrap, where the keyring is the
+# build's own and is still needed for the rest of the image build.
+post_upgrade() {
+  local dir=/etc/pacman.d/gnupg mark=/var/lib/moarchy/pacman-keyring-generated
+  [ -d "$dir" ] && [ ! -e "$mark" ] || return 0
+  # Its agent would otherwise keep the shared secret key in memory.
+  gpgconf --homedir "$dir" --kill all 2>/dev/null || true
+  rm -rf "$dir"
+  echo "==> moarchy: replacing the pacman keyring that came built into the image"
+  echo "    The phone generates its own now; re-add any key you lsigned by hand."
+  # restart, not start: RemainAfterExit keeps a unit that succeeded once active,
+  # and starting an active unit does nothing.
+  systemctl restart --no-block moarchy-pacman-init.service 2>/dev/null ||
+    echo "    Reboot to finish: the new keyring is generated at the next boot."
+}

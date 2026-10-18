@@ -61,6 +61,9 @@ sed -i 's|^moarchy:!:|moarchy:$6$fakehashfakehashfakehash:|' $W/r/etc/shadow
 rm -rf $W/r/usr/share/moarchy/plugins/moarchy.control-center
 # 8. un-enable the grow unit
 rm -f $W/r/etc/systemd/system/sysinit.target.wants/moarchy-grow-rootfs.service
+# 9. ship a pacman keyring, the master secret every flashed phone would share
+mkdir -p $W/r/etc/pacman.d/gnupg/private-keys-v1.d
+touch $W/r/etc/pacman.d/gnupg/private-keys-v1.d/planted.key
 umount $W/r
 
 echo "==> re-sparsing"
@@ -98,6 +101,7 @@ catches "plugins, image has"           "a missing shell plugin"
 # a check that is working -- [[empty-grep-is-not-absence]], costing one run.
 catches "not enabled in either tree: system/sysinit.target.wants/moarchy-grow-rootfs" \
         "a disabled first-boot unit"
+catches "share one pacman master key"  "a pacman keyring shipped in the image"
 
 echo
 if [ $rc -ne 0 ]; then ok "verify.sh exited non-zero ($rc)"; else no "verify.sh exited 0 on a broken image"; fi

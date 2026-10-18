@@ -122,28 +122,25 @@ else
   no "no build-info in the image -- it cannot say what commit it is"
 fi
 have /usr/share/pacman/keyrings/moarchy.gpg
-# The file being there is not the check. pacman validates against its own
-# keyring in /etc/pacman.d/gnupg, and nothing imports into that automatically --
-# moarchy-keyring's post_install runs `pacman-key --populate`, and it swallows
-# its own failure with a warning to stderr that pacstrap's output buries. If
-# that ran and did not work, SigLevel = Required refuses every package in the
-# repo and the phone's only symptom is that `pacman -Syu` stops, which is
-# precisely the thing the repo exists to make possible.
-#
-# Three outcomes, told apart: trusted, present but not trusted (imported without
-# the -trusted file, so gpg has no ownertrust and validates nothing), absent.
-kt="$R/usr/share/pacman/keyrings/moarchy-trusted"
-kf=$(sed 's/:.*//' "$kt" 2>/dev/null | head -1)
-if [ -z "$kf" ]; then
-  no "no moarchy-trusted beside the key -- pacman-key had no fingerprint to trust"
-elif pacman-key --gpgdir "$R/etc/pacman.d/gnupg" --list-keys "$kf" 2>/dev/null |
-     grep -qE '\[ *(full|ultimate) *\]'; then
-  ok "the moarchy signing key is trusted in the image's own keyring ($kf)"
-elif pacman-key --gpgdir "$R/etc/pacman.d/gnupg" --list-keys "$kf" >/dev/null 2>&1; then
-  no "the moarchy key is in the keyring but NOT trusted -- SigLevel = Required will refuse every update"
+# No keyring in the image. One built in carries a master secret key, and every
+# phone flashed from the image would share it: anyone holding the image could
+# sign a key all of those phones then trust. moarchy-pacman-init makes each
+# phone its own on first boot; the behaviour section runs it and checks the
+# moarchy key comes out trusted.
+if [ -e "$R/etc/pacman.d/gnupg" ]; then
+  no "the image ships /etc/pacman.d/gnupg -- every phone flashed from it would share one pacman master key"
 else
-  no "the moarchy key is not in /etc/pacman.d/gnupg -- pacman-key --populate did not run, and pacman -Syu will refuse the repo"
+  ok "no pacman keyring in the image (each phone generates its own)"
 fi
+# The mark says "this phone generated its keyring"; shipped, it would stop
+# moarchy.install from replacing a keyring that came built into an image.
+[ ! -e "$R/var/lib/moarchy/pacman-keyring-generated" ] \
+  && ok "no keyring-generated mark in the image" \
+  || no "the image ships /var/lib/moarchy/pacman-keyring-generated -- an image-built keyring would never be replaced"
+# And no secret key material anywhere else, whatever put it there.
+_sk=$(find "$R" -xdev \( -name private-keys-v1.d -o -name secring.gpg \) 2>/dev/null | sed "s|^$R||")
+[ -z "$_sk" ] && ok "no GnuPG secret key material in the rootfs" \
+              || no "GnuPG secret key material in the image: $(echo $_sk)"
 have /usr/share/libalpm/hooks/50-moarchy-shell-reload.hook
 # The update path, checked for every repo the manifest names rather than for
 # [moarchy] alone. Without a stanza a phone can only be upgraded by reflashing,
@@ -380,6 +377,7 @@ unit() {
 }
 unit system/multi-user.target moarchy-firstboot.service
 unit system/multi-user.target moarchy-led-perms.service
+unit system/multi-user.target moarchy-pacman-init.service
 unit system/sysinit.target    moarchy-grow-rootfs.service
 unit user/default.target      moarchy-user-setup.service
 # sysinit.target, which is where systemd-timesyncd.service's own [Install]
@@ -471,6 +469,43 @@ for g in input feedbackd; do
 done
 [ -f "$R/var/lib/moarchy/firstboot-done" ] && ok "firstboot stamped itself" \
                                            || no "no firstboot stamp -- it would run again"
+
+# --- moarchy-pacman-init ---------------------------------------------------
+# Run from a state a power cut during first boot leaves: a half-made
+# gnupg.new. The script must discard it and still produce a keyring. Then the
+# check that matters: SigLevel = Required refuses every package in the repo
+# unless the moarchy key is TRUSTED, and the phone's only symptom would be
+# `pacman -Syu` stopping. Three outcomes, told apart: trusted, present but not
+# trusted (no ownertrust, so gpg validates nothing), absent.
+mkdir -p "$R/etc/pacman.d/gnupg.new" && touch "$R/etc/pacman.d/gnupg.new/pubring.gpg"
+if chroot "$R" /usr/lib/moarchy/bin/moarchy-pacman-init > "$WORK/pacman-init.log" 2>&1; then
+  ok "moarchy-pacman-init generated a keyring over an interrupted run's leftovers"
+else
+  no "moarchy-pacman-init failed"; sed 's/^/       /' "$WORK/pacman-init.log" 2>/dev/null
+fi
+[ ! -e "$R/etc/pacman.d/gnupg.new" ] && ok "no gnupg.new left behind" \
+                                    || no "gnupg.new left behind -- the keyring was not moved into place"
+[ -e "$R/var/lib/moarchy/pacman-keyring-generated" ] && ok "the generated keyring is marked as the phone's own" \
+  || no "no keyring-generated mark -- the next upgrade would replace a keyring the phone made itself"
+kt="$R/usr/share/pacman/keyrings/moarchy-trusted"
+kf=$(sed 's/:.*//' "$kt" 2>/dev/null | head -1)
+if [ -z "$kf" ]; then
+  no "no moarchy-trusted beside the key -- pacman-key had no fingerprint to trust"
+elif pacman-key --gpgdir "$R/etc/pacman.d/gnupg" --list-keys "$kf" 2>/dev/null |
+     grep -qE '\[ *(full|ultimate) *\]'; then
+  ok "the moarchy signing key is trusted in the phone-generated keyring ($kf)"
+elif pacman-key --gpgdir "$R/etc/pacman.d/gnupg" --list-keys "$kf" >/dev/null 2>&1; then
+  no "the moarchy key is in the keyring but NOT trusted -- SigLevel = Required will refuse every update"
+else
+  no "the moarchy key is not in the generated keyring -- pacman -Syu will refuse the repo"
+fi
+chroot "$R" gpgconf --homedir /etc/pacman.d/gnupg --kill all 2>/dev/null
+# Exactly one ultimately trusted key, the phone's own master; a second would be
+# a keyring that was copied in rather than generated.
+_ult=$(chroot "$R" gpg --homedir /etc/pacman.d/gnupg --export-ownertrust 2>/dev/null | grep -c ':6:$')
+chroot "$R" gpgconf --homedir /etc/pacman.d/gnupg --kill all 2>/dev/null
+[ "$_ult" = 1 ] && ok "one local master key in the generated keyring" \
+                || no "$_ult ultimately trusted keys in the generated keyring, expected 1"
 
 # --- moarchy-user-setup ----------------------------------------------------
 # Runs as the user, from their own HOME, the way the user unit does.

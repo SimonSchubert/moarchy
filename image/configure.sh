@@ -69,8 +69,8 @@ echo 'LANG=en_US.UTF-8' > "$ROOTDIR/etc/locale.conf"
 #
 # SigLevel = Required, not Never: these packages install as root, and without a
 # signature check the only thing between a download and the phone is HTTPS.
-# moarchy-keyring is in the package set, so the key is already trusted by the
-# time this repo is first consulted.
+# moarchy-keyring is in the package set, so the key is trusted in the build's
+# keyring here and in the phone's own after moarchy-pacman-init.
 # Every repository the manifest names, not just the first one. This used to be
 # a single hardcoded `manifest_get repo` lookup, which is why [moarchy-apps]
 # -- the repo every app in moarchy-store installs from -- was in no image at

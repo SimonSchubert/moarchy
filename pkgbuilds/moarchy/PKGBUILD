@@ -183,11 +183,16 @@ pkgver=$_ver
 #    so this package ships strictly less and upstream answers for more. The
 #    payload changed in both directions, which is exactly what
 #    docker/build-packages.sh needs a new pkgver-pkgrel to notice.
-pkgrel=6
+# 7: ships moarchy-pacman-init.service, which generates the pacman keyring on
+#    the phone. The image stops carrying one, because a keyring built into the
+#    image is one master secret key shared by every phone flashed from it.
+#    moarchy.install replaces such a keyring on phones flashed before this.
+pkgrel=7
 pkgdesc="Omarchy's look, keybindings and theming on a phone, under Hyprland"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
 license=('MIT')
+install=moarchy.install
 # The last three are new here, and they are a fix rather than an addition. Each
 # has always been a dependency of this package and none of them was declared:
 #
@@ -478,11 +483,15 @@ package() {
     "$pkgdir/usr/lib/systemd/system/moarchy-firstboot.service"
   install -Dm644 "$_repo/default/systemd/system/moarchy-led-perms.service" \
     "$pkgdir/usr/lib/systemd/system/moarchy-led-perms.service"
+  install -Dm644 "$_repo/default/systemd/system/moarchy-pacman-init.service" \
+    "$pkgdir/usr/lib/systemd/system/moarchy-pacman-init.service"
   install -d "$pkgdir/usr/lib/systemd/system/multi-user.target.wants"
   ln -s ../moarchy-firstboot.service \
     "$pkgdir/usr/lib/systemd/system/multi-user.target.wants/moarchy-firstboot.service"
   ln -s ../moarchy-led-perms.service \
     "$pkgdir/usr/lib/systemd/system/multi-user.target.wants/moarchy-led-perms.service"
+  ln -s ../moarchy-pacman-init.service \
+    "$pkgdir/usr/lib/systemd/system/multi-user.target.wants/moarchy-pacman-init.service"
 
   install -Dm644 "$_repo/default/systemd/user/moarchy-user-setup.service" \
     "$pkgdir/usr/lib/systemd/user/moarchy-user-setup.service"
