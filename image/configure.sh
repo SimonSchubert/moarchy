@@ -175,9 +175,10 @@ fi
 
 # --- the clock (I10) -------------------------------------------------------
 # Nothing in this image sets the time. Arch enables no NTP client by default,
-# and this systemd ships no /usr/lib/clock-epoch, so the only thing holding the
-# clock up is the PMIC RTC -- which reads back nonsense on a phone that has been
-# off the battery. A clock far enough out fails certificate validation on every
+# this systemd ships no /usr/lib/clock-epoch, and the PMIC RTC reads 1970 (the
+# kernel no longer copies it into the system clock; linux-moarchy-sdm670's
+# RTC_HCTOSYS note), so without NTP and the floor below the clock is whatever
+# boot leaves it at. A clock far enough out fails certificate validation on every
 # TLS handshake, and the phone can no longer install anything:
 #
 #   yay:    x509: certificate has expired or is not yet valid

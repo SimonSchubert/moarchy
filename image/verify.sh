@@ -387,8 +387,9 @@ unit user/default.target      moarchy-user-setup.service
 unit system/sysinit.target    systemd-timesyncd.service
 
 # The clock (I10). An image with no NTP client enabled has no time source at
-# all: Arch enables none by default and this systemd ships no
-# /usr/lib/clock-epoch, so the clock is whatever the PMIC RTC says. Far enough
+# all: Arch enables none by default, this systemd ships no
+# /usr/lib/clock-epoch, and the PMIC RTC reads 1970 and no longer sets the
+# system clock (linux-moarchy-sdm670's RTC_HCTOSYS note). Far enough
 # out and every TLS handshake fails certificate validation, which is how it
 # actually presented -- as `yay` reporting an expired certificate for the AUR on
 # a phone flashed the same day.
