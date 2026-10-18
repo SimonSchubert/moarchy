@@ -214,7 +214,11 @@ pkgset_list "$PKGS" | sed 's/^/    /'
 cat >"$WORK/pacman.conf" <<EOF
 [options]
 Architecture = aarch64
-SigLevel = Never
+# Every package the image is built from is signature-checked, the same as on
+# the phone, and core/extra/alarm/aur come over HTTPS (configure.sh's mirror
+# note). It was Never, over the plain-HTTP redirector, so anyone on the build
+# host's network could have put a package into every published image.
+SigLevel = Required DatabaseOptional
 DisableSandbox
 # pacman's default gives up on a stalled mirror with "Operation too slow. Less
 # than 1 bytes/sec", which failed a build 40 minutes in on webkitgtk. The retry
@@ -222,21 +226,32 @@ DisableSandbox
 # that merely crawls.
 DisableDownloadTimeout
 HoldPkg = pacman glibc
+# This build's own packages, unsigned: pkgset_vouched above has already checked
+# each one against the hash the package build recorded.
 [moarchy]
+SigLevel = Never
 Server = file://$WORK/repo
 [core]
-Server = http://mirror.archlinuxarm.org/\$arch/\$repo
+Include = $WORK/mirrorlist
 [extra]
-Server = http://mirror.archlinuxarm.org/\$arch/\$repo
+Include = $WORK/mirrorlist
 [alarm]
-Server = http://mirror.archlinuxarm.org/\$arch/\$repo
+Include = $WORK/mirrorlist
 [aur]
-Server = http://mirror.archlinuxarm.org/\$arch/\$repo
+Include = $WORK/mirrorlist
 # [danctnix] outlived the phone it was added for: libdng and libmegapixels are
 # not in Arch Linux ARM, and pkgbuilds/megapixels links against both
-# (docs/devices.md §2).
+# (docs/devices.md §2). Still Never: its packages carry detached signatures, but
+# this container does not trust the DanctNIX key, and pulling the key from the
+# same server would prove nothing. HTTPS is all that protects these two.
 [danctnix]
+SigLevel = Never
 Server = https://archmobile.mirror.danctnix.org/\$repo/\$arch/
+EOF
+cat >"$WORK/mirrorlist" <<'EOF'
+Server = https://ca.us.mirror.archlinuxarm.org/$arch/$repo
+Server = https://fl.us.mirror.archlinuxarm.org/$arch/$repo
+Server = https://de3.mirror.archlinuxarm.org/$arch/$repo
 EOF
 
 # ---------------------------------------------------------------------------

@@ -165,6 +165,31 @@ for _sec in $_repos; do
     no "no [$_name] repo in pacman.conf -- nothing from it can be installed or updated"
   fi
 done
+# Package signatures are what HTTPS cannot replace: required globally, and not
+# weakened for the Arch Linux ARM repos, whose packages install as root.
+_gsig=$(pacman-conf --config "$R/etc/pacman.conf" SigLevel 2>/dev/null | tr '\n' ' ')
+_weak=""
+for _r in core extra alarm aur; do
+  _rsig=$(pacman-conf --config "$R/etc/pacman.conf" --repo "$_r" SigLevel 2>/dev/null | tr '\n' ' ')
+  case "$_rsig" in *PackageNever*|*PackageOptional*|*PackageTrustAll*) _weak="$_weak $_r" ;; esac
+done
+case "$_gsig" in
+  *PackageRequired*) [ -z "$_weak" ] && ok "package signatures required (global: $_gsig)" \
+                       || no "package signatures weakened for:$_weak" ;;
+  *) no "package signatures not required globally (SigLevel: ${_gsig:-unreadable})" ;;
+esac
+# ALARM's databases are unsigned, so the transport is what keeps them honest:
+# every mirror HTTPS, and at least one of them.
+_ml="$R/etc/pacman.d/mirrorlist"
+_plain=$(grep -cE '^\s*Server\s*=\s*http://' "$_ml" 2>/dev/null)
+_tls=$(grep -cE '^\s*Server\s*=\s*https://' "$_ml" 2>/dev/null)
+if [ "${_plain:-0}" -gt 0 ]; then
+  no "the mirrorlist has $_plain plain-HTTP Server line(s) -- unsigned ALARM databases could be served by anyone on the network"
+elif [ "${_tls:-0}" -eq 0 ]; then
+  no "the mirrorlist has no Server line -- nothing from core/extra/alarm can be updated"
+else
+  ok "Arch Linux ARM mirrors are HTTPS only ($_tls)"
+fi
 # The cached database, and whether it is signed. This is the check that was
 # missing while the bug it catches shipped twice.
 #

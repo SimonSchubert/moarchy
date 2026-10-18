@@ -109,6 +109,24 @@ else
   say "$_repos_written repo(s) configured -- pacman -Syu updates the phone UI and its apps"
 fi
 
+# --- Arch Linux ARM mirrors: HTTPS only ------------------------------------
+# ALARM signs its packages but not its databases, and the stock mirrorlist
+# reaches them over plain HTTP. Signatures stop a tampered package; they do not
+# stop someone on the phone's network serving an old or edited database, which
+# can hold back security updates indefinitely. These are the official mirrors
+# that serve HTTPS with a valid certificate (3 of 13, checked 2026-10-18). No
+# HTTP fallback: one would let that same attacker force it by blocking HTTPS.
+#
+# /etc/pacman.d/mirrorlist is a backup file of pacman-mirrorlist, so an upgrade
+# of that package leaves a .pacnew beside this rather than replacing it.
+cat >"$ROOTDIR/etc/pacman.d/mirrorlist" <<'EOF'
+# moarchy: Arch Linux ARM mirrors that serve HTTPS (image/configure.sh).
+Server = https://ca.us.mirror.archlinuxarm.org/$arch/$repo
+Server = https://fl.us.mirror.archlinuxarm.org/$arch/$repo
+Server = https://de3.mirror.archlinuxarm.org/$arch/$repo
+EOF
+say "mirrorlist: Arch Linux ARM over HTTPS only (3 mirrors)"
+
 # --- DNS -------------------------------------------------------------------
 # systemd ships /etc/resolv.conf as a symlink to systemd-resolved's stub, and
 # nsswitch.conf already lists `resolve` first. With resolved disabled that

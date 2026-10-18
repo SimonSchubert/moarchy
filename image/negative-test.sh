@@ -61,6 +61,8 @@ sed -i 's|^moarchy:!:|moarchy:$6$fakehashfakehashfakehash:|' $W/r/etc/shadow
 rm -rf $W/r/usr/share/moarchy/plugins/moarchy.control-center
 # 8. un-enable the grow unit
 rm -f $W/r/etc/systemd/system/sysinit.target.wants/moarchy-grow-rootfs.service
+# 9. a plain-HTTP mirror, over which the unsigned ALARM databases travel
+echo 'Server = http://mirror.archlinuxarm.org/$arch/$repo' >> $W/r/etc/pacman.d/mirrorlist
 umount $W/r
 
 echo "==> re-sparsing"
@@ -98,6 +100,7 @@ catches "plugins, image has"           "a missing shell plugin"
 # a check that is working -- [[empty-grep-is-not-absence]], costing one run.
 catches "not enabled in either tree: system/sysinit.target.wants/moarchy-grow-rootfs" \
         "a disabled first-boot unit"
+catches "plain-HTTP Server line"       "a plain-HTTP Arch Linux ARM mirror"
 
 echo
 if [ $rc -ne 0 ]; then ok "verify.sh exited non-zero ($rc)"; else no "verify.sh exited 0 on a broken image"; fi
