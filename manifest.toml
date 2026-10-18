@@ -432,9 +432,14 @@ keyid   = "3CA83612E7F3108F442006B418305B893569BAD3"
 # in a sync database. No stanza, no sync database, no Install button -- on a
 # freshly flashed phone, while the developer's own handset worked because
 # somebody had added the stanza to it by hand months earlier.
+#
+# Published as [market-apps] since the Pages site renamed it. The name is the
+# database pacman fetches, so a stanza still saying moarchy-apps asks for a
+# moarchy-apps.db that 404s and fails every `pacman -Syu` on the phone. Same
+# server, same key; moarchy-store installs by package name, not repo.
 # ---------------------------------------------------------------------------
 [repo.apps]
-name    = "moarchy-apps"
+name    = "market-apps"
 server  = "https://simonschubert.github.io/moarchy-apps/aarch64"
 keyid   = "3CA83612E7F3108F442006B418305B893569BAD3"
 
