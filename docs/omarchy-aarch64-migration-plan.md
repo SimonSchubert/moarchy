@@ -1,5 +1,10 @@
 # Plan: move from a vendored Omarchy to upstream's aarch64 packages
 
+**Superseded 2026-10-18** by [`mobile-landscape-2026-10.md`](./mobile-landscape-2026-10.md)
+and the successor project omarchy-mobile (local, `~/Personal/omarchy-mobile`).
+Correction: the shell lives in the `omarchy` package, not `omarchy-settings`,
+so "track omarchy-settings only" below would have kept the vendored shell.
+
 **Status: PLAN ONLY, not started (written 2026-10-16).** Waiting for the trigger
 in [Gate 0](#gate-0-wait-for-the-packages-on-stable). Background and numbers:
 [`omarchy-arm-scan-2026-10.md`](./omarchy-arm-scan-2026-10.md).

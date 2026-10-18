@@ -1048,8 +1048,9 @@ Check `q6voiced.conf`'s device number against the new PCM list.
 
 ## D35 -- the shell UI broke on the 10-17 image: Qt 6.12 shadows `Color` {#d35}
 
-**Status: FIX IN THE PACKAGES, hotfixed on the handset (2026-10-17).** Move to
-fixes once an image carrying it is on the phone.
+**Status: FIX IN THE PACKAGES (`360b644`, CI run 39065323535 green), hotfixed on
+the handset (2026-10-17); the owner reports the phone working (2026-10-18).**
+Move to fixes once an image carrying it is on the phone.
 
 The first image built on 10-17 (`fp4` @ `22c0726`) came up with the dropdown
 menu solid black and the app drawer showing icons with no names. Nothing of
