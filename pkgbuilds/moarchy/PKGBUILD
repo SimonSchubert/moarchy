@@ -183,7 +183,10 @@ pkgver=$_ver
 #    so this package ships strictly less and upstream answers for more. The
 #    payload changed in both directions, which is exactly what
 #    docker/build-packages.sh needs a new pkgver-pkgrel to notice.
-pkgrel=6
+# 7: the plugins say `Commons.Color`, not `Color`. QtQuick 6.12 brings its own
+#    `Color`, which shadows the qs.Commons singleton, and every moarchy surface
+#    rendered black (omarchy-config 7 carries the same rewrite for the shell).
+pkgrel=7
 pkgdesc="Omarchy's look, keybindings and theming on a phone, under Hyprland"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'

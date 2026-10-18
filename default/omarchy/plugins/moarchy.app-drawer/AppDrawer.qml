@@ -63,6 +63,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui as Ui
 // moarchy.settings', not ours: the Settings tree flattened for search, and the
 // batched guard script its pages are read with. See the header note above.
@@ -478,15 +479,15 @@ Item {
   // mirrors Hyprland's `decoration:rounding` and is pinned to 0 here by the
   // hyprctl shim -- right for tiled windows under Sway, wrong for a phone.
   // Colours still come from the theme, so a theme switch restyles all of this.
-  readonly property color surface: Color.menu.background
+  readonly property color surface: Commons.Color.menu.background
   // NOT `onSurface` / `onAccent`, however much the Material role names want to
   // be spelled that way. QML reserves the `on<Uppercase>` prefix for signal
   // handlers, so a property declared there is never readable: the binding
   // evaluates to undefined, undefined assigned to a `color` is #000000, and
   // nothing is logged. The symptom is every glyph and label painted pure black
   // on a dark tile while the properties either side of them are fine.
-  readonly property color textOnSurface: Color.menu.text
-  readonly property color container: Util.alpha(Color.menu.text, 0.08)
+  readonly property color textOnSurface: Commons.Color.menu.text
+  readonly property color container: Util.alpha(Commons.Color.menu.text, 0.08)
   // The fifth of C2's six roles, and the app drawer had never needed one: at rest
   // this screen is a search pill and bare icons, and a second tone with nothing
   // to distinguish from would be a colour nobody chose. The detail card is what
@@ -494,9 +495,9 @@ Item {
   // control sitting on it rather than as more card (style.md C2, and the
   // Bluetooth sheet's Forget for the precedent that a destructive button here is
   // a tone up, not a red).
-  readonly property color containerHigh: Util.alpha(Color.menu.text, 0.14)
+  readonly property color containerHigh: Util.alpha(Commons.Color.menu.text, 0.14)
   readonly property color subduedBase: Theme.mix(
-    Qt.rgba(root.surface.r, root.surface.g, root.surface.b, 1), Color.menu.text, 0.08)
+    Qt.rgba(root.surface.r, root.surface.g, root.surface.b, 1), Commons.Color.menu.text, 0.08)
 
   // The detail card's fill, and it has to be this rather than `container`.
   //
@@ -513,7 +514,7 @@ Item {
   // something solid.
   readonly property color cardFill: root.subduedBase
   readonly property color subdued: Theme.readableOn(root.subduedBase,
-                                                   Color.menu.text, 0.55, 4.5)
+                                                   Commons.Color.menu.text, 0.55, 4.5)
 
   // The veil is shared (docs/refactor.md E2); the default ink is this
   // surface's own, which is the half a shared type cannot know (style.md H2).
@@ -1596,7 +1597,7 @@ Item {
     // has nothing spare.
     Rectangle {
       anchors.fill: parent
-      color: Util.alpha(Color.background, 0.6 * root.progress)
+      color: Util.alpha(Commons.Color.background, 0.6 * root.progress)
     }
 
     Rectangle {

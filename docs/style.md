@@ -114,9 +114,9 @@ edge rather than centred may stay a plain `Text`.
 
 | Layer | Source | Surfaces |
 | --- | --- | --- |
-| bar | `Color.bar.*` | `moarchy.bar` |
-| full-screen | `Color.menu.*` | app drawer, Settings, Themes, Device |
-| popup / pull-down | `Color.popups.*` | control center, Wi-Fi, Bluetooth, SIM, the volume panel |
+| bar | `Commons.Color.bar.*` | `moarchy.bar` |
+| full-screen | `Commons.Color.menu.*` | app drawer, Settings, Themes, Device |
+| popup / pull-down | `Commons.Color.popups.*` | control center, Wi-Fi, Bluetooth, SIM, the volume panel |
 
 Every token named here is one upstream's `Color` singleton actually has:
 `foreground`, `background`, `accent`, `urgent`, `muted`, and a nested object per
@@ -126,15 +126,16 @@ that were therefore always false. It drew the hex beside each one and never once
 followed the theme (`refactor.md` J1a).
 
 **C2** Each surface declares the same six roles at the top of the file, and the
-body refers only to those — never to `Color.*` inline. The recipe:
+body refers only to those — never to `Commons.Color.*` inline. The recipe, in a file that imports
+`qs.Commons as Commons`:
 
 ```qml
-readonly property color surface:       Color.menu.background
-readonly property color textOnSurface: Color.menu.text
-readonly property color container:     Util.alpha(Color.menu.text, 0.08)
-readonly property color containerHigh: Util.alpha(Color.menu.text, 0.14)
-readonly property color accent:        Color.accent
-readonly property color textOnAccent:  Color.background
+readonly property color surface:       Commons.Color.menu.background
+readonly property color textOnSurface: Commons.Color.menu.text
+readonly property color container:     Util.alpha(Commons.Color.menu.text, 0.08)
+readonly property color containerHigh: Util.alpha(Commons.Color.menu.text, 0.14)
+readonly property color accent:        Commons.Color.accent
+readonly property color textOnAccent:  Commons.Color.background
 ```
 
 Two blocks, not one, is the whole reason this is a per-surface property block
@@ -148,9 +149,11 @@ surface's own `readableOn()` helper, and never fixed at an alpha. A theme whose
 menu text is already low-contrast turns a flat `alpha(text, 0.62)` into
 unreadable.
 
-**C4** Literal hex appears in exactly one place: the fallback in a `typeof Color
+**C4** Literal hex appears in exactly one place: the fallback in a `typeof Commons.Color
 !== "undefined"` guard, for a surface that must draw before the theme singleton
 is available. Anywhere else it is a colour that will not follow a theme change.
+
+**C5** The palette is always `Commons.Color`, through `import qs.Commons as Commons`, never a bare `Color`. QtQuick 6.12 brings its own `Color`, which wins the lookup over the qs.Commons singleton, and a surface that says `Color.menu.background` then reads Qt's type, gets `undefined` for every role and renders black.
 
 ---
 

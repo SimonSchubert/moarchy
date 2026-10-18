@@ -69,7 +69,7 @@ RUN printf '\n[danctnix]\nSigLevel = Never\nServer = https://archmobile.mirror.d
 # which names the dependency honestly and still points at the wrong place: the
 # package declares it correctly, and the container is what has not got it.
 RUN pacman-key --init && pacman-key --populate archlinuxarm && \
-    pacman -Syu --noconfirm git go base-devel sudo bc libelf meson ninja alsa-lib
+    pacman -Syu --noconfirm git go base-devel sudo bc libelf meson ninja alsa-lib python
 
 # makepkg refuses to run as root.
 RUN useradd -m builder && \

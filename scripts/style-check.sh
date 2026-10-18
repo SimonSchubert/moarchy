@@ -134,8 +134,12 @@ for path in sorted(pathlib.Path(sys.argv[1]).glob("*/*.qml")):
         # that guard routinely wraps onto the line above.
         if HEX.search(re.sub(r"//.*$", "", line)):
             window = "\n".join(lines[max(0, n - 4):n])
-            if "typeof Color" not in window:
+            if "typeof Commons.Color" not in window:
                 problems.append(f"{path}:{n}  literal hex colour (C4)")
+
+        # C5: QtQuick 6.12's own Color shadows the qs.Commons singleton.
+        if re.search(r"(?<![\w.])Color\.", re.sub(r"//.*$", "", line)):
+            problems.append(f"{path}:{n}  bare Color. -- write Commons.Color. (C5)")
 
     # ------------------------------------------------------------- H1, H6
     # A control is a MouseArea that answers a tap. It has to name itself, and
@@ -217,6 +221,7 @@ PY
 if [[ -z $report ]]; then
   ok "every Text names its family and weight; glyphs in slots use OpticalGlyph (B1, B3, B5)"
   ok "hex only as a pre-theme fallback (C4)"
+  ok "the palette is always Commons.Color, never a bare Color (C5)"
   ok "every radius is sheet, tile, card, pill or radiusOn (D1)"
   ok "every control that answers a tap shows a pressed state (H1, H6)"
 else
