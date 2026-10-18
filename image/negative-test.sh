@@ -61,6 +61,9 @@ sed -i 's|^moarchy:!:|moarchy:$6$fakehashfakehashfakehash:|' $W/r/etc/shadow
 rm -rf $W/r/usr/share/moarchy/plugins/moarchy.control-center
 # 8. un-enable the grow unit
 rm -f $W/r/etc/systemd/system/sysinit.target.wants/moarchy-grow-rootfs.service
+# 9. turn the mDNS responder back on behind the image's back
+mkdir -p $W/r/etc/systemd/resolved.conf.d
+printf '[Resolve]\nMulticastDNS=yes\n' > $W/r/etc/systemd/resolved.conf.d/99-planted.conf
 umount $W/r
 
 echo "==> re-sparsing"
@@ -98,6 +101,7 @@ catches "plugins, image has"           "a missing shell plugin"
 # a check that is working -- [[empty-grep-is-not-absence]], costing one run.
 catches "not enabled in either tree: system/sysinit.target.wants/moarchy-grow-rootfs" \
         "a disabled first-boot unit"
+catches "LLMNR or mDNS re-enabled"     "an mDNS responder turned back on"
 
 echo
 if [ $rc -ne 0 ]; then ok "verify.sh exited non-zero ($rc)"; else no "verify.sh exited 0 on a broken image"; fi

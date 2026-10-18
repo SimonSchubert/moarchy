@@ -315,6 +315,17 @@ else
   say "no credentials baked in (publishable)"
 fi
 
+# --- mDNS back on, debug images only ---------------------------------------
+# moarchy turns systemd-resolved's mDNS responder off (50-moarchy.conf), but the
+# plugins' install-on-device.sh scripts find the phone as moarchy.local, and a
+# debug image is the only one they can log in to. 90 sorts after 50, so this
+# drop-in wins; LLMNR stays off.
+if [ -e "$ROOTDIR/etc/moarchy-debug-image" ]; then
+  install -d "$ROOTDIR/etc/systemd/resolved.conf.d"
+  printf '[Resolve]\nMulticastDNS=yes\n' >"$ROOTDIR/etc/systemd/resolved.conf.d/90-debug-mdns.conf"
+  say "DEBUG IMAGE: mDNS on, so the phone answers as moarchy.local"
+fi
+
 # --- fstab -----------------------------------------------------------------
 # Moved to the boot backend (docs/devices.md D8). It used to be written here,
 # and it was the third device-specific thing hiding inside device-independent

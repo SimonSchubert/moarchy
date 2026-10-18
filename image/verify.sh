@@ -436,6 +436,18 @@ else
 fi
 grep -qi '^PasswordAuthentication no' "$R/etc/ssh/sshd_config.d/10-moarchy.conf" 2>/dev/null \
   && ok "sshd password auth disabled" || no "sshd password auth not disabled"
+# systemd-resolved's LLMNR and mDNS responders answer on every interface and
+# announce the hostname; off, nothing in the image listens on a network.
+_rc="$R/usr/lib/systemd/resolved.conf.d/50-moarchy.conf"
+_rc_on=$(grep -lsE '^\s*(LLMNR|MulticastDNS)\s*=\s*(yes|resolve|true|1)\s*$' \
+  "$R/etc/systemd/resolved.conf" "$R"/etc/systemd/resolved.conf.d/*.conf | sed "s|^$R||")
+if ! grep -qx 'LLMNR=no' "$_rc" 2>/dev/null || ! grep -qx 'MulticastDNS=no' "$_rc" 2>/dev/null; then
+  no "LLMNR or mDNS is not turned off -- the phone answers name queries on every network it joins"
+elif [ -n "$_rc_on" ]; then
+  no "LLMNR or mDNS re-enabled by $(echo $_rc_on) -- the phone answers name queries on every network it joins"
+else
+  ok "systemd-resolved answers no LLMNR or mDNS queries"
+fi
 
 # ---------------------------------------------------------------------------
 # Everything above reads the image. This runs it. These two scripts do the work
