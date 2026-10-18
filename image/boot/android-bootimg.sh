@@ -176,10 +176,13 @@ say "boot image"
 local CMDLINE=${CMDLINE:-"root=PARTLABEL=$ROOT_PARTLABEL ro rootwait rootfstype=ext4 init=/sbin/init"}
 info "cmdline: $CMDLINE"
 
-# No --ramdisk: this kernel mounts root itself (D24).
+# This kernel mounts root itself (D24), but the ramdisk must not be empty: ABL
+# then passes a stale initrd, and an Android /init left in it reboots the phone
+# to the bootloader. The empty cpio has no /init, so root= and init= still rule.
 python3 "$REPO/image/boot/android-image.py" bootimg \
   --kernel  "$ROOTDIR/boot/Image.gz" \
   --dtb     "$ROOTDIR/boot/dtbs/qcom/$DTB_NAME.dtb" \
+  --empty-ramdisk \
   --cmdline "$CMDLINE" \
   --pagesize 4096 \
   --out "$OUTDIR/boot.img" || die "boot.img generation failed"
@@ -189,11 +192,11 @@ python3 "$REPO/image/boot/android-image.py" bootimg \
 local hdr
 hdr=$(dd if="$OUTDIR/boot.img" bs=8 count=1 status=none)
 [ "$hdr" = "ANDROID!" ] || die "boot.img does not start with ANDROID!"
-# ramdisk_size, a little-endian u32 at byte 16. Zero is the point of D24, and a
-# non-zero value here means an initramfs crept back in.
+# ramdisk_size, a little-endian u32 at byte 16. 124 is the empty cpio (D24): 0
+# lets ABL pass a stale initrd, and anything larger means an initramfs crept in.
 rdsz=$(od -An -tu4 -j16 -N4 "$OUTDIR/boot.img" | tr -d " ")
-[ "$rdsz" = 0 ] || die "boot.img carries a $rdsz-byte ramdisk; this backend ships none (D24)"
-info "boot.img $(stat -c%s "$OUTDIR/boot.img") bytes, no ramdisk"
+[ "$rdsz" = 124 ] || die "boot.img carries a $rdsz-byte ramdisk, not the 124-byte empty cpio (D24)"
+info "boot.img $(stat -c%s "$OUTDIR/boot.img") bytes, empty ramdisk"
 
 say "vbmeta"
 # An Android 12 bootloader refuses an unsigned kernel unless the vbmeta it has

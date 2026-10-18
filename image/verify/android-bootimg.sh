@@ -41,23 +41,33 @@ hver=$(od -An -tu4 -j40 -N4 "$IMG_XZ/boot.img" 2>/dev/null | tr -d ' ')
 [ "$hver" = 0 ] && ok "header version 0" || no "header version is $hver, not 0"
 
 # ramdisk_size, a little-endian u32 at byte 16. This backend ships no initramfs
-# (D24) -- the kernel mounts root itself -- and a non-zero value here means one
-# crept back in, which on this device is 18 MB of code that cannot print.
+# (D24) -- the kernel mounts root itself -- but it does ship the 124-byte empty
+# cpio. 0 lets ABL pass a stale initrd whose Android /init reboots the phone to
+# the bootloader; anything larger means an initramfs crept back in.
 rdsz=$(od -An -tu4 -j16 -N4 "$IMG_XZ/boot.img" 2>/dev/null | tr -d ' ')
-[ "$rdsz" = 0 ] && ok "no ramdisk (the kernel mounts root itself)" \
-                || no "boot.img carries a ${rdsz:-?}-byte ramdisk; this backend ships none (D24)"
+[ "$rdsz" = 124 ] && ok "124-byte ramdisk (the empty cpio; the kernel mounts root itself)" \
+                  || no "boot.img carries a ${rdsz:-?}-byte ramdisk, not the 124-byte empty cpio (D24)"
 
 # kernel_size, a little-endian u32 at byte 8. Read here because the size check
 # below needs it and so does the DTB extraction further down.
 ksize=$(od -An -tu4 -j8 -N4 "$IMG_XZ/boot.img" 2>/dev/null | tr -d ' ')
+kpages=$(( (ksize + 4095) / 4096 ))
 
-# The whole file should then be the header page plus the padded kernel, with
-# nothing after it. Catches a stray page or a truncated kernel, both of which
-# boot into silence.
-want=$(( 4096 + (ksize + 4095) / 4096 * 4096 ))
+# The whole file should then be the header page, the padded kernel and one
+# ramdisk page, with nothing after it. Catches a stray page or a truncated
+# kernel, both of which boot into silence.
+want=$(( 4096 + kpages * 4096 + 4096 ))
 have=$(stat -c%s "$IMG_XZ/boot.img")
-[ "$have" = "$want" ] && ok "boot.img is header + kernel, $have bytes" \
-                      || no "boot.img is $have bytes, not the $want a header plus a padded kernel makes"
+[ "$have" = "$want" ] && ok "boot.img is header + kernel + ramdisk, $have bytes" \
+                      || no "boot.img is $have bytes, not the $want a header, padded kernel and ramdisk page make"
+
+# And the ramdisk is the empty archive, not merely 124 bytes of something: a
+# newc header whose only record is the trailer, so there is no /init to run.
+rd=$(dd if="$IMG_XZ/boot.img" bs=4096 skip=$(( 1 + kpages )) count=1 status=none 2>/dev/null | head -c 124 | tr -d '\0')
+case "$rd" in
+  070701*TRAILER!!!) ok "the ramdisk is an empty cpio (no /init)" ;;
+  *) no "the ramdisk is not the empty cpio -- check android-image.py --empty-ramdisk" ;;
+esac
 
 sec "boot cmdline"
 # Read back out of the artifact rather than trusted from the script that wrote

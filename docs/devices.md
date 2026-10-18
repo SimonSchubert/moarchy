@@ -267,8 +267,12 @@ phone that shows two penguins and stops.
 > exactly like every other failure. `PARTLABEL=` needs no udev, so the
 > dependency and the debugging surface go together.
 
+*Amended 2026-10-17.* Still no initramfs, but the boot image now carries a **124-byte empty cpio** as its ramdisk (`android-image.py --empty-ramdisk`), because a `ramdisk_size` of 0 is not "no initrd" to sargo's ABL. Given none, it still passes the kernel a stale one: a handset that looped on 0.5.0 logged `Trying to unpack rootfs image as initramfs` and `Freeing initrd memory: 13924K` from an image with no ramdisk in it. The kernel then runs that region's `/init` instead of mounting root, and the phone shows a penguin and lands in fastboot with `Enter reason: reboot bootloader`, nothing in the journal. That reason is what Android's init does on a fatal error, so the region is most likely the Android boot ramdisk the handset last ran. Whether a handset has one depends on what it booted before, which is why the same image boots on one 3a and loops on another.
+
+> Found by elimination, all with `fastboot boot` so nothing was written: the release kernel booted with any ramdisk at all (one that waited for a USB console, one that continued at once, and finally an empty one) and looped without one, including on 7.2.3 with the bootloader's cmdline ignored (`CMDLINE_FORCE`). `boot_delay=40` slowed the kernel log enough to film, and the initrd lines were in it. The empty cpio has no `/init`, so the kernel falls through to `root=` and `init=` exactly as before; nothing above changes.
+
 **D12** `image/verify.sh` splits the same way. The backend asserts its own
-artifact facts (boot.img magic, the DTB appended, vbmeta flags = 2, no
+artifact facts (boot.img magic, the DTB appended, vbmeta flags = 2, the empty
 ramdisk, and the cmdline read back out of the header), and the behavioural
 section — the first-boot scripts run in a chroot — stays shared because it is
 about the rootfs.

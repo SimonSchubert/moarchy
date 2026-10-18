@@ -77,7 +77,8 @@ url="$_url"
 license=('GPL-2.0-only')
 # No mkinitcpio, and no preset for it either (devices.md D24). This kernel
 # mounts root on its own -- ext4, mmc and GPT are all built in -- so the
-# android-bootimg backend builds no initramfs and the boot image carries none.
+# android-bootimg backend builds no initramfs; the boot image carries only the
+# empty cpio that keeps ABL from passing a stale initrd.
 #
 # Shipping the preset anyway would be worse than useless. mkinitcpio stays
 # installed on a phone that already has it, its install hooks fire on any

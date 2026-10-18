@@ -28,12 +28,15 @@ Without it, (2) SKIPS loudly rather than passing quietly -- a test that reports
 success while measuring nothing is worse than one that does not run.
 """
 
+import contextlib
 import hashlib
 import importlib.util
+import io
 import os
 import pathlib
 import struct
 import sys
+import tempfile
 
 _HERE = pathlib.Path(__file__).resolve().parent
 _spec = importlib.util.spec_from_file_location("android_image",
@@ -135,11 +138,12 @@ def test_bootimg_roundtrip():
 
 
 def test_bootimg_no_ramdisk():
-    """The shape every sargo image actually has: a kernel and nothing else.
+    """A kernel and nothing else: the shape sargo images had until D24's
+    2026-10-17 amendment, and still what make_bootimg() writes for b"".
 
-    The round-trip fixture has a ramdisk, so without this the only path the
-    Android backend uses in production is covered by nothing -- and it SKIPS
-    when the 24 MB fixture is absent, which is most runs.
+    The round-trip fixture has a ramdisk, so without this the zero-length path
+    is covered by nothing -- and it SKIPS when the 24 MB fixture is absent,
+    which is most runs.
 
     Note the positional call. make_bootimg()'s second argument is the ramdisk
     and must stay there: giving it a default and moving it after `cmdline`
@@ -168,10 +172,56 @@ def test_bootimg_no_ramdisk():
           img[4096:4096 + len(kernel)] == kernel)
 
 
+def test_empty_cpio():
+    """The ramdisk every sargo image ships (docs/devices.md D24, amended).
+
+    Its one job is to have no /init: the kernel then mounts root= and runs
+    init= itself. So parse it the way the kernel does and assert the trailer
+    is the first and only record.
+    """
+    rd = ai.empty_cpio()
+    check("empty cpio is 124 bytes", len(rd) == 124, f"got {len(rd)}")
+    check("empty cpio has the newc magic", rd[:6] == b"070701", f"got {rd[:6]!r}")
+    namesize = int(rd[94:102], 16)
+    name = rd[110:110 + namesize]
+    check("its only record is TRAILER!!!", name == b"TRAILER!!!\0", f"got {name!r}")
+    check("nothing follows the trailer but padding",
+          rd[110 + namesize:].strip(b"\0") == b"")
+
+    kernel = b"\x1f\x8b" + bytes(range(256)) * 97
+    img = ai.make_bootimg(kernel, rd, "root=PARTLABEL=userdata ro")
+    rdsz = struct.unpack_from("<I", img, 16)[0]
+    check("image with the empty cpio reports ramdisk_size 124", rdsz == 124, f"got {rdsz}")
+    kend = 4096 + (len(kernel) + 4095) // 4096 * 4096
+    check("the empty cpio lands on the page after the kernel",
+          img[kend:kend + 124] == rd and len(img) == kend + 4096)
+
+    # The path android-bootimg.sh actually takes: the CLI, not the functions.
+    with tempfile.TemporaryDirectory() as d:
+        k = pathlib.Path(d, "Image.gz")
+        out = pathlib.Path(d, "boot.img")
+        k.write_bytes(kernel)
+        ai._main(["bootimg", "--kernel", str(k), "--empty-ramdisk",
+                  "--cmdline", "root=PARTLABEL=userdata ro", "--out", str(out)])
+        cli = out.read_bytes()
+        check("bootimg --empty-ramdisk writes ramdisk_size 124",
+              struct.unpack_from("<I", cli, 16)[0] == 124)
+        check("bootimg --empty-ramdisk writes the same image", cli == img)
+        try:
+            with contextlib.redirect_stderr(io.StringIO()):
+                ai._main(["bootimg", "--kernel", str(k), "--ramdisk", str(k),
+                          "--empty-ramdisk", "--out", str(out)])
+            refused = False
+        except SystemExit:
+            refused = True
+        check("--ramdisk and --empty-ramdisk together are refused", refused)
+
+
 def main():
     print("android-image.py")
     test_vbmeta()
     test_bootimg_no_ramdisk()
+    test_empty_cpio()
     test_bootimg_roundtrip()
     print()
     if _failures:

@@ -97,6 +97,30 @@ def make_bootimg(kernel: bytes, ramdisk: bytes, cmdline: str,
             + pad_to(ramdisk, page_size))
 
 
+# --- The empty ramdisk -------------------------------------------------------
+#
+# A newc cpio holding nothing but its TRAILER!!! record: 124 bytes. It exists
+# only so ramdisk_size is not 0 (docs/devices.md D24, amended 2026-10-17).
+#
+# Given a zero-length ramdisk, sargo's ABL still hands the kernel an initrd: a
+# stale 13924K region, measured on a handset whose log read "Trying to unpack
+# rootfs image as initramfs" and "Freeing initrd memory: 13924K" from an image
+# with no ramdisk in it. The kernel runs that region's /init instead of
+# mounting root, and the phone shows a penguin and then fastboot with the
+# reason "reboot bootloader" -- what Android's init does on a fatal error, so
+# most likely the Android ramdisk the handset last booted. Whether a handset
+# has one depends on what it ran before, which is why the same image boots on
+# some 3a's and loops on others.
+#
+# With this archive ABL points the initrd at it instead. It has no /init, so
+# the kernel falls through to root= and init= exactly as with no ramdisk.
+def empty_cpio() -> bytes:
+    name = b"TRAILER!!!\0"
+    fields = (0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, len(name), 0)
+    entry = b"070701" + b"".join(b"%08X" % f for f in fields) + name
+    return entry + b"\0" * (-len(entry) % 4)
+
+
 # --- AVB vbmeta -------------------------------------------------------------
 #
 # An Android 12 bootloader will not hand control to an unsigned kernel unless
@@ -142,10 +166,13 @@ def _main(argv):
 
     b = sub.add_parser("bootimg")
     b.add_argument("--kernel", required=True)
-    # Optional: the Android backend ships no ramdisk (docs/devices.md D24).
-    # A zero-length one gives ramdisk_size = 0, which mkbootimg also writes,
-    # and make_bootimg() needs no special case for it.
-    b.add_argument("--ramdisk", help="omitted for a kernel that mounts root itself")
+    # Optional. A zero-length one gives ramdisk_size = 0, which mkbootimg also
+    # writes, and make_bootimg() needs no special case for it -- but sargo must
+    # not be given one; see empty_cpio().
+    rd = b.add_mutually_exclusive_group()
+    rd.add_argument("--ramdisk", help="a ramdisk file; for a kernel that mounts root itself use --empty-ramdisk")
+    rd.add_argument("--empty-ramdisk", action="store_true",
+                    help="a cpio with no /init, so ABL cannot pass a stale initrd")
     b.add_argument("--dtb", help="appended to the kernel (sargo: required)")
     b.add_argument("--cmdline", default="")
     b.add_argument("--pagesize", type=int, default=4096)
@@ -162,7 +189,10 @@ def _main(argv):
         kernel = open(a.kernel, "rb").read()
         if a.dtb:
             kernel += open(a.dtb, "rb").read()
-        ramdisk = open(a.ramdisk, "rb").read() if a.ramdisk else b""
+        if a.empty_ramdisk:
+            ramdisk = empty_cpio()
+        else:
+            ramdisk = open(a.ramdisk, "rb").read() if a.ramdisk else b""
         img = make_bootimg(kernel, ramdisk, a.cmdline, page_size=a.pagesize)
         open(a.out, "wb").write(img)
         rd = f"ramdisk {len(ramdisk)}" if ramdisk else "no ramdisk"
