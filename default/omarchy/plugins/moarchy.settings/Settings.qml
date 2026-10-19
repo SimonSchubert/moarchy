@@ -33,6 +33,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui as Ui
 import "../moarchy.common" as Shared
 import "../moarchy.common/Theme.js" as Theme
@@ -153,9 +154,9 @@ Item {
   readonly property int radiusCard: ui.radiusCard
 
   // NOT `onSurface` / `onAccent` -- see the header.
-  readonly property color surface: Color.menu.background
-  readonly property color textOnSurface: Color.menu.text
-  readonly property color container: Util.alpha(Color.menu.text, 0.08)
+  readonly property color surface: Commons.Color.menu.background
+  readonly property color textOnSurface: Commons.Color.menu.text
+  readonly property color container: Util.alpha(Commons.Color.menu.text, 0.08)
 
   // The detail line is computed per theme rather than fixed, because no single
   // alpha is right for all 22.
@@ -173,10 +174,10 @@ Item {
   // on rose-pine, and sixteen of the twenty-two below 0.70.
   //
   // Evaluated once per theme change, not per row.
-  readonly property color cardOpaque: Theme.mix(root.surface, Color.menu.text, 0.08)
-  readonly property color subdued: Theme.readableOn(root.cardOpaque, Color.menu.text,
+  readonly property color cardOpaque: Theme.mix(root.surface, Commons.Color.menu.text, 0.08)
+  readonly property color subdued: Theme.readableOn(root.cardOpaque, Commons.Color.menu.text,
                                                    0.55, 4.5)
-  readonly property color accent: Color.accent
+  readonly property color accent: Commons.Color.accent
 
   // ------------------------------------------------------- press (style.md H)
   //
@@ -208,12 +209,12 @@ Item {
   // list the control center does. Most of it it already had; what is added here
   // is the half a settings screen has never needed.
   //
-  // The palette above is `Color.menu` where the control center's is
-  // `Color.popups`, which is the whole reason a widget takes its colours from
+  // The palette above is `Commons.Color.menu` where the control center's is
+  // `Commons.Color.popups`, which is the whole reason a widget takes its colours from
   // its host rather than picking them (docs/style.md C2). A preview drawn here
   // therefore looks like this screen, not like a pull-down pasted onto it.
-  readonly property color containerHigh: Util.alpha(Color.menu.text, 0.14)
-  readonly property color textOnAccent: Color.background
+  readonly property color containerHigh: Util.alpha(Commons.Color.menu.text, 0.14)
+  readonly property color textOnAccent: Commons.Color.background
   function radiusOn(size) { return ui.radiusOn(size) }
   readonly property int tileHeight: ui.controlCenterTile
   readonly property int sliderHeight: ui.controlCenterSlider

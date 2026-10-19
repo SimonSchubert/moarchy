@@ -15,10 +15,12 @@ hl.config({
     -- either way, because there is nothing to sit beside.
     border_size = 2,
 
-    -- Tiling, and the split is what makes P7 free: on a 360x740 workspace
-    -- dwindle splits along the longer side, so a second window lands BELOW
-    -- the first rather than beside it. Half of 740 is 370, which every app
-    -- here reflows to; half of 360 is 180, which nothing can use.
+    -- Windows normally get a workspace to themselves (hypr/windows.lua sends
+    -- every new tiled window to an empty one), so two rarely share. Dwindle is
+    -- the fallback for when they deliberately do: on a 360x740 workspace it
+    -- splits along the longer side, so a second window lands BELOW the first
+    -- rather than beside it. Half of 740 is 370, which every app here reflows
+    -- to; half of 360 is 180, which nothing can use.
     layout = "dwindle",
   },
 

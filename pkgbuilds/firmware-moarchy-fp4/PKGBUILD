@@ -1,0 +1,210 @@
+# The Fairphone 4's proprietary firmware, repackaged for pacman.
+#
+# The counterpart of firmware-moarchy-sargo, and much simpler than it, for a
+# reason worth recording: sargo needs FOUR upstreams, because TheMuppets'
+# vendor dump has no modem images (they live in the phone's own `modem`
+# partition) and no audio calibration (that lives in the Android config repo).
+# The Fairphone's blobs are all in ONE place -- FairBlobs/FP4-firmware, which
+# carries the modem, the hexagonfs tree and everything else. pmaports'
+# firmware-fairphone-fp4 has exactly one `source=` line too, which is the
+# corroboration that this is real and not something being missed.
+#
+# Pinned at a commit, not a branch, on the same terms as sargo's: these are
+# signed blobs whose contents must not move under a phone.
+#
+# --- Why pil-squasher is a build dependency ---------------------------------
+#
+# Qualcomm ships these as a header plus one file per ELF segment -- modem.mdt,
+# modem.b00, modem.b01, ... -- and Linux's PIL loader wants the merged
+# modem.mbn. FairBlobs carries the split form; sargo's upstream did not, which
+# is why this package needs a tool sargo's does not. pkgbuilds/pil-squasher
+# says why that tool is pinned here rather than taken from the AUR.
+#
+# --- One package, not ten ---------------------------------------------------
+#
+# pmaports splits this into ten subpackages (adsp, cdsp, modem, wlan, ...)
+# because Alpine users may want a phone with no modem firmware on it. moarchy
+# ships one image for one phone and firmware-moarchy-sargo is a single package
+# for the same reason; splitting would add ten names to the repo and let a
+# phone exist in nine broken states. `venus` (video decode) is included here
+# although pmaports' device package does not depend on it -- 5 MB, and its
+# absence is the difference between hardware and software video decode.
+
+. "$startdir/../../scripts/manifest.sh"
+_url=$(manifest_get device.fp4 firmware-url) || return 1
+_ref=$(manifest_get device.fp4 firmware-ref) || return 1
+
+pkgname=firmware-moarchy-fp4
+# Upstream has no versions -- it is a blob dump. pmaports dates its pkgver,
+# and the date it uses (20240313) belongs to the pinned commit, so the same
+# number here means the same bytes there.
+pkgver=20240313
+pkgrel=1
+pkgdesc="Proprietary firmware for the Fairphone 4 (SM7225)"
+arch=('aarch64')
+url="$_url"
+license=('LicenseRef-proprietary')
+makedepends=('pil-squasher')
+# !strip: these are signed images. Stripping one invalidates the signature the
+# secure world checks, and the failure is a subsystem that never comes up.
+options=('!strip' '!debug' '!emptydirs')
+
+# A tarball, deliberately, even though linux-moarchy-sm6350 beside it had to
+# move to git. The rate limit that forced that is NOT global: this tarball
+# downloads and verifies while the kernel's returns 429 from every endpoint,
+# measured in the same build minutes apart. So the two packages differ because
+# the service behaves differently for them, not because of a house style.
+#
+# Keeping it is worth something concrete. The sha512 below is the one
+# postmarketOS publishes for this exact commit, copied from pmaports'
+# firmware-fairphone-fp4 APKBUILD rather than computed here -- so a build that
+# passes this check has provably the same bytes pmOS builds and tests against.
+# A git commit pin proves the tree is what the id names; it does not tie the
+# result to pmaports. That tie is the more useful of the two for a blob nobody
+# in this project can read.
+#
+# If this ever starts returning 429 as well, the kernel PKGBUILD next door is
+# the worked example of the conversion, and the pin here is already a commit.
+source=("FP4-firmware-$_ref.tar.gz::$_url/archive/$_ref/FP4-firmware-$_ref.tar.gz")
+sha512sums=('b6836a8770c089615698ec26d397530c75086457c309d7220265da1203f2b06c4021d5a872244ad1e5a4a19d0d8192c13ae2051538e24d1df5292480daa6309d')
+
+build() {
+  cd "FP4-firmware-$_ref"
+  # Merge every split image. `*.mdt` is the header file; pil-squasher finds the
+  # .bNN segments beside it by name.
+  local _n=0
+  for _mdt in *.mdt; do
+    [ -e "$_mdt" ] || continue
+    pil-squasher "${_mdt%.mdt}.mbn" "$_mdt" || return 1
+    _n=$((_n + 1))
+  done
+  # A glob that matched nothing leaves every .mbn below missing, and the
+  # package() failures would then read as an upstream layout change rather
+  # than as a tool that never ran.
+  [ "$_n" -gt 0 ] || { echo "!! no .mdt files found -- upstream layout changed"; return 1; }
+  echo "==> squashed $_n firmware images"
+}
+
+package() {
+  cd "FP4-firmware-$_ref"
+
+  local _fw="$pkgdir/usr/lib/firmware"
+  local _dev="$_fw/qcom/sm7225/fairphone4"
+
+  # --- the DSPs, the modem, Wi-Fi, IPA, video -------------------------------
+  #
+  # All under qcom/sm7225/fairphone4/, which is where this kernel's DT points:
+  # the compatible is qcom,sm7225-fairphone4 and the remoteproc nodes name
+  # their firmware relative to /lib/firmware.
+  #
+  # wlanmdsp.mbn is the one that is not obvious and is load-bearing: the Wi-Fi
+  # firmware executes on the MODEM DSP, not on a Wi-Fi core, so a phone with no
+  # modem firmware has no Wi-Fi either. devices.md D27 records the same
+  # surprise on sargo.
+  #
+  # It is also the one image upstream ships ALREADY MERGED -- there is no
+  # wlanmdsp.mdt in the tarball, so build()'s loop never touches it. Checked
+  # rather than assumed: the tarball's six .mdt files are a615_zap, adsp,
+  # cdsp, lagoon_ipa_fws, modem and venus, and wlanmdsp.mbn sits beside them
+  # whole. A `for i in *.mdt` that silently produced no wlanmdsp.mbn would
+  # otherwise look exactly like this line being wrong.
+  install -Dm644 adsp.mbn cdsp.mbn modem.mbn wlanmdsp.mbn venus.mbn -t "$_dev"
+  install -Dm644 adsp*.jsn cdsp*.jsn modem*.jsn -t "$_dev"
+  # Renamed on install, exactly as pmaports does: the DT asks for ipa_fws.mbn
+  # and upstream ships it under the SoC's internal name, "lagoon".
+  install -Dm644 lagoon_ipa_fws.mbn "$_dev/ipa_fws.mbn"
+  # The modem's protection-domain data, a directory rather than a file.
+  cp -r modem_pr "$_dev/"
+  find "$_dev" -type f -exec chmod 0644 {} +
+
+  # --- the GPU ---------------------------------------------------------------
+  #
+  # Adreno 619. a619_gmu.bin goes in qcom/ (not the device directory) because
+  # it is an SoC-family file that linux-firmware would carry if it had it yet;
+  # a615_zap.mbn is signed per-device and goes with the rest.
+  install -Dm644 a619_gmu.bin -t "$_fw/qcom"
+  install -Dm644 a615_zap.mbn -t "$_dev"
+
+  # --- Bluetooth: NOT shipped, and that is a decision with a caveat ---------
+  #
+  # This package used to install qca/apbtfw11.tlv and qca/apnv11.bin, on the
+  # stated grounds that "linux-firmware-atheros carries files for other WCN
+  # parts but not these two". That was simply wrong, and pacstrap said so:
+  #
+  #   /usr/lib/firmware/qca/apbtfw11.tlv exists in both
+  #       'linux-firmware-atheros' and 'firmware-moarchy-fp4'
+  #
+  # Arch's linux-firmware-atheros 20260916 has both, and moarchy-device-fp4
+  # already depends on linux-firmware, so they are in the image either way.
+  #
+  # The two copies are NOT the same bytes, which is why this is a judgement
+  # rather than a cleanup:
+  #
+  #                    FairBlobs (vendor)   linux-firmware-atheros
+  #   apbtfw11.tlv     230260               225236
+  #   apnv11.bin         4875                 4878
+  #
+  # `apnv11.bin` is the NVM -- board-specific calibration, including RF
+  # tuning -- so the vendor copy is the one Fairphone shipped for THIS board,
+  # and postmarketOS installs it for that reason. Upstream linux-firmware has
+  # since gained its own, which is what Arch packages.
+  #
+  # Upstream's is used here, deliberately: it is maintained, it is what every
+  # other Arch machine with this radio runs, and two packages cannot own one
+  # path. The wiki reports Bluetooth working on this device, though with the
+  # vendor blobs, so this is the one substitution in the package that has not
+  # been validated against the other.
+  #
+  # IF BLUETOOTH MISBEHAVES -- pairs but drops, poor range, or works only at
+  # close distance -- this is the first suspect, and the test is cheap: take
+  # the two files out of the FairBlobs tarball by hand and
+  # `pacman -U --overwrite '/usr/lib/firmware/qca/*'`. If that fixes it, the
+  # answer is to ship them again under that overwrite rather than to revert
+  # this comment.
+
+  # --- the speaker amplifier, in TWO places, deliberately --------------------
+  #
+  # pmaports installs these under /lib/firmware/postmarketos/, and that path is
+  # a postmarketOS convention this project cannot inherit for free: the kernel
+  # firmware loader only searches /lib/firmware and the subdirectory a driver
+  # names, and this kernel's config has no EXTRA_FIRMWARE_DIR (checked:
+  # CONFIG_EXTRA_FIRMWARE="" and CONFIG_EXTRA_FIRMWARE_DIR absent). Whether the
+  # aw88264 driver requests "aw882xx_spk_reg_l.bin" or
+  # "postmarketos/aw882xx_spk_reg_l.bin" is not settled from the config alone.
+  #
+  # So both, and the cost of being wrong in one direction is a phone with no
+  # speaker while the file sits on disk unread. Three files, ~100 KB total;
+  # the symlink is the cheaper answer than an assumption.
+  #
+  # If this is ever resolved on hardware -- `dmesg | grep -i aw882xx` names the
+  # path it asked for -- delete the branch that is not used and say which.
+  install -Dm644 aw882xx_monitor.bin aw882xx_spk_reg_l.bin aw882xx_spk_reg_r.bin \
+    -t "$_fw/postmarketos"
+  for _f in aw882xx_monitor.bin aw882xx_spk_reg_l.bin aw882xx_spk_reg_r.bin; do
+    ln -s "postmarketos/$_f" "$_fw/$_f"
+  done
+
+  # --- hexagonfs -------------------------------------------------------------
+  #
+  # Not firmware: a filesystem tree the DSPs read through FastRPC, served by
+  # hexagonrpcd. Under /usr/share, not /usr/lib/firmware, because nothing in
+  # the kernel loads it.
+  #
+  # acdb/ and dsp/ are dropped, as pmaports drops them -- they are the audio
+  # calibration and DSP images that are served from elsewhere, and keeping them
+  # here would be two copies of a large tree with no reader for the second.
+  local _hex="$pkgdir/usr/share/qcom/sm7225/Fairphone/fp4"
+  install -d "$(dirname "$_hex")"
+  cp -r hexagonfs "$_hex"
+  rm -rf "$_hex/acdb" "$_hex/dsp"
+  find "$_hex" -type f -exec chmod 0644 {} +
+
+  # Prove the files the phone cannot boot Wi-Fi or audio without actually
+  # landed, rather than trusting a glob. An upstream layout change otherwise
+  # ships a package that installs cleanly and leaves hardware dead.
+  local _want="$_dev/modem.mbn $_dev/wlanmdsp.mbn $_dev/adsp.mbn $_dev/cdsp.mbn
+               $_fw/qcom/a619_gmu.bin"
+  for _p in $_want; do
+    [ -f "$_p" ] || { echo "!! expected firmware missing: ${_p#$pkgdir}"; return 1; }
+  done
+}

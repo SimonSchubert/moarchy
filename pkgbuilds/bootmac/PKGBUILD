@@ -117,6 +117,8 @@ package() {
   # Making Wi-Fi stable is a NetworkManager setting (wifi.cloned-mac-address),
   # not a bootmac one, and it is a privacy-versus-convenience decision that
   # belongs somewhere a person can see it.
+  # (Decided 2026-10-08: one stable MAC per network, NetworkManager's
+  # stable-ssid -- default/NetworkManager/conf.d/30-moarchy-wifi-mac.conf.)
   rm -f "$pkgdir/usr/lib/udev/rules.d/90-bootmac-wifi.rules"
 
   # The three files that have to be there, asserted rather than assumed: this

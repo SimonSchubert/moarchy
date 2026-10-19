@@ -1,5 +1,5 @@
 #!/bin/bash
-# What swayidle's timeout runs. Blanks the panel unless Stay Awake is set.
+# What swayidle's first timeout runs. Locks the panel unless Stay Awake is set.
 #
 # swayidle has no way to skip a timeout conditionally -- the command it runs is
 # fixed at start -- so the condition has to live in the command. Without this the
@@ -13,7 +13,13 @@ STATE_FILE="$HOME/.local/state/omarchy/indicators/stay-awake"
 [[ -f $STATE_FILE ]] && exit 0
 
 # Through moarchy-screen, not straight to swaymsg: it is the one place that
-# knows what powering the panel means here (docs/refactor.md D1, D3). `blank`
-# and not `lock` -- an idle timeout must not set the lock flag, or the resume
-# hook that shares this script's swayidle line would refuse to undo it.
-exec moarchy-screen blank
+# knows what powering the panel means here (docs/refactor.md D1, D3).
+#
+# `lock`, not `blank`: idle-off must leave the SAME state as a power-button off,
+# or the power button needs two presses to wake from idle -- the first press
+# reads no lock flag and re-locks (a no-op blank) instead of waking, the second
+# then wakes (fp4-defects.md D28). Setting the flag here unifies the two: one
+# power press always wakes to the PIN pad. The cost is that touch no longer wakes
+# from idle (the power button does), which is standard phone behaviour and is
+# what removes the two-handler race on the power key.
+exec moarchy-screen lock

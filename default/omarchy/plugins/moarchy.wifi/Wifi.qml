@@ -42,6 +42,7 @@ import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Networking
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui as Ui
 import "../moarchy.common/Theme.js" as Theme
 import "../moarchy.common" as Shared
@@ -92,14 +93,14 @@ Item {
   readonly property int radiusCard: ui.radiusCard
 
   readonly property int textWeight: Font.DemiBold
-  readonly property color surface: Color.popups.background
-  readonly property color textOnSurface: Color.popups.text
-  readonly property color container: Util.alpha(Color.popups.text, 0.08)
-  readonly property color containerHigh: Util.alpha(Color.popups.text, 0.14)
-  readonly property color accent: Color.accent
-  readonly property color textOnAccent: Color.background
-  readonly property color subdued: Util.alpha(Color.popups.text, 0.62)
-  readonly property color danger: Color.popups.text
+  readonly property color surface: Commons.Color.popups.background
+  readonly property color textOnSurface: Commons.Color.popups.text
+  readonly property color container: Util.alpha(Commons.Color.popups.text, 0.08)
+  readonly property color containerHigh: Util.alpha(Commons.Color.popups.text, 0.14)
+  readonly property color accent: Commons.Color.accent
+  readonly property color textOnAccent: Commons.Color.background
+  readonly property color subdued: Util.alpha(Commons.Color.popups.text, 0.62)
+  readonly property color danger: Commons.Color.popups.text
 
   // The veil is shared (docs/refactor.md E2); the default ink is this
   // surface's own, which is the half a shared type cannot know (style.md H2).

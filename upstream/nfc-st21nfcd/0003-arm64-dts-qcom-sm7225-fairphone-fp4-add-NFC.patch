@@ -1,0 +1,40 @@
+From b34652bb3eb709f2421314a26290bb19cd4fc250 Mon Sep 17 00:00:00 2001
+From: Tim auf der Landwehr <tadl-git@taufderl.de>
+Date: Thu, 24 Sep 2026 12:07:02 +0200
+Subject: [RFC PATCH 3/3] arm64: dts: qcom: sm7225-fairphone-fp4: add NFC
+
+The Fairphone 4 carries an ST21NFCD NFC controller on i2c0 at 0x08,
+with its interrupt on GPIO 9, reset on GPIO 6, and its reference
+clock from RPMh LN_BB_CLK3. Describe it.
+
+Signed-off-by: Tim auf der Landwehr <tadl-git@taufderl.de>
+---
+ arch/arm64/boot/dts/qcom/sm7225-fairphone-fp4.dts | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm7225-fairphone-fp4.dts b/arch/arm64/boot/dts/qcom/sm7225-fairphone-fp4.dts
+index 453d4eb24..06d0c6e1c 100644
+--- a/arch/arm64/boot/dts/qcom/sm7225-fairphone-fp4.dts
++++ b/arch/arm64/boot/dts/qcom/sm7225-fairphone-fp4.dts
+@@ -880,7 +880,17 @@ &i2c0 {
+ 	clock-frequency = <400000>;
+ 	status = "okay";
+ 
+-	/* ST21NFCD NFC @ 8 */
++	nfc@8 {
++		compatible = "st,st21nfcd";
++		reg = <0x08>;
++
++		interrupt-parent = <&tlmm>;
++		interrupts = <9 IRQ_TYPE_LEVEL_HIGH>;
++
++		reset-gpios = <&tlmm 6 GPIO_ACTIVE_LOW>;
++		clocks = <&rpmhcc RPMH_LN_BB_CLK3>;
++	};
++
+ 	/* VL53L3 ToF @ 29 */
+ 
+ 	speaker_codec_l: audio-codec@34 {
+-- 
+2.55.0
+

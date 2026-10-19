@@ -9,6 +9,14 @@ Present tense, normative. The archaeology lives in
 [build-log.md](build-log.md); the shape of our own code is
 [refactor.md](refactor.md); this is the contract at the seam between the two.
 
+**Override note (2026-09-29): the Sway port described in this file was removed.**
+This fork now runs Hyprland; `port-4x.patch` no longer performs the
+Hyprland-to-Sway translation (it keeps upstream's `Quickshell.Hyprland` and only
+hosts our plugins). See the README's "Compositor and upstream divergence"
+section and `omarchy-config`'s change 3. Passages below that still describe the
+Sway port as current are pre-Hyprland; treat this note as the override until they
+are rewritten.
+
 Status: **§A landed 2026-09-13.** §B–§E are the contract to argue with before
 any of them is; where an AC is my reading rather than a decision it is marked
 **?**.
@@ -76,7 +84,7 @@ commits of drift without a reject. The gap is that "applied" was being read as
 | Term | What it means |
 | --- | --- |
 | **the pin** | `[omarchy]` in `manifest.toml`: url, ref, version. Moving it is a bump. |
-| **the port** | The Hyprland→Sway translation. Permanent; it will never go upstream. |
+| **the port** | `port-4x.patch`: hosts moarchy's plugins in the vendored shell. It once also translated the compositor from Hyprland to Sway; that half was removed when the fork moved to Hyprland. It will never go upstream. |
 | **a carried change** | A change to upstream's tree that is *not* the port — config, a feature, or how our plugins are hosted. Each one has its own reason to exist and its own way of ending. |
 | **the seam** | Everything that couples us to upstream: the patch, the `bin/` shims, the `shell.*` API the plugins call, and the theme template directory. |
 | **loud** | A failure that stops the build or fails a check by name. The opposite is what §A is about. |
@@ -213,9 +221,11 @@ to be diffed against by hand.
 The seam that is already right, stated so a refactor cannot quietly take it
 away.
 
-**E1** The theme layer stays patch-free. One file — `default/themed/sway.conf.tpl`
-— themes Sway from any upstream theme, through
-`omarchy-theme-set-templates`'s *user* template directory. 22 themes, zero
+**E1** The theme layer stays patch-free. On Hyprland the compositor theming is
+upstream's own: `config/hypr/hyprland.lua` reads the active theme and `hyprctl
+reload` re-reads it on a theme change, through `omarchy-theme-set-templates`'s
+*user* template directory. (Pre-Hyprland this was `default/themed/sway.conf.tpl`
+theming Sway, now removed.) 22 themes, zero
 upstream lines touched. This is the best mechanism in the project and everything
 else in this file is an argument for being more like it.
 

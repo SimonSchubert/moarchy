@@ -1,0 +1,37 @@
+// The Docker app (omarchy's lazydocker wrapper) runs `pkexec ... lazydocker` to
+// reach the root-owned Docker socket, because the install user is deliberately
+// not in the docker group. On this phone that pkexec can never be answered: the
+// image locks the account password (image/configure.sh `passwd -l`), so the
+// polkit dialog has no password to take and the on-screen keyboard will not
+// raise for it, the TTY fallback is worse, and the Docker terminal blocks there
+// with no way to cancel -- a soft-lock (fp4-defects.md D25). This is the same
+// locked-password cause as the app store (49-moarchy-store.rules); only the
+// surface differs.
+//
+// Grant just this action for wheel, so no prompt appears at all. It is no wider
+// than a door already open: the same user holds `ALL=(ALL) NOPASSWD: ALL` in
+// /etc/sudoers.d/10-moarchy, and Docker-socket access is root-equivalent either
+// way. Scoped to the lazydocker command so this is "let the Docker app
+// through", not "authorize every pkexec".
+//
+// Not gated on subject.local && subject.active, for the same reason as
+// 49-moarchy-store.rules: a shell restarted over ssh has no seat, and an
+// active-only rule would put the unanswerable dialog back on a phone that
+// cannot answer it.
+//
+// UNVERIFIED: lazydocker is not installed on the test handset, so the exact
+// `command_line` string could not be confirmed. If the wrapper's command does
+// not contain "lazydocker", this rule silently will not fire (the failure mode
+// D26 hit). The broader alternative -- grant org.freedesktop.policykit.exec for
+// wheel unconditionally -- fixes the whole class of terminal-pkexec soft-lock on
+// this un-answerable device and is still bounded by the NOPASSWD sudo above; it
+// is a security-posture call left to the owner.
+polkit.addRule(function (action, subject) {
+  if (action.id === "org.freedesktop.policykit.exec" &&
+      subject.isInGroup("wheel")) {
+    var cmd = action.lookup("command_line") || "";
+    if (cmd.indexOf("lazydocker") !== -1) {
+      return polkit.Result.YES;
+    }
+  }
+});

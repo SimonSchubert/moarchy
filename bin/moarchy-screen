@@ -51,6 +51,7 @@ set_touch() {
 lock() {
   mkdir -p "$STATE_DIR"
   : >"$FLAG"
+  moarchy-lock                  # arm the PIN lock so the next wake shows it, not home
   set_touch false               # before the blank, so the dark panel is already deaf
   dpms off
 }
@@ -70,7 +71,7 @@ case "${1:-toggle}" in
   # either through lock() would set the flag and then `wake` would refuse to
   # undo it, which is an idle timeout that bricks the screen until the power
   # button is found (docs/refactor.md D1, D3).
-  blank)  dpms off ;;
+  blank)  moarchy-lock; dpms off ;;
   # swayidle's resume hook, and the one way back on. Any input wakes the panel,
   # but while we are locked the only input that should is the power button,
   # which unlocks in its own right -- so resume must not light the screen

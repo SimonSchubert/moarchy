@@ -38,6 +38,7 @@ import Quickshell.Bluetooth
 import Quickshell.Networking
 import Quickshell.Services.UPower
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui as Ui
 import "../moarchy.common" as Shared
 
@@ -160,9 +161,9 @@ Item {
   }
 
   // ------------------------------------------------------------- appearance
-  readonly property color background: Color.bar.background
-  readonly property color foreground: Color.bar.text
-  readonly property color dim: Util.alpha(Color.bar.text, 0.55)
+  readonly property color background: Commons.Color.bar.background
+  readonly property color foreground: Commons.Color.bar.text
+  readonly property color dim: Util.alpha(Commons.Color.bar.text, 0.55)
   readonly property int edgePad: Style.space(8)
 
   // ------------------------------------------ transparent over Android apps
@@ -610,7 +611,7 @@ Item {
             StatusGlyph {
               anchors.verticalCenter: parent.verticalCenter
               text: root.batteryGlyph
-              color: root.batteryLow ? Color.bar.active : root.foreground
+              color: root.batteryLow ? Commons.Color.bar.active : root.foreground
             }
 
             // Shown unless turned off, so this changes nothing until asked.
@@ -628,7 +629,7 @@ Item {
               // 10px percentage read as a different bar's worth of text.
               font.pixelSize: Style.font.bodySmall
               font.weight: root.textWeight
-              color: root.batteryLow ? Color.bar.active : root.foreground
+              color: root.batteryLow ? Commons.Color.bar.active : root.foreground
             }
           }
         }

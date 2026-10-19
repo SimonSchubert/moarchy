@@ -1,0 +1,12 @@
+#!/bin/bash
+# Engage the on-screen-PIN session lock (the quickshell lock plugin's ext-
+# session-lock surface). Idempotent -- locking while already locked is a no-op
+# the shell absorbs -- and bounded by a timeout so a wedged shell cannot hang
+# the caller (moarchy-screen, and through it the idle timer and power button).
+#
+# This is the auth lock, distinct from moarchy-screen's own DPMS blanking:
+# the two are used together so that blanking the panel also arms the lock, and
+# the next wake shows the PIN pad rather than the home screen.
+set -uo pipefail
+OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"
+exec timeout 3 qs -p "$OMARCHY_PATH/shell" ipc call lock lock >/dev/null 2>&1

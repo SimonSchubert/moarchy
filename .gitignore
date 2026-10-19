@@ -6,7 +6,7 @@ packages/*.pkg.tar.*
 *.img
 *.img.xz
 
-# Python bytecode cache (bin/moarchy-one-app-per-workspace)
+# Python bytecode cache
 __pycache__/
 
 # Built disk images

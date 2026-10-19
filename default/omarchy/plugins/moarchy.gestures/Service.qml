@@ -70,6 +70,7 @@ import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui as Ui
 import "../moarchy.common/ShellApps.js" as ShellApps
 import "../moarchy.common/Sheet.js" as Sheet
@@ -1739,9 +1740,9 @@ Item {
       // has room for one idea at a time. It differs in that it decays
       // (holdPop), because arming for home is a state you can still leave and
       // firing the hold is a thing that has already happened.
-      color: root.homeArmed ? Color.accent
-           : root.holdPop > 0 ? Util.alpha(Color.accent, 0.4 + 0.6 * root.holdPop)
-           : Util.alpha(Color.foreground, root.tracking ? 0.9 : 0.3)
+      color: root.homeArmed ? Commons.Color.accent
+           : root.holdPop > 0 ? Util.alpha(Commons.Color.accent, 0.4 + 0.6 * root.holdPop)
+           : Util.alpha(Commons.Color.foreground, root.tracking ? 0.9 : 0.3)
       scale: root.homeArmed ? 1.6
            : 1 + 0.5 * root.holdPop
              + Math.min(0.4, Math.max(0, -root.dy) / (root.commitDistance * 4))
@@ -1753,7 +1754,7 @@ Item {
       // just.
       //
       // So carry the contrast rather than borrow it. This ring is
-      // `Color.background`, which is the colour of whatever this strip sits on
+      // `Commons.Color.background`, which is the colour of whatever this strip sits on
       // everywhere except an Android window, so it is invisible by
       // construction in the case it is not needed and an outline in the case it
       // is. A child with a negative z draws behind its parent, which also means
@@ -1764,7 +1765,7 @@ Item {
         anchors.fill: parent
         anchors.margins: -1
         radius: height / 2
-        color: Util.alpha(Color.background, 0.55)
+        color: Util.alpha(Commons.Color.background, 0.55)
       }
 
       Behavior on x {
@@ -1960,7 +1961,7 @@ Item {
     // is the cost of the fill being there before the window leaves.
     Rectangle {
       anchors.fill: parent
-      color: Color.background
+      color: Commons.Color.background
       visible: root.fillWorkspace
     }
 
@@ -2071,10 +2072,10 @@ Item {
         // vocabulary for "letting go now does something" (C2, A4) rather than
         // a third colour invented for one gesture.
         color: root.backPull >= 1 || root.backFlash > 0
-               ? Util.alpha(Color.accent, 0.55 + 0.45 * Math.max(root.backFlash, 0))
-               : Util.alpha(Color.background, 0.82)
+               ? Util.alpha(Commons.Color.accent, 0.55 + 0.45 * Math.max(root.backFlash, 0))
+               : Util.alpha(Commons.Color.background, 0.82)
         border.width: 1
-        border.color: Util.alpha(Color.foreground, 0.18)
+        border.color: Util.alpha(Commons.Color.foreground, 0.18)
       }
 
       // The same chevron Settings' own back button wears, through the same
@@ -2086,7 +2087,7 @@ Item {
         fontFamily: Style.font.family
         fontSize: Style.font.icon
         color: root.backPull >= 1 || root.backFlash > 0
-               ? Color.background : Color.foreground
+               ? Commons.Color.background : Commons.Color.foreground
       }
 
       Behavior on x {

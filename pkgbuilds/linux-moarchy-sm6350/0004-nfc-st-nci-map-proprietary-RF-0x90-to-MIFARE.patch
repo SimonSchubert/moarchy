@@ -1,0 +1,55 @@
+From c340b7570d94ec5700981a731a2eabad88c7c78c Mon Sep 17 00:00:00 2001
+From: Tim auf der Landwehr <tadl-git@taufderl.de>
+Date: Tue, 29 Sep 2026 12:30:43 +0200
+Subject: [PATCH 4/6] nfc: st-nci: map proprietary RF 0x90 to MIFARE
+
+The ST21NFCD reports MIFARE Classic under the proprietary RF protocol
+number 0x90 (observed on a MIFARE Classic 4K). st_nci_get_rfprotocol only
+mapped 0x83 (ISO 15693), so nci_add_new_protocol dropped the tag with
+"the target found does not have the desired protocol" and userspace never
+saw the card.
+
+Map 0x90 to NFC_PROTO_MIFARE_MASK. NFC_PROTO_MIFARE_MASK is already in the
+driver's supported-protocols set.
+
+Signed-off-by: Tim auf der Landwehr <tadl-git@taufderl.de>
+---
+ drivers/nfc/st-nci/core.c | 15 +++++++++++++--
+ 1 file changed, 13 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/nfc/st-nci/core.c b/drivers/nfc/st-nci/core.c
+index d7802434a..3ba49d696 100644
+--- a/drivers/nfc/st-nci/core.c
++++ b/drivers/nfc/st-nci/core.c
+@@ -15,6 +15,11 @@
+ #define DRIVER_DESC "NCI NFC driver for ST_NCI"
+ 
+ #define ST_NCI1_X_PROPRIETARY_ISO15693 0x83
++/* Proprietary RF protocol the controller reports for MIFARE Classic (observed:
++ * 0x90 on a MIFARE Classic 4K). Not an NFC Forum protocol, so it must be
++ * mapped here or nci_add_new_protocol drops the tag.
++ */
++#define ST_NCI1_X_PROPRIETARY_MIFARE 0x90
+ 
+ static int st_nci_init(struct nci_dev *ndev)
+ {
+@@ -76,8 +81,14 @@ static int st_nci_send(struct nci_dev *ndev, struct sk_buff *skb)
+ static __u32 st_nci_get_rfprotocol(struct nci_dev *ndev,
+ 					 __u8 rf_protocol)
+ {
+-	return rf_protocol == ST_NCI1_X_PROPRIETARY_ISO15693 ?
+-		NFC_PROTO_ISO15693_MASK : 0;
++	switch (rf_protocol) {
++	case ST_NCI1_X_PROPRIETARY_ISO15693:
++		return NFC_PROTO_ISO15693_MASK;
++	case ST_NCI1_X_PROPRIETARY_MIFARE:
++		return NFC_PROTO_MIFARE_MASK;
++	default:
++		return 0;
++	}
+ }
+ 
+ static int st_nci_prop_rsp_packet(struct nci_dev *ndev,
+-- 
+2.55.0
+

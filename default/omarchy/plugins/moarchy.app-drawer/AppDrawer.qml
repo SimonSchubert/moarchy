@@ -63,6 +63,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui as Ui
 // moarchy.settings', not ours: the Settings tree flattened for search, and the
 // batched guard script its pages are read with. See the header note above.
@@ -478,15 +479,15 @@ Item {
   // mirrors Hyprland's `decoration:rounding` and is pinned to 0 here by the
   // hyprctl shim -- right for tiled windows under Sway, wrong for a phone.
   // Colours still come from the theme, so a theme switch restyles all of this.
-  readonly property color surface: Color.menu.background
+  readonly property color surface: Commons.Color.menu.background
   // NOT `onSurface` / `onAccent`, however much the Material role names want to
   // be spelled that way. QML reserves the `on<Uppercase>` prefix for signal
   // handlers, so a property declared there is never readable: the binding
   // evaluates to undefined, undefined assigned to a `color` is #000000, and
   // nothing is logged. The symptom is every glyph and label painted pure black
   // on a dark tile while the properties either side of them are fine.
-  readonly property color textOnSurface: Color.menu.text
-  readonly property color container: Util.alpha(Color.menu.text, 0.08)
+  readonly property color textOnSurface: Commons.Color.menu.text
+  readonly property color container: Util.alpha(Commons.Color.menu.text, 0.08)
   // The fifth of C2's six roles, and the app drawer had never needed one: at rest
   // this screen is a search pill and bare icons, and a second tone with nothing
   // to distinguish from would be a colour nobody chose. The detail card is what
@@ -494,9 +495,9 @@ Item {
   // control sitting on it rather than as more card (style.md C2, and the
   // Bluetooth sheet's Forget for the precedent that a destructive button here is
   // a tone up, not a red).
-  readonly property color containerHigh: Util.alpha(Color.menu.text, 0.14)
+  readonly property color containerHigh: Util.alpha(Commons.Color.menu.text, 0.14)
   readonly property color subduedBase: Theme.mix(
-    Qt.rgba(root.surface.r, root.surface.g, root.surface.b, 1), Color.menu.text, 0.08)
+    Qt.rgba(root.surface.r, root.surface.g, root.surface.b, 1), Commons.Color.menu.text, 0.08)
 
   // The detail card's fill, and it has to be this rather than `container`.
   //
@@ -513,7 +514,7 @@ Item {
   // something solid.
   readonly property color cardFill: root.subduedBase
   readonly property color subdued: Theme.readableOn(root.subduedBase,
-                                                   Color.menu.text, 0.55, 4.5)
+                                                   Commons.Color.menu.text, 0.55, 4.5)
 
   // The veil is shared (docs/refactor.md E2); the default ink is this
   // surface's own, which is the half a shared type cannot know (style.md H2).
@@ -1572,21 +1573,22 @@ Item {
     // failure, arriving from the fix for a different one.
     margins.bottom: root.keyboardUp ? 0 : -root.gestureStrip
 
-    // Plain Exclusive rather than the prime-then-OnDemand dance in
-    // Ui/KeyboardPanel.qml: that exists so clicks can still reach the bar
-    // underneath, and this app drawer deliberately owns the whole screen while it
-    // is up. Every other full-screen overlay in the shell -- menu, emojis,
-    // clipboard, image picker -- does exactly this.
+    // OnDemand, NOT Exclusive. This surface owns the whole screen while it is up
+    // (its mask is null when open, so the input region is the entire output), and
+    // an Exclusive-keyboard-focus layer surface makes Hyprland route ALL touch to
+    // it -- including taps meant for the on-screen keyboard, which sits on a
+    // higher layer. The symptom: with Exclusive the OSK received no touch at all
+    // while the drawer was open (not even a key highlight), so the search field
+    // could never be typed into (docs/fp4-defects.md D27 -- confirmed by protocol
+    // trace and on the handset). OnDemand takes keyboard focus when the surface is
+    // tapped -- enough to focus the search field -- without grabbing pointer/touch
+    // away from the OSK.
     //
-    // Gated on `progress`, NOT on `opened`. `opened` goes false on the first
-    // frame of the close drag, which drops keyboard_interactivity to None
-    // mid-gesture; sway then hands focus back to a window, and that focus
-    // change cancels the touch this surface is holding. The symptom was a
-    // close drag that died after one frame -- and only when a window was open
-    // for focus to return to, which is why it passed by hand on an empty
-    // workspace and failed every time under the selftest. Holding Exclusive
-    // until the sheet is all the way down keeps the gesture intact.
-    WlrLayershell.keyboardFocus: root.progress > 0 ? WlrKeyboardFocus.Exclusive
+    // Still gated on `progress`, NOT on `opened`: `opened` goes false on the first
+    // frame of the close drag, which would drop keyboard_interactivity mid-gesture;
+    // holding it until the sheet is all the way down keeps the close-drag intact
+    // (verified working under OnDemand on the FP4).
+    WlrLayershell.keyboardFocus: root.progress > 0 ? WlrKeyboardFocus.OnDemand
                                                    : WlrKeyboardFocus.None
 
     // The scrim is what makes a half-open app drawer read as half-open rather than
@@ -1596,7 +1598,7 @@ Item {
     // has nothing spare.
     Rectangle {
       anchors.fill: parent
-      color: Util.alpha(Color.background, 0.6 * root.progress)
+      color: Util.alpha(Commons.Color.background, 0.6 * root.progress)
     }
 
     Rectangle {
@@ -1817,7 +1819,15 @@ Item {
           // is 0 wide and `clearButton.left` is the pill's right edge, so the
           // field is back to filling the pill and F1 still holds: every pixel
           // of the drawn pill focuses it.
-          Ui.TextField {
+          // A plain TextInput. NB the field type was NOT the D27 cause: qs.Ui's
+          // TextField is already a plain TextInput, and swapping to this inline
+          // one changed nothing on its own -- the OSK still typed nowhere. The
+          // real cause was this window holding Exclusive keyboard focus, which
+          // made Hyprland grab ALL touch (the OSK never saw a tap); the fix is
+          // OnDemand keyboardFocus above (fp4-defects.md D27). A plain TextInput
+          // is kept because it is the right control for text-input-v3 (matches
+          // the shell's other fields), not because it fixed anything here.
+          TextInput {
             id: searchField
             anchors.left: parent.left
             anchors.right: clearButton.left
@@ -1828,21 +1838,36 @@ Item {
             // button's slot already carries the gap on that side, and a second
             // one would leave the caret stranded well short of the glyph.
             rightPadding: clearButton.visible ? Style.space(4) : Style.space(16)
-            // The control is taller than its line now, so it has to be told
-            // where that line goes. Left at the default the text renders
-            // against the top of the pill.
+            // Taller than its line, so tell it where the line goes; left at the
+            // default the text renders against the top of the pill.
             verticalAlignment: TextInput.AlignVCenter
-            placeholderText: "Search apps and settings"
-            background: null
-            verticalPadding: 0
+            clip: true
+            selectByMouse: true
+            color: root.textOnSurface
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body
             onTextChanged: queryDebounce.restart()
+            // No focusPolicy (Controls-only): a TextInput takes active focus on
+            // press by default, which is what the tap below relies on. Not
+            // focus:true, so Exclusive keyboardFocus does not park here on map.
+            activeFocusOnTab: false
+
+            // The placeholder, drawn as a child since TextInput has no
+            // placeholderText. Subdued, matching the search glyph.
+            Text {
+              anchors.verticalCenter: parent.verticalCenter
+              anchors.left: parent.left
+              anchors.leftMargin: searchField.leftPadding
+              visible: !searchField.text.length
+              text: "Search apps and settings"
+              color: root.subdued
+              font: searchField.font
+            }
 
             // G14a. A press that *starts* on this field, and only once the
-            // app drawer is sitting still. ClickFocus keeps Exclusive from parking
-            // here on map. onPressed rather than a TapHandler: the pill slides
-            // under the opening finger, and onTapped fires on that release.
-            focusPolicy: Qt.ClickFocus
-            activeFocusOnTab: false
+            // app drawer is sitting still. onPressed rather than a TapHandler:
+            // the pill slides under the opening finger, and onTapped fires on
+            // that release.
             MouseArea {
               anchors.fill: parent
               enabled: root.keyboardRaiseArmed

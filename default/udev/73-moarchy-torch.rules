@@ -28,6 +28,22 @@
 #
 # *:torch is matched for the same reason feedbackd matches it: some devices
 # name the same LED that way. The controlCenter only ever probes *:flash.
+# brightness alone is enough for the Torch tile, which just turns the LED on.
+# A camera app needs more: libmegapixels strobes the flash for the duration of
+# an exposure through the V4L2 flash attributes, and stops at the first one it
+# cannot open --
+#
+#   [libmegapixels] Could not open /sys/class/leds/white:flash/flash_strobe: Permission denied
+#
+# after which megapixels lights the whole screen white instead, which looks
+# exactly like a phone whose flash is not wired up. Those three attributes only
+# exist on LEDs the kernel registers as V4L2 flash devices, so each line tests
+# for its attribute and exits 0 either way, rather than a narrower KERNEL==
+# pattern that would need updating per device. Written out one per attribute
+# because udev reads $ as the start of its own substitution, so a shell loop
+# variable cannot survive here.
 ACTION=="add|change", SUBSYSTEM=="leds", KERNEL=="*:flash|*:torch", \
-  RUN+="/usr/bin/chgrp feedbackd %S%p/brightness", \
-  RUN+="/usr/bin/chmod g+w %S%p/brightness"
+  RUN+="/bin/sh -c '[ -e %S%p/brightness ] && chgrp feedbackd %S%p/brightness && chmod g+w %S%p/brightness; exit 0'", \
+  RUN+="/bin/sh -c '[ -e %S%p/flash_brightness ] && chgrp feedbackd %S%p/flash_brightness && chmod g+w %S%p/flash_brightness; exit 0'", \
+  RUN+="/bin/sh -c '[ -e %S%p/flash_strobe ] && chgrp feedbackd %S%p/flash_strobe && chmod g+w %S%p/flash_strobe; exit 0'", \
+  RUN+="/bin/sh -c '[ -e %S%p/flash_timeout ] && chgrp feedbackd %S%p/flash_timeout && chmod g+w %S%p/flash_timeout; exit 0'"

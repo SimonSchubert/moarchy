@@ -13,6 +13,15 @@ hl.config({
     -- both of these on, which is right for a laptop.
     key_press_enables_dpms = false,
     mouse_move_enables_dpms = false,
+
+    -- Suppress Hyprland 0.56's red banner "was started without start-hyprland"
+    -- (fp4-defects.md D12). The session execs `Hyprland -c ...` from
+    -- zz-moarchy.sh on purpose; start-hyprland is a 264 KB binary that manages an
+    -- instance and does more than exec, so adopting it risks a phone that boots
+    -- to no UI -- a worse defect than a banner. This option (misleadingly named;
+    -- its own description is "the warning about not using start-hyprland") turns
+    -- the banner off without changing how the session launches.
+    disable_watchdog_warning = true,
   },
 
   cursor = {

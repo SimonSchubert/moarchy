@@ -1,0 +1,26 @@
+# moarchy debug-kernel config fragment.
+#
+# Merged onto the vendored `config` ONLY for the -debug build variant, i.e. when
+# MOARCHY_KERNEL_DEBUG=1 (set by the FP4 build workflow's `debug_kernel` input).
+# Off by default, so the release kernel is byte-identical to a no-fragment build.
+#
+# This is a FRAGMENT, not the audited base config -- edit it freely per
+# investigation. The default set is PM/suspend-focused (that is what prompted it,
+# D29). Add heavier symbols as needed, e.g. PROVE_LOCKING (lockdep) or KASAN for
+# driver races and memory bugs -- but note those change timing and can mask the
+# very race you are chasing, so they are deliberately left out of the default.
+#
+# The -debug localversion gives the kernel its own `uname -r` (and so its own
+# /usr/lib/modules dir), which keeps a debug image cleanly distinct from release.
+CONFIG_LOCALVERSION="-debug"
+
+# Deep-sleep / suspend visibility (D29): soc sleep-stats built in (no modprobe),
+# plus the PM debug sysfs and messages.
+CONFIG_DEBUG_KERNEL=y
+CONFIG_QCOM_STATS=y
+CONFIG_PM_DEBUG=y
+CONFIG_PM_ADVANCED_DEBUG=y
+
+# Cheap correctness checks that do not meaningfully distort timing.
+CONFIG_DEBUG_PREEMPT=y
+CONFIG_DEBUG_ATOMIC_SLEEP=y

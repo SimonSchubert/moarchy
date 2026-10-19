@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Record from the Fairphone 4's microphone straight onto this machine.
+#
+# The phone can record but cannot play back: the speaker amplifiers are
+# powered down (docs/fp4-defects.md D3) and the FP4 has no headphone jack.
+# So the file lands here, where there is something to play it with.
+#
+#   fp4-mic-record            10 seconds, ~/fp4-mic-<timestamp>.wav
+#   fp4-mic-record 30         30 seconds
+#   fp4-mic-record 30 out.wav 30 seconds, named
+#
+# FP4_HOST / FP4_KEY override the phone's address and ssh key.
+set -euo pipefail
+
+PHONE=${FP4_HOST:-moarchy@172.16.42.1}
+KEY=${FP4_KEY:-$HOME/.ssh/id_ed25519}
+SECS=${1:-10}
+OUT=${2:-$HOME/fp4-mic-$(date +%Y%m%d-%H%M%S).wav}
+
+# Capture lives on MultiMedia2 (hw:0,1); playback has MultiMedia1 to
+# itself, which is what lets the two run at the same time.
+# The capture route is torn down when the front-end PCM closes -- PipeWire
+# suspends the idle source a few seconds after anything stops using it, and
+# the route goes with it. So assert it here rather than relying on it having
+# survived since boot. (moarchy docs/fp4-defects.md D13: the UCM profile does
+# exactly this in its EnableSequence, but PipeWire's ACP layer offers this
+# card no profile, so nothing applies it.)
+ROUTE="amixer -c 0 cset name='MultiMedia2 Mixer TX_CODEC_DMA_TX_3' 1 >/dev/null 2>&1
+       amixer -c 0 cset name='ADC1 Switch' 1 >/dev/null 2>&1"
+
+printf 'Recording %ss from the phone... speak now.\n' "$SECS"
+# -t wav to stdout: arecord writes a real header, so the file is playable by
+# anything without having to be told the format afterwards.
+ssh -o ConnectTimeout=8 -i "$KEY" "$PHONE" \
+    "$ROUTE
+     arecord -D hw:0,1 -f S24_LE -r 48000 -c 2 -d $SECS -t wav" > "$OUT" 2>/dev/null
+
+printf 'Saved %s (%s)\n' "$OUT" "$(du -h "$OUT" | cut -f1)"
+printf 'Play it with:  mpv %q\n' "$OUT"

@@ -457,7 +457,7 @@ Native 6 · Bridged 8 · Unsupported 14
 | id | label | class | lands at | note |
 | --- | --- | --- | --- | --- |
 | `update` | Update | Native | dissolved: System, Shell & plugins |  |
-| `update.omarchy` | Omarchy | Unsupported | -- | `omarchy-update` needs pkgs.omarchy.org's aarch64 tree (404) and Snapper on btrfs |
+| `update.omarchy` | Omarchy | Unsupported | -- | `omarchy-update` needs the `omarchy` package (absent from pkgs.omarchy.org's aarch64 app catalog) and Snapper on btrfs |
 | `update.channel` | Channel | Unsupported | -- | every child unsupported |
 | `update.config` | Config | Native | Shell & plugins | only Tmux survives |
 | `update.themes` | Extra Themes | Bridged | Appearance > Get more | upstream `when: omarchy-theme-extras` kept |

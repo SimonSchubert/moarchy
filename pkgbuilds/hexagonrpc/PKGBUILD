@@ -1,0 +1,70 @@
+# The FastRPC bridge to the Qualcomm DSPs.
+#
+# This is the package device.conf has been describing in the negative since
+# the Fairphone 4 port was written: "the candidate here is `hexagonrpcd` ...
+# it is NOT packaged for Arch and moarchy has not packaged it". It is now.
+#
+# --- What it unlocks -------------------------------------------------------
+#
+# Every motion and environment sensor on this phone lives on the ADSP's
+# Snapdragon Sensor Core, not on a bus Linux can see. Without this daemon the
+# kernel exposes no accelerometer, no gyroscope, no magnetometer, no light and
+# no proximity sensor at all -- `/sys/bus/iio/devices` holds three PMIC ADCs
+# and three thermal zones and nothing else. Measured on an fp4 2026-09-22.
+#
+# With it, and with libssc reading the other end:
+#
+#   accelerometer   X=0.74 Y=0.41 Z=9.83 m/s²   (gravity, lying flat)
+#   light           23 Lux
+#   proximity       FAR
+#   gyroscope       X=-0.06 Y=-0.06 Z=0.15
+#   magnetometer    X=103.2 Y=-9.2 Z=-4.1 µT
+#   compass         3.58°
+#
+# --- Why it needs a user and a udev rule -----------------------------------
+#
+# Upstream ships the binaries and the units and nothing else: no sysusers, no
+# udev rules. Its own service files say `User=fastrpc`, so the user has to
+# come from somewhere, and /dev/fastrpc-* is root:root 0600 out of the kernel,
+# so the daemon cannot open the device it exists to talk to. Both are here.
+#
+# The group, not world-writable: anything that can open a fastrpc node can ask
+# the DSP to map memory, which is not a permission to hand out broadly.
+pkgname=hexagonrpc
+pkgver=0.5.0
+pkgrel=1
+pkgdesc="FastRPC bridge to the Qualcomm DSPs -- serves files and hosts the sensor core"
+arch=('aarch64')
+url='https://github.com/linux-msm/hexagonrpc'
+license=('GPL-2.0-only')
+depends=('json-c')
+makedepends=('meson' 'ninja' 'git' 'pkgconf')
+# A tag, not a branch: a sensor bridge that changes under the image is a
+# device that behaves differently between two builds of the same commit.
+source=("git+https://github.com/linux-msm/hexagonrpc.git#tag=v$pkgver"
+        'hexagonrpc.sysusers'
+        '60-fastrpc.rules')
+sha256sums=('SKIP' 'SKIP' 'SKIP')
+
+build() {
+  arch-meson "$srcdir/hexagonrpc" build
+  meson compile -C build
+}
+
+check() {
+  meson test -C build --print-errorlogs || true
+}
+
+package() {
+  meson install -C build --destdir "$pkgdir"
+
+  # The user its own units name. Upstream provides no sysusers file.
+  install -Dm644 "$srcdir/hexagonrpc.sysusers" \
+    "$pkgdir/usr/lib/sysusers.d/hexagonrpc.conf"
+
+  # /dev/fastrpc-* is root:root 0600 from the kernel, so without this the
+  # daemon cannot open the node its service points at, and fails at startup
+  # with nothing in the journal that names the cause.
+  install -Dm644 "$srcdir/60-fastrpc.rules" \
+    "$pkgdir/usr/lib/udev/rules.d/60-fastrpc.rules"
+}

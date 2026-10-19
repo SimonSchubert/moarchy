@@ -1,0 +1,143 @@
+# ModemManager 1.24.2 with two upstream fixes that no release carries yet.
+#
+# This is Arch's recipe (packaging/packages/modemmanager, 1.24.2-1) with three
+# differences, and nothing else:
+#
+#   1. Two patches from ModemManager main (fp4-defects.md D33):
+#        0001  9317cbc4  netlink: fix use-after-free calling completion_fn
+#        0002  0edcb916  base-manager: fix cleanup of multiplexed bearers
+#      0001 is the one that costs calls. On the FP4 (qcom-soc plugin, IPA,
+#      rmnet multiplexing) MM creates qmapmux0.0 on every data connect and
+#      then, in transaction_complete(), calls tr->completion_fn after `tr` was
+#      freed by the hash-table remove. Measured on the stock binary: the
+#      crashing frame is exactly that indirect call (ldr x3,[x28,#32]; blr x3;
+#      cbz w0), roughly one reconnect in five. NetworkManager reconnects mobile
+#      data after every resume, so a call that woke the phone took MM, and the
+#      call, down with it. With both patches: 0 crashes in 5 resume cycles
+#      against 1 in 5 for the stock build on the same phone the same night.
+#      Arch's own two cherry-picks (1ec2b862 gtk-doc, 018e4408 Fibocom) are
+#      already ancestors of the 1.24.2 tag and are not repeated.
+#   2. No modemmanager-docs split and gtk_doc=false: the API reference is not
+#      something a phone needs, and gtk-doc is a heavy build dependency.
+#   3. A pinned tarball (manifest.toml [modemmanager]) instead of a signed git
+#      tag, like every other upstream this repo builds.
+#
+# The package names are Arch's so that everything depending on modemmanager or
+# libmm-glib is satisfied by this build; [moarchy] is ahead of [extra] in the
+# image's pacman.conf, so these win. Drop the package once Arch ships a release
+# containing both commits (1.26.x).
+
+. "$startdir/../../scripts/manifest.sh"
+_url=$(manifest_get modemmanager url) || return 1
+_ref=$(manifest_get modemmanager ref) || return 1
+_ver=$(manifest_get modemmanager version) || return 1
+
+pkgbase=modemmanager
+pkgname=(modemmanager libmm-glib)
+pkgver=$_ver
+# A dotted pkgrel on Arch's 1: says which release this is derived from, and
+# sorts above it.
+pkgrel=1.1
+pkgdesc="Mobile broadband modem management service (with moarchy's backported fixes)"
+url="$_url"
+arch=(aarch64)
+license=(GPL-2.0-or-later LGPL-2.1-or-later)
+depends=(
+  bash
+  glib2
+  glibc
+  hicolor-icon-theme
+  libgcc
+  libgudev
+  libmbim
+  libqmi
+  libqrtr-glib
+  mobile-broadband-provider-info
+  polkit
+  ppp
+  systemd-libs
+)
+makedepends=(
+  bash-completion
+  glib2-devel
+  gobject-introspection
+  meson
+  systemd
+  vala
+)
+source=("ModemManager-$_ref.tar.gz::$_url/-/archive/$_ref/ModemManager-$_ref.tar.gz"
+        '0001-netlink-fix-use-after-free-calling-completion_fn.patch'
+        '0002-base-manager-fix-cleanup-of-multiplexed-bearers.patch')
+sha256sums=('fbc75adcc0d7b0565f256e7ff4e8872b0a37c4413ff576665f7470932d9c1b68'
+            'SKIP' 'SKIP')
+
+_srcdir="ModemManager-$_ref"
+
+prepare() {
+  cd "$_srcdir"
+  for p in "$srcdir"/000*-*.patch; do
+    echo "==> applying $(basename "$p")"
+    patch -p1 < "$p" || return 1
+  done
+}
+
+build() {
+  local meson_options=(
+    -D dbus_policy_dir=/usr/share/dbus-1/system.d
+    -D dist_version="\"$pkgver-$pkgrel\""
+    -D gtk_doc=false
+    -D polkit=permissive
+    -D vapi=true
+  )
+
+  arch-meson "$_srcdir" build "${meson_options[@]}"
+  meson compile -C build
+}
+
+_pick() {
+  local p="$1" f d; shift
+  for f; do
+    d="$srcdir/$p/${f#$pkgdir/}"
+    mkdir -p "$(dirname "$d")"
+    mv "$f" "$d"
+    rmdir -p --ignore-fail-on-non-empty "$(dirname "$f")"
+  done
+}
+
+package_modemmanager() {
+  license=(GPL-2.0-or-later)
+  depends+=(
+    "libmm-glib=$pkgver-$pkgrel" libmm-glib.so
+    libgudev-1.0.so
+    libg{lib,object,io,module}-2.0.so
+    libmbim-glib.so
+    libqmi-glib.so
+    libsystemd.so
+  )
+  optdepends=(
+    'usb_modeswitch: install if your modem shows up as a storage drive'
+  )
+
+  meson install -C build --destdir "$pkgdir"
+
+  cd "$pkgdir"
+  _pick libmm usr/include
+  _pick libmm usr/lib/girepository-1.0
+  _pick libmm usr/lib/libmm-glib.so*
+  _pick libmm usr/lib/pkgconfig
+  _pick libmm usr/share/gir-1.0
+  _pick libmm usr/share/vala
+}
+
+package_libmm-glib() {
+  pkgdesc="ModemManager library (with moarchy's backported fixes)"
+  license=(LGPL-2.1-or-later)
+  depends=(
+    glib2 libg{lib,object,io}-2.0.so
+    glibc
+    libgcc
+  )
+  provides=(libmm-glib.so)
+
+  mv libmm/* "$pkgdir"
+}

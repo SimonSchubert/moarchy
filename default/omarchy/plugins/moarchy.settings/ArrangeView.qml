@@ -37,6 +37,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui as Ui
 import "../moarchy.common" as Shared
 import "../moarchy.common/Widgets.js" as Catalogue
@@ -46,7 +47,7 @@ Item {
   id: view
 
   // The host the previews draw with -- Settings itself, whose palette is
-  // Color.menu where the control center's is Color.popups. One Preview serves
+  // Commons.Color.menu where the control center's is Commons.Color.popups. One Preview serves
   // both because it takes the host (docs/style.md C2).
   property var host: null
   property string surface: ""

@@ -32,6 +32,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui as Ui
 import "../moarchy.common/Theme.js" as Theme
 import "../moarchy.common/Ui.js" as UiSpec
@@ -80,17 +81,17 @@ Item {
   // corners pick on this screen restyles the cells it is sitting on.
   readonly property int radiusTile: ui.radiusTile
 
-  readonly property color surface: Color.menu.background
+  readonly property color surface: Commons.Color.menu.background
   // NOT `onSurface` / `onAccent`, however much the Material role names want to
   // be spelled that way. QML reserves the `on<Uppercase>` prefix for signal
   // handlers, so a property declared there is never readable: the binding
   // evaluates to undefined, undefined assigned to a `color` is #000000, and
   // nothing is logged. The symptom is every glyph and label painted pure black
   // on a dark tile while the properties either side of them are fine.
-  readonly property color textOnSurface: Color.menu.text
-  readonly property color container: Util.alpha(Color.menu.text, 0.08)
-  readonly property color containerHigh: Util.alpha(Color.menu.text, 0.14)
-  readonly property color accent: Color.accent
+  readonly property color textOnSurface: Commons.Color.menu.text
+  readonly property color container: Util.alpha(Commons.Color.menu.text, 0.08)
+  readonly property color containerHigh: Util.alpha(Commons.Color.menu.text, 0.14)
+  readonly property color accent: Commons.Color.accent
   // Computed per theme, not fixed. A flat 0.6 reaches 2.72:1 on rose-pine --
   // measured across all 22 colors.toml files -- and no single alpha clears AA
   // everywhere without being loud enough to stop reading as secondary. Walk
@@ -99,7 +100,7 @@ Item {
   // code: moarchy.common/Theme.js. It was copied into six files under a comment
   // saying an import across plugin directories "breaks silently"; that was
   // never tested, and when it was it turned out to work (docs/refactor.md E1).
-  readonly property color subdued: Theme.readableOn(root.surface, Color.menu.text,
+  readonly property color subdued: Theme.readableOn(root.surface, Commons.Color.menu.text,
                                                    0.55, 4.5)
 
   // The veil is shared (docs/refactor.md E2); the default ink is this

@@ -1,9 +1,10 @@
 #!/bin/bash
 # First-boot configuration baked into the rootfs (docs/structure.md I6-I8).
 #
-# Nothing here is a credential. A published image carries no password, no
-# preseeded network and no key (I6a); the wifi preseed is opt-in through the
-# environment and is for debug images only.
+# Nothing here is a secret. A published image carries no preseeded network and
+# no key (I6a), and its only password is the documented default PIN below (I8,
+# D30); the wifi preseed is opt-in through the environment and is for debug
+# images only.
 set -euo pipefail
 ROOTDIR=$1
 USER_NAME=${MOARCHY_USER:-moarchy}
@@ -12,20 +13,27 @@ say() { printf '    %s\n' "$*"; }
 
 # --- the user (I8) ---------------------------------------------------------
 # DanctNIX ships `alarm` with the password 123456 and root with `root`. Neither
-# is in this image. The account is created with a LOCKED password instead:
+# is in this image. The account gets a short documented default PIN instead,
+# and root stays locked:
 #
-#   - tty1 autologin is how the phone is used, and it does not consult a
-#     password, so the phone comes up usable with no secret to leak or change.
-#   - sshd is not enabled, and password authentication is off if it is enabled,
-#     so a locked password cannot be brute-forced remotely.
+#   - The session lock is a PIN pad that authenticates through PAM. It used to
+#     ship a LOCKED password, which PAM can never accept, so the first
+#     before-sleep lock trapped the user on the lock screen with no shell to
+#     run `passwd` from (D30). A known default is the quick fix; the user
+#     changes it with `passwd` (it asks for this default first).
+#   - The default is public by design, so it must not open anything remote:
+#     sshd is not enabled, and password authentication is off if it is enabled
+#     (below). It only ever unlocks the screen of a phone you are holding.
+#   - tty1 autologin is how the phone is used and does not consult a password.
 #   - sudo is passwordless for this account. On a device with no disk
 #     encryption that concedes nothing: anyone holding the phone can read the
-#     SD card. It is the same deliberate choice the dev provisioning makes.
+#     storage. It is the same deliberate choice the dev provisioning makes.
 #
-# Setting a real password is `passwd`, and the user can do it from the terminal
-# once the session and its on-screen keyboard are up.
+# image/verify.sh accepts exactly this default (it recomputes the hash) and
+# still fails on any other real password in the image. Keep the two in step.
+DEFAULT_PIN=1337
 arch-chroot "$ROOTDIR" useradd -m -G wheel,video,audio,input,feedbackd -s /bin/bash "$USER_NAME"
-arch-chroot "$ROOTDIR" passwd -l "$USER_NAME" >/dev/null
+printf '%s:%s\n' "$USER_NAME" "$DEFAULT_PIN" | arch-chroot "$ROOTDIR" chpasswd -c SHA512
 arch-chroot "$ROOTDIR" passwd -l root >/dev/null
 # Autologin, written HERE rather than left to moarchy-firstboot.
 #
@@ -45,13 +53,13 @@ EOF
 
 printf '%s ALL=(ALL) NOPASSWD: ALL\n' "$USER_NAME" > "$ROOTDIR/etc/sudoers.d/10-moarchy"
 chmod 440 "$ROOTDIR/etc/sudoers.d/10-moarchy"
-say "user $USER_NAME (locked password, passwordless sudo, root locked)"
+say "user $USER_NAME (default PIN $DEFAULT_PIN, passwordless sudo, root locked)"
 
 # sshd off by default, and no password logins if someone turns it on.
 install -d "$ROOTDIR/etc/ssh/sshd_config.d"
 cat >"$ROOTDIR/etc/ssh/sshd_config.d/10-moarchy.conf" <<EOF
-# A published image ships no password, so password auth could only ever
-# succeed against one the user set themselves. Keys only.
+# The image's only password is the public default PIN (above), so password auth
+# over ssh would be an open door until the user changes it. Keys only.
 PasswordAuthentication no
 PermitRootLogin no
 EOF

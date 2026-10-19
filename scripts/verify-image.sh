@@ -39,10 +39,20 @@ echo "==> verifying $(basename "$IMAGE")"
 # happened to type.
 IMAGE_ABS=$(cd "$(dirname "$IMAGE")" && pwd)/$(basename "$IMAGE")
 
-docker build --platform linux/arm64 -f image/Dockerfile -t moarchy-image . >/dev/null
-# --privileged for the loop mount of the rootfs and for the chroot the
-# behavioural checks run in.
-docker run --rm --privileged --platform linux/arm64 \
+# Which container engine, and the flags that differ between docker and podman.
+. "$REPO_ROOT/scripts/container.sh"
+ctr_require
+
+"$CTR" build --platform linux/arm64 -f image/Dockerfile -t moarchy-image . >/dev/null
+# --privileged for the mount of the rootfs and for the chroot the behavioural
+# checks run in.
+#
+# --device=/dev/fuse is added on rootless podman, and only there. A rootless
+# container cannot use a loop device -- `mount -o loop` is EPERM and
+# /dev/loop-control belongs to nobody inside the user namespace -- so
+# image/verify.sh falls back to fuse2fs, which needs the device passed in. On
+# docker the loop mount works and the flag would buy nothing.
+"$CTR" run --rm --privileged --platform linux/arm64 $(ctr_fuse_args) \
   -v "$(dirname "$IMAGE_ABS")":/img:ro \
   --entrypoint bash moarchy-image \
   /repo/image/verify.sh "/img/$(basename "$IMAGE_ABS")"

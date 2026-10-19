@@ -1,0 +1,37 @@
+#!/bin/bash
+# swayidle's second timeout: suspend the phone after the panel has already
+# blanked, so idle actually sleeps the system (s2idle) instead of running at full
+# power behind a dark screen. This is the fix for docs/fp4-defects.md D28 -- with
+# only moarchy-idle-blank the phone drained ~0.73 W with the screen off (~1 day
+# of "standby"); s2idle resume is proven working (D28 step 1).
+#
+# Runs ~60 s after moarchy-idle-blank. Locking is NOT done here: swayidle's
+# before-sleep hook runs moarchy-lock for EVERY suspend path, so the next wake
+# shows the PIN pad however it was put to sleep.
+#
+# The power button, the modem and the RTC are all registered wake sources
+# (D28), so a press, an incoming call or an alarm brings it back.
+set -uo pipefail
+
+# Stay Awake: the same flag moarchy-idle-blank honours. If the screen was kept
+# on deliberately, do not sleep the system either.
+STATE_FILE="$HOME/.local/state/omarchy/indicators/stay-awake"
+[[ -f $STATE_FILE ]] && exit 0
+
+# Respect anything holding a sleep inhibitor (block mode) -- e.g. a dialer or a
+# media app saying "not now". systemctl suspend can override these, so the guard
+# is here rather than relied on downstream.
+if command -v systemd-inhibit >/dev/null 2>&1; then
+  if systemd-inhibit --list --mode=block 2>/dev/null | grep -qiw sleep; then
+    exit 0
+  fi
+fi
+
+# Active audio, even without a formal inhibitor: a running playback stream
+# (music) or capture stream (a call) means stay awake.
+if command -v pactl >/dev/null 2>&1; then
+  pactl list short sink-inputs   2>/dev/null | grep -q . && exit 0
+  pactl list short source-outputs 2>/dev/null | grep -q . && exit 0
+fi
+
+exec systemctl suspend

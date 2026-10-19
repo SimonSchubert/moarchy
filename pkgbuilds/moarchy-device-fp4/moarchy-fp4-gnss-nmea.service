@@ -1,0 +1,15 @@
+[Unit]
+Description=Enable standard NMEA output on the modem GNSS engine
+# D8: ModemManager's own "Set NMEA Types" times out on this modem, leaving the
+# engine emitting only proprietary sentences. See fp4-gnss-nmea.
+After=ModemManager.service
+Wants=ModemManager.service
+ConditionPathExists=/usr/bin/qmicli
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/moarchy/fp4-gnss-nmea
+
+[Install]
+WantedBy=multi-user.target

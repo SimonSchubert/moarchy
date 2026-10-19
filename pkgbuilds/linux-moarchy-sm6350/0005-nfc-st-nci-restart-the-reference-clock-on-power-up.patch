@@ -1,0 +1,89 @@
+From 7ccfd34c8b9d5a82831e7110df5a7c3a07b7629d Mon Sep 17 00:00:00 2001
+From: Tim auf der Landwehr <tadl-git@taufderl.de>
+Date: Tue, 29 Sep 2026 12:30:44 +0200
+Subject: [PATCH 5/6] nfc: st-nci: restart the reference clock on power-up
+
+On the Fairphone 4 (and reported on the Fairphone 5), the ST21NFCD stops
+answering NCI after a poll enable/disable cycle: the next NFC_CMD_DEV_UP
+sends CORE_RESET and never gets a response (__nci_request timeout,
+nfc_dev_up: SE discovery failed), and the controller stays dead until a
+reboot. No tag is needed to trigger it; enable/disable/enable polling is
+enough.
+
+A reset pulse alone does not recover the part; its input clock has to be
+stopped and restarted. The driver enabled the clock once at probe and left
+it running, so only re-probing (which cycles the clock) recovered it.
+
+Cycle the reference clock in the power-up path, while the controller is
+held in reset. Scope it to the raw-NCI (st21nfcd) part so the NDLC parts
+are untouched; the reset-assert delay stays unconditional.
+
+Signed-off-by: Tim auf der Landwehr <tadl-git@taufderl.de>
+---
+ drivers/nfc/st-nci/i2c.c | 32 ++++++++++++++++++++++++--------
+ 1 file changed, 24 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/nfc/st-nci/i2c.c b/drivers/nfc/st-nci/i2c.c
+index e527d3cc9..16f643b3a 100644
+--- a/drivers/nfc/st-nci/i2c.c
++++ b/drivers/nfc/st-nci/i2c.c
+@@ -46,6 +46,7 @@ struct st_nci_i2c_phy {
+ 	bool irq_active;
+ 	bool raw_nci;
+ 
++	struct clk *clk;
+ 	struct gpio_desc *gpiod_reset;
+ 
+ 	struct st_nci_se_status se_status;
+@@ -60,15 +61,29 @@ static int st_nci_i2c_enable(void *phy_id)
+ 	 * chip-running. GPIO_ACTIVE_LOW: logical 1 asserts reset
+ 	 * (physical LOW).
+ 	 */
+-	if (gpiod_is_active_low(phy->gpiod_reset)) {
++	if (gpiod_is_active_low(phy->gpiod_reset))
+ 		gpiod_set_value(phy->gpiod_reset, 1);
+-		usleep_range(10000, 15000);
++	else
+ 		gpiod_set_value(phy->gpiod_reset, 0);
+-	} else {
++
++	/*
++	 * The ST21NFCD (raw NCI) stops answering NCI after a poll on/off cycle
++	 * and does not recover on a reset pulse alone: its input clock has to be
++	 * stopped and restarted. The clock is enabled once at probe, so cycle it
++	 * here, while the controller is held in reset, on every power-up. Scoped
++	 * to the raw-NCI part; the NDLC parts keep their previous timing. The
++	 * usleep below is the reset-assert width and stays unconditional.
++	 */
++	if (phy->raw_nci)
++		clk_disable_unprepare(phy->clk);
++	usleep_range(10000, 15000);
++	if (phy->raw_nci)
++		clk_prepare_enable(phy->clk);
++
++	if (gpiod_is_active_low(phy->gpiod_reset))
+ 		gpiod_set_value(phy->gpiod_reset, 0);
+-		usleep_range(10000, 15000);
++	else
+ 		gpiod_set_value(phy->gpiod_reset, 1);
+-	}
+ 	usleep_range(80000, 85000);
+ 
+ 	if (phy->ndlc->powered == 0 && phy->irq_active == 0) {
+@@ -282,9 +297,10 @@ static int st_nci_i2c_probe(struct i2c_client *client)
+ 	if (r && r != -ENODEV)
+ 		return dev_err_probe(dev, r, "failed to enable vdd-io\n");
+ 
+-	r = PTR_ERR_OR_ZERO(devm_clk_get_optional_enabled(dev, NULL));
+-	if (r)
+-		return dev_err_probe(dev, r, "failed to enable clock\n");
++	phy->clk = devm_clk_get_optional_enabled(dev, NULL);
++	if (IS_ERR(phy->clk))
++		return dev_err_probe(dev, PTR_ERR(phy->clk),
++				     "failed to enable clock\n");
+ 
+ 	/* Get RESET GPIO */
+ 	phy->gpiod_reset = devm_gpiod_get(dev, "reset", GPIOD_OUT_HIGH);
+-- 
+2.55.0
+

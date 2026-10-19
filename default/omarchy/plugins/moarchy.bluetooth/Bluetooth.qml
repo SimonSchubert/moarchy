@@ -10,7 +10,7 @@
 //
 //   * a list row is one terminal line, ~17 logical px on the 60x41 grid
 //     moarchy-launch-tui gives, against the 44 docs/style.md E1 asks for;
-//   * a terminal carries foot's palette instead of Color.popups.*, so the
+//   * a terminal carries foot's palette instead of Commons.Color.popups.*, so the
 //     tile that opened it landed you somewhere that did not look like the
 //     shell. This screen is a window too now (docs/gestures.md K1), so what
 //     separates them is the palette and the touch targets, not the workspace;
@@ -60,6 +60,7 @@ import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Bluetooth
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui as Ui
 import "../moarchy.common/Theme.js" as Theme
 import "../moarchy.common" as Shared
@@ -114,21 +115,21 @@ Item {
   readonly property int radiusCard: ui.radiusCard
 
   readonly property int textWeight: Font.DemiBold
-  readonly property color surface: Color.popups.background
-  readonly property color textOnSurface: Color.popups.text
-  readonly property color container: Util.alpha(Color.popups.text, 0.08)
-  readonly property color containerHigh: Util.alpha(Color.popups.text, 0.14)
-  readonly property color accent: Color.accent
-  readonly property color textOnAccent: Color.background
+  readonly property color surface: Commons.Color.popups.background
+  readonly property color textOnSurface: Commons.Color.popups.text
+  readonly property color container: Util.alpha(Commons.Color.popups.text, 0.08)
+  readonly property color containerHigh: Util.alpha(Commons.Color.popups.text, 0.14)
+  readonly property color accent: Commons.Color.accent
+  readonly property color textOnAccent: Commons.Color.background
 
   // C3, not a flat alpha. `container` is painted with alpha over the surface,
   // so the background this text actually lands on is the blend of the two, and
   // a constant 0.62 falls below AA on six of the 22 themes. Same computation
   // as the control center, which is the surface this screen matches.
   readonly property color subduedBase: Theme.mix(
-    Qt.rgba(root.surface.r, root.surface.g, root.surface.b, 1), Color.popups.text, 0.08)
+    Qt.rgba(root.surface.r, root.surface.g, root.surface.b, 1), Commons.Color.popups.text, 0.08)
   readonly property color subdued: Theme.readableOn(root.subduedBase,
-                                                   Color.popups.text, 0.55, 4.5)
+                                                   Commons.Color.popups.text, 0.55, 4.5)
 
   // The veil is shared (docs/refactor.md E2); the default ink is this
   // surface's own, which is the half a shared type cannot know (style.md H2).

@@ -31,14 +31,15 @@ OpenGL ES profile version:  OpenGL ES 2.0 Mesa 26.2.1
 GLES **2.0**. Hyprland 0.50 also removed the legacy GLES2 renderer, so there is
 no version that works. The compositor had to be **Sway** (wlroots, GLES2).
 
-**Omarchy's package repo is x86_64-only:**
+**Omarchy's package repo has no usable aarch64 base:**
 
 ```
 https://pkgs.omarchy.org/stable/x86_64/omarchy.db  -> 200
-https://pkgs.omarchy.org/stable/aarch64/omarchy.db -> 404
+https://pkgs.omarchy.org/stable/aarch64/omarchy.db -> 200  (app catalog, no omarchy base package)
 ```
 
-Its installer also requires limine, btrfs and Snapper. So none of upstream's
+The aarch64 tree appeared later but is an app catalog with no `omarchy`
+metapackage or `omarchy-config`. Its installer also requires limine, btrfs and Snapper. So none of upstream's
 installer is used — only its architecture-neutral config/theme layer, vendored.
 
 ---

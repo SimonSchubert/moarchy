@@ -24,6 +24,16 @@ hl.on("hyprland.start", function()
   -- The polkit agent. Upstream leaves this to its own session plumbing.
   hl.exec_cmd("/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1")
 
+  -- The geoclue agent. geoclue hands a position only to a client whose
+  -- session has an agent registered (or that is on its system whitelist), so
+  -- without one GNOME Maps, the browser and every other location client time
+  -- out ("Failed to connect to GeoClue2 service") and the modem's GPS is never
+  -- even switched on (D8). GNOME and Phosh bring their own; this session has
+  -- none, so it runs the one geoclue ships, which is on geoclue.conf's agent
+  -- whitelist as geoclue-demo-agent. It needs libnotify (a dependency of
+  -- moarchy for that reason), and without it exits at once.
+  hl.exec_cmd("/usr/lib/geoclue-2.0/demos/agent")
+
   -- No wallpaper process. In 4.x the wallpaper is a shell plugin --
   -- shell/plugins/background/Background.qml -- and it reads the same
   -- ~/.local/state/omarchy/current/background that swaybg was pointed at, so
@@ -40,11 +50,23 @@ hl.on("hyprland.start", function()
   -- focus covered half the screen for the appDrawer's own search field.
   hl.exec_cmd("moarchy-keyboard")
 
-  -- Blank the screen when idle, but never lock it. swayidle is an
+  -- Idle behaviour: at 600 s lock the panel and suspend to s2idle, so idle
+  -- actually sleeps the phone instead of running at full power behind a dark
+  -- screen (docs/fp4-defects.md D28). One timeout runs moarchy-idle-action, which
+  -- locks and then suspends in a single action -- rather than a second swayidle
+  -- timeout for the suspend, so it does not depend on two independent timeouts
+  -- firing in sequence. before-sleep locks first, so every suspend path -- idle
+  -- here, or the power button -- wakes to the PIN pad. swayidle is an
   -- ext-idle-notify-v1 client and carries across unchanged, like swaybg.
   --
-  -- Both commands go through moarchy-* wrappers rather than straight at the
-  -- compositor: the timeout has to honour the Stay Awake flag, and the resume
-  -- must not light a panel the power button deliberately blanked.
-  hl.exec_cmd("swayidle -w timeout 600 'moarchy-idle-blank' resume 'moarchy-screen wake'")
+  -- This MUST be launched in-session (hl.exec_cmd here runs it as a Hyprland
+  -- child on seat0): polkit grants suspend to an active seated session without a
+  -- prompt but denies it to a seatless one, so an ssh-launched swayidle silently
+  -- fails to suspend (auth_admin) even though everything else is right -- D28.
+  --
+  -- All commands go through moarchy-* wrappers rather than straight at the
+  -- compositor: the action honours the Stay Awake flag (and moarchy-idle-suspend
+  -- also skips a call/active audio/sleep inhibitor), and the resume must not
+  -- light a panel the power button deliberately blanked.
+  hl.exec_cmd("swayidle -w timeout 600 'moarchy-idle-action' resume 'moarchy-screen wake' before-sleep 'moarchy-lock'")
 end)

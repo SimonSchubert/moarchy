@@ -75,7 +75,8 @@ tile opens on a long press — `moarchy.wifi` (`docs/control-center.md` S6b) and
 
 The third is **Update system**, and it is not `update.omarchy` wearing a new
 label. That id stays Unsupported for the reason `docs/menu-coverage.md` records —
-`omarchy-update` wants pkgs.omarchy.org's aarch64 tree, which 404s, and Snapper on
+`omarchy-update` wants the `omarchy` package, absent from pkgs.omarchy.org's
+aarch64 tree (an app catalog), and Snapper on
 btrfs — and none of that stops `pacman -Syu`, which `docs/structure.md` R8a
 already says works here and updates the phone UI. So the row runs the plain
 upgrade in the TUI terminal, carries no `covers:`, and adds no line to

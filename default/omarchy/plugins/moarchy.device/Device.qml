@@ -24,6 +24,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui as Ui
 import "../moarchy.common/Theme.js" as Theme
 import "../moarchy.common" as Shared
@@ -42,10 +43,10 @@ Item {
   property string returnTo: ""
 
   // Palette, C1's full-screen block: this is a Top layer surface like the app drawer
-  // and the theme picker, so it reads `Color.menu.*`.
+  // and the theme picker, so it reads `Commons.Color.menu.*`.
   //
-  // It read `Color.surface`, `Color.surfaceContainer`, `Color.onSurface`,
-  // `Color.onSurfaceVariant` and `Color.primary` until 2026-09-15. Those are
+  // It read `Commons.Color.surface`, `Commons.Color.surfaceContainer`, `Commons.Color.onSurface`,
+  // `Commons.Color.onSurfaceVariant` and `Commons.Color.primary` until 2026-09-15. Those are
   // Material role names and upstream's `Color` singleton has never had any of
   // them -- it carries `foreground`, `background`, `accent`, `urgent`, `muted`
   // and a nested object per layer. So all five guards were false, every colour
@@ -56,13 +57,13 @@ Item {
   // check caught this: the guard was the thing that was wrong. It is the third
   // time this one file has claimed in a comment to match the others while
   // matching none of them -- raw pixels, then no font family, now the palette.
-  readonly property color surface: Color.menu.background
-  readonly property color textOnSurface: Color.menu.text
-  readonly property color container: Util.alpha(Color.menu.text, 0.08)
-  readonly property color accent: Color.accent
+  readonly property color surface: Commons.Color.menu.background
+  readonly property color textOnSurface: Commons.Color.menu.text
+  readonly property color container: Util.alpha(Commons.Color.menu.text, 0.08)
+  readonly property color accent: Commons.Color.accent
 
   // C3: computed against the surface it is read on, never fixed at an alpha.
-  readonly property color subdued: Theme.readableOn(root.surface, Color.menu.text,
+  readonly property color subdued: Theme.readableOn(root.surface, Commons.Color.menu.text,
                                                    0.55, 4.5)
 
   // The veil is shared (docs/refactor.md E2); the default ink is this

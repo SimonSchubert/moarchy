@@ -38,6 +38,32 @@
 #                Moves the volume, mutes and unmutes, and blanks the screen
 #                once; the sink is put back on any exit. V8-V10 need the touch
 #                injector and root and skip without them.
+#
+# STATUS (2026-09-30): this harness is Sway-era. It drives `swaymsg` throughout
+# and so does NOT run on the Hyprland session yet (swaymsg is not installed
+# there); a swaymsg -> hyprctl port is still to do. It also references
+# `moarchy-one-app-per-workspace`, which has been RETIRED: Hyprland places one
+# app per workspace declaratively via the `workspace emptynm` window rule in
+# hypr/windows.lua, so the daemon and its `--free` helper no longer exist. The
+# checks that assumed a running daemon (the startup probe and the window checks
+# that call `--free`) need rewriting to assert the rule's effect when ported.
+#
+# PORT MAP (measured on Hyprland 0.56.2, 2026-10-01):
+#   reads are easy and drop in 1:1 --
+#     swaymsg -t get_workspaces  -> hyprctl -j workspaces
+#     swaymsg -t get_tree        -> hyprctl -j clients   (FLAT list, not a tree:
+#                                    the get_tree node-walking must be rewritten)
+#     swaymsg -t get_outputs     -> hyprctl -j monitors
+#   field renames: .app_id -> .class ; .con_id -> .address ; ws .num -> .id ;
+#     .rect -> .at/.size ; .focused window -> `hyprctl -j activewindow`.
+#   ACTIONS are the hard part and need an interactive session to finish:
+#     `hyprctl dispatch <...>` is intercepted by the LUA config parser and
+#     eval'd as `hl.dispatch(<args>)`, so the old `swaymsg '[app_id=X] focus'`
+#     form does NOT translate directly. Use `hyprctl eval '<lua>'` with the
+#     hl.dsp.* dispatcher API -- but note `hyprctl eval` returns only "ok" and
+#     swallows print() output, so the dsp API has to be explored via the
+#     interactive `hyprctl repl`. ~23 dispatch sites (focus/kill/floating/
+#     workspace) need this. Deferred to an attended session for that reason.
 
 set -uo pipefail
 

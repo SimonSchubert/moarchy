@@ -41,6 +41,7 @@ import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui as Ui
 import "Tree.js" as Tree
 import "../moarchy.common/Apps.js" as Apps
@@ -958,22 +959,22 @@ Item {
   readonly property bool keyboardUp:
     root.surfaceUp && workspaceOverviewWindow.width > 100 && osk.reserving(workspaceOverviewWindow)
 
-  readonly property color surface: Color.menu.background
+  readonly property color surface: Commons.Color.menu.background
   // NOT `onSurface`: QML reserves the `on<Uppercase>` prefix for signal
   // handlers, so a property declared there is never readable -- the binding
   // evaluates to undefined, undefined assigned to a `color` is #000000, and
   // nothing is logged.
-  readonly property color textOnSurface: Color.menu.text
-  readonly property color container: Util.alpha(Color.menu.text, 0.08)
+  readonly property color textOnSurface: Commons.Color.menu.text
+  readonly property color container: Util.alpha(Commons.Color.menu.text, 0.08)
   readonly property color subduedBase: Theme.mix(
-    Qt.rgba(root.surface.r, root.surface.g, root.surface.b, 1), Color.menu.text, 0.08)
+    Qt.rgba(root.surface.r, root.surface.g, root.surface.b, 1), Commons.Color.menu.text, 0.08)
   readonly property color cardFill: root.subduedBase
   readonly property color subdued: Theme.readableOn(root.subduedBase,
-                                                    Color.menu.text, 0.55, 4.5)
-  // P12. The theme's own red, not a chosen one: `Color.urgent` is what upstream
+                                                    Commons.Color.menu.text, 0.55, 4.5)
+  // P12. The theme's own red, not a chosen one: `Commons.Color.urgent` is what upstream
   // ships for the one thing that cannot be undone, and the bin is this sheet's
   // only such thing.
-  readonly property color danger: Color.urgent
+  readonly property color danger: Commons.Color.urgent
 
   // The veil is shared (docs/refactor.md E2); the default ink is this surface's
   // own, which is the half a shared type cannot know (style.md H2).
@@ -1189,7 +1190,7 @@ Item {
     // nothing spare.
     Rectangle {
       anchors.fill: parent
-      color: Util.alpha(Color.background, 0.6 * root.progress)
+      color: Util.alpha(Commons.Color.background, 0.6 * root.progress)
     }
 
     Rectangle {
@@ -1300,8 +1301,8 @@ Item {
                 // armed pill, the back edge's committed arc. The bin is the one
                 // target that is not, and it is drawn in `urgent` (P12).
                 border.width: card.isTarget || card.modelData.focused ? 2 : 1
-                border.color: card.isTarget ? Color.accent
-                            : card.modelData.focused ? Util.alpha(Color.accent, 0.6)
+                border.color: card.isTarget ? Commons.Color.accent
+                            : card.modelData.focused ? Util.alpha(Commons.Color.accent, 0.6)
                             : Util.alpha(root.textOnSurface, 0.1)
 
                 PressVeil {
@@ -1331,7 +1332,7 @@ Item {
                       font.pixelSize: Style.font.caption
                       font.weight: root.textWeight
                       font.letterSpacing: Style.space(1)
-                      color: card.modelData.focused ? Color.accent : root.subdued
+                      color: card.modelData.focused ? Commons.Color.accent : root.subdued
                     }
 
                     // P7. Said only when the windows are hidden behind each
@@ -1570,7 +1571,7 @@ Item {
           radius: root.radiusTile
           color: root.container
           border.width: 1
-          border.color: Util.alpha(Color.accent, 0.8)
+          border.color: Util.alpha(Commons.Color.accent, 0.8)
         }
 
         AppTile {

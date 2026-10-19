@@ -1,0 +1,18 @@
+#!/bin/bash
+# One swayidle timeout runs this: lock the panel, then suspend, as a single
+# atomic action rather than relying on a second swayidle timeout to fire after
+# the first one already acted on the screen. Honour Stay Awake, then lock, then
+# hand off to moarchy-idle-suspend (which re-checks Stay Awake, call/audio,
+# inhibitors before `systemctl suspend`).
+#
+# NB the suspend only succeeds when swayidle runs inside the graphical logind
+# session (seat0, active): polkit grants org.freedesktop.login1.suspend to an
+# active seated session with no prompt, but denies it (auth_admin) to a session
+# with no seat -- e.g. anything launched over ssh. At boot autostart.lua launches
+# swayidle in-session via hl.exec_cmd, so this holds; a hand test must do the
+# same (hyprctl-eval hl.exec_cmd), never a bare ssh relaunch. See fp4-defects D28.
+set -uo pipefail
+STATE_FILE="$HOME/.local/state/omarchy/indicators/stay-awake"
+[[ -f $STATE_FILE ]] && exit 0
+moarchy-screen lock
+exec moarchy-idle-suspend

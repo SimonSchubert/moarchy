@@ -1,0 +1,104 @@
+From 0a2935b732af6353fe240ab9973a60523dcc0218 Mon Sep 17 00:00:00 2001
+From: Kristian Brox <isyourbrainfoss@proton.me>
+Date: Wed, 2 Sep 2026 21:22:18 +0000
+Subject: [PATCH 1/6] FROMLIST v4 dt-bindings: net: nfc: add st,st21nfcd
+
+Add a compatible for the ST ST21NFCD NFC controller. Document optional
+SYS_CLK (clocks) and VPS_IO (vdd-io-supply).
+
+ST21NFCD is not I2C-only; the ST data brief lists I2C and SPI.
+Split the spi-max-frequency if/else: forbid it for
+st,st21nfcb-i2c and st,st21nfcc-i2c, require it for st,st21nfcb-spi,
+and leave it optional for st,st21nfcd. Add clocks and vdd-io-supply to
+the existing st,st21nfcb-i2c example instead of a second I2C example.
+
+Signed-off-by: Kristian Brox <isyourbrainfoss@proton.me>
+Reviewed-by: Krzysztof Kozlowski <krzysztof.kozlowski@oss.qualcomm.com>
+Link: https://lore.kernel.org/linux-arm-msm/20260902-fp5-st21nfcd-v4-v4-1-ded2f1c501be@proton.me/
+---
+ .../bindings/net/nfc/st,st-nci.yaml           | 49 +++++++++++++------
+ 1 file changed, 35 insertions(+), 14 deletions(-)
+
+diff --git a/Documentation/devicetree/bindings/net/nfc/st,st-nci.yaml b/Documentation/devicetree/bindings/net/nfc/st,st-nci.yaml
+index 1dcbddbc5..8abafb3d8 100644
+--- a/Documentation/devicetree/bindings/net/nfc/st,st-nci.yaml
++++ b/Documentation/devicetree/bindings/net/nfc/st,st-nci.yaml
+@@ -15,6 +15,7 @@ properties:
+       - st,st21nfcb-i2c
+       - st,st21nfcb-spi
+       - st,st21nfcc-i2c
++      - st,st21nfcd
+ 
+   reset-gpios:
+     description: Output GPIO pin used for resetting the controller
+@@ -36,26 +37,43 @@ properties:
+       Specifies that the uicc swp signal can be physically connected to the
+       controller
+ 
++  clocks:
++    maxItems: 1
++    description:
++      External reference clock connected to SYS_CLK.
++
++  vdd-io-supply:
++    description:
++      Digital I/O supply (VPS_IO).
++
+ required:
+   - compatible
+   - interrupts
+   - reg
+   - reset-gpios
+ 
+-if:
+-  properties:
+-    compatible:
+-      contains:
+-        enum:
+-          - st,st21nfcb-i2c
+-          - st,st21nfcc-i2c
+-then:
+-  properties:
+-    spi-max-frequency: false
+-else:
+-  $ref: /schemas/spi/spi-peripheral-props.yaml#
+-  required:
+-    - spi-max-frequency
++allOf:
++  - if:
++      properties:
++        compatible:
++          contains:
++            enum:
++              - st,st21nfcb-i2c
++              - st,st21nfcc-i2c
++    then:
++      properties:
++        spi-max-frequency: false
++    else:
++      $ref: /schemas/spi/spi-peripheral-props.yaml#
++
++  - if:
++      properties:
++        compatible:
++          contains:
++            const: st,st21nfcb-spi
++    then:
++      required:
++        - spi-max-frequency
+ 
+ unevaluatedProperties: false
+ 
+@@ -76,6 +94,9 @@ examples:
+             interrupts = <2 IRQ_TYPE_LEVEL_HIGH>;
+             reset-gpios = <&gpio5 29 GPIO_ACTIVE_HIGH>;
+ 
++            clocks = <&clk>;
++            vdd-io-supply = <&vdd_io>;
++
+             ese-present;
+             uicc-present;
+         };
+-- 
+2.55.0
+

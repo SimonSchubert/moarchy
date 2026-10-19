@@ -1,0 +1,7 @@
+# D29: the FP4 serial debug console (884000.serial / ttyMSM0) arms an RX wakeup IRQ
+# ("884000.serial:wakeup", msmgpio 64) that fires the instant s2idle idles the CPUs,
+# aborting every system suspend in ~2s (pm_system_irq_wakeup -> pm_abort_suspend).
+# The debug console does not need to wake the phone, so disable its wakeup; this lets
+# s2idle hold. Verified: disabling it makes `echo mem` hold to its rtc alarm (21s)
+# instead of exiting in ~1.3s. See docs/fp4-defects.md (D29).
+ACTION=="add|change", SUBSYSTEM=="platform", KERNEL=="884000.serial", DRIVER=="qcom_geni_serial", ATTR{power/wakeup}="disabled"

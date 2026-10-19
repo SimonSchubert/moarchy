@@ -1,0 +1,299 @@
+#!/usr/bin/env python3
+# NFC for a screen rather than a shell: power the controller up, wait for one
+# tag, say what it is, power it down again.
+#
+#   moarchy-nfc status          present=yes|no   (no privilege needed)
+#   moarchy-nfc read [SECONDS]  one tag, or status=timeout after SECONDS (20)
+#
+# Output is key=value lines, the same shape moarchy-sim uses, so the plugin can
+# parse it the same way:
+#
+#   status=found
+#   tech=ISO 14443-A
+#   type=MIFARE Ultralight / NTAG (NFC Forum Type 2)
+#   uid=04:XX:XX:XX:XX:XX:XX          (example; a real 7-byte NXP UID)
+#   protocols=MIFARE ISO14443
+#   atqa=0044
+#   sak=00
+#
+# It talks to the kernel's own NFC interface, generic netlink family "nfc",
+# directly. There is no daemon: neard is the usual one and is not packaged for
+# this architecture, and nothing here needs more than one poll.
+#
+# Polling needs CAP_NET_ADMIN -- the kernel marks NFC_CMD_DEV_UP and
+# NFC_CMD_START_POLL GENL_ADMIN_PERM -- so `read` re-runs itself under
+# `sudo -n`, passwordless on this phone by design (docs/structure.md), for the
+# same reason moarchy-sim does. `status` reads sysfs and needs nothing.
+#
+# The poll belongs to the socket that started it. The kernel stops polling the
+# moment that socket closes, so this process holds it open for the whole wait;
+# a poll started from a helper that then exits is torn down before any card
+# can answer it.
+
+import errno
+import glob
+import os
+import signal
+import socket
+import struct
+import sys
+import time
+
+NETLINK_GENERIC = 16
+SOL_NETLINK = 270
+NETLINK_ADD_MEMBERSHIP = 1
+GENL_ID_CTRL = 0x10
+CTRL_CMD_GETFAMILY = 3
+CTRL_ATTR_FAMILY_ID = 1
+CTRL_ATTR_FAMILY_NAME = 2
+CTRL_ATTR_MCAST_GROUPS = 7
+NLM_F_REQUEST, NLM_F_ACK, NLM_F_DUMP = 0x1, 0x4, 0x300
+NLMSG_ERROR, NLMSG_DONE = 2, 3
+
+# include/uapi/linux/nfc.h
+CMD_GET_TARGET, CMD_DEV_UP, CMD_DEV_DOWN = 8, 2, 3
+CMD_START_POLL, CMD_STOP_POLL = 6, 7
+EVENT_TARGETS_FOUND = 9
+A_DEVICE_INDEX, A_PROTOCOLS, A_SENS_RES, A_SEL_RES = 1, 3, 5, 6
+A_NFCID1, A_SENSB_RES, A_SENSF_RES = 7, 8, 9
+A_ISO15693_UID, A_ATS = 27, 32
+
+PROTO_NAMES = {1: "JEWEL", 2: "MIFARE", 3: "FELICA", 4: "ISO14443",
+               5: "NFC-DEP", 6: "ISO14443-B", 7: "ISO15693"}
+POLL_ALL = sum(1 << p for p in (1, 2, 3, 4, 6, 7))
+
+
+def out(**kv):
+    for k, v in kv.items():
+        print(f"{k}={v}")
+    sys.stdout.flush()
+
+
+def nla(t, payload):
+    ln = 4 + len(payload)
+    return struct.pack("=HH", ln, t) + payload + b"\0" * ((-ln) % 4)
+
+
+def parse_attrs(buf):
+    attrs = {}
+    while len(buf) >= 4:
+        ln, t = struct.unpack("=HH", buf[:4])
+        if ln < 4:
+            break
+        attrs[t & 0x7fff] = buf[4:ln]
+        buf = buf[(ln + 3) & ~3:]
+    return attrs
+
+
+class Genl:
+    def __init__(self):
+        self.s = socket.socket(socket.AF_NETLINK, socket.SOCK_RAW, NETLINK_GENERIC)
+        self.s.bind((0, 0))
+        self.seq = 0
+
+    def request(self, family, cmd, attrs=b"", flags=NLM_F_ACK):
+        self.seq += 1
+        body = struct.pack("=BBH", cmd, 1, 0) + attrs
+        self.s.send(struct.pack("=IHHII", 16 + len(body), family,
+                                NLM_F_REQUEST | flags, self.seq, 0) + body)
+        replies = []
+        while True:
+            data = self.s.recv(65536)
+            off = 0
+            while off + 16 <= len(data):
+                ln, typ, _, seq, _ = struct.unpack("=IHHII", data[off:off + 16])
+                if seq == self.seq:
+                    if typ == NLMSG_ERROR:
+                        err = struct.unpack("=i", data[off + 16:off + 20])[0]
+                        return err, replies
+                    if typ == NLMSG_DONE:
+                        return 0, replies
+                    replies.append(parse_attrs(data[off + 20:off + ln]))
+                off += (ln + 3) & ~3
+
+    def resolve(self, name):
+        err, replies = self.request(GENL_ID_CTRL, CTRL_CMD_GETFAMILY,
+                                    nla(CTRL_ATTR_FAMILY_NAME, name + b"\0"))
+        if err or not replies:
+            return None, None
+        attrs = replies[0]
+        fam = struct.unpack("=H", attrs[CTRL_ATTR_FAMILY_ID][:2])[0]
+        group = None
+        groups = attrs.get(CTRL_ATTR_MCAST_GROUPS, b"")
+        for g in parse_attrs(groups).values():
+            ga = parse_attrs(g)
+            if ga.get(1, b"").rstrip(b"\0") == b"events":
+                group = struct.unpack("=I", ga[2][:4])[0]
+        return fam, group
+
+
+def device_index():
+    for path in sorted(glob.glob("/sys/class/nfc/nfc*")):
+        return int(os.path.basename(path)[3:])
+    return None
+
+
+# The card database is data, not code: a JSON table of the MIFARE SAK/ATQA tree
+# (NXP AN10833) and the ISO 7816-6 manufacturer codes, so a new card is a new
+# row rather than a code change. Looked for beside the packaged helper first,
+# then beside this file for running straight from a checkout.
+_TABLE_PATHS = [
+    "/usr/share/moarchy/nfc/tag-types.json",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                 "..", "default", "omarchy", "plugins", "moarchy.nfc",
+                 "tag-types.json"),
+]
+
+
+def load_table():
+    import json
+    for p in _TABLE_PATHS:
+        try:
+            with open(p) as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            continue
+    return {}
+
+
+def mifare_name(table, sak, atqa):
+    """AN10833 order: an entry that names an ATQA is more specific than one that
+    does not, so the first exact (sak, atqa) match wins, then sak alone."""
+    rows = table.get("mifare", [])
+    for row in rows:
+        if row.get("sak") == sak and row.get("atqa") == atqa:
+            return row["name"]
+    for row in rows:
+        if row.get("sak") == sak and "atqa" not in row:
+            return row["name"]
+    return None
+
+
+def describe(t, table):
+    """Best effort from the anticollision bytes. What the tag *is* can only
+    be settled by talking to it; this is what the controller already knows.
+    The MIFARE naming comes from the loaded AN10833 table."""
+    protos = struct.unpack("=I", t[A_PROTOCOLS][:4])[0] if A_PROTOCOLS in t else 0
+    names = [PROTO_NAMES[b] for b in sorted(PROTO_NAMES) if protos & (1 << b)]
+    info = {"protocols": " ".join(names) or "unknown"}
+
+    uid = None
+    if A_NFCID1 in t:
+        uid = t[A_NFCID1]
+    elif A_ISO15693_UID in t:
+        uid = t[A_ISO15693_UID][::-1]
+    elif A_SENSF_RES in t:
+        uid = t[A_SENSF_RES][1:9]                       # FeliCa IDm
+    elif A_SENSB_RES in t:
+        uid = t[A_SENSB_RES][1:5]                       # ISO 14443-B PUPI
+    if uid:
+        info["uid"] = uid.hex(":")
+        # ISO 7816-6: byte 0 is the chip maker only on a 7-byte UID. A 4-byte
+        # value is a NUID (or a random ID when it starts 0x08); its first byte
+        # is not a manufacturer code, so naming one there would be wrong.
+        if A_NFCID1 in t and len(uid) == 7:
+            maker = table.get("manufacturers", {}).get(f"{uid[0]:02x}")
+            if maker:
+                info["manufacturer"] = maker
+
+    if A_SENS_RES in t and (protos & ((1 << 2) | (1 << 4) | (1 << 1))):
+        atqa = struct.unpack("=H", t[A_SENS_RES][:2])[0]
+        sak = t[A_SEL_RES][0] if A_SEL_RES in t else 0
+        info.update(tech="ISO 14443-A", atqa=f"{atqa:04x}", sak=f"{sak:02x}")
+        info["type"] = (mifare_name(table, f"{sak:02x}", f"{atqa:04x}")
+                        or "ISO 14443-A tag")
+        if protos & (1 << 1):
+            info["type"] = "Topaz / Jewel (NFC Forum Type 1)"
+    elif protos & (1 << 6):
+        info.update(tech="ISO 14443-B", type="ISO 14443-B card (often an ID card or passport)")
+    elif protos & (1 << 3):
+        info.update(tech="FeliCa", type="FeliCa (NFC Forum Type 3)")
+    elif protos & (1 << 7):
+        info.update(tech="ISO 15693", type="Vicinity tag (NFC Forum Type 5)")
+    else:
+        info.update(tech="unknown", type="Unrecognised tag")
+
+    if A_ATS in t:
+        info["ats"] = t[A_ATS].hex()
+    return info
+
+
+def read(seconds):
+    idx = device_index()
+    if idx is None:
+        out(status="no-device")
+        return 1
+    table = load_table()
+
+    nl = Genl()
+    fam, group = nl.resolve(b"nfc")
+    if fam is None or group is None:
+        out(status="error", error="the kernel has no NFC support loaded")
+        return 1
+    nl.s.setsockopt(SOL_NETLINK, NETLINK_ADD_MEMBERSHIP, group)
+    dev = nla(A_DEVICE_INDEX, struct.pack("=I", idx))
+
+    err, _ = nl.request(fam, CMD_DEV_UP, dev)
+    if err and err != -errno.EALREADY:
+        out(status="error", error=f"could not power the controller: {os.strerror(-err)}")
+        return 1
+    try:
+        err, _ = nl.request(fam, CMD_START_POLL, dev + nla(A_PROTOCOLS, struct.pack("=I", POLL_ALL)))
+        if err == -errno.EBUSY:     # someone left a poll running; take it over
+            nl.request(fam, CMD_STOP_POLL, dev)
+            err, _ = nl.request(fam, CMD_START_POLL, dev + nla(A_PROTOCOLS, struct.pack("=I", POLL_ALL)))
+        if err:
+            out(status="error", error=f"could not start polling: {os.strerror(-err)}")
+            return 1
+
+        nl.s.settimeout(0.5)
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            try:
+                data = nl.s.recv(65536)
+            except socket.timeout:
+                continue
+            off = 0
+            while off + 16 <= len(data):
+                ln, typ = struct.unpack("=IH", data[off:off + 6])
+                if typ == fam and data[off + 16] == EVENT_TARGETS_FOUND:
+                    _, targets = nl.request(fam, CMD_GET_TARGET, dev, flags=NLM_F_DUMP)
+                    if targets:
+                        out(status="found", **describe(targets[0], table))
+                        return 0
+                off += (ln + 3) & ~3
+        out(status="timeout")
+        return 0
+    finally:
+        # Stop the poll first: nfc_dev_down() refuses with -EBUSY while one is
+        # running, which after a timeout left the controller powered and its
+        # reference clock on until something else turned it off.
+        nl.s.settimeout(5)
+        nl.request(fam, CMD_STOP_POLL, dev)
+        nl.request(fam, CMD_DEV_DOWN, dev)
+
+
+def main():
+    # The screen stops a read by terminating this process when it is closed.
+    # Python's default SIGTERM skips `finally`, which would leave the poll
+    # running and the controller powered; exiting instead runs the cleanup.
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
+    cmd = sys.argv[1] if len(sys.argv) > 1 else ""
+    if cmd == "status":
+        out(present="yes" if device_index() is not None else "no")
+        return 0
+    if cmd == "read":
+        try:
+            seconds = max(1, min(120, int(sys.argv[2]))) if len(sys.argv) > 2 else 20
+        except ValueError:
+            print("moarchy-nfc: SECONDS must be a number", file=sys.stderr)
+            return 2
+        if os.geteuid() != 0:
+            os.execvp("sudo", ["sudo", "-n", os.path.abspath(sys.argv[0]), "read", str(seconds)])
+        return read(seconds)
+    print("usage: moarchy-nfc status | read [SECONDS]", file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

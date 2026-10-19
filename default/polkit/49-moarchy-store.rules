@@ -28,8 +28,13 @@
 // over ssh lands in a session with no seat, and an active-only rule would put
 // the password dialog back exactly where it is hardest to answer -- on a phone
 // whose keyboard is not up because there is no session to raise it.
+// The id is org.moarchy.store.manage, with the vendor prefix, exactly as
+// org.moarchy.Store.policy declares it. Matching "moarchy.store.manage" without
+// the prefix -- as this rule did until 2026-09-24 -- silently never fires, and
+// every install falls back to the .policy's auth_self_keep password dialog
+// (fp4-defects D25).
 polkit.addRule(function (action, subject) {
-  if (action.id === "moarchy.store.manage" && subject.isInGroup("wheel")) {
+  if (action.id === "org.moarchy.store.manage" && subject.isInGroup("wheel")) {
     return polkit.Result.YES;
   }
 });

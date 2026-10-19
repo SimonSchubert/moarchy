@@ -1,0 +1,19 @@
+# iio-sensor-proxy with libssc: accelerometer mount matrix
+
+SUBSYSTEM=="misc", KERNEL=="fastrpc-*", ENV{ACCEL_MOUNT_MATRIX}+="-1, 0, 0; 0, -1, 0; 0, 0, -1"
+
+# iio-sensor-proxy ships 80-iio-sensor-proxy.rules, which advertises only
+#
+#   SUBSYSTEM=="misc", KERNEL=="fastrpc-adsp*", ENV{IIO_SENSOR_PROXY_TYPE}+="ssc-light ssc-compass"
+#
+# on a fastrpc node. Its SSC accelerometer and proximity drivers are compiled
+# in and registered, but each one gates discovery on finding its own type in
+# that property, so neither is ever asked for: the daemon requests exactly
+# 'ambient_light' and 'rotv' and reports HasAccelerometer false on a handset
+# whose accelerometer works. ssccli reads all four sensors here.
+#
+# The property is built with +=, and this file sorts after 80, so naming the
+# two missing types is enough. Upstream's rule is the right place for this
+# eventually - nothing about it is specific to this handset.
+SUBSYSTEM=="misc", KERNEL=="fastrpc-adsp*", ENV{IIO_SENSOR_PROXY_TYPE}+="ssc-accel ssc-proximity"
+SUBSYSTEM=="misc", KERNEL=="fastrpc-sdsp*", ENV{IIO_SENSOR_PROXY_TYPE}+="ssc-accel ssc-proximity"

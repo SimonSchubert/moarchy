@@ -1,5 +1,7 @@
-# Upstream Omarchy's configuration and theme layer, ported to Sway at BUILD
-# time (docs/structure.md P2-P4).
+# Upstream Omarchy's configuration and theme layer, with moarchy's plugins
+# hosted at BUILD time (docs/structure.md P2-P4). This fork runs Hyprland; the
+# Sway port was removed (see change 3 below), so port-4x.patch no longer rewrites
+# the compositor seam and the shell keeps upstream's own Quickshell.Hyprland.
 #
 # The port used to run on the phone: install/port-4x.sh, 442 lines of sed and
 # python rewriting the vendored QML in place. It is port-4x.patch now. A patch
@@ -110,7 +112,31 @@ pkgver=${_ver#v}
 #    owner, and it blanks without ever locking.
 #
 #    Same two edits as every entry above: the sha256sum and this number.
-pkgrel=6
+# 7: moarchy.nfc in shell.json. The plugin reads one NFC tag and shows what it
+#    is; on a phone with no NFC controller it says so and does nothing else.
+# 8: enable-user-units.sh enables each user unit only if installed. The phone
+#    ships none of the six desktop units it lists, and a single combined
+#    `systemctl --user enable` under set -e aborted on the first missing one,
+#    so first-run never completed and re-emitted its notifications every boot
+#    (fp4-defects D15).
+# 9: LockView.qml gains an on-screen PIN pad, so the ext-session-lock screen is
+#    usable on a touch device -- the compositor hides the on-screen keyboard
+#    under the locker, so the digits must be part of the lock surface itself.
+# 10: fix a malformed hunk header in port-4x.patch. The shell.qml
+#    pluginBarWidgetRegistryFor hunk was hand-edited and its @@ count left at
+#    -768,8 +809,8 while the body holds 7 lines each side, so patch read one
+#    line too far and swallowed the next file's header -- the whole patch failed
+#    prepare() from a clean checkout (only cached builds hid it; CI caught it).
+#    Corrected to -768,7 +809,7; no change to what the patch does. sha256sum
+#    below moved with it.
+# 11: qt612-qualify-color.patch. Qt 6.12 (Arch Linux ARM, 2026-10) adds a
+#    `Color` type to QtQuick, which shadows the shell's palette singleton in
+#    every file that writes a bare `Color.x`: no palette loads, menus render
+#    black, labels have no colour ("Property 'loadColors' of object QQuickColor
+#    is not a function"). The patch is upstream's own fix, b83d3df0 (#14553),
+#    reproduced at this pin by scripts/qt612-qualify-color.py (byte-identical to
+#    b83d3df0 when run on its parent). Drop it when [omarchy] passes b83d3df0.
+pkgrel=11
 pkgdesc="Omarchy's configuration and theme layer, with moarchy's plugins hosted"
 arch=('any')
 url="$_url"
@@ -119,16 +145,19 @@ license=('MIT')
 depends=('quickshell' 'bash')
 source=("omarchy-$_ref.tar.gz::$_url/archive/$_ref.tar.gz"
         'port-4x.patch'
-        'notification-popups-bar-opt-out.patch')
+        'notification-popups-bar-opt-out.patch'
+        'qt612-qualify-color.patch')
 sha256sums=('8cc6b1d9d903c606600395e3b3d80ad9f15bd3ab78f0f19b0f49041b1df82013'
-            '3b562e93dbe65fd5aff211285891df51149eaca967136a7a06d5aac997b112e6'
-            'e2e3425600b71ae016a8d63439a60dbbb2b42eb51f95516089ebd7d9610d67c5')
+            'a4938434255dcc6cbd78dfbf28fe18ffb1afecff0c9e3ffbef151fa849050b15'
+            'e2e3425600b71ae016a8d63439a60dbbb2b42eb51f95516089ebd7d9610d67c5'
+            'a7e2b86fe5abd608a1b48a82d9248fdfeb266269235236d92c248d8a82edccd9')
 
 # Two patches, and they are different kinds of thing.
 #
-# port-4x.patch is the Sway port: it exists because this hardware cannot run
-# Hyprland, it will never go upstream, and it is the reason this package is not
-# just upstream's tree.
+# port-4x.patch is what makes this a patched package rather than upstream's tree
+# as-is: it hosts moarchy's plugins in the vendored shell. It once also ported
+# the compositor to Sway; that half was removed (change 3 below) now the fork
+# runs Hyprland. It will never go upstream.
 #
 # notification-popups-bar-opt-out.patch is a hook, and it is MEANT to go
 # upstream and be deleted here once it lands. A bar that shows notifications
@@ -157,6 +186,7 @@ prepare() {
   cd "omarchy-$_ref"
   patch -p1 --fuzz=0 < "$srcdir/port-4x.patch"
   patch -p1 --fuzz=0 < "$srcdir/notification-popups-bar-opt-out.patch"
+  patch -p1 --fuzz=0 < "$srcdir/qt612-qualify-color.patch"
 
   # A1/A3. GNU patch's --backup-if-mismatch is on by default and writes a
   # .orig for exactly the files that did not apply cleanly, so the signal for
@@ -199,6 +229,15 @@ prepare() {
   #
   # A floor rather than an equality: upstream adding a sixth is not our
   # failure, and Background.qml on `quattro` is exactly that case.
+  # Qt 6.12: a bare `Color.` anywhere in the shell is a palette lookup that
+  # resolves to QtQuick's Color type and yields undefined (change 11). Upstream
+  # code added by a future bump, or a new hunk, must be qualified too.
+  if grep -rlP '(?<![\w.])Color\s*\.' shell/ --include=*.qml | grep -v '/Commons/Color\.qml$' | grep -q .; then
+    echo "==> ERROR: unqualified palette references (write Commons.Color, see change 11):" >&2
+    grep -rlP '(?<![\w.])Color\s*\.' shell/ --include=*.qml | grep -v '/Commons/Color\.qml$' >&2
+    return 1
+  fi
+
   local _hypr
   _hypr=$(grep -rlE 'import Quickshell\.Hyprland' shell/ | wc -l)
   if [ "$_hypr" -lt 5 ]; then

@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=NFC
+GenericName=NFC Reader
+Comment=Read an NFC tag or contactless card and see what it is
+# A shell plugin is not a process you launch, it is a screen the shell already
+# holds -- the same Exec every moarchy shell app uses.
+Exec=omarchy-shell shell toggle moarchy.nfc
+Terminal=false
+Categories=Utility;
+Keywords=nfc;tag;card;rfid;contactless;ntag;mifare;
+# Ownership marker. install/config.sh sweeps entries whose named plugin is no
+# longer in the repo; without it a deleted plugin leaves a appDrawer icon that
+# launches nothing.
+X-Moarchy-Plugin=moarchy.nfc

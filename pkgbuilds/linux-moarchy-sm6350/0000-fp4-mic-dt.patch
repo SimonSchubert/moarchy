@@ -1,0 +1,419 @@
+diff --git a/arch/arm64/boot/dts/qcom/sm6350.dtsi b/arch/arm64/boot/dts/qcom/sm6350.dtsi
+index f6d796ca287375..d5dfd8f04ca5c1 100644
+--- a/arch/arm64/boot/dts/qcom/sm6350.dtsi
++++ b/arch/arm64/boot/dts/qcom/sm6350.dtsi
+@@ -1450,6 +1450,115 @@
+ 			};
+ 		};
+ 
++		rxmacro: codec@3200000 {
++			compatible = "qcom,sm8250-lpass-rx-macro";
++			reg = <0x0 0x03200000 0x0 0x1000>;
++			pinctrl-0 = <&rx_swr_active>;
++			pinctrl-names = "default";
++			status = "disabled";
++
++			clocks = <&q6afecc LPASS_CLK_ID_TX_CORE_MCLK LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
++				 <&q6afecc LPASS_CLK_ID_TX_CORE_NPL_MCLK LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
++				 <&q6afecc LPASS_HW_MACRO_VOTE LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
++				 <&q6afecc LPASS_HW_DCODEC_VOTE LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
++				 <&vamacro>;
++			clock-names = "mclk", "npl", "macro", "dcodec", "fsgen";
++
++			#clock-cells = <0>;
++			clock-output-names = "mclk";
++			#sound-dai-cells = <1>;
++		};
++
++		swr1: soundwire@3210000 {
++			compatible = "qcom,soundwire-v1.5.1";
++			reg = <0x0 0x03210000 0x0 0x2000>;
++			interrupts = <GIC_SPI 297 IRQ_TYPE_LEVEL_HIGH>;
++			clocks = <&rxmacro>;
++			clock-names = "iface";
++			label = "RX";
++			status = "disabled";
++
++			qcom,din-ports = <0>;
++			qcom,dout-ports = <5>;
++
++			qcom,ports-sinterval-low =	/bits/ 8 <0x03 0x1f 0x1f 0x07 0x00 0xff 0xff 0xff>;
++			qcom,ports-offset1 =		/bits/ 8 <0x00 0x00 0x0b 0x01 0x00 0xff 0xff 0xff>;
++			qcom,ports-offset2 =		/bits/ 8 <0x00 0x00 0x0b 0x00 0x00 0xff 0xff 0xff>;
++			qcom,ports-hstart =		/bits/ 8 <0xff 0x03 0xff 0xff 0xff 0xff 0xff 0xff>;
++			qcom,ports-hstop =		/bits/ 8 <0xff 0x06 0xff 0xff 0xff 0xff 0xff 0xff>;
++			qcom,ports-word-length =	/bits/ 8 <0x01 0x07 0x04 0xff 0xff 0xff 0xff 0xff>;
++			qcom,ports-block-pack-mode =	/bits/ 8 <0xff 0x00 0x01 0xff 0xff 0xff 0xff 0xff>;
++			qcom,ports-lane-control =	/bits/ 8 <0x01 0x00 0x00 0x00 0x00 0xff 0xff 0xff>;
++			qcom,ports-block-group-count =	/bits/ 8 <0xff 0xff 0xff 0xff 0x00 0xff 0xff 0xff>;
++
++			#address-cells = <2>;
++			#size-cells = <0>;
++			#sound-dai-cells = <1>;
++		};
++
++		txmacro: codec@3220000 {
++			compatible = "qcom,sm8250-lpass-tx-macro";
++			reg = <0x0 0x03220000 0x0 0x1000>;
++			pinctrl-0 = <&tx_swr_active>;
++			pinctrl-names = "default";
++			status = "disabled";
++
++			clocks = <&q6afecc LPASS_CLK_ID_TX_CORE_MCLK LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
++				 <&q6afecc LPASS_CLK_ID_TX_CORE_NPL_MCLK LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
++				 <&q6afecc LPASS_HW_MACRO_VOTE LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
++				 <&q6afecc LPASS_HW_DCODEC_VOTE LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
++				 <&vamacro>;
++			clock-names = "mclk", "npl", "macro", "dcodec", "fsgen";
++
++			#clock-cells = <0>;
++			clock-output-names = "mclk";
++			#sound-dai-cells = <1>;
++		};
++
++		swr2: soundwire@3230000 {
++			compatible = "qcom,soundwire-v1.5.1";
++			reg = <0x0 0x03230000 0x0 0x2000>;
++			interrupts-extended = <&intc GIC_SPI 296 IRQ_TYPE_LEVEL_HIGH>,
++					      <&pdc 144 IRQ_TYPE_LEVEL_HIGH>;
++			interrupt-names = "core", "wakeup";
++			clocks = <&txmacro>;
++			clock-names = "iface";
++			label = "TX";
++			status = "disabled";
++
++			qcom,din-ports = <5>;
++			qcom,dout-ports = <0>;
++
++			qcom,ports-sinterval-low =	/bits/ 8 <0xff 0x01 0x01 0x03 0x03 0xff 0xff 0xff>;
++			qcom,ports-offset1 =		/bits/ 8 <0xff 0x01 0x00 0x02 0x00 0xff 0xff 0xff>;
++			qcom,ports-offset2 =		/bits/ 8 <0xff 0x00 0x00 0x00 0x00 0xff 0xff 0xff>;
++			qcom,ports-hstart =		/bits/ 8 <0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff>;
++			qcom,ports-hstop =		/bits/ 8 <0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff>;
++			qcom,ports-word-length =	/bits/ 8 <0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff>;
++			qcom,ports-block-pack-mode =	/bits/ 8 <0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff>;
++			qcom,ports-lane-control =	/bits/ 8 <0xff 0x00 0x01 0x00 0x01 0xff 0xff 0xff>;
++			qcom,ports-block-group-count =	/bits/ 8 <0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff>;
++
++			#address-cells = <2>;
++			#size-cells = <0>;
++			#sound-dai-cells = <1>;
++		};
++
++		vamacro: codec@3370000 {
++			compatible = "qcom,sm8250-lpass-va-macro";
++			reg = <0x0 0x03370000 0x0 0x1000>;
++			status = "disabled";
++
++			clocks = <&q6afecc LPASS_CLK_ID_TX_CORE_MCLK LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
++				 <&q6afecc LPASS_HW_MACRO_VOTE LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
++				 <&q6afecc LPASS_HW_DCODEC_VOTE LPASS_CLK_ATTRIBUTE_COUPLE_NO>;
++			clock-names = "mclk", "macro", "dcodec";
++
++			#clock-cells = <0>;
++			clock-output-names = "fsgen";
++			#sound-dai-cells = <1>;
++		};
++
+ 		lpass_tlmm: pinctrl@33c0000 {
+ 			compatible = "qcom,sm6350-lpass-lpi-pinctrl";
+ 			reg = <0x0 0x033c0000 0x0 0x20000>,
+@@ -1514,6 +1623,66 @@
+ 					input-enable;
+ 				};
+ 			};
++
++			rx_swr_active: rx-swr-active-state {
++				clk-pins {
++					pins = "gpio3";
++					function = "swr_rx_clk";
++					drive-strength = <2>;
++					slew-rate = <1>;
++					bias-disable;
++				};
++
++				data-pins {
++					pins = "gpio4", "gpio5";
++					function = "swr_rx_data";
++					drive-strength = <2>;
++					slew-rate = <1>;
++					bias-bus-hold;
++				};
++			};
++
++			tx_swr_active: tx-swr-active-state {
++				clk-pins {
++					pins = "gpio0";
++					function = "swr_tx_clk";
++					drive-strength = <2>;
++					slew-rate = <1>;
++					bias-disable;
++				};
++
++				data-pins {
++					pins = "gpio1", "gpio2", "gpio14";
++					function = "swr_tx_data";
++					drive-strength = <2>;
++					slew-rate = <1>;
++					bias-bus-hold;
++				};
++			};
++
++			tx_swr_sleep: tx-swr-sleep-state {
++				clk-pins {
++					pins = "gpio0";
++					function = "swr_tx_clk";
++					drive-strength = <2>;
++					bias-pull-down;
++				};
++
++				data1-pins {
++					pins = "gpio1", "gpio14";
++					function = "swr_tx_data";
++					drive-strength = <2>;
++					bias-bus-hold;
++				};
++
++				data2-pins {
++					pins = "gpio2";
++					function = "swr_tx_data";
++					drive-strength = <2>;
++					bias-pull-down;
++				};
++			};
++
+ 		};
+ 
+ 		gpu: gpu@3d00000 {
+diff --git a/arch/arm64/boot/dts/qcom/sm7225-fairphone-fp4.dts b/arch/arm64/boot/dts/qcom/sm7225-fairphone-fp4.dts
+index 27d2e5e2e0f431..37659c25543259 100644
+--- a/arch/arm64/boot/dts/qcom/sm7225-fairphone-fp4.dts
++++ b/arch/arm64/boot/dts/qcom/sm7225-fairphone-fp4.dts
+@@ -42,6 +42,34 @@
+ 		serial1 = &uart1;
+ 	};
+ 
++	wcd938x: audio-codec {
++		compatible = "qcom,wcd9380-codec";
++
++		pinctrl-0 = <&wcd_reset_n>;
++		pinctrl-names = "default";
++
++		reset-gpios = <&tlmm 83 GPIO_ACTIVE_LOW>;
++
++		vdd-buck-supply = <&vreg_l14a>;
++		vdd-rxtx-supply = <&vreg_l11a>;
++		vdd-io-supply = <&vreg_l11a>;
++		vdd-mic-bias-supply = <&vreg_bob>;
++
++		qcom,micbias1-microvolt = <2700000>;
++		qcom,micbias2-microvolt = <2700000>;
++		qcom,micbias3-microvolt = <2700000>;
++		qcom,micbias4-microvolt = <2700000>;
++		qcom,mbhc-buttons-vthreshold-microvolt = <75000 150000 237000 500000
++							 500000 500000 500000 500000>;
++		qcom,mbhc-headset-vthreshold-microvolt = <1700000>;
++		qcom,mbhc-headphone-vthreshold-microvolt = <50000>;
++
++		qcom,rx-device = <&wcd_rx>;
++		qcom,tx-device = <&wcd_tx>;
++
++		#sound-dai-cells = <1>;
++	};
++
+ 	battery: battery {
+ 		compatible = "simple-battery";
+ 
+@@ -1352,8 +1380,29 @@
+ };
+ 
+ &q6asmdai {
++	/*
++	 * Two front ends, split by direction.
++	 *
++	 * q6asm-dais builds its DAI list from these child nodes -- there is no
++	 * default set -- so a dai-link naming MULTIMEDIA2 without a dai@1 here
++	 * fails the whole card with "MultiMedia2: error getting cpu dai name".
++	 *
++	 * Splitting them rather than declaring one full-duplex front end is the
++	 * point: with a single front end, playback and capture contend for one
++	 * q6asm session and the second opener is refused with "Audio Client
++	 * already active", so the microphone and the speaker cannot be used at
++	 * once. Giving each direction its own front end also makes the ALSA
++	 * device list unambiguous -- aplay -l shows only MultiMedia1, arecord -l
++	 * only MultiMedia2 -- so nothing has to be told which to pick.
++	 */
+ 	dai@0 {
+ 		reg = <MSM_FRONTEND_DAI_MULTIMEDIA1>;
++		direction = <Q6ASM_DAI_RX>;
++	};
++
++	dai@1 {
++		reg = <MSM_FRONTEND_DAI_MULTIMEDIA2>;
++		direction = <Q6ASM_DAI_TX>;
+ 	};
+ };
+ 
+@@ -1402,6 +1451,10 @@
+ 	status = "okay";
+ };
+ 
++&rxmacro {
++	status = "okay";
++};
++
+ &sdc2_off_state {
+ 	sd-cd-pins {
+ 		pins = "gpio94";
+@@ -1440,6 +1493,16 @@
+ 	compatible = "fairphone,fp4-sndcard";
+ 	model = "Fairphone 4";
+ 
++	audio-routing =
++		"AMIC1", "MIC BIAS1",
++		"AMIC3", "MIC BIAS3",
++		"AMIC4", "MIC BIAS3",
++		"AMIC5", "MIC BIAS4",
++		"TX SWR_ADC0", "ADC1_OUTPUT",
++		"TX SWR_ADC1", "ADC2_OUTPUT",
++		"TX SWR_ADC2", "ADC3_OUTPUT",
++		"TX SWR_ADC3", "ADC4_OUTPUT";
++
+ 	pinctrl-0 = <&i2s1_active>;
+ 	pinctrl-1 = <&i2s1_sleep>;
+ 	pinctrl-names = "default",
+@@ -1453,6 +1516,34 @@
+ 		};
+ 	};
+ 
++	/*
++	 * A second front end, for capture.
++	 *
++	 * With only MultiMedia1 declared, the card exposes exactly one PCM and
++	 * `aplay -l` and `arecord -l` both name it. Playback and capture then
++	 * contend for a single q6asm session, and whichever opens second is
++	 * refused:
++	 *
++	 *   q6asm-dai: Audio Client already active
++	 *   q6asm-dai: q6asm_dai_prepare: q6asm_open_write failed
++	 *   ASoC error (-22): at snd_soc_pcm_component_prepare()
++	 *
++	 * which on a phone means the microphone and the speaker cannot be used
++	 * at the same time -- no call audio, and a recorder that fails if
++	 * anything played recently. A second front end gives capture its own
++	 * session. q6routing already carries the mixers for MultiMedia1..8, so
++	 * nothing else has to change to reach it.
++	 */
++	mm2-dai-link {
++		link-name = "MultiMedia2";
++
++		cpu {
++			sound-dai = <&q6asmdai MSM_FRONTEND_DAI_MULTIMEDIA2>;
++		};
++	};
++
++
++
+ 	usb-dai-link {
+ 		link-name = "USB Playback";
+ 
+@@ -1484,6 +1575,69 @@
+ 			sound-dai = <&aw882xx_l>, <&aw882xx_r>;
+ 		};
+ 	};
++
++	/*
++	 * The codec's PLAYBACK link, on a handset with no headphone jack.
++	 *
++	 * Not vestigial. Without it nothing references swr1 or the RX macro, so
++	 * neither binds to the card -- and the wcd938x's DAPM graph spans both
++	 * halves of the codec. With only the capture link bound, every widget on
++	 * the capture path stays Off with "out 0" and the backend DAI never
++	 * starts, which is silence with no error anywhere. Every board carrying
++	 * this codec declares both links; this one is here for the same reason
++	 * qcom,rx-device is, not because anything plays through it.
++	 */
++	wcd-playback-dai-link {
++		link-name = "WCD Playback";
++
++		cpu {
++			sound-dai = <&q6afedai RX_CODEC_DMA_RX_0>;
++		};
++
++		codec {
++			sound-dai = <&wcd938x 0>, <&swr1 0>, <&rxmacro 0>;
++		};
++
++		platform {
++			sound-dai = <&q6routing>;
++		};
++	};
++
++	wcd-capture-dai-link {
++		link-name = "WCD Capture";
++
++		cpu {
++			sound-dai = <&q6afedai TX_CODEC_DMA_TX_3>;
++		};
++
++		codec {
++			sound-dai = <&wcd938x 1>, <&swr2 0>, <&txmacro 0>;
++		};
++
++		platform {
++			sound-dai = <&q6routing>;
++		};
++	};
++};
++
++&swr1 {
++	status = "okay";
++
++	wcd_rx: codec@0,4 {
++		compatible = "sdw20217010d00";
++		reg = <0 4>;
++		qcom,rx-port-mapping = <1 2 3 4 5>;
++	};
++};
++
++&swr2 {
++	status = "okay";
++
++	wcd_tx: codec@0,3 {
++		compatible = "sdw20217010d00";
++		reg = <0 3>;
++		qcom,tx-port-mapping = <2 3 4 5>;
++	};
+ };
+ 
+ &tlmm {
+@@ -1658,6 +1812,18 @@
+ 			bias-pull-down;
+ 		};
+ 	};
++
++	wcd_reset_n: wcd-reset-n-state {
++		pins = "gpio83";
++		function = "gpio";
++		drive-strength = <16>;
++		output-high;
++	};
++
++};
++
++&txmacro {
++	status = "okay";
+ };
+ 
+ &uart1 {
+@@ -1737,6 +1903,10 @@
+ 	remote-endpoint = <&pm7250b_ss_in>;
+ };
+ 
++&vamacro {
++	status = "okay";
++};
++
+ &wifi {
+ 	vdd-0.8-cx-mx-supply = <&vreg_l4a>;
+ 	vdd-1.8-xo-supply = <&vreg_l7a>;

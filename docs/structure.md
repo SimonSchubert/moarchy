@@ -9,6 +9,13 @@ acceptance criteria are the contract to argue with before any of them is; where
 one is my reading rather than your decision it is marked **?**. Each AC below
 carries its state, and §11 has the per-milestone summary.
 
+**Override note (2026-09-29): the Sway port this file describes was removed; the
+fork runs Hyprland.** `port-4x.patch` no longer translates the compositor to
+Sway (it keeps `Quickshell.Hyprland` and hosts our plugins), the Hyprland config
+lives in `config/hypr/`, and the deleted Sway overlay (sway.conf, sway bindings,
+sway theme template) is gone. See the README's "Compositor and upstream
+divergence" section. Passages below that describe Sway as current are pre-Hyprland.
+
 The archaeology of how we got here lives in [build-log.md](build-log.md). This
 file is the destination.
 
@@ -203,8 +210,10 @@ and theme layer at the pin in `manifest.toml`'s `[omarchy]` (`c668141`, v4.0.4 �
 it lived in `install/vendor-omarchy.sh` until V3), installed to the path
 upstream hardcodes.
 
-**P3** The Hyprland→Sway translation that `install/port-4x.sh` performs at
-install time is applied at **build** time, in `omarchy-config`'s `prepare()`.
+**P3** `port-4x.patch` is applied at **build** time, in `omarchy-config`'s
+`prepare()`. It hosts moarchy's plugins in the vendored shell. It once also
+translated the compositor from Hyprland to Sway at build time; that half was
+removed when the fork moved to Hyprland.
 
 **P4** That translation is a checked-in `.patch` applied with `patch -p1`, not
 a script of `sed` expressions.
@@ -251,9 +260,10 @@ fetched by `source=()` with a checksum, or by a tag `makepkg` can verify.
 **R1** A pacman repository named `moarchy` is published for `aarch64`, with a
 `moarchy.db` at a stable URL.
 
-> This is the aarch64 half of the thing the README already measures as missing:
-> `pkgs.omarchy.org/stable/x86_64/omarchy.db` → 200,
-> `.../aarch64/omarchy.db` → 404.
+> This is the aarch64 half of the thing the README measures. Upstream now has
+> `pkgs.omarchy.org/stable/aarch64/omarchy.db` -> 200, but it is an app catalog
+> with no `omarchy` / `omarchy-config`, no keyring and an unsigned db, so the
+> base stack this repo carries is still missing upstream.
 
 **R2** It contains every package this project builds: the keyboard, the store,
 the AUR rebuilds, `moarchy`, `omarchy-config`, `moarchy-meta` and
@@ -513,13 +523,17 @@ partition it was flashed to on first boot. **Met:**
 > every downloaded package in `/var/cache/pacman/pkg`, 1.26 GiB of it, and
 > sizing the partition before clearing it puts that straight into the download.
 
-**I8** First boot creates the user and ships no default password. **Met, by
-there being no password at all:** the account is created at build time with a
-*locked* password, and root is locked too.
+**I8** First boot creates the user with a documented default PIN, and root is
+locked. **Met, by `image/configure.sh`:** the account gets the PIN `1337`
+(SHA-512) at build time; `image/verify.sh` recomputes the hash and accepts that
+default and nothing else. Until 2026-10-10 the password was *locked*, which the
+PIN lock screen can never accept: the first before-sleep lock trapped the user
+(D30), so the locked-password design was replaced by a public default.
 
-> tty1 autologin does not consult a password, so the phone comes up usable with
-> no secret to leak or change; `sshd` is disabled and password authentication
-> is off if it is enabled, so a locked password cannot be attacked remotely.
+> tty1 autologin does not consult a password, so the phone comes up usable; the
+> default PIN only unlocks the screen of a phone in your hand, because `sshd` is
+> disabled and password authentication is off if it is enabled, so the public
+> default cannot be used remotely. Change it with `passwd`.
 > `sudo` is passwordless for the account, which concedes nothing on a device
 > with no disk encryption — anyone holding the phone can read the card. `passwd`
 > from the phone's own terminal is how a user opts into SSH.

@@ -8,10 +8,11 @@
 // separately.
 //
 // Colours come in as properties rather than being read from Color here, because
-// the control center wants them from Color.popups and the full-screen surfaces want them
-// from Color.menu, and a component that picks for itself cannot serve both.
+// the control center wants them from Commons.Color.popups and the full-screen surfaces want them
+// from Commons.Color.menu, and a component that picks for itself cannot serve both.
 import QtQuick
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui as Ui
 import "../moarchy.common" as Shared
 

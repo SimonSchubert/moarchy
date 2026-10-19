@@ -1,0 +1,60 @@
+From 88f78a40aec5fae92b8e762c9fa21fb2be19afd2 Mon Sep 17 00:00:00 2001
+From: Tim auf der Landwehr <tadl-git@taufderl.de>
+Date: Tue, 29 Sep 2026 12:33:15 +0200
+Subject: [PATCH 6/6] nfc: st-nci: treat the idle 0x7e read as no-data
+
+In the raw-NCI read path the controller returns 0x7e as the first byte
+when it has nothing to send, and its IRQ can fire without a frame behind
+it. The driver took buf[2] of that idle read as a frame length, logged
+"invalid frame len", and read the following bytes at the wrong offset,
+desyncing the next real frame on the bus.
+
+On the Fairphone 4 this produced repeated "invalid frame len" during
+polling. Return -ENODATA when the first byte is the idle marker, and treat
+it like the other benign read outcomes in the IRQ handler.
+
+Signed-off-by: Tim auf der Landwehr <tadl-git@taufderl.de>
+---
+ drivers/nfc/st-nci/i2c.c | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/nfc/st-nci/i2c.c b/drivers/nfc/st-nci/i2c.c
+index 16f643b3a..3a99dc23f 100644
+--- a/drivers/nfc/st-nci/i2c.c
++++ b/drivers/nfc/st-nci/i2c.c
+@@ -29,6 +29,7 @@
+ 
+ #define ST_NCI_I2C_MIN_SIZE 4   /* PCB(1) + NCI Packet header(3) */
+ #define ST_NCI_NCI_HDR_SIZE 3   /* raw NCI: MT/PBF/GID + OID + len */
++#define ST_NCI_IDLE_BYTE 0x7e /* first read byte when the controller is idle (observed) */
+ #define ST_NCI_I2C_MAX_SIZE 250 /* req 4.2.1 */
+ 
+ enum st_nci_i2c_proto {
+@@ -157,6 +158,15 @@ static int st_nci_i2c_read(struct st_nci_i2c_phy *phy,
+ 		if (r != ST_NCI_NCI_HDR_SIZE)
+ 			return -EREMOTEIO;
+ 
++		/*
++		 * The controller returns 0x7e as the first byte when it has
++		 * nothing to send; its IRQ can assert without a frame behind it.
++		 * Treat that as no-data, otherwise buf[2] is taken as a length and
++		 * the next real frame is read off the bus at the wrong offset.
++		 */
++		if (buf[0] == ST_NCI_IDLE_BYTE)
++			return -ENODATA;
++
+ 		len = buf[2];
+ 		if (len > ST_NCI_I2C_MAX_SIZE) {
+ 			nfc_err(&client->dev, "invalid frame len\n");
+@@ -247,7 +257,7 @@ static irqreturn_t st_nci_irq_thread_fn(int irq, void *phy_id)
+ 	}
+ 
+ 	r = st_nci_i2c_read(phy, &skb);
+-	if (r == -EREMOTEIO || r == -ENOMEM || r == -EBADMSG)
++	if (r == -EREMOTEIO || r == -ENOMEM || r == -EBADMSG || r == -ENODATA)
+ 		return IRQ_HANDLED;
+ 
+ 	ndlc_recv(phy->ndlc, skb);
+-- 
+2.55.0
+

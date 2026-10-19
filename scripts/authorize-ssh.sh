@@ -3,9 +3,9 @@
 #
 #   curl -sL https://raw.githubusercontent.com/SimonSchubert/moarchy/main/scripts/authorize-ssh.sh | sh -s <github-user>
 #
-# Why this exists: a reflash wipes /home/moarchy/.ssh, and the account has no
-# password -- image/configure.sh locks it, sshd runs with PasswordAuthentication
-# off, and publickey is the only thing that can work. So the way back in is
+# Why this exists: a reflash wipes /home/moarchy/.ssh, and sshd runs with
+# PasswordAuthentication off (the account's only password is the public
+# default lock-screen PIN, D30), so publickey is the only thing that can work. So the way back in is
 # either a reflash (which means the phone in fastboot and a cable) or one line
 # typed on the phone itself. This is that line.
 #

@@ -55,8 +55,11 @@ mkdir -p $W/r/etc/NetworkManager/system-connections
 echo "[connection]" > $W/r/etc/NetworkManager/system-connections/leaked.nmconnection
 # 5. mark it a debug image
 touch $W/r/etc/moarchy-debug-image
-# 6. give the account a real password hash
-sed -i 's|^moarchy:!:|moarchy:$6$fakehashfakehashfakehash:|' $W/r/etc/shadow
+# 6. give the account a real password hash that is NOT the documented default
+#    PIN (D30). Replaces whatever hash is there: the image now ships the default,
+#    so matching only a locked `!` would plant nothing and the check would read
+#    as missed.
+sed -i 's|^moarchy:[^:]*:|moarchy:$6$fakehashfakehashfakehash:|' $W/r/etc/shadow
 # 7. remove a shell plugin
 rm -rf $W/r/usr/share/moarchy/plugins/moarchy.control-center
 # 8. un-enable the grow unit

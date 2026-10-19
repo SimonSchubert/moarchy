@@ -1,0 +1,190 @@
+# Build, verify and publish a Fairphone 4 image.
+#
+# MANUAL ONLY — the sole trigger is workflow_dispatch. There is no push, no
+# pull_request and no schedule trigger, so this never runs on its own; someone
+# has to start it from the Actions tab (or `gh workflow run build-fp4.yml`).
+# That is deliberate: image builds are long and produce large artifacts.
+#
+# It runs the repository's own documented build flow, unchanged, with DEVICE=fp4:
+#   ./scripts/provision.sh build     # aarch64 packages (incl. the kernel)
+#   ./scripts/build-image.sh         # -> images/moarchy-fp4-<ver>-<date>/
+#   ./scripts/verify-image.sh        # the checks against that image
+#
+# Runner: a NATIVE arm64 GitHub-hosted runner (ubuntu-24.04-arm), free for
+# public repositories. Native aarch64 means the containers run at full speed
+# with no qemu emulation — the difference between a ~1h kernel build and a
+# multi-hour emulated one. If arm64 runners are ever unavailable, switch
+# `runs-on` to `ubuntu-latest` and add a `docker/setup-qemu-action` step before
+# the build, accepting the emulation slowdown.
+#
+# Note (GitHub mechanic): a workflow_dispatch workflow is only offered in the
+# Actions UI once this file exists on the repository's DEFAULT branch. Until
+# then it can still be started against a specific branch via the API/CLI.
+
+name: Build FP4 image
+
+on:
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: "Also publish the image as a GitHub Release (otherwise it is a workflow artifact only)"
+        type: boolean
+        default: false
+      prerelease:
+        description: "Mark the release as a pre-release (snapshot). Uncheck ONLY for an official cut, after bumping [moarchy] version in manifest.toml."
+        type: boolean
+        default: true
+      artifact_retention_days:
+        description: "How many days to keep the workflow artifact"
+        type: string
+        default: "14"
+      debug_kernel:
+        description: "Build the DEBUG kernel variant (merges config.debug: soc sleep-stats, PM/suspend debug). For investigation, NOT daily use; names the artifact/release -debug."
+        type: boolean
+        default: false
+
+# One build at a time; a second manual run waits for the first rather than
+# cancelling it (killing a long in-flight build would waste the work).
+concurrency:
+  group: build-fp4
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # needed only for the optional release; artifacts need no extra scope
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 300      # cap well under the 6h hard limit so a hang fails cleanly
+    env:
+      DEVICE: fp4
+      DEVICES: fp4            # build only the FP4 device packages, not sargo's
+      # provision.sh passes this into the kernel build; 1 merges config.debug.
+      MOARCHY_KERNEL_DEBUG: ${{ inputs.debug_kernel && '1' || '0' }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+        # A clean checkout keeps the working tree clean, which build-image.sh
+        # requires (it refuses a dirty tree). Built packages and images are
+        # gitignored, so they do not dirty it.
+
+      - name: Show build environment
+        run: |
+          echo "arch:    $(uname -m)"
+          docker version --format '{{.Server.Version}}' | sed 's/^/docker:  /'
+          echo "--- disk before ---"
+          df -h / /mnt 2>/dev/null || df -h /
+
+      - name: Reclaim disk space (best effort)
+        run: |
+          # The kernel build, the 1.26 GiB pacstrap and the image together want
+          # room. Drop large preinstalled toolchains if present; never fail on it.
+          sudo rm -rf /opt/hostedtoolcache /usr/local/lib/android /usr/share/dotnet 2>/dev/null || true
+          df -h / | sed 's/^/  /'
+
+      - name: Build aarch64 packages
+        run: ./scripts/provision.sh build
+
+      - name: Build the FP4 image
+        run: ./scripts/build-image.sh
+
+      - name: Verify the image
+        run: |
+          IMG=$(ls -td images/moarchy-fp4-*/ 2>/dev/null | head -1)
+          [ -n "$IMG" ] || { echo "no images/moarchy-fp4-* was produced" >&2; exit 1; }
+          echo "verifying ${IMG%/}"
+          ./scripts/verify-image.sh "${IMG%/}"
+
+      - name: Identify the built image
+        id: img
+        run: |
+          IMG=$(ls -td images/moarchy-fp4-*/ 2>/dev/null | head -1)
+          IMG="${IMG%/}"
+          NAME=$(basename "$IMG")                 # moarchy-fp4-<version>-<date>
+          # One identity used everywhere: image name + short commit, so the
+          # artifact and any release name the exact commit unambiguously and
+          # match each other. e.g. moarchy-fp4-0.5.0-20260925-9b8af81
+          VERSION_ID="${NAME}-${GITHUB_SHA::7}"
+          # Mark the debug variant unmistakably in the artifact/release identity
+          # (the kernel inside also carries a -debug uname from config.debug).
+          [ "${MOARCHY_KERNEL_DEBUG:-0}" = 1 ] && VERSION_ID="${VERSION_ID}-debug"
+          echo "dir=$IMG"              >> "$GITHUB_OUTPUT"
+          echo "name=$NAME"            >> "$GITHUB_OUTPUT"
+          echo "version_id=$VERSION_ID" >> "$GITHUB_OUTPUT"
+          echo "Built: $VERSION_ID"
+
+      - name: Upload the image as a workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.img.outputs.version_id }}
+          # The flash directory plus the two sidecars build-image.sh writes
+          # beside it (same set the release ships, minus the release-only
+          # tarball + its checksum). Multiple paths share images/ as the common
+          # root, so the artifact keeps the dir and the sidecars side by side.
+          path: |
+            ${{ steps.img.outputs.dir }}
+            ${{ steps.img.outputs.dir }}.build-info
+            ${{ steps.img.outputs.dir }}.packages
+          retention-days: ${{ fromJSON(inputs.artifact_retention_days) }}
+          if-no-files-found: error
+
+      - name: Publish a GitHub Release (optional)
+        if: ${{ inputs.create_release }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # One release identity, four assets sharing one stem, matching the
+          # upstream layout. VERSION_ID (image name + short SHA) is the tag and
+          # title, unique per commit. NAME (moarchy-fp4-<version>-<date>, no SHA)
+          # is the stem all four asset files share so they line up in the list.
+          VERSION_ID='${{ steps.img.outputs.version_id }}'
+          NAME='${{ steps.img.outputs.name }}'
+          DIR='${{ steps.img.outputs.dir }}'
+          IMAGES="$(dirname "$DIR")"
+
+          # The flash directory (boot.img, rootfs.simg, flash.sh, inner sha256) as
+          # one xz tarball, plus its checksum. build-image.sh already wrote the
+          # .build-info and .packages sidecars beside the directory. xz for parity
+          # with upstream and size; -T0 uses every core to stay inside the budget.
+          TARBALL="${NAME}.tar.xz"
+          XZ_OPT=-T0 tar -cJf "$TARBALL" -C "$IMAGES" "$NAME"
+          sha256sum "$TARBALL" > "${TARBALL}.sha256"
+          SHA_LINE="$(cut -d' ' -f1 "${TARBALL}.sha256")"
+
+          # Snapshot unless the trigger explicitly said this is an official cut.
+          if [ '${{ inputs.prerelease }}' = 'true' ]; then
+            PRE=(--prerelease); KIND="snapshot pre-release"
+          else
+            PRE=(--latest); KIND="official release"
+          fi
+
+          # Build the notes with no leading indentation, so the markdown renders
+          # as lists rather than an indented code block.
+          NOTES=$(printf '%s\n' \
+            "FP4 image built by the manual build-fp4 workflow." \
+            "" \
+            "- version identity: \`$VERSION_ID\`" \
+            "- commit: $GITHUB_SHA" \
+            "- kind: $KIND" \
+            "- \`$TARBALL\` sha256: \`$SHA_LINE\`" \
+            "" \
+            "Assets: the flash directory (\`boot.img\`, \`rootfs.simg\`, \`flash.sh\`) as \`$TARBALL\`, its \`.sha256\`, and the \`.build-info\` and \`.packages\` sidecars." \
+            "" \
+            "## Flashing (fastboot)" \
+            "" \
+            "1. Power the phone off. Hold Volume Down and, still holding it, plug in the USB cable to enter fastboot." \
+            "2. First time only: \`fastboot flashing unlock\` (this ERASES the device)." \
+            "3. Unpack \`$TARBALL\` and run \`./flash.sh\` from inside it. It overwrites boot and userdata; the Android install does not survive it." \
+            "" \
+            "Verify the download first: \`sha256sum -c $TARBALL.sha256\`." \
+            "" \
+            "The version segment is \`[moarchy] version\` from manifest.toml; date and short SHA make each build unique and traceable.")
+
+          gh release create "$VERSION_ID" \
+            "$TARBALL" "${TARBALL}.sha256" \
+            "$IMAGES/${NAME}.build-info" "$IMAGES/${NAME}.packages" \
+            "${PRE[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$VERSION_ID" \
+            --notes "$NOTES"

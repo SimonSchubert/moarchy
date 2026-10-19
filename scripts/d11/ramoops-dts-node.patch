@@ -1,0 +1,25 @@
+diff --git i/arch/arm64/boot/dts/qcom/sm7225-fairphone-fp4.dts w/arch/arm64/boot/dts/qcom/sm7225-fairphone-fp4.dts
+index 27d2e5e2e0f4..417ecefac5ad 100644
+--- i/arch/arm64/boot/dts/qcom/sm7225-fairphone-fp4.dts
++++ w/arch/arm64/boot/dts/qcom/sm7225-fairphone-fp4.dts
+@@ -109,6 +109,20 @@ memory@efe01000 {
+ 			qcom,client-id = <1>;
+ 			qcom,vmid = <QCOM_SCM_VMID_MSS_MSA>;
+ 		};
++
++		/*
++		 * D11 instrumentation: carve 1 MiB out of the a2400000-bcbfffff
++		 * System RAM window (verified free on hardware, no no-map so the
++		 * ramoops driver can memremap it) to persist the console and last
++		 * panic across a reboot into /sys/fs/pstore. Transient test node.
++		 */
++		ramoops@b0000000 {
++			compatible = "ramoops";
++			reg = <0 0xb0000000 0 0x100000>;
++			console-size = <0x20000>;
++			pmsg-size = <0x20000>;
++			record-size = <0x20000>;
++		};
+ 	};
+ 
+ 	msm_therm_sensor: thermal-sensor-msm {

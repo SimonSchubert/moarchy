@@ -67,6 +67,7 @@ require("hypr.monitors")
 require("hypr.input")
 require("hypr.bindings")
 require("hypr.looknfeel")
+require("hypr.windows")
 require("hypr.autostart")
 
 -- Upstream's dynamic config flags, last, as upstream orders them.
