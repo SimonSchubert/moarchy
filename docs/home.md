@@ -333,20 +333,29 @@ the slop first is a swipe, exactly as before.
 → `moarchy-touch hold 360 1250 700` (empty space on page 1) leaves `home menu state` == `open`, and
 `hyprctl clients` and the sheets' `state` are what they were before the hold
 
-**HM38** The menu is a card centred on home over a scrim, framed in `accent`
-with `radiusCard`. From the top: a **settings** row, which opens Settings at its
-first page; the **theme strip**; nothing else. A tap on the scrim closes it, as
-do the back swipe and leaving home for an app.
+**HM38** The menu is Omalauncher's card (`HomeMenu.kt` `Menu`), centred on
+home over a scrim of `background` at 90%: solid `background`, between 240 and
+360px wide, a 2px `accent` frame at 20px times the corner scale (`frame`'s
+16px stretched by 20/16, so `square` stays square), 8px inside. From the top:
+the **create** row (HM53), with the **settings button** at its right end, a
+44px round button on `containerHigh` with the gear in `accent`, which opens
+Settings at its first page; `browse store` (owl.md OW7), a plain 15px row; the
+**theme strip**; nothing else. A tap on the scrim closes it, as do the back
+swipe and leaving home for an app.
 → a tap on the scrim, or `home menu close`, leaves `home menu state` == `closed`
 
-**HM39** The theme strip shows every installed theme as a swatch drawn in its
-own colours: its name in its `foreground` on its `background`, and five chips
-(`accent`, `red`, `yellow`, `green`, `magenta`). The current theme is framed in
-`accent`, and the strip opens scrolled to it. A tap applies the theme through
+**HM39** The theme strip is Omalauncher's `ThemeStrip`: over it `THEME` in
+`accent` capitals, letter-spaced, and at the right the current theme's name in
+`foreground` at 60%. Under them every installed theme as a 112px swatch drawn
+in its own colours: its name in its `foreground` on its `background`, then
+five 14x6 chips (`accent`, `red`, `yellow`, `green`, `magenta`), in a frame of
+`muted` at 12px times the corner scale. The current theme's frame is 2px
+`accent`, and the strip opens scrolled to it. The strip scrolls under the
+card's padding to its frame. A tap applies the theme through
 `omarchy-theme-set`, the way the theme picker does, and the menu stays open, so
 the recolour is seen happen. While one applies its swatch says `applying…` and
-other swatches ignore taps. The strip ends in `more themes ›`, which opens the
-theme picker.
+other swatches ignore taps. The strip ends in `more themes ›`, a swatch of
+`muted` chips on `containerHigh`, which opens the theme picker.
 → a tap on `Gruvbox`'s swatch leaves `current/theme.name` == `gruvbox` and the
 strip's frame on it, without the menu closing
 
@@ -460,8 +469,9 @@ screen: home looking at page 1 is still on page 1 after Settings reorders them,
 and otherwise on the page it was looking at, wherever that went.
 → moving page 2's only tile to page 1 leaves no page 2 in the file
 
-**HM53** The home menu (HM38) gains Omalauncher's first row: `create with
-<agent>` and `[widget]` `[face]`. Each asks the chosen agent, on a free
+**HM53** The home menu (HM38) opens on Omalauncher's first row: `create with
+<agent>` and, right under it, `[ widget ]` `[ face ]` in `accent`, the first
+bracket lined up with the label. Each asks the chosen agent, on a free
 workspace, with the moarchy skill: `widget` for a new widget on the page the
 menu was opened on, `face` for a new face left of the others. The face invite
 asks for a face the same way.

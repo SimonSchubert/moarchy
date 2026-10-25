@@ -12,6 +12,7 @@
 import QtQuick
 import qs.Commons
 import qs.Commons as Upstream
+import qs.Ui as Ui
 import "../moarchy.common" as Shared
 import "../moarchy.common/Sheet.js" as Sheet
 
@@ -36,15 +37,35 @@ Item {
     strip.showCurrent()
   }
 
-  readonly property int rowHeight: Style.space(48)
+  // Omalauncher's sizes (HomeMenu.kt, Setup.kt ThemeStrip), a step for a
+  // step: its menu entries are Item, its brackets Body, the strip's words Small.
+  readonly property int textItem: Style.font.subtitle
+  readonly property int textBody: Style.font.body
+  readonly property int textSmall: Style.font.bodySmall
+  readonly property int textWeight: menu.host ? menu.host.textWeight : Font.Normal
+  readonly property color ink: menu.host ? menu.host.textOnSurface : "transparent"
+  readonly property color accent: menu.host ? menu.host.accent : "transparent"
+  readonly property color border: menu.host ? menu.host.frameBorderColor : "transparent"
+  readonly property color raised: menu.host ? menu.host.containerHigh : "transparent"
+  // Its radii are the frame's 16px stretched, times the corner scale the
+  // preset already put into `frame`, so `square` stays square.
+  function radiusFrameAt(px, size): int {
+    return Math.min(Math.round((menu.host ? menu.host.radiusFrame : 0) * px / 16), Math.floor(size / 2))
+  }
   readonly property int swatchWidth: Style.space(112)
-  readonly property int swatchHeight: Style.space(56)
+  FontMetrics {
+    id: swatchFont
+    font.family: Style.font.family
+    font.pixelSize: menu.textSmall
+  }
+  // The strip scrolls under the card's padding and its own, to the frame.
+  readonly property int gutter: Style.space(20)
 
   // HM38. Dims home, and a tap on it puts the menu away.
   Rectangle {
     anchors.fill: parent
-    // The theme's own scrim, as upstream's menu draws it.
-    color: Upstream.Color.menu.scrim
+    // Omalauncher's overlay: the theme's background at 90%.
+    color: Util.alpha(Upstream.Color.background, 0.9)
   }
   MouseArea {
     anchors.fill: parent
@@ -55,13 +76,13 @@ Item {
   Rectangle {
     id: card
     anchors.centerIn: parent
-    width: Math.min(Style.space(340), parent.width - Style.space(24))
+    width: Math.max(Style.space(240), Math.min(Style.space(360), parent.width - Style.space(32)))
     height: column.implicitHeight + Style.space(16)
     // Solid where a tile is translucent: a menu is read, not looked through.
-    color: Util.alpha(Upstream.Color.background, 0.97)
-    radius: menu.host ? menu.host.radiusCard : 0
+    color: Upstream.Color.background
+    radius: menu.radiusFrameAt(20, width)
     border.width: Style.space(2)
-    border.color: menu.host ? menu.host.accent : "transparent"
+    border.color: menu.accent
 
     // A press on the card is not a press on the scrim behind it.
     MouseArea {
@@ -75,169 +96,185 @@ Item {
       anchors.right: parent.right
       anchors.top: parent.top
       anchors.margins: Style.space(8)
-      spacing: Style.space(4)
 
-      // --------------------------------------------------- create (HM53)
+      // ------------------------------------------ create (HM53), settings
       // Omalauncher's first row: what to make sits on the row itself, one tap
-      // each, and the agent asks what it should be.
+      // each, and the agent asks what it should be. Settings at its right
+      // end, as in the drawer.
       Item {
         width: column.width
-        height: Style.space(28)
-        Text {
+        height: Math.max(createColumn.implicitHeight, gear.height)
+
+        Column {
+          id: createColumn
           anchors.left: parent.left
+          anchors.right: gear.left
           anchors.leftMargin: Style.space(12)
-          anchors.verticalCenter: parent.verticalCenter
-          text: "create with " + (menu.host ? menu.host.agentName : "")
-          font.family: Style.font.family
-          font.pixelSize: Style.font.body
-          font.weight: menu.host ? menu.host.textWeight : Font.Normal
-          color: menu.host ? menu.host.textOnSurface : "transparent"
-        }
-      }
-      Row {
-        x: Style.space(4)
-        Repeater {
-          model: [ { label: "widget", face: false }, { label: "face", face: true } ]
-          delegate: Item {
-            id: kind
-            required property var modelData
-            width: kindText.implicitWidth + Style.space(16)
-            height: menu.rowHeight
-            Shared.PressVeil {
-              anchors.fill: parent
-              ink: menu.host ? menu.host.accent : "transparent"
-              on: kindArea.pressed
-            }
-            Text {
-              id: kindText
-              anchors.centerIn: parent
-              text: "[ " + kind.modelData.label + " ]"
-              font.family: Style.font.family
-              font.pixelSize: Style.font.bodySmall
-              font.weight: menu.host ? menu.host.textWeight : Font.Normal
-              color: menu.host ? menu.host.accent : "transparent"
-            }
-            MouseArea {
-              id: kindArea
-              anchors.fill: parent
-              onClicked: {
-                menu.closed()
-                if (!menu.host) return
-                if (kind.modelData.face) menu.host.createFace()
-                else menu.host.createWidget(menu.host.page)
+          anchors.rightMargin: Style.space(4)
+          topPadding: Style.space(10)
+          Text {
+            text: "create with " + (menu.host ? menu.host.agentName : "")
+            font.family: Style.font.family
+            font.pixelSize: menu.textItem
+            font.weight: menu.textWeight
+            color: menu.ink
+          }
+          Row {
+            // Pulled left by the buttons' own padding, so the first bracket
+            // lines up with the label.
+            x: -Style.space(8)
+            Repeater {
+              model: [ { label: "widget", face: false }, { label: "face", face: true } ]
+              delegate: Item {
+                id: kind
+                required property var modelData
+                width: kindText.implicitWidth + Style.space(16)
+                height: Style.space(44)
+                Shared.PressVeil {
+                  anchors.fill: parent
+                  ink: menu.accent
+                  on: kindArea.pressed
+                }
+                Text {
+                  id: kindText
+                  anchors.centerIn: parent
+                  text: "[ " + kind.modelData.label + " ]"
+                  font.family: Style.font.family
+                  font.pixelSize: menu.textBody
+                  font.weight: menu.textWeight
+                  color: menu.accent
+                }
+                MouseArea {
+                  id: kindArea
+                  anchors.fill: parent
+                  onClicked: {
+                    menu.closed()
+                    if (!menu.host) return
+                    if (kind.modelData.face) menu.host.createFace()
+                    else menu.host.createWidget(menu.host.page)
+                  }
+                }
               }
             }
           }
         }
-      }
 
-      // ------------------------------------------------------------ settings
-      Item {
-        width: column.width
-        height: menu.rowHeight
-
-        Shared.PressVeil {
-          anchors.fill: parent
-          ink: menu.host ? menu.host.textOnSurface : "transparent"
-          on: settingsArea.pressed
-        }
-        Row {
-          anchors.left: parent.left
-          anchors.leftMargin: Style.space(12)
-          anchors.verticalCenter: parent.verticalCenter
-          spacing: Style.space(12)
-          Text {
-            // The control center's gear: one glyph for Settings in this shell.
-            text: ""
-            font.family: Style.font.family
-            font.pixelSize: Style.font.body
-            font.weight: menu.host ? menu.host.textWeight : Font.Normal
-            color: menu.host ? menu.host.accent : "transparent"
+        // Omalauncher's SettingsButton: a 44px round button, the gear in accent.
+        Rectangle {
+          id: gear
+          anchors.right: parent.right
+          anchors.top: parent.top
+          width: Style.space(44)
+          height: width
+          radius: menu.radiusFrameAt(22, width)
+          color: menu.raised
+          Shared.PressVeil {
+            anchors.fill: parent
+            radius: parent.radius
+            ink: menu.accent
+            on: settingsArea.pressed
           }
-          Text {
-            text: "settings"
-            font.family: Style.font.family
-            font.pixelSize: Style.font.body
-            font.weight: menu.host ? menu.host.textWeight : Font.Normal
-            color: menu.host ? menu.host.textOnSurface : "transparent"
+          Ui.OpticalGlyph {
+            anchors.fill: parent
+            // The control center's gear, U+E615: one glyph for Settings in this
+            // shell. An escape, because the rune itself is the kind an editor eats.
+            text: "\ue615"
+            fontFamily: Style.font.family
+            fontSize: Style.font.iconLarge
+            color: menu.accent
           }
-        }
-        MouseArea {
-          id: settingsArea
-          anchors.fill: parent
-          onClicked: {
-            menu.closed()
-            if (menu.host) Sheet.summon(menu.host.shell, "moarchy.settings")
+          MouseArea {
+            id: settingsArea
+            anchors.fill: parent
+            onClicked: {
+              menu.closed()
+              if (menu.host) Sheet.summon(menu.host.shell, "moarchy.settings")
+            }
           }
         }
       }
 
       // ------------------------------------------------------- the store
-      // owl.md OW7. Omalauncher's `browse store`, for widgets.
+      // owl.md OW7, OW7a. Omalauncher's `browse store`, opened on its own so
+      // back from it is home again.
       Item {
         width: column.width
-        height: menu.rowHeight
+        height: Style.space(40)
         Shared.PressVeil {
           anchors.fill: parent
-          ink: menu.host ? menu.host.textOnSurface : "transparent"
+          ink: menu.ink
           on: storeArea.pressed
         }
         Text {
+          id: storeText
           anchors.left: parent.left
           anchors.leftMargin: Style.space(12)
           anchors.verticalCenter: parent.verticalCenter
-          text: "browse widgets"
+          text: "browse store"
           font.family: Style.font.family
-          font.pixelSize: Style.font.body
-          font.weight: menu.host ? menu.host.textWeight : Font.Normal
-          color: menu.host ? menu.host.textOnSurface : "transparent"
+          font.pixelSize: menu.textItem
+          font.weight: menu.textWeight
+          color: menu.ink
         }
         MouseArea {
           id: storeArea
           anchors.fill: parent
+          // style.md E1: the row is drawn 40, and answers 44.
+          anchors.topMargin: -Style.space(2)
+          anchors.bottomMargin: -Style.space(2)
           onClicked: {
             menu.closed()
             if (menu.host) Sheet.summon(menu.host.shell, "moarchy.settings",
-                                        JSON.stringify({ page: "appearance.home.widgets" }))
+                                        JSON.stringify({ page: "appearance.home.widgets", alone: true }))
           }
         }
       }
 
       // --------------------------------------------------------- theme strip
+      // HM39. Omalauncher's ThemeStrip: a THEME label, the current name, and
+      // the swatches under them.
       Item {
         width: column.width
-        height: Style.space(28)
+        height: themeLabel.implicitHeight + Style.space(10 + 12)
         Text {
+          id: themeLabel
           anchors.left: parent.left
           anchors.leftMargin: Style.space(12)
-          anchors.verticalCenter: parent.verticalCenter
-          text: "theme"
+          anchors.top: parent.top
+          anchors.topMargin: Style.space(10)
+          text: "THEME"
           font.family: Style.font.family
-          font.pixelSize: Style.font.caption
-          font.weight: menu.host ? menu.host.textWeight : Font.Normal
-          color: menu.host ? menu.host.subdued : "transparent"
+          font.pixelSize: menu.textSmall
+          font.weight: menu.textWeight
+          font.letterSpacing: Style.space(1.5)
+          color: menu.accent
         }
         Text {
           anchors.right: parent.right
           anchors.rightMargin: Style.space(12)
-          anchors.verticalCenter: parent.verticalCenter
+          anchors.baseline: themeLabel.baseline
           text: catalog.pendingSlug !== "" ? "applying…" : strip.currentName
           font.family: Style.font.family
-          font.pixelSize: Style.font.caption
-          font.weight: menu.host ? menu.host.textWeight : Font.Normal
-          color: menu.host ? menu.host.subdued : "transparent"
+          font.pixelSize: menu.textSmall
+          font.weight: menu.textWeight
+          // Omalauncher's Subtle: some themes' dim colours match their
+          // surfaces, so the foreground fades instead.
+          color: Util.alpha(menu.ink, 0.6)
         }
       }
 
       ListView {
         id: strip
-        width: column.width
-        height: menu.swatchHeight
+        // Out through the card's padding to the inside of its frame.
+        x: -(Style.space(8) - card.border.width)
+        width: column.width + 2 * (Style.space(8) - card.border.width)
+        height: Style.space(10) + Math.ceil(swatchFont.height) + Style.space(10 + 6 + 10)
         orientation: ListView.Horizontal
         spacing: Style.space(8)
         clip: true
-        leftMargin: Style.space(8)
-        rightMargin: Style.space(8)
+        // The first swatch lines up with THEME, 20px in from the frame.
+        leftMargin: menu.gutter - card.border.width
+        rightMargin: leftMargin
         boundsBehavior: Flickable.StopAtBounds
         // The catalogue, then one more cell: `more themes ›`.
         model: catalog.themes.length + 1
@@ -275,53 +312,51 @@ Item {
           readonly property bool isCurrent: !cell.more && cell.row.slug === catalog.currentSlug
           readonly property bool isPending: !cell.more && cell.row.slug === catalog.pendingSlug
           width: menu.swatchWidth
-          height: menu.swatchHeight
+          height: strip.height
           opacity: catalog.pendingSlug !== "" && !cell.isPending ? 0.45 : 1
 
           // A theme in its own colours; `more themes ›` in the menu's.
           Rectangle {
             id: swatch
             anchors.fill: parent
-            radius: menu.host ? menu.host.radiusOn(height) : 0
-            color: cell.more ? "transparent" : cell.row.background
+            radius: menu.radiusFrameAt(12, height)
+            color: cell.more ? menu.raised : cell.row.background
             border.width: cell.isCurrent ? Style.space(2) : Style.space(1)
-            border.color: menu.host ? (cell.isCurrent ? menu.host.accent : menu.host.frameBorderColor)
-                                    : "transparent"
+            border.color: cell.isCurrent ? menu.accent : menu.border
 
             Shared.PressVeil {
               anchors.fill: parent
               radius: parent.radius
-              ink: cell.more ? (menu.host ? menu.host.textOnSurface : "transparent") : cell.row.foreground
+              ink: cell.more ? menu.ink : cell.row.foreground
               on: cellArea.pressed
             }
           }
           Column {
             anchors.left: parent.left
             anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.leftMargin: Style.space(10)
-            anchors.rightMargin: Style.space(10)
-            spacing: Style.space(8)
+            anchors.top: parent.top
+            anchors.margins: Style.space(10)
+            spacing: Style.space(10)
             Text {
               width: parent.width
+              height: Math.ceil(swatchFont.height)
               text: cell.more ? "more themes ›"
                               : (cell.isPending ? "applying…" : String(cell.row.name).toLowerCase())
               elide: Text.ElideRight
               font.family: Style.font.family
-              font.pixelSize: Style.font.caption
-              font.weight: menu.host ? menu.host.textWeight : Font.Normal
-              color: cell.more ? (menu.host ? menu.host.accent : "transparent") : cell.row.foreground
+              font.pixelSize: menu.textSmall
+              font.weight: menu.textWeight
+              color: cell.more ? menu.accent : cell.row.foreground
             }
             Row {
               spacing: Style.space(3)
               Repeater {
-                model: cell.more ? 6 : cell.row.chips
+                model: cell.more ? 5 : (cell.row.swatch || cell.row.chips.slice(0, 5))
                 delegate: Rectangle {
                   required property var modelData
-                  width: Style.space(12)
+                  width: Style.space(14)
                   height: Style.space(6)
-                  color: cell.more ? (menu.host ? menu.host.frameBorderColor : "transparent")
-                                   : modelData
+                  color: cell.more ? menu.border : modelData
                 }
               }
             }
@@ -341,6 +376,8 @@ Item {
           }
         }
       }
+      // The strip's own padding under it, as in Omalauncher's menu.
+      Item { width: 1; height: Style.space(10) }
     }
   }
 }

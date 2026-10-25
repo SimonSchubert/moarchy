@@ -393,6 +393,7 @@ Item {
     var named = false
     var pending = ""
     var quiet = false
+    var alone = false
     try {
       var payload = JSON.parse(String(payloadJson || "{}"))
       if (payload.returnTo) root.returnTo = String(payload.returnTo)
@@ -401,6 +402,10 @@ Item {
         named = true
       }
       resume = payload.resume === true
+      // docs/owl.md OW7a. A page opened on its own is the whole stack, so back
+      // from it closes the window instead of walking up through its parents:
+      // the store from the home menu goes back to home, not to Appearance.
+      alone = named && payload.alone === true
       if (payload.activate) pending = String(payload.activate)
       // `quiet` without a row to fire is a surface that would never map and
       // never do anything, so the two are one option.
@@ -431,7 +436,7 @@ Item {
     // A rebuilt stack is a different screen, so the fields on the old one go
     // with it; coming back to the same screen keeps what was typed.
     if (named || !(resume || root.opened)) {
-      root.stack = root.stackFor(start)
+      root.stack = alone ? [start] : root.stackFor(start)
       root.resetFields()
     }
     // Always, and this is the half that open() was missing: `refresh()` runs a
@@ -604,6 +609,10 @@ Item {
   // there is nothing left to go back to, so the gesture layer closes us.
   function goBack() {
     if (root.confirmText !== "") { root.confirmText = ""; root.confirmRow = null; return true }
+    // A view with a page of its own inside it (the store's widget page, OW7a)
+    // goes back within itself first.
+    var view = arrangeSlot.item
+    if (arrangeSlot.active && view && typeof view.goBack === "function" && view.goBack()) return true
     return root.pop()
   }
 
@@ -1237,8 +1246,10 @@ Item {
         anchors.bottomMargin: Style.space(8)
         spacing: Style.space(10)
 
+        // A view that draws its own header (the store's, OW7) hides this one.
         SheetHeader {
           title: root.pageTitle
+          visible: !(root.pageDef && root.pageDef.ownHeader)
         }
 
         // A page that arranges something is not a list of rows and cannot be

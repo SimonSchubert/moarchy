@@ -50,7 +50,8 @@
 //
 // A page may draw something other than rows: `arrange: "<surface>"` is
 // ArrangeView over a widget surface, `view: "home-pages"` is PagesView,
-// `view: "owl-store"` is StoreView.
+// `view: "owl-store"` is StoreView. `ownHeader: true` hides Settings' header
+// for a view that draws its own.
 //
 // A page may build rows at open instead of declaring them: `provider.list`
 // turns one value per line into `choice` rows, `provider.json` takes a JSON
@@ -308,7 +309,7 @@ var PAGES = {
 "appearance.home.pages": { title: "Pages", view: "home-pages", rows: [] },
 
 // The OWL widget store (docs/owl.md OW7): StoreView, over moarchy-owl.
-"appearance.home.widgets": { title: "Widgets", view: "owl-store", rows: [] },
+"appearance.home.widgets": { title: "Store", view: "owl-store", ownHeader: true, rows: [] },
 
 // The control center's widgets, arranged (docs/widgets.md §E). `arrange` and no
 // rows: Settings draws ArrangeView for this instead of the row list, and the

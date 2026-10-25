@@ -5,7 +5,7 @@
 //     Shared.ThemeCatalog { id: catalog }
 //     ...
 //     model: catalog.themes          // [{slug, name, mode, background,
-//                                    //   foreground, accent, chips}]
+//                                    //   foreground, accent, chips, swatch}]
 //     catalog.currentSlug            // what current/theme.name says
 //     catalog.apply(row)             // omarchy-theme-set, one at a time
 //
@@ -75,7 +75,9 @@ Item {
       "        rows.append({'slug': slug, 'name': name, 'mode': c.get('mode', 'dark'),\n" +
       "                     'background': c['background'], 'foreground': c.get('foreground', '#ffffff'),\n" +
       "                     'accent': c.get('accent', c.get('blue', '#888888')),\n" +
-      "                     'chips': [c.get(k, '#888888') for k in ('accent', 'red', 'green', 'yellow', 'blue', 'magenta')]})\n" +
+      "                     'chips': [c.get(k, '#888888') for k in ('accent', 'red', 'green', 'yellow', 'blue', 'magenta')],\n" +
+      // The home menu's five, in Omalauncher's order (docs/home.md HM39).
+      "                     'swatch': [c.get(k, '#888888') for k in ('accent', 'red', 'yellow', 'green', 'magenta')]})\n" +
       // current/theme is a staged *copy* of the theme, not a symlink to it, so
       // its basename is always the literal string "theme". The slug lives in
       // current/theme.name, which is what omarchy-theme-current reads.

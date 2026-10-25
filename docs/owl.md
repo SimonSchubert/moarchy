@@ -49,8 +49,22 @@ in it (HM13), and `home report` gives `state=error` and the first line.
 
 ## B. The store
 
-**OW7** The store is **Settings › Appearance › Home › Widgets**. The home menu
-(HM38) gains `browse widgets`, which opens it.
+**OW7** The store is Omalauncher's `store` panel (`StoreScreen.kt`), drawn in
+the Settings window as the page **Settings › Appearance › Home › Widgets**, with
+a header of its own in place of Settings': the title `store` in `accent` at
+title size, then at the right a refresh button (`moarchy-owl catalog
+--refresh`, `accent` while it runs) and, when the store is on its own, a red
+`✕`. The home menu's `browse store` (HM38) opens it on its own.
+
+**OW7a** **Back.** Opened on its own, the store is the whole of Settings' stack:
+`✕`, the back swipe and Escape close the window, which leaves home on screen,
+never a page of Settings. Reached from Settings, its title reads `‹ store` and
+back goes to the page it came from. On a widget's page the title is `‹ <name>`,
+and back, either way, goes to the grid first.
+→ after `browse store`, `omarchy-shell settings stack` prints
+`appearance.home.widgets` alone, and `settings back` answers `closed`; after
+`settings openAt appearance.home` and a tap on `Widgets`, `settings back`
+answers `appearance.home`
 
 **OW8** The catalogue is the store's `index.json`, read by
 `moarchy-owl catalog` from
@@ -59,18 +73,35 @@ in it (HM13), and `home report` gives `state=error` and the first line.
 however old it is and the store says how old; with no cache it says it could
 not reach the store.
 
-**OW9** The store lists the widgets as a grid of cards: the preview drawn in the
-current theme (the entry's `themes[<slug>]`, else its `preview`), the name, and
-`on home` / `update` where that is so. Above them, a search field (name,
-description, author) and chips: `all`, `new`, `installed`, then each category
-the catalogue has.
+**OW9** The store lists the widgets as a two-column grid of cards, each framed
+in 1px of `muted` with no fill, at 12px times the corner scale: the preview,
+104px high, drawn in the current theme (the entry's `themes[<slug>]`, else its
+`preview`; the name on `containerHigh` until one loads), the name, a `new`
+badge beside it while the catalogue says so, and one status line --
+`✓ installed` in `green`, `update available` in `accent`, `needs a newer
+runtime` in `red`, else `<category> · <w>x<h>` in `muted`. Above them, a search
+field (name, description, author) reading `search <n> widgets`; under it the
+chips, each `<name> <count>`, outlined, the chosen one in `accent` over 15%
+`accent`: `all`, `new`, then each category the catalogue has, the biggest
+first, then `installed`, which adds `· <n>↑` while updates wait; then the
+caption `reviewed widgets from github.com/SimonSchubert/omarchy-widgets`.
 
-**OW10** A card opens the widget's page: the preview large, the description,
-`category · author · v<version> · <license> · <w>x<h>`, **what it runs** (every
-line of `commands`), **what it needs** (each package, marked installed or not),
-and one button: `add to home` (to the page OW11 picks), `update <a> → <b>`, or nothing but
-`needs a newer runtime (owl <n>)` when its `owl` is above the runtime's. An
-installed one also has `remove`.
+**OW10** A card opens the widget's page: the preview large, the name at title
+size with its `new` badge,
+`category · author · v<version> · <license> · <w>x<h>` in `muted`, the
+description, **what it installs** (`installs packages: none`, or each package
+marked `✓` installed or `✗` not), **what it runs** (`runs no commands`, or
+`runs these commands:` and each line of `commands` in a code block on
+`containerHigh`), and then one bracket action in `accent`: `[ add to home ]`
+(to the page OW11 picks), `[ update <a> → <b> ]`, or nothing but
+`needs a newer runtime (owl <n>)` in `red` when its `owl` is above the
+runtime's. An installed one says `✓ on your home screen` in `green` and has
+`[ remove ]` in `red`.
+
+**OW10a** An install that went through with nothing to say closes the store and
+shows home, the new tile on its page, as Omalauncher's does. One that said
+something -- packages that did not install (OW11 step 4), a failure -- stays on
+the widget's page with what it said under the button.
 
 **OW11** **Install** is `moarchy-owl install <id> [page]`:
 1. the file is downloaded and its SHA-256 checked against the catalogue; a
