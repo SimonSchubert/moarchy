@@ -179,6 +179,25 @@ Item {
                                                    0.55, 4.5)
   readonly property color accent: Upstream.Color.accent
 
+  // Omalauncher's green and red, which its panels use for installed, open,
+  // remove and failures (owl.md OW9, settings.md P14). The theme's own, which
+  // Upstream.Color does not carry; accent and urgent until it has been read.
+  property color green: Upstream.Color.accent
+  property color red: Upstream.Color.urgent
+  FileView {
+    path: (Quickshell.env("HOME") || "") + "/.local/state/omarchy/current/theme/colors.toml"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: {
+      var t = text()
+      var g = /^\s*green\s*=\s*"(#[0-9a-fA-F]{6})"/m.exec(t)
+      var r = /^\s*red\s*=\s*"(#[0-9a-fA-F]{6})"/m.exec(t)
+      root.green = g ? g[1] : Upstream.Color.accent
+      root.red = r ? r[1] : Upstream.Color.urgent
+    }
+  }
+
   // ------------------------------------------------------- press (style.md H)
   //
   // One blended quad the size of the chrome, the control's own ink at 12%
@@ -1266,7 +1285,8 @@ Item {
           // their handles, but they are pages and not widgets.
           sourceComponent: !root.pageDef ? null
                          : root.pageDef.view === "home-pages" ? pagesView
-                         : root.pageDef.view === "owl-store" ? storeView : arrangeView
+                         : root.pageDef.view === "owl-store" ? storeView
+                         : root.pageDef.view === "coding-agents" ? agentsView : arrangeView
         }
         Component {
           id: arrangeView
@@ -1283,6 +1303,10 @@ Item {
         Component {
           id: storeView
           StoreView { host: root }
+        }
+        Component {
+          id: agentsView
+          AgentsView { host: root }
         }
 
         ListView {

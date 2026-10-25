@@ -21,6 +21,12 @@
 #   moarchy-agent names          print "<id><TAB><name>" per agent, for a menu
 #   moarchy-agent set   <name>   choose an agent; install and launch nothing
 #   moarchy-agent ask   <prompt> open the chosen agent with a prompt
+#   moarchy-agent install <name> install through mise, open nothing
+#   moarchy-agent remove  <name> uninstall through mise; the wrapper stays
+#   moarchy-agent installed      print the installed agents, one per line
+#   moarchy-agent current        print the agent in use (docs/settings.md P17)
+#   moarchy-agent state          a line per agent for the screens: id, name,
+#                                description, installed, in use (TSV)
 #   moarchy-agent skills         link the moarchy and omarchy skills into
 #                                every agent's skills directory
 #
@@ -97,6 +103,23 @@ agent_name() {
 
 agents() { printf '%s\n' claude codex copilot crush gemini grok omp opencode pi; }
 
+# One line under the name on the coding agents page (docs/settings.md P14),
+# Omalauncher's words where it lists the same agent.
+agent_desc() {
+  case "$1" in
+    claude)   echo "Anthropic's coding agent" ;;
+    codex)    echo "OpenAI's coding agent" ;;
+    copilot)  echo "GitHub's coding agent" ;;
+    crush)    echo "Charm's agent for the terminal" ;;
+    gemini)   echo "Google's Gemini coding agent" ;;
+    grok)     echo "xAI's coding agent" ;;
+    omp)      echo "Pi with tools and plugins built in" ;;
+    opencode) echo "Open source agent, any model provider" ;;
+    pi)       echo "Minimal, extensible coding agent" ;;
+    *)        return 1 ;;
+  esac
+}
+
 # Last linux-aarch64 grok TUI that does not execute sha512su0. 1.0.30's TUI
 # does, and this SoC does not have that instruction (Pixel 3a / PinePhone:
 # SIGILL at 0x7bfd6f8, same as xai-org/plugin-marketplace#694 and #700).
@@ -112,6 +135,37 @@ agent_package() {
     omp)  echo "github:can1357/oh-my-pi" ;;
     *)    echo "$1" ;;
   esac
+}
+
+# The tool name mise lists an agent under: its package without a version.
+agent_tool() {
+  case "$1" in
+    grok) echo "npm:@xai-official/grok" ;;
+    *)    agent_package "$1" ;;
+  esac
+}
+
+# P15. The agents mise has installed, in this script's order. `mise ls` reads
+# the global config and the installs dir and asks no network; `mise where`
+# checks for newer versions and took 12s for the nine on the Pixel.
+installed_agents() {
+  local tools a
+  tools=$(mise ls --global --installed 2>/dev/null | awk '{print $1}') || return 0
+  while read -r a; do
+    grep -qxF "$(agent_tool "$a")" <<<"$tools" && echo "$a"
+  done < <(agents)
+}
+
+# P17. The agent in use: the chosen one when it is installed, else the first
+# installed one, else the chosen one as written -- whose wrapper installs it
+# on first run, which is what a phone with none installed has always done.
+agent_in_use() {
+  local chosen installed
+  chosen=$(current_agent)
+  installed=$(installed_agents)
+  if [[ -n $chosen ]] && grep -qxF "$chosen" <<<"$installed"; then echo "$chosen"; return; fi
+  [[ -n $installed ]] && { head -n1 <<<"$installed"; return; }
+  [[ -n $chosen ]] && echo "$chosen"
 }
 
 # The agent that has been picked, or nothing at all. There is deliberately no
@@ -361,7 +415,7 @@ open_agent() {
 # when nothing has been chosen.
 write_current() {
   local chosen
-  chosen=$(current_agent)
+  chosen=$(agent_in_use)
   if [[ -n $chosen ]]; then write_entry "$chosen"; else write_setup_entry; fi
 }
 
@@ -429,7 +483,7 @@ case "${1:-}" in
     shift
     [[ ${1:-} == -- ]] && shift
     (($# == 1)) && [[ -n $1 ]] || { echo "usage: moarchy-agent ask <prompt>" >&2; exit 2; }
-    chosen=$(current_agent)
+    chosen=$(agent_in_use)
     if [[ -z $chosen ]]; then
       # The same answer `launch` gives with nothing chosen: the picker, and not
       # whichever agent this script names first.
@@ -446,10 +500,10 @@ case "${1:-}" in
     ;;
   launch)
     # docs/gestures.md C1. The strip's hold, which has no name to give.
-    chosen=$(current_agent)
+    chosen=$(agent_in_use)
     [[ -n $chosen ]] && open_agent "$chosen"
 
-    # Nothing picked. The picker, not an arbitrary agent -- the same screen and
+    # Nothing picked, and nothing installed. The picker, not an arbitrary agent -- the same screen and
     # the same IPC the setup tile carries (docs/settings.md P3, P10), so the
     # hold on a fresh phone asks the question the grid asks instead of
     # installing whichever agent this script happened to name first.
@@ -460,8 +514,58 @@ case "${1:-}" in
     write_setup_entry || echo "moarchy-agent: could not write the appDrawer tile" >&2
     exec omarchy-shell settings openAt apps.default.agent
     ;;
+  install)
+    # P15. The coding agents page's `[ install ]`: mise's output is the job log
+    # the card shows, and nothing opens. The first agent installed on a phone
+    # with none in use becomes the one in use.
+    [[ -n ${2:-} ]] || { echo "usage: moarchy-agent install <name>" >&2; exit 2; }
+    agent_name "$2" >/dev/null || { echo "moarchy-agent: unknown agent '$2'" >&2; exit 1; }
+    before=$(installed_agents)
+    write_shim "$2" || echo "moarchy-agent: could not write the wrapper" >&2
+    # The grok wrapper's reason: its pinned release is older than mise's
+    # minimum age would otherwise let through.
+    MISE_YES=1 MISE_MINIMUM_RELEASE_AGE=0 mise use -g "$(agent_package "$2")" 2>&1 || exit 1
+    chosen=$(current_agent)
+    if [[ -z $chosen ]] || ! grep -qxF "$chosen" <<<"$before"; then
+      mkdir -p "$HOME/.config/omarchy/defaults"
+      printf '%s\n' "$2" >"$HOME/.config/omarchy/defaults/agent"
+    fi
+    link_skills
+    write_current || echo "moarchy-agent: could not write the appDrawer tile" >&2
+    ;;
+  remove)
+    # P16. The wrapper stays (P6): the name still works and installs again.
+    [[ -n ${2:-} ]] || { echo "usage: moarchy-agent remove <name>" >&2; exit 2; }
+    agent_name "$2" >/dev/null || { echo "moarchy-agent: unknown agent '$2'" >&2; exit 1; }
+    MISE_YES=1 mise unuse -g "$(agent_tool "$2")" 2>&1 || exit 1
+    if [[ $(current_agent) == "$2" ]]; then
+      next=$(installed_agents | head -n1)
+      if [[ -n $next ]]; then
+        printf '%s\n' "$next" >"$HOME/.config/omarchy/defaults/agent"
+      else
+        rm -f "$HOME/.config/omarchy/defaults/agent"
+      fi
+    fi
+    write_current || echo "moarchy-agent: could not write the appDrawer tile" >&2
+    ;;
+  installed)
+    installed_agents
+    ;;
+  current)
+    agent_in_use
+    ;;
+  state)
+    # P17. One read of mise for the whole page and the bar's menu.
+    installed=$(installed_agents)
+    in_use=$(agent_in_use)
+    while read -r a; do
+      grep -qxF "$a" <<<"$installed" && i=1 || i=0
+      [[ $a == "$in_use" ]] && u=1 || u=0
+      printf '%s\t%s\t%s\t%s\t%s\n' "$a" "$(agent_name "$a")" "$(agent_desc "$a")" "$i" "$u"
+    done < <(agents)
+    ;;
   *)
-    echo "usage: moarchy-agent {list|names|shim|entry|seed|open|launch|set|skills} [name]" >&2
+    echo "usage: moarchy-agent {list|names|shim|entry|seed|open|launch|set|skills|install|remove|installed|current|state} [name]" >&2
     echo "       moarchy-agent ask <prompt>" >&2
     exit 2
     ;;

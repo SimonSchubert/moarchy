@@ -1038,7 +1038,7 @@ is the one the plugin entries already use to raise a shell surface from a
 `.desktop` (`Exec=omarchy-shell shell toggle moarchy.wifi`).
 → the setup tile's `Exec` is `omarchy-shell settings openAt apps.default.agent`;
 running it answers `ok` and leaves `settings page` == `apps.default.agent` with
-its nine choice rows drawn
+its nine agent cards drawn (P14)
 
 **P11** A new user can find that screen by the name of the agent they want. The
 setup tile carries all nine agent names as `Keywords`, so typing `claude` into
@@ -1076,6 +1076,53 @@ is `1.0.25`, auto-update is off (`GROK_DISABLE_AUTOUPDATER` and
 not the `grok` symlink the npm launcher would follow into 1.0.30.
 → after `moarchy-agent shim grok`, `~/.local/bin/grok` names `1.0.25` and
 `GROK_DISABLE_AUTOUPDATER`, and no line in it begins with `mise use -g`
+
+**P14** **AI agent is Omalauncher's `coding agents` panel** (`AgentsScreen.kt`),
+drawn in the Settings window under a header of its own (as the store's,
+`owl.md` OW7): `coding agents` in `accent`, `‹` before it when back goes to a
+page, a red `✕` when it is open on its own. Under it, in `muted`,
+`installed with mise, like omarchy. logins open in the browser.`, then one card
+per agent of `moarchy-agent list`, in that order: `containerHigh` at 12px times
+the corner scale, the agent's name, its description in `muted`, and at the
+right `[ install ]` in `accent`; once installed `[ open ]` in `green` and
+`[ remove ]` in `red`; while a job runs only `installing…` or `removing…` in
+`accent`, with its last four lines of output under the name, and after a
+failure `failed:` and those lines in `red`. The page's choice rows stay in
+`Pages.js` as the list P5 checks; the cards are drawn from `moarchy-agent
+state`, not from them.
+→ `settings rows` on the page prints one line per agent, `<id> installed=0|1`
+
+**P15** **Install installs, and opens nothing.** `moarchy-agent install
+<name>` writes the wrapper (P6) and runs `mise use -g <package>` there and then,
+its output on stdout. When no installed agent was chosen before, the new one
+becomes the choice. `moarchy-agent installed` prints the installed ids from
+`mise ls --global --installed`, which asks no network, in the list's order.
+→ after `moarchy-agent install pi` on a phone with none, `moarchy-agent
+installed` prints `pi` and `defaults/agent` holds `pi`
+
+**P16** **Remove** is `moarchy-agent remove <name>`: `mise unuse -g <package>`.
+The wrapper stays, so the name still works and installs again on first run
+(P6). When it was the chosen agent, the choice moves to the first installed
+agent left, or is cleared when none is (and the tile with it, P3).
+→ removing the chosen `pi` with `claude` installed leaves `defaults/agent`
+holding `claude`
+
+**P17** **The agent in use** is `moarchy-agent current`: the chosen agent when
+it is installed, else the first installed one, else the chosen one as written
+(its wrapper installs it on first run). `ask`, `launch` and the tile read it,
+and so does the prompt bar's chip (`home.md` HM24). `moarchy-agent state`
+prints a line per agent for the screens: `id`, name, description, installed
+(`0|1`), in use (`0|1`), tab-separated.
+→ with `codex` chosen and only `claude` installed, `moarchy-agent current` is
+`claude`
+
+**P18** `[ open ]` runs `moarchy-agent open <name>` (P12: it becomes the choice
+and opens) and closes Settings.
+
+**P19** **Back.** Opened from the prompt bar (the chip with no agent installed,
+or `manage agents…`) the page is alone in Settings' stack, as the store is from
+the home menu (`owl.md` OW7a): back closes the window onto home.
+→ after `manage agents…`, `settings stack` prints `apps.default.agent` alone
 
 ## Q. What the triggers open
 

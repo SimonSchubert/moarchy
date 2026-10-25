@@ -218,12 +218,21 @@ agent picker, as the strip's hold does (C1).
 opens a window of app-id `org.omarchy.agent`; a prompt containing `"; rm -rf ~`
 arrives intact
 
-**HM24** The chip shows the chosen agent's command name in `accent`. A tap opens
-a menu above the bar listing every agent `moarchy-agent names` prints, the
-chosen one marked. Choosing one runs `moarchy-agent set <name>`. The choice is
-upstream's `~/.config/omarchy/defaults/agent`: no second agent file, and Settings
-> Apps > AI agent, the strip's hold and the bar always agree.
-→ `moarchy-agent set codex` and the chip reads `codex` within a second
+**HM24** The chip shows the agent in use (`settings.md` P17) by its command
+name, in `accent`, and `agent` in `muted` while none is installed. A tap with
+none installed opens Settings' coding agents page on its own (`settings.md`
+P19). Otherwise it opens Omalauncher's agent menu above the bar
+(`PromptBar.kt` `AgentsMenu`): a 2px `accent` frame on `background` at 16px
+times the corner scale, lined up with the bar's start; one row per **installed**
+agent, `●` and `accent` on the one in use, its name with its command under it
+in `muted`; then a `muted` rule and `  manage agents…` in `muted`, which opens
+that page on its own. Choosing one runs `moarchy-agent set <name>`. The choice
+is upstream's `~/.config/omarchy/defaults/agent`: no second agent file, and
+Settings, the strip's hold and the bar always agree. The menu and chip follow
+an install or a removal within a second, by watching that file and mise's
+`~/.config/mise/config.toml`.
+→ with `claude` and `opencode` installed, the menu has exactly those two rows;
+`moarchy-agent set opencode` and the chip reads `opencode` within a second
 
 ## F. The sheets a swipe raises
 

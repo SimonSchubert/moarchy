@@ -1858,6 +1858,8 @@ Item {
             open: agentMenu.open
             interactive: !root.sheetDragging
             onTapped: {
+              // home.md HM24. Nothing installed: the page that installs.
+              if (agents.installed.length === 0) { agentMenu.manage(); return }
               var p = searchGlyph.mapToItem(agentMenu, 0, 0)
               agentMenu.anchorX = p.x
               agentMenu.anchorY = p.y
@@ -2629,13 +2631,12 @@ Item {
       anchors.fill: parent
       agents: agents
       shell: root.shell
-      surface: root.surface
+      surface: Upstream.Color.background
       textOnSurface: root.textOnSurface
       subdued: root.subdued
       accent: root.accent
-      borderColor: root.container
-      borderWidth: Style.space(1)
-      radiusCard: ui.radiusCard
+      borderColor: Upstream.Color.muted
+      radiusFrame: ui.radiusFrame
       textWeight: root.textWeight
       onClosed: agentMenu.open = false
     }

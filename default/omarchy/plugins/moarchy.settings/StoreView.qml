@@ -57,24 +57,11 @@ Item {
   Shared.UiFile { id: ui }
   function radiusFrameAt(px, size): int { return Math.min(Math.round(ui.radiusFrame * px / 16), Math.floor(size / 2)) }
 
-  // Omalauncher's border is the theme's `muted`; its green and red are the
-  // theme's own, which Upstream.Color does not carry.
+  // Omalauncher's border is the theme's `muted`; its green and red are
+  // Settings' (the theme's own).
   readonly property color border: Upstream.Color.muted
-  property color green: Upstream.Color.accent
-  property color red: Upstream.Color.urgent
-  FileView {
-    path: (Quickshell.env("HOME") || "") + "/.local/state/omarchy/current/theme/colors.toml"
-    watchChanges: true
-    printErrors: false
-    onFileChanged: reload()
-    onLoaded: {
-      var t = text()
-      var g = /^\s*green\s*=\s*"(#[0-9a-fA-F]{6})"/m.exec(t)
-      var r = /^\s*red\s*=\s*"(#[0-9a-fA-F]{6})"/m.exec(t)
-      view.green = g ? g[1] : Upstream.Color.accent
-      view.red = r ? r[1] : Upstream.Color.urgent
-    }
-  }
+  readonly property color green: view.host ? view.host.green : "transparent"
+  readonly property color red: view.host ? view.host.red : "transparent"
 
   // The theme's slug, for the preview drawn in it (OW9).
   property string themeSlug: ""
@@ -247,35 +234,6 @@ Item {
     wrapMode: Text.Wrap
   }
 
-  // Omalauncher's BracketAction: a terminal-style `[ label ]`, 44 tall to tap.
-  component Bracket: Item {
-    id: bracket
-    property string label: ""
-    property color ink: view.accent
-    signal activated()
-    width: bracketText.implicitWidth + Style.space(16)
-    height: Style.space(44)
-    Shared.PressVeil {
-      anchors.fill: parent
-      ink: bracket.ink
-      on: bracketArea.pressed
-    }
-    Text {
-      id: bracketText
-      anchors.centerIn: parent
-      text: "[ " + bracket.label + " ]"
-      font.family: Style.font.family
-      font.pixelSize: view.textBody
-      font.weight: view.weight
-      color: bracket.ink
-    }
-    MouseArea {
-      id: bracketArea
-      anchors.fill: parent
-      onClicked: bracket.activated()
-    }
-  }
-
   // Omalauncher's Chip: outlined, the chosen one in accent over 15% accent.
   component Chip: Item {
     id: chip
@@ -336,93 +294,33 @@ Item {
   }
 
   // ---------------------------------------------------------------- header
-  // OW7. Omalauncher's panel header: the title in accent, `‹` before it when
-  // back goes somewhere, refresh and the red ✕ at the right.
-  Item {
+  // OW7. Omalauncher's panel header, with refresh among its actions.
+  PanelHeader {
     id: header
-    width: parent.width
-    height: Style.space(44)
-    readonly property bool backward: !!view.selected || !view.alone
+    host: view.host
+    title: view.selected ? String(view.selected.name || "") : "store"
+    backward: !!view.selected || !view.alone
+    closable: view.alone && !view.selected
+    onBack: view.back()
+    onClose: if (view.host) view.host.dismiss()
 
     Item {
-      id: titleSlot
-      anchors.left: parent.left
-      anchors.top: parent.top
-      anchors.bottom: parent.bottom
-      width: Math.min(titleRow.implicitWidth + Style.space(8), header.width - actions.width)
-      Row {
-        id: titleRow
-        anchors.verticalCenter: parent.verticalCenter
-        spacing: Style.space(6)
-        Text {
-          visible: header.backward
-          anchors.verticalCenter: parent.verticalCenter
-          // fa-angle-left, SheetHeader's chevron.
-          text: "\uf104"
-          font.family: Style.font.family
-          font.pixelSize: view.textTitle
-          font.weight: view.weight
-          color: view.accent
-        }
-        Text {
-          anchors.verticalCenter: parent.verticalCenter
-          width: Math.min(implicitWidth, header.width - actions.width - Style.space(40))
-          text: view.selected ? String(view.selected.name || "") : "store"
-          elide: Text.ElideRight
-          font.family: Style.font.family
-          font.pixelSize: view.textTitle
-          font.weight: view.weight
-          color: view.accent
-        }
+      visible: !view.selected
+      width: Style.space(44)
+      height: Style.space(44)
+      Ui.OpticalGlyph {
+        anchors.fill: parent
+        // nf-md-refresh, as an escape: a rune like it is the kind an editor eats.
+        text: "\udb81\udc50"
+        fontFamily: Style.font.family
+        fontSize: view.textTitle
+        color: view.loading ? view.accent : view.muted
       }
       MouseArea {
         anchors.fill: parent
-        enabled: header.backward
-        // no press state (style.md H7): Omalauncher's title is its own back
-        onClicked: view.back()
-      }
-    }
-
-    Row {
-      id: actions
-      anchors.right: parent.right
-      anchors.verticalCenter: parent.verticalCenter
-      Item {
-        visible: !view.selected
-        width: Style.space(44)
-        height: Style.space(44)
-        Ui.OpticalGlyph {
-          anchors.fill: parent
-          // nf-md-refresh, as an escape: a rune like it is the kind an editor eats.
-          text: "\udb81\udc50"
-          fontFamily: Style.font.family
-          fontSize: view.textTitle
-          color: view.loading ? view.accent : view.muted
-        }
-        MouseArea {
-          anchors.fill: parent
-          enabled: !view.loading
-          // no press state (style.md H7): it turns accent while it runs
-          onClicked: view.load(true)
-        }
-      }
-      Item {
-        visible: view.alone && !view.selected
-        width: Style.space(44)
-        height: Style.space(44)
-        Ui.OpticalGlyph {
-          anchors.fill: parent
-          // nf-md-close, as an escape: a rune like it is the kind an editor eats.
-          text: "\udb80\udd56"
-          fontFamily: Style.font.family
-          fontSize: view.textTitle
-          color: view.red
-        }
-        MouseArea {
-          anchors.fill: parent
-          // no press state (style.md H7): it closes the window
-          onClicked: if (view.host) view.host.dismiss()
-        }
+        enabled: !view.loading
+        // no press state (style.md H7): it turns accent while it runs
+        onClicked: view.load(true)
       }
     }
   }
@@ -775,17 +673,22 @@ Item {
         x: -Style.space(8)
         visible: view.busy === "" && detail.w.supported !== false
         Bracket {
+          textWeight: view.weight
+          ink: view.accent
           visible: !detail.w.installed
           label: "add to home"
           onActivated: view.act("install")
         }
         Bracket {
+          textWeight: view.weight
+          ink: view.accent
           visible: !!detail.w.installed && !!detail.w.update
           label: (detail.w.changed || detail.w.edited ? "update anyway " : "update ")
                  + detail.w.installed + " → " + detail.w.version
           onActivated: view.act("update")
         }
         Bracket {
+          textWeight: view.weight
           visible: !!detail.w.installed
           label: "remove"
           ink: view.red

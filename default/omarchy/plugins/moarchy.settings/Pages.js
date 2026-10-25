@@ -50,7 +50,7 @@
 //
 // A page may draw something other than rows: `arrange: "<surface>"` is
 // ArrangeView over a widget surface, `view: "home-pages"` is PagesView,
-// `view: "owl-store"` is StoreView. `ownHeader: true` hides Settings' header
+// `view: "owl-store"` is StoreView, `view: "coding-agents"` AgentsView. `ownHeader: true` hides Settings' header
 // for a view that draws its own.
 //
 // A page may build rows at open instead of declaring them: `provider.list`
@@ -597,7 +597,11 @@ var PAGES = {
 // files in default/agents/. Three lists, and moarchy-selftest asserts all three
 // against upstream's own `omarchy:args=` line rather than against each other,
 // so a name upstream adds fails here loudly instead of quietly missing an icon.
-"apps.default.agent": { title: "AI agent", reader: "omarchy-default-agent", rows: [
+// docs/settings.md P14. The page draws AgentsView, Omalauncher's coding
+// agents panel, from `moarchy-agent state`; these rows stay as the list P5
+// holds against upstream, and what `settings activate <id>` still fires.
+"apps.default.agent": { title: "AI agent", reader: "omarchy-default-agent",
+                        view: "coding-agents", ownHeader: true, rows: [
   { id: "how", type: "info", glyph: "󰚩", label: "Tap one to install it",
     detail: "The first run downloads the agent, then opens it" },
   { id: "claude", type: "choice", label: "Claude", value: "claude",

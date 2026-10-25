@@ -1085,6 +1085,8 @@ Item {
           textWeight: home.textWeight
           open: menu.open
           onTapped: {
+            // HM24. Nothing installed: nothing to choose, so the page that installs.
+            if (agents.installed.length === 0) { menu.manage(); return }
             var p = chip.mapToItem(home, 0, 0)
             var b = bar.mapToItem(home, 0, 0)
             menu.anchorX = p.x
@@ -1114,13 +1116,13 @@ Item {
     anchors.fill: parent
     agents: agents
     shell: home.shell
-    surface: Util.alpha(Upstream.Color.background, Math.max(0.94, ui.homeOpacity))
+    // Solid, as Omalauncher's popup is: a menu is read, not looked through.
+    surface: Upstream.Color.background
     textOnSurface: home.textOnSurface
     subdued: home.subdued
     accent: home.accent
     borderColor: home.frameBorderColor
-    borderWidth: home.frameBorder
-    radiusCard: home.radiusFrame
+    radiusFrame: home.radiusFrame
     textWeight: home.textWeight
     onClosed: menu.open = false
   }
