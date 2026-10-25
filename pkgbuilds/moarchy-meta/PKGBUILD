@@ -120,7 +120,10 @@ pkgver=$_ver
 #    already a depends here, so the apps still arrive -- but a phone holding
 #    the old package keeps it until `pacman -Rs` takes it, and its files are
 #    the pre-rename org.moarchy.* copies.
-pkgrel=2
+# 3: sway leaves this list (827f362) and swaybg (f4f0e69). Both commits
+#    changed the payload without moving this number, so the builder kept the
+#    Sep 19 artifact and every image built since still installed sway.
+pkgrel=3
 pkgdesc="The moarchy package set -- install this and you have the phone"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'

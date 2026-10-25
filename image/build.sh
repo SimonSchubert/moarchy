@@ -290,6 +290,13 @@ do
   info "pacstrap failed; retrying ($attempt/3)"
   sleep 5
 done
+# EXTRA_PACKAGES from image.local.env (scripts/build-image.sh): a debug image's
+# own additions, such as the Pixel 3a firmware for the builder's phone. Never
+# in a published image (devices.md D35, structure.md I6a).
+if compgen -G "/extra/*.pkg.tar.*" >/dev/null; then
+  pacman --config "$WORK/pacman.conf" --root "$ROOTDIR" --noconfirm -U /extra/*.pkg.tar.*
+  say "DEBUG IMAGE: extra packages $(cd /extra && ls *.pkg.tar.* | tr '\n' ' ')-- do not publish this"
+fi
 info "rootfs: $(du -sh "$ROOTDIR" | cut -f1)"
 
 # ---------------------------------------------------------------------------

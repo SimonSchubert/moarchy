@@ -24,3 +24,7 @@ repo/dist/
 # from. Untracked and ignored on purpose: it describes a local build directory,
 # and scripts/build-image.sh refuses a tree with untracked files in it.
 packages/.build-manifest
+
+# Local debug-image settings (WIFI_SSID, WIFI_PSK, MOARCHY_SSH_KEY) that
+# scripts/build-image.sh reads. It holds a Wi-Fi password: never commit it.
+image.local.env

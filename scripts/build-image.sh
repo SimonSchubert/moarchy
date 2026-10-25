@@ -8,11 +8,32 @@
 #
 #   WIFI_SSID='MyNetwork' WIFI_PSK='secret' ./scripts/build-image.sh
 #
+# or put those lines, and MOARCHY_SSH_KEY=~/.ssh/id_ed25519.pub, in
+# image.local.env at the repo root (gitignored), and every build picks them up.
+# Values already in the environment win over the file.
+#
+# EXTRA_PACKAGES, in the same file, lists package files installed into the
+# rootfs after pacstrap: the Pixel 3a firmware for your own phone, which
+# devices.md D35 keeps out of every published image.
+#
 # Never publish one of those: it carries your PSK (docs/structure.md I6a).
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
+
+if [ -f image.local.env ]; then
+  _env=$(env)
+  # shellcheck disable=SC1091
+  . ./image.local.env
+  for _v in WIFI_SSID WIFI_PSK MOARCHY_SSH_KEY EXTRA_PACKAGES; do
+    _line=$(printf '%s\n' "$_env" | grep "^$_v=" || true)
+    [ -n "$_line" ] && export "$_line"
+  done
+  export WIFI_SSID WIFI_PSK MOARCHY_SSH_KEY EXTRA_PACKAGES
+  echo "==> image.local.env: DEBUG image (wifi '${WIFI_SSID:-}', ssh key ${MOARCHY_SSH_KEY:+yes}, extra packages ${EXTRA_PACKAGES:+yes}) -- never publish it"
+  unset _env _v _line
+fi
 
 OUTDIR="${OUTDIR:-$REPO_ROOT/images}"
 
@@ -70,11 +91,21 @@ docker build --platform linux/arm64 -f image/Dockerfile -t moarchy-image . >/dev
 CACHE="${PACMAN_CACHE:-$REPO_ROOT/.cache/pacman}"
 mkdir -p "$CACHE"
 
+# Copied, not mounted one by one: the container sees a single directory, and
+# one left over from the last build must not ride along.
+EXTRA="$REPO_ROOT/.cache/extra-packages"
+rm -rf "$EXTRA"; mkdir -p "$EXTRA"
+for _p in ${EXTRA_PACKAGES:-}; do
+  [ -f "$_p" ] || { echo "EXTRA_PACKAGES: $_p does not exist" >&2; exit 1; }
+  cp "$_p" "$EXTRA/"
+done
+
 docker run --rm --privileged --platform linux/arm64 \
   -v "$REPO_ROOT:/repo:ro" \
   -v "$CACHE:/var/cache/pacman/pkg" \
   -v "$REPO_ROOT/packages:/pkgs:ro" \
   -v "$OUTDIR:/out" \
+  -v "$EXTRA:/extra:ro" \
   -e "WIFI_SSID=${WIFI_SSID:-}" -e "WIFI_PSK=${WIFI_PSK:-}" \
   -e "MOARCHY_USER=${MOARCHY_USER:-moarchy}" \
   -e "XZ_LEVEL=${XZ_LEVEL:-9}" \

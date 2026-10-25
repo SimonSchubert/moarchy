@@ -95,6 +95,13 @@ class Touch:
         self.ui.syn()
 
     def close(self):
+        # A beat between the release and the device going away. Removed on the
+        # same instant, the device can be gone before the compositor has passed
+        # the release on, and the client is left holding a press that never
+        # lifts: a control drawn pressed, and a tap that never clicks. Seen
+        # twice in one evening on the Pixel 3a (a Settings row, a Share button),
+        # each time on a tap that the next identical one completed.
+        time.sleep(0.15)
         self.ui.close()
 
 

@@ -7,3 +7,5 @@ packages/
 .cache/
 *.img
 *.img.xz
+# A Wi-Fi password: it reaches the build through the environment, never a layer.
+image.local.env
