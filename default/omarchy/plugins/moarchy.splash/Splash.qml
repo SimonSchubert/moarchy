@@ -40,6 +40,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
+import qs.Commons as Upstream
 
 Item {
   id: root
@@ -74,8 +75,8 @@ Item {
   // The fallback outline's colour, off the theme so it recolours with
   // everything else, with a literal only for a shell whose Color singleton
   // failed to load.
-  readonly property color placeholder: (typeof Color !== "undefined" && Color.foreground)
-                                       ? Color.foreground : "#c0caf5"
+  readonly property color placeholder: (typeof Upstream.Color !== "undefined" && Upstream.Color.foreground)
+                                       ? Upstream.Color.foreground : "#c0caf5"
 
   // ------------------------------------------------------------------ sizing
   //

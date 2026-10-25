@@ -37,6 +37,7 @@ import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Services.Pipewire
 import qs.Commons
+import qs.Commons as Upstream
 import qs.Ui as Ui
 import "../moarchy.common/Sheet.js" as Sheet
 import "../moarchy.common" as Shared
@@ -140,12 +141,12 @@ Item {
   // not a screen. C2's six, and `surface` is drawn nearly opaque -- the card
   // sits over whatever was playing, and a translucent one over video is a
   // control you cannot read at exactly the moment you reach for it.
-  readonly property color surface: Color.popups.background
-  readonly property color textOnSurface: Color.popups.text
-  readonly property color container: Util.alpha(Color.popups.text, 0.08)
-  readonly property color containerHigh: Util.alpha(Color.popups.text, 0.14)
-  readonly property color accent: Color.accent
-  readonly property color textOnAccent: Color.background
+  readonly property color surface: Upstream.Color.popups.background
+  readonly property color textOnSurface: Upstream.Color.popups.text
+  readonly property color container: Util.alpha(Upstream.Color.popups.text, 0.08)
+  readonly property color containerHigh: Util.alpha(Upstream.Color.popups.text, 0.14)
+  readonly property color accent: Upstream.Color.accent
+  readonly property color textOnAccent: Upstream.Color.background
 
   // The veil is shared (docs/refactor.md E2); the default ink is this
   // surface's own, which is the half a shared type cannot know (style.md H2).

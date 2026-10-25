@@ -24,6 +24,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
+import qs.Commons as Upstream
 import qs.Ui as Ui
 import "../moarchy.common/Theme.js" as Theme
 import "../moarchy.common" as Shared
@@ -56,13 +57,13 @@ Item {
   // check caught this: the guard was the thing that was wrong. It is the third
   // time this one file has claimed in a comment to match the others while
   // matching none of them -- raw pixels, then no font family, now the palette.
-  readonly property color surface: Color.menu.background
-  readonly property color textOnSurface: Color.menu.text
-  readonly property color container: Util.alpha(Color.menu.text, 0.08)
-  readonly property color accent: Color.accent
+  readonly property color surface: Upstream.Color.menu.background
+  readonly property color textOnSurface: Upstream.Color.menu.text
+  readonly property color container: Util.alpha(Upstream.Color.menu.text, 0.08)
+  readonly property color accent: Upstream.Color.accent
 
   // C3: computed against the surface it is read on, never fixed at an alpha.
-  readonly property color subdued: Theme.readableOn(root.surface, Color.menu.text,
+  readonly property color subdued: Theme.readableOn(root.surface, Upstream.Color.menu.text,
                                                    0.55, 4.5)
 
   // The veil is shared (docs/refactor.md E2); the default ink is this

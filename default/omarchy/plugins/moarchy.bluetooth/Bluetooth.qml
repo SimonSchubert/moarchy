@@ -60,6 +60,7 @@ import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Bluetooth
 import qs.Commons
+import qs.Commons as Upstream
 import qs.Ui as Ui
 import "../moarchy.common/Theme.js" as Theme
 import "../moarchy.common" as Shared
@@ -114,21 +115,21 @@ Item {
   readonly property int radiusCard: ui.radiusCard
 
   readonly property int textWeight: Font.DemiBold
-  readonly property color surface: Color.popups.background
-  readonly property color textOnSurface: Color.popups.text
-  readonly property color container: Util.alpha(Color.popups.text, 0.08)
-  readonly property color containerHigh: Util.alpha(Color.popups.text, 0.14)
-  readonly property color accent: Color.accent
-  readonly property color textOnAccent: Color.background
+  readonly property color surface: Upstream.Color.popups.background
+  readonly property color textOnSurface: Upstream.Color.popups.text
+  readonly property color container: Util.alpha(Upstream.Color.popups.text, 0.08)
+  readonly property color containerHigh: Util.alpha(Upstream.Color.popups.text, 0.14)
+  readonly property color accent: Upstream.Color.accent
+  readonly property color textOnAccent: Upstream.Color.background
 
   // C3, not a flat alpha. `container` is painted with alpha over the surface,
   // so the background this text actually lands on is the blend of the two, and
   // a constant 0.62 falls below AA on six of the 22 themes. Same computation
   // as the control center, which is the surface this screen matches.
   readonly property color subduedBase: Theme.mix(
-    Qt.rgba(root.surface.r, root.surface.g, root.surface.b, 1), Color.popups.text, 0.08)
+    Qt.rgba(root.surface.r, root.surface.g, root.surface.b, 1), Upstream.Color.popups.text, 0.08)
   readonly property color subdued: Theme.readableOn(root.subduedBase,
-                                                   Color.popups.text, 0.55, 4.5)
+                                                   Upstream.Color.popups.text, 0.55, 4.5)
 
   // The veil is shared (docs/refactor.md E2); the default ink is this
   // surface's own, which is the half a shared type cannot know (style.md H2).

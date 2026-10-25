@@ -26,6 +26,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
+import qs.Commons as Upstream
 import qs.Ui as Ui
 import "../moarchy.common/Theme.js" as Theme
 import "../moarchy.common" as Shared
@@ -48,12 +49,12 @@ Item {
   // Where Back goes, set by whoever summoned this screen.
   property string returnTo: ""
 
-  readonly property color surface: Color.popups.background
-  readonly property color textOnSurface: Color.popups.text
-  readonly property color container: Util.alpha(Color.popups.text, 0.08)
-  readonly property color containerHigh: Util.alpha(Color.popups.text, 0.14)
-  readonly property color accent: Color.accent
-  readonly property color textOnAccent: Color.background
+  readonly property color surface: Upstream.Color.popups.background
+  readonly property color textOnSurface: Upstream.Color.popups.text
+  readonly property color container: Util.alpha(Upstream.Color.popups.text, 0.08)
+  readonly property color containerHigh: Util.alpha(Upstream.Color.popups.text, 0.14)
+  readonly property color accent: Upstream.Color.accent
+  readonly property color textOnAccent: Upstream.Color.background
 
   // style.md B3 and D1. This screen was written without either, which is what
   // the checker's header says happened to moarchy.device once: every comment in
@@ -65,7 +66,7 @@ Item {
   // polkit error text falls back to, so a theme that sets a red gets its red
   // here (style.md C4 -- this was a literal, and the only one left in the
   // plugins).
-  readonly property color danger: Color.urgent
+  readonly property color danger: Upstream.Color.urgent
 
   // ---------------------------------------------------------------- state
   // Straight out of `moarchy-sim status`, which is the only thing that talks to

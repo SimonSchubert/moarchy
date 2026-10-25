@@ -57,6 +57,7 @@ import Quickshell.Wayland
 // belong to the widgets that draw them now (docs/widgets.md W3).
 import Quickshell.Networking
 import qs.Commons
+import qs.Commons as Upstream
 import qs.Ui as Ui
 import "../moarchy.common/Theme.js" as Theme
 import "../moarchy.common/ShellApps.js" as ShellApps
@@ -215,22 +216,22 @@ Item {
   // of this is built out of; `textOnAccent` is what has to sit on top of a
   // filled accent surface, and reads off the theme background rather than
   // assuming the accent is dark.
-  readonly property color surface: Color.popups.background
+  readonly property color surface: Upstream.Color.popups.background
   // NOT `onSurface` / `onAccent`, however much the Material role names want to
   // be spelled that way. QML reserves the `on<Uppercase>` prefix for signal
   // handlers, so a property declared there is never readable: the binding
   // evaluates to undefined, undefined assigned to a `color` is #000000, and
   // nothing is logged. The symptom is every glyph and label painted pure black
   // on a dark tile while the properties either side of them are fine.
-  readonly property color textOnSurface: Color.popups.text
-  readonly property color container: Util.alpha(Color.popups.text, 0.08)
-  readonly property color containerHigh: Util.alpha(Color.popups.text, 0.14)
-  readonly property color accent: Color.accent
-  readonly property color textOnAccent: Color.background
+  readonly property color textOnSurface: Upstream.Color.popups.text
+  readonly property color container: Util.alpha(Upstream.Color.popups.text, 0.08)
+  readonly property color containerHigh: Util.alpha(Upstream.Color.popups.text, 0.14)
+  readonly property color accent: Upstream.Color.accent
+  readonly property color textOnAccent: Upstream.Color.background
   readonly property color subduedBase: Theme.mix(
-    Qt.rgba(root.surface.r, root.surface.g, root.surface.b, 1), Color.popups.text, 0.08)
+    Qt.rgba(root.surface.r, root.surface.g, root.surface.b, 1), Upstream.Color.popups.text, 0.08)
   readonly property color subdued: Theme.readableOn(root.subduedBase,
-                                                   Color.popups.text, 0.55, 4.5)
+                                                   Upstream.Color.popups.text, 0.55, 4.5)
 
   // The veil is shared (docs/refactor.md E2); the default ink is this
   // surface's own, which is the half a shared type cannot know (style.md H2).
@@ -1187,7 +1188,7 @@ Item {
       // token is already a composed colour with its own alpha baked in, so
       // re-alpha'ing it produces whatever the theme happened to choose rather
       // than a dim. Over a bright wallpaper that read as flat grey.
-      color: Util.alpha(Color.background, 0.72 * root.progress)
+      color: Util.alpha(Upstream.Color.background, 0.72 * root.progress)
       visible: root.progress > 0
 
       // Tap-to-dismiss *and* the close drag (H2), because the band of scrim

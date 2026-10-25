@@ -135,8 +135,15 @@ for path in sorted(pathlib.Path(sys.argv[1]).glob("*/*.qml")):
         # that guard routinely wraps onto the line above.
         if HEX.search(re.sub(r"//.*$", "", line)):
             window = "\n".join(lines[max(0, n - 4):n])
-            if "typeof Color" not in window:
+            if not re.search(r"typeof (Upstream\.)?Color\b", window):
                 problems.append(f"{path}:{n}  literal hex colour (C4)")
+
+        # C5: Qt 6.12's QtQuick exports a `Color` singleton of its own, and it
+        # shadows qs.Commons' theme palette: an unqualified Color.menu reads
+        # undefined and the surface draws black. Import qs.Commons as Upstream
+        # and write Upstream.Color.
+        if re.search(r"(?<![A-Za-z0-9_./])Color\.[a-z]", re.sub(r"//.*$", "", line)):
+            problems.append(f"{path}:{n}  unqualified Color; use Upstream.Color (C5)")
 
     # ------------------------------------------------------------- H1, H6
     # A control is a MouseArea that answers a tap. It has to name itself, and
