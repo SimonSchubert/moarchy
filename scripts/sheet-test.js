@@ -20,11 +20,12 @@ const src = fs.readFileSync(
 // `.pragma library` is a QML engine directive and not JavaScript.
 const sheet = {}
 new Function("exports", src.replace(/^\s*\.pragma\s+library\s*$/m, "") +
-  "\n;Object.assign(exports, { SHEETS, CONTROL_CENTER, APP_DRAWER, WORKSPACE_OVERVIEW, THEMES, WINDOW," +
-  " TOP, OVERLAY, ids, cover, payload, summon })")(sheet)
+  "\n;Object.assign(exports, { SHEETS, CONTROL_CENTER, APP_DRAWER, APP_DRAWER_MINIMAL," +
+  " WORKSPACE_OVERVIEW, THEMES, WINDOW, TOP, OVERLAY, ids, cover, payload, summon })")(sheet)
 
-const { CONTROL_CENTER, APP_DRAWER, WORKSPACE_OVERVIEW, THEMES, WINDOW, TOP, OVERLAY } = sheet
-const ALL = [CONTROL_CENTER, APP_DRAWER, WORKSPACE_OVERVIEW, THEMES]
+const { CONTROL_CENTER, APP_DRAWER, APP_DRAWER_MINIMAL, WORKSPACE_OVERVIEW, THEMES,
+        WINDOW, TOP, OVERLAY } = sheet
+const ALL = [CONTROL_CENTER, APP_DRAWER, APP_DRAWER_MINIMAL, WORKSPACE_OVERVIEW, THEMES]
 
 let fail = 0
 const check = (ok, what, detail) => {
@@ -42,10 +43,16 @@ const same = (a, b) => JSON.stringify([...a].sort()) === JSON.stringify([...b].s
 console.log("cover(): every sheet at or above the caller, never itself (B6)")
 for (const [name, mine, rank, up, want] of [
   ["the controlCenter covers nothing -- it is the only sheet on Overlay", CONTROL_CENTER, OVERLAY, ALL, []],
-  ["the appDrawer covers the two beside it and the controlCenter above", APP_DRAWER, TOP, ALL, [CONTROL_CENTER, WORKSPACE_OVERVIEW, THEMES]],
-  ["the workspaceOverview covers the two beside it and the controlCenter above", WORKSPACE_OVERVIEW, TOP, ALL, [CONTROL_CENTER, APP_DRAWER, THEMES]],
-  ["the picker covers the two beside it and the controlCenter above", THEMES, TOP, ALL, [CONTROL_CENTER, APP_DRAWER, WORKSPACE_OVERVIEW]],
-  ["a shell app is a window, so it covers all four", "moarchy.wifi", WINDOW, ALL, ALL],
+  ["the appDrawer covers the three beside it and the controlCenter above", APP_DRAWER, TOP, ALL, [CONTROL_CENTER, APP_DRAWER_MINIMAL, WORKSPACE_OVERVIEW, THEMES]],
+  // app-drawer-minimal.md M4. The two drawers put each other away, and nothing
+  // in Sheet.js knows they are both drawers: they are two rank-1 sheets on Top,
+  // which is B6 with no exception written for the pair. A rule that needed one
+  // would be a rule that needs another the day a third launcher arrives.
+  ["the minimal drawer covers the three beside it and the controlCenter above", APP_DRAWER_MINIMAL, TOP, ALL, [CONTROL_CENTER, APP_DRAWER, WORKSPACE_OVERVIEW, THEMES]],
+  ["one drawer alone puts the other away", APP_DRAWER_MINIMAL, TOP, [APP_DRAWER], [APP_DRAWER]],
+  ["the workspaceOverview covers the three beside it and the controlCenter above", WORKSPACE_OVERVIEW, TOP, ALL, [CONTROL_CENTER, APP_DRAWER, APP_DRAWER_MINIMAL, THEMES]],
+  ["the picker covers the three beside it and the controlCenter above", THEMES, TOP, ALL, [CONTROL_CENTER, APP_DRAWER, APP_DRAWER_MINIMAL, WORKSPACE_OVERVIEW]],
+  ["a shell app is a window, so it covers all five", "moarchy.wifi", WINDOW, ALL, ALL],
   ["...including the picker on its own (I2a)", "moarchy.wifi", WINDOW, [THEMES], [THEMES]],
   ["nothing open, nothing hidden", APP_DRAWER, TOP, [], []],
   ["a sheet never hides itself", APP_DRAWER, TOP, [APP_DRAWER], []],
@@ -72,7 +79,8 @@ for (const [raw, want] of [
 
 console.log("ids(): topmost first, which is the order the back gesture walks (G11)")
 check(JSON.stringify(sheet.ids()) === JSON.stringify(ALL),
-      "controlCenter, appDrawer, workspaceOverview, themes", sheet.ids().join(" "))
+      "controlCenter, appDrawer, appDrawerMinimal, workspaceOverview, themes",
+      sheet.ids().join(" "))
 
 console.log("summon(): goes through the host, so openPanelIds stays its record")
 const h = host([])

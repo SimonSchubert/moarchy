@@ -30,12 +30,19 @@
 // swipe up means the app drawer and nothing else -- names it rather than spelling it.
 var CONTROL_CENTER = "moarchy.control-center"
 var APP_DRAWER = "moarchy.app-drawer"
+// docs/app-drawer-minimal.md M1. The second drawer: the same apps as a list
+// rather than a grid. Rank 1 beside the first one and not a special case --
+// M4 is exactly B6 with no exception written for the pair, so opening either
+// puts the other away because they are both on Top, not because anything here
+// knows they are both drawers.
+var APP_DRAWER_MINIMAL = "moarchy.app-drawer-minimal"
 var WORKSPACE_OVERVIEW = "moarchy.workspace-overview"
 var THEMES = "moarchy.themes"
 
 var SHEETS = [
   { id: CONTROL_CENTER, rank: 2 },
   { id: APP_DRAWER, rank: 1 },
+  { id: APP_DRAWER_MINIMAL, rank: 1 },
   { id: WORKSPACE_OVERVIEW, rank: 1 },
   { id: THEMES, rank: 1 }
 ]

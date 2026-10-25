@@ -784,7 +784,7 @@ fi
 # Same doubling trap as the gestures plugin, one level along: an overlay
 # declared as a service gets two surfaces, and for the control center that means two
 # grab strips fighting over the top edge.
-for plugin in moarchy.app-drawer moarchy.control-center \
+for plugin in moarchy.app-drawer moarchy.app-drawer-minimal moarchy.control-center \
               moarchy.themes moarchy.settings moarchy.device moarchy.wifi \
               moarchy.bluetooth; do
   k=$(python3 -c '
@@ -802,7 +802,7 @@ except Exception:
   fi
 done
 
-for target in app-drawer control-center themes settings device volume; do
+for target in app-drawer app-drawer-minimal control-center themes settings device volume; do
   if st=$(timeout 5 omarchy-shell "$target" state 2>/dev/null) && [[ -n $st ]]; then
     ok "$target IPC answers ($st)"
   else
@@ -5626,6 +5626,7 @@ sys.exit(0 if abs(a - b) <= tol else 1)' "$1" "$2" "$3" 2>/dev/null; }
   case ${v_right_target:-none} in
     moarchy.workspace-overview) v_rt=workspace-overview ;;
     moarchy.app-drawer)   v_rt=app-drawer ;;
+    moarchy.app-drawer-minimal) v_rt=app-drawer-minimal ;;
     moarchy.control-center)    v_rt=control-center ;;
     moarchy.themes)   v_rt=themes ;;
     *)                v_rt="" ;;

@@ -32,8 +32,8 @@ function dataDir(app, home, xdg, override) {
 // over a window that has just opened.
 //
 // A no-op off the shell, where `shell` is null and there is nothing to hide.
-var OVERLAYS = ["moarchy.control-center", "moarchy.app-drawer", "moarchy.workspace-overview",
-                "moarchy.themes"]
+var OVERLAYS = ["moarchy.control-center", "moarchy.app-drawer", "moarchy.app-drawer-minimal",
+                "moarchy.workspace-overview", "moarchy.themes"]
 
 function hideOverlays(shell) {
   if (!shell || typeof shell.isPluginOpen !== "function") return

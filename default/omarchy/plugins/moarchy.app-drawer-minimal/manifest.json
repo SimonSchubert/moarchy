@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "moarchy.app-drawer-minimal",
+  "name": "Minimal app drawer",
+  "version": "1.0.0",
+  "author": "moarchy",
+  "description": "Every app as a row, alphabetical, in one ink, with an A-Z rail. An alternative to the grid, chosen on an edge.",
+  "kinds": [
+    "overlay"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "AppDrawerMinimal.qml"
+  }
+}

@@ -9,11 +9,12 @@
 #
 # Covers: A1/A2/A3 (no literals), B1 (family), B3 (weight), B5 (glyph slots),
 # C4 (no stray hex), D1 (four named radii), H1/H6 (a pressed state on every
-# control, guarded where the control is also a drag handle). Plus three things
-# that are not ACs at all: that every SVG this project ships still parses, the
-# sheet-stacking rule, the edge table (gestures.md Q2), and the workspace-layout
-# rule the workspace overview drags onto (gestures.md P7) -- all of which decide behaviour
-# and none of which needs the phone to run.
+# control, guarded where the control is also a drag handle). Plus the things
+# that are not style.md ACs at all: that every SVG this project ships still
+# parses, the sheet-stacking rule, the edge table (gestures.md Q2), the
+# workspace-layout rule the workspace overview drags onto (gestures.md P7),
+# and the minimal drawer's glyph table (app-drawer-minimal.md M10, M11) --
+# all of which decide behaviour and none of which needs the phone to run.
 #
 # Does NOT cover E (touch targets) or F (text inputs): a hit area is a runtime
 # rectangle, and the accessors that answer for it -- `omarchy-shell app drawer
@@ -184,7 +185,7 @@ for path in sorted(pathlib.Path(sys.argv[1]).glob("*/*.qml")):
             problems.append(f"{path}:{start}  {m.group(1)}.pressed is read "
                             "nowhere: this control has no press state (H1)")
 
-    # H6. On the two surfaces whose controls are also the sheet's drag handle,
+    # H6. On the three surfaces whose controls are also the sheet's drag handle,
     # `pressed` stays true for the whole drag -- so an unguarded read lights
     # every tile a scrolling thumb crosses.
     #
@@ -201,7 +202,7 @@ for path in sorted(pathlib.Path(sys.argv[1]).glob("*/*.qml")):
     # way H7 declares a non-control above, because the alternative is teaching
     # this regex one bespoke property name per surface until it matches
     # anything with an `&&` in it.
-    if path.name in ("ControlCenter.qml", "AppDrawer.qml"):
+    if path.name in ("ControlCenter.qml", "AppDrawer.qml", "AppDrawerMinimal.qml"):
         for n, line in enumerate(lines, 1):
             if not re.search(r"\w+\.pressed\b", line):
                 continue
@@ -511,6 +512,23 @@ if command -v node >/dev/null 2>&1; then
   fi
 else
   skip "the Edge.js cases need node, which is not installed here (Q2)"
+fi
+
+# docs/app-drawer-minimal.md M10, M11. The minimal drawer's glyph table: that
+# every literal in it is one code point rather than a truncated `\uXXXX` escape,
+# and that the category list is still ordered specific-first. Pure data with no
+# Qt in it, so a wrong row is caught here rather than as a calculator wearing a
+# wrench on the phone. (bin/moarchy-selftest asks fontconfig the other half --
+# whether an installed font covers the codepoint -- and that one needs the
+# device.)
+if command -v node >/dev/null 2>&1; then
+  if glyph_out=$(node scripts/glyph-test.js 2>&1); then
+    ok "the drawer's glyph table is one glyph per row, specific first ($(grep -c 'ok' <<<"$glyph_out") cases, M10, M11)"
+  else
+    no "the glyph table is broken (M10, M11)" "$glyph_out"
+  fi
+else
+  skip "the glyph table cases need node, which is not installed here (M10, M11)"
 fi
 
 # gestures.md P7. What a workspace holding two windows is arranged as, which is
