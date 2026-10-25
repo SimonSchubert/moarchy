@@ -28,3 +28,7 @@ packages/.build-manifest
 # Local debug-image settings (WIFI_SSID, WIFI_PSK, MOARCHY_SSH_KEY) that
 # scripts/build-image.sh reads. It holds a Wi-Fi password: never commit it.
 image.local.env
+
+# The OWL runtime at manifest.toml's pin, fetched by scripts/fetch-owl.sh for
+# linting and hand deploys. The package fetches and checks its own copy.
+default/omarchy/plugins/moarchy.owl/

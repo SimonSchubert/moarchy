@@ -50,6 +50,7 @@ sentence, kebab for anything a machine parses, and the label a thumb reads.
 | --- | --- | --- |
 | the control center | `moarchy.control-center` · `control-center` | **Control Center** |
 | the app drawer | `moarchy.app-drawer` · `app-drawer` | **App drawer** |
+| the minimal app drawer | `moarchy.app-drawer-minimal` · `app-drawer-minimal` | **Minimal app drawer** |
 | the workspace overview | `moarchy.workspace-overview` · `workspace-overview` | **Workspace overview** |
 | the status bar | `moarchy.bar` · `bar` | **Status bar** |
 | the strip | `moarchy.gestures` · `gestures` | no label of its own — *Press and hold the strip* |
@@ -64,10 +65,53 @@ each.
 Two of the four swipes are a setting rather than a fact: what the strip raises
 and what the right-edge swipe raises are each named by `gesture_bottom` and
 `gesture_right` in `~/.config/omarchy/ui.toml`, and either can be `none`, `app
-drawer`, `workspace overview` or `control center` ([`gestures.md`](gestures.md)
-Q1). The app drawer and the workspace overview are the pairing that ships, so
-that is what the picture shows. The control center keeps its grab band
+drawer`, `minimal app drawer`, `workspace overview` or `control center`
+([`gestures.md`](gestures.md) Q1). The app drawer and the workspace overview
+are the pairing that ships, so that is what the picture shows. The control center keeps its grab band
 whichever edge it is also set on (Q7).
+
+## Home
+
+What an empty workspace shows ([`home.md`](home.md)). Omalauncher's home screen,
+in its own words where moarchy had none, and in moarchy's where it had one.
+
+```
+   faces  <-  swipe  ->  pages of tiles
+   +-------------------+ +-------------------+
+   | 9:41      wifi 82%| | 9:41      wifi 82%|  status bar
+   |                   | | +------+ +------+ |
+   |      12:30        | | | fetch| | today| |  tiles, on the grid
+   |   saturday 25     | | |      | |      | |
+   |   [ today ]       | | +------+ +------+ |
+   |   [ calendar ]    | | +---------------+ |
+   |                   | | |    media      | |
+   |   a face          | | +---------------+ |
+   |                   | | [ o  o  o       ] |  the recent strip
+   |                   | | [claude⌄ open...] |  the prompt bar
+   +-------------------+ +-------------------+
+                               ^ page 1, where home opens
+```
+
+| Part | What it is | Governed by |
+| --- | --- | --- |
+| **home** | what is drawn on an empty workspace: pages, faces, the recent strip, the prompt bar. Drawn on `moarchy.gestures`' Bottom-layer surface by the kit in `moarchy.home/`; IPC target `home` | [`home.md`](home.md) §A |
+| **page** | one screenful of home, turned by a sideways swipe. **Page 1** is the first page of tiles | [`home.md`](home.md) §B |
+| **face** | a whole page drawn by one QML file, left of page 1 — Omalauncher's word | [`home.md`](home.md) HM7 |
+| **tile** | a widget at a cell rectangle on a page, in a frame. A tile *is* a widget; the word says where it is | [`home.md`](home.md) §C, [`widgets.md`](widgets.md) |
+| **prompt bar** | the field that opens an app or asks the coding agent: on home a picture of one, in the app drawer the live one. Never "bar", which is the status bar's IPC target | [`home.md`](home.md) §E |
+| **recent strip** | the row of open apps above the prompt bar | [`home.md`](home.md) HM21 |
+| **home menu** | what a long press anywhere on home opens: Settings, and the theme strip. Not "context menu", which is the kit's per-row menu | [`home.md`](home.md) §J |
+| **OWL widget** | a widget written in OWL, Omalauncher's language: a `.owl` file, from the store or the user's own, drawn by `moarchy.owl`. A **native widget** is a QML one | [`owl.md`](owl.md) |
+| **the store** | omarchy-widgets' reviewed catalogue, browsed in Settings › Appearance › Home › Widgets and installed by `moarchy-owl`. Not the App Store, which is `moarchy-store` and installs apps | [`owl.md`](owl.md) §B |
+| **edit mode** | a tile selected by a long press: its frame and handles, the grid's guides, the action bar. Every touch on home is the editor's until it ends | [`home.md`](home.md) §K |
+| **action bar** | `edit`, `share`, `remove`, over the selected tile. Not the app bar, which is a shell app's title row | [`home.md`](home.md) HM46 |
+| **face invite** | the empty page waiting left of the leftmost: `a face of your own`, and the agent makes one | [`home.md`](home.md) HM51 |
+| **spare page** | the empty page of tiles waiting after the last; a tile put there makes it a page | [`home.md`](home.md) HM51 |
+| **stepper** | a Settings row with `−` value `+` | [`home.md`](home.md) HM55 |
+| **theme strip** | every installed theme as a swatch in its own colours, in the home menu; one tap applies one | [`home.md`](home.md) HM39 |
+
+Omalauncher's **panels** are this project's **sheets**: its drawer is the app
+drawer, its `controls.owl` is the control center. There is no second word.
 
 ## What quickshell draws
 
@@ -81,7 +125,8 @@ what puts it away, and whether it can be dismissed at all.
   |          running                                                        |
   |    the control center              Settings   Wi-Fi   Bluetooth   SIM   |
   |    the app drawer                  Clock   Calendar   Phone   Messages  |
-  |    the workspace overview          Files   Weather   Mail   + 11 more   |
+  |    the minimal app drawer          Files   Weather   Mail   + 11 more   |
+  |    the workspace overview                                               |
   |    the theme picker                                                     |
   |                                                                         |
   |  WIDGETS  inside a surface someone else owns                            |

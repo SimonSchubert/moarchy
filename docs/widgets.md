@@ -83,7 +83,9 @@ available=0`, and `sheet` reports a height that does not include it
 **W7** A widget publishes `implicitHeight` and takes its width from the host.
 It sets no `x`, no `y`, no anchors against the sheet, and asks for no position
 in the order. The host places it — that is the entire difference between this
-kind and the other three (`naming-convention.md`).
+kind and the other three (`naming-convention.md`). Home is the one host that
+gives both dimensions: a tile is sized to its cells and its `implicitHeight`
+is not read ([`home.md`](home.md) HM9).
 → `grep -nE '^\s*(x|y|anchors\.(top|bottom|left|right|fill|centerIn))\s*:'`
 over each widget's root item matches nothing
 

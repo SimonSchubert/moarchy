@@ -148,6 +148,72 @@ rm -f "$HOME/.config/omarchy/ui.toml"
   && ok "a corners retake leaves all four gesture keys alone" \
   || no "corners write lost a gesture key"
 
+# docs/home.md HM29. A file from before the sections reads as it did, and the
+# first write moves each flat key into its section without losing a comment
+# the user wrote.
+cat >"$HOME/.config/omarchy/ui.toml" <<'TOML'
+# my phone, my corners
+corners = "square"
+gesture_bottom = "control-center"
+sheet = 9
+TOML
+[[ $("$UI" get corners) == square && $("$UI" get gesture-bottom) == control-center && $("$UI" get sheet) == 9 ]] \
+  && ok "a flat file reads as it always did" \
+  || no "flat file read as: $("$UI" get corners)/$("$UI" get gesture-bottom)/$("$UI" get sheet)"
+"$UI" gesture-right none >/dev/null
+F="$HOME/.config/omarchy/ui.toml"
+grep -q '^# my phone, my corners$' "$F" && ok "the user's comment survives the migration" \
+  || no "the comment is gone: $(cat "$F")"
+# Above the first section only: `corners` and `sheet` keep their names inside
+# [shape], which is what moarchy-keyboard's section-blind reader relies on.
+top=$(awk '/^\[/{exit} {print}' "$F")
+grep -qE '^(corners|gesture_bottom|sheet) *=' <<<"$top" && no "a flat key is still at the top: $top" \
+  || ok "no flat key is left above the sections"
+python3 -c 'import sys,tomllib; d=tomllib.load(open(sys.argv[1],"rb")); assert d["shape"]["corners"]=="square" and d["shape"]["sheet"]==9 and d["gestures"]["bottom"]=="control-center" and d["gestures"]["right"]=="none", d' "$F" \
+  && ok "the migrated file is TOML with every value in its section" \
+  || no "migrated file: $(cat "$F")"
+
+# HM29. Not TOML -- no quotes -- and read for a year by the old reader.
+printf 'corners = modest\n' >"$F"
+[[ $("$UI" get corners) == modest ]] && ok "an unquoted value still reads" \
+  || no "unquoted corners read as $("$UI" get corners)"
+
+# HM31. A write changes the line it was asked about and nothing else.
+rm -f "$F"
+"$UI" set home.opacity 0.7 >/dev/null
+cat >>"$F" <<'TOML'
+# a note I keep here
+TOML
+before=$(grep -v '^opacity' "$F")
+"$UI" set home.opacity 0.5 >/dev/null
+after=$(grep -v '^opacity' "$F")
+[[ $before == "$after" && $("$UI" get home.opacity) == 0.5 ]] && ok "set home.opacity changes one line" \
+  || no "set changed more than the line: $(diff <(echo "$before") <(echo "$after"))"
+grep -q '^\[home\]$' "$F" && ok "the key lands under [home]" || no "no [home] in: $(cat "$F")"
+
+rc=0; out=$("$UI" set home.opacty 0.7 2>&1) || rc=$?
+[[ $rc -eq 2 && $out == *opacity* ]] && ok "a misspelt key exits 2 and names the real one" \
+  || no "misspelt key: rc=$rc out=$out"
+rc=0; "$UI" set home.columns 40 >/dev/null 2>&1 || rc=$?
+[[ $rc -eq 2 && $("$UI" get home.columns) == 6 ]] && ok "an out-of-range value is refused, not clamped" \
+  || no "columns 40: rc=$rc now $("$UI" get home.columns)"
+"$UI" set home.prompt-bar no >/dev/null
+[[ $("$UI" get home.prompt-bar) == false ]] && ok "a boolean takes yes/no and stores false" \
+  || no "prompt-bar: $("$UI" get home.prompt-bar)"
+rc=0; "$UI" set gestures.bottom nonsense >/dev/null 2>&1 || rc=$?
+[[ $rc -eq 2 && $("$UI" get gesture-bottom) == app-drawer ]] && ok "a dotted gesture set refuses an unknown sheet" \
+  || no "gestures.bottom nonsense: rc=$rc now $("$UI" get gesture-bottom)"
+"$UI" set shape.corners modest >/dev/null
+"$UI" set sheet 5 >/dev/null
+"$UI" set shape.corners large >/dev/null
+[[ -z $("$UI" get sheet) ]] && ok "set shape.corners drops the radius overrides, as the corners verb does" \
+  || no "sheet still $("$UI" get sheet)"
+
+n=$("$UI" keys | grep -c ' = ')
+[[ $n -ge 20 ]] && ok "keys lists every documented key ($n)" || no "keys listed $n"
+"$UI" keys | grep -q '^shape.frame = 16' && ok "an override documented as a comment is a key too" \
+  || no "shape.frame missing from: $("$UI" keys)"
+
 if [[ $fail -gt 0 ]]; then
   echo "$fail failed"
   exit 1

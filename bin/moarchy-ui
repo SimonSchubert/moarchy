@@ -1,315 +1,555 @@
-#!/bin/bash
-# Read and write ~/.config/omarchy/ui.toml -- corners and control center control sizes.
+#!/usr/bin/env python3
+# Read and write ~/.config/omarchy/ui.toml, the UI settings file (docs/home.md §G).
 #
-# Colours stay in the staged theme (omarchy-theme-set / colors.toml). This
-# file is the half that is a preference: how round cards are, how tall the
-# control center's sliders and tiles are. The theme switcher, Settings, and an agent
-# that edits the path all write the same keys; FileView picks the change up
-# with no restart.
+# The one writer of that file (HM27). The shell reads it through Ui.js and
+# Toml.js and never writes it; Settings, the theme picker and an agent all come
+# through here, or edit it by hand.
 #
-#   moarchy-ui                         print current "key=value" lines
-#   moarchy-ui get corners             large | modest | square
-#   moarchy-ui get corners-label       Large | Modest | Square
-#   moarchy-ui get control center               roomy | compact
-#   moarchy-ui get control center-label         Roomy | Compact
-#   moarchy-ui get gesture-bottom      none | app-drawer | workspace-overview | control-center
-#   moarchy-ui get gesture-right       the same four
-#   moarchy-ui get gesture-summary     "App drawer · Overview"
-#   moarchy-ui get gesture-hold        none | agent | a sheet | an app id
-#   moarchy-ui get gesture-power       the same
-#   moarchy-ui corners modest
-#   moarchy-ui control center compact
+#   moarchy-ui                          the old "key=value" summary
+#   moarchy-ui keys                     every key: section.key = value  (default)
+#   moarchy-ui get <section>.<key>      one value, e.g. get home.opacity
+#   moarchy-ui set <section>.<key> <v>  one value, checked against the packaged
+#                                       file's documented keys (HM31)
+#   moarchy-ui path                     the file this reads and writes
+#
+# and the verbs Settings and the theme switcher were written against, kept as
+# they were:
+#
+#   moarchy-ui get corners | corners-label | control-center | control-center-label
+#   moarchy-ui get gesture-bottom | gesture-right | gesture-hold | gesture-power
+#                  (each also -label) | gesture-summary
+#   moarchy-ui get sheet | tile | card | control_center_tile | ...   overrides
+#   moarchy-ui corners modest           a preset, which drops its overrides
+#   moarchy-ui control-center compact
 #   moarchy-ui gesture-bottom workspace-overview
 #   moarchy-ui gesture-hold org.gnome.Calls
-#   moarchy-ui set sheet 16            numeric override (logical px)
-
-set -euo pipefail
-
-FILE="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy/ui.toml"
-
-norm_corners() {
-  case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
-    large|round|rounded|big) echo large ;;
-    modest|small|little|soft) echo modest ;;
-    square|none|off|flat|0) echo square ;;
-    *) echo large ;;
-  esac
-}
-
-norm_density() {
-  case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
-    roomy|comfortable|large|big|huge) echo roomy ;;
-    compact|small|dense|tight) echo compact ;;
-    *) echo roomy ;;
-  esac
-}
-
-# gestures.md Q1. Words, never plugin ids: Sheet.js is where an id is
-# written and this script has no business knowing one. An unreadable value
-# is the caller's default rather than `none`, so a typo cannot switch an
-# edge off -- Ui.js normTarget() is the same rule on the QML side.
-norm_target() {
-  case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
-    none|off|nothing) echo none ;;
-    app-drawer|moarchy.app-drawer) echo app-drawer ;;
-    workspace-overview|moarchy.workspace-overview) echo workspace-overview ;;
-    control-center|moarchy.control-center) echo control-center ;;
-    *) echo "$2" ;;
-  esac
-}
-
-# gestures.md Q10. The tap triggers take a wider vocabulary than an edge:
-# `none`, `agent`, a sheet word, or any desktop entry id. An id cannot be
-# whitelisted -- the set is every app on the phone -- so anything that is not
-# one of the known words is passed through untouched, case and all. What a
-# value *means* is `moarchy-trigger`'s to decide; this only stores it.
-norm_tap() {
-  local raw="$1" low
-  low=$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]')
-  case "$low" in
-    "") printf '%s' "$2" ;;
-    none|off|nothing) echo none ;;
-    agent) echo agent ;;
-    app-drawer|workspace-overview|control-center|themes) printf '%s' "$low" ;;
-    *) printf '%s' "$raw" ;;
-  esac
-}
-
-# The word a row shows. An id stays an id here: the name behind it is in a
-# desktop entry that only the shell has read, and `moarchy-trigger label` is
-# what asks it.
-label_tap() {
-  case "$1" in
-    none) echo Nothing ;;
-    agent) echo "Coding agent" ;;
-    app-drawer|workspace-overview|control-center|themes) label_target "$1" ;;
-    *) printf '%s' "$1" ;;
-  esac
-}
-
-label_target() {
-  case "$1" in
-    none) echo Nothing ;;
-    app-drawer) echo "App drawer" ;;
-    workspace-overview) echo "Workspace overview" ;;
-    control-center) echo "Control Center" ;;
-    themes) echo Themes ;;
-    *) echo Nothing ;;
-  esac
-}
-
-label_corners() {
-  case "$(norm_corners "$1")" in
-    modest) echo Modest ;;
-    square) echo Square ;;
-    *) echo Large ;;
-  esac
-}
-
-label_density() {
-  case "$(norm_density "$1")" in
-    compact) echo Compact ;;
-    *) echo Roomy ;;
-  esac
-}
-
-# Defaults match Ui.js fallback().
-corners=large
-control_center=roomy
-gesture_bottom=app-drawer
-gesture_right=workspace-overview
-gesture_hold=agent
-gesture_power=none
-sheet=""
-tile=""
-card=""
-control_center_tile=""
-control_center_slider=""
-control_center_round=""
-
-read_file() {
-  [[ -f $FILE ]] || return 0
-  local key raw
-  while IFS= read -r line || [[ -n $line ]]; do
-    line="${line%%#*}"
-    line="${line#"${line%%[![:space:]]*}"}"
-    line="${line%"${line##*[![:space:]]}"}"
-    [[ -n $line && $line != [* ]] || continue
-    key="${line%%=*}"
-    raw="${line#*=}"
-    key="${key%"${key##*[![:space:]]}"}"
-    raw="${raw#"${raw%%[![:space:]]*}"}"
-    raw="${raw%\"}"
-    raw="${raw#\"}"
-    raw="${raw%\'}"
-    raw="${raw#\'}"
-    case $key in
-      corners) corners=$(norm_corners "$raw") ;;
-      control_center|density) control_center=$(norm_density "$raw") ;;
-      sheet) sheet=$raw ;;
-      tile) tile=$raw ;;
-      card) card=$raw ;;
-      control_center_tile|controlCenterTile) control_center_tile=$raw ;;
-      control_center_slider|controlCenterSlider) control_center_slider=$raw ;;
-      control_center_round|controlCenterRound) control_center_round=$raw ;;
-      gesture_bottom|gestureBottom) gesture_bottom=$(norm_target "$raw" appDrawer) ;;
-      gesture_right|gestureRight) gesture_right=$(norm_target "$raw" workspaceOverview) ;;
-      gesture_hold|gestureHold) gesture_hold=$(norm_tap "$raw" agent) ;;
-      gesture_power|gesturePower) gesture_power=$(norm_tap "$raw" none) ;;
-    esac
-  done <"$FILE"
-}
-
-write_file() {
-  mkdir -p "$(dirname "$FILE")"
-  {
-    cat <<'EOF'
-# Phone chrome. Independent of the colour theme.
-# Colours live in ~/.local/state/omarchy/current/theme/colors.toml
-# and change with omarchy-theme-set. This file reshapes the UI.
+#   moarchy-ui set sheet 16             a numeric override, logical px
 #
-# corners: large | modest | square
-# control center:   roomy | compact
+# What the file looks like is the packaged /usr/share/moarchy/ui.toml, which is
+# also the list of keys that exist: a key written there, set or commented out
+# as `# key = default`, is a key this accepts, and nothing else is. One list,
+# documented where a person reads it.
 #
-# Which sheet each swipeable edge raises:
-#   gesture_bottom, gesture_right: none | app-drawer | workspace-overview | control-center
-#   gesture_hold, gesture_power:   the same, plus agent or an app id
-#
-# Optional numbers (logical px) override the preset for that key:
-#   sheet, tile, card, control_center_tile, control_center_slider, control_center_round
+# A write edits the one line it was asked about and leaves every other line,
+# comment and blank line where it was (HM31). A file from before the sections --
+# flat `corners = "large"`, `gesture_bottom = ...` -- reads as it always did,
+# and the first write moves each flat key into its section (HM29).
 
-EOF
-    printf 'corners = "%s"\n' "$corners"
-    printf 'control_center = "%s"\n' "$control_center"
-    printf 'gesture_bottom = "%s"\n' "$gesture_bottom"
-    printf 'gesture_right = "%s"\n' "$gesture_right"
-    printf 'gesture_hold = "%s"\n' "$gesture_hold"
-    printf 'gesture_power = "%s"\n' "$gesture_power"
-    if [[ -n $sheet ]]; then printf 'sheet = %s\n' "$sheet"; fi
-    if [[ -n $tile ]]; then printf 'tile = %s\n' "$tile"; fi
-    if [[ -n $card ]]; then printf 'card = %s\n' "$card"; fi
-    if [[ -n $control_center_tile ]]; then printf 'control_center_tile = %s\n' "$control_center_tile"; fi
-    if [[ -n $control_center_slider ]]; then printf 'control_center_slider = %s\n' "$control_center_slider"; fi
-    if [[ -n $control_center_round ]]; then printf 'control_center_round = %s\n' "$control_center_round"; fi
-  } >"$FILE"
+import json
+import os
+import re
+import sys
+import tomllib
+
+HOME = os.environ.get("HOME", "")
+CONFIG = os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config")
+FILE = os.path.join(CONFIG, "omarchy", "ui.toml")
+
+
+def packaged_path():
+    here = os.path.dirname(os.path.realpath(__file__))
+    for p in (os.environ.get("MOARCHY_UI_DEFAULTS", ""),
+              os.path.join(os.environ.get("MOARCHY_PATH", "/usr/share/moarchy"), "ui.toml"),
+              "/usr/share/moarchy/ui.toml",
+              os.path.join(here, "..", "default", "omarchy", "ui.toml")):
+        if p and os.path.isfile(p):
+            return p
+    return ""
+
+
+SECTIONS = ["shape", "control-center", "gestures", "home"]
+
+# HM29. The flat names a file from before the sections used, and where each
+# lives now. Ui.js's `pick()` reads the same names; nothing else knows them.
+LEGACY = {
+    "corners": ("shape", "corners"),
+    "sheet": ("shape", "sheet"),
+    "tile": ("shape", "tile"),
+    "card": ("shape", "card"),
+    "control_center": ("control-center", "density"),
+    "controlCenter": ("control-center", "density"),
+    "density": ("control-center", "density"),
+    "control_center_tile": ("control-center", "tile-height"),
+    "controlCenterTile": ("control-center", "tile-height"),
+    "control_center_slider": ("control-center", "slider-height"),
+    "controlCenterSlider": ("control-center", "slider-height"),
+    "control_center_round": ("control-center", "button-size"),
+    "controlCenterRound": ("control-center", "button-size"),
+    "gesture_bottom": ("gestures", "bottom"),
+    "gestureBottom": ("gestures", "bottom"),
+    "gesture_right": ("gestures", "right"),
+    "gestureRight": ("gestures", "right"),
+    "gesture_hold": ("gestures", "hold"),
+    "gestureHold": ("gestures", "hold"),
+    "gesture_power": ("gestures", "power"),
+    "gesturePower": ("gestures", "power"),
 }
 
-usage() {
-  echo "Usage: moarchy-ui [get KEY | corners VALUE | control-center VALUE |" >&2
-  echo "                   gesture-bottom VALUE | gesture-right VALUE |" >&2
-  echo "                   gesture-hold VALUE | gesture-power VALUE | set KEY NUMBER]" >&2
-  echo "  KEY: corners, corners-label, control-center, control-center-label," >&2
-  echo "       gesture-bottom, gesture-bottom-label, gesture-right," >&2
-  echo "       gesture-right-label, gesture-summary, gesture-hold," >&2
-  echo "       gesture-hold-label, gesture-power, gesture-power-label" >&2
-  echo "  corners: large | modest | square" >&2
-  echo "  control-center:  roomy | compact" >&2
-  echo "  gesture: none | app-drawer | workspace-overview | control-center" >&2
-  echo "  hold/power also take: agent, or a desktop entry id" >&2
-  exit 1
+# Which overrides a preset owns, so choosing the preset again clears them --
+# otherwise "square" with sheet = 28 still on disk would not look square.
+OWNED = {
+    ("shape", "corners"): ["sheet", "tile", "card", "frame"],
+    ("control-center", "density"): ["tile-height", "slider-height", "button-size"],
 }
 
-read_file
+# ------------------------------------------------------------------ words
+# Ui.js holds the same tables; scripts/test-ui.sh holds the two to each other.
 
-if (($# == 0)); then
-  printf 'corners=%s\n' "$corners"
-  printf 'control_center=%s\n' "$control_center"
-  printf 'gesture_bottom=%s\n' "$gesture_bottom"
-  printf 'gesture_right=%s\n' "$gesture_right"
-  printf 'gesture_hold=%s\n' "$gesture_hold"
-  printf 'gesture_power=%s\n' "$gesture_power"
-  if [[ -n $sheet ]]; then printf 'sheet=%s\n' "$sheet"; fi
-  if [[ -n $tile ]]; then printf 'tile=%s\n' "$tile"; fi
-  if [[ -n $card ]]; then printf 'card=%s\n' "$card"; fi
-  if [[ -n $control_center_tile ]]; then printf 'control_center_tile=%s\n' "$control_center_tile"; fi
-  if [[ -n $control_center_slider ]]; then printf 'control_center_slider=%s\n' "$control_center_slider"; fi
-  if [[ -n $control_center_round ]]; then printf 'control_center_round=%s\n' "$control_center_round"; fi
-  exit 0
-fi
+def norm_corners(v):
+    n = str(v or "").lower().strip()
+    if n in ("large", "round", "rounded", "big"): return "large"
+    if n in ("modest", "small", "little", "soft"): return "modest"
+    if n in ("square", "none", "off", "flat", "0"): return "square"
+    return "large"
 
-case "$1" in
-get)
-  [[ $# -eq 2 ]] || usage
-  case "$2" in
-    corners) echo "$corners" ;;
-    corners-label) label_corners "$corners" ;;
-    control-center|control_center|density) echo "$control_center" ;;
-    control-center-label|density-label) label_density "$control_center" ;;
-    gesture-bottom) echo "$gesture_bottom" ;;
-    gesture-right) echo "$gesture_right" ;;
-    gesture-bottom-label) label_target "$gesture_bottom" ;;
-    gesture-hold) printf '%s\n' "$gesture_hold" ;;
-    gesture-power) printf '%s\n' "$gesture_power" ;;
-    gesture-hold-label) label_tap "$gesture_hold" ;;
-    gesture-power-label) label_tap "$gesture_power" ;;
-    gesture-right-label) label_target "$gesture_right" ;;
-    # The detail line on the row that opens the pair (settings.md D5).
-    gesture-summary)
-      # A literal middle dot and not $'\u00b7': bash expands that against the
-      # locale, and this runs from a shell with no LANG as often as not.
-      printf '%s · %s\n' "$(label_target "$gesture_bottom")" \
-                        "$(label_target "$gesture_right")" ;;
-    sheet|tile|card|control_center_tile|control_center_slider|control_center_round)
-      eval "val=\${$2}"
-      echo "$val"
-      ;;
-    *) usage ;;
-  esac
-  ;;
-corners)
-  [[ $# -eq 2 ]] || usage
-  corners=$(norm_corners "$2")
-  # A preset retake drops numeric overrides for the radii it owns, otherwise
-  # "square" with sheet=28 still on disk would not look square.
-  sheet=""; tile=""; card=""
-  write_file
-  echo "$corners"
-  ;;
-control-center|control_center)
-  [[ $# -eq 2 ]] || usage
-  control_center=$(norm_density "$2")
-  control_center_tile=""; control_center_slider=""; control_center_round=""
-  write_file
-  echo "$control_center"
-  ;;
-gesture-bottom)
-  [[ $# -eq 2 ]] || usage
-  # No companion overrides to drop: unlike `corners` and `control-center`, these two
-  # presets own no numeric keys.
-  gesture_bottom=$(norm_target "$2" "$gesture_bottom")
-  write_file
-  echo "$gesture_bottom"
-  ;;
-gesture-right)
-  [[ $# -eq 2 ]] || usage
-  gesture_right=$(norm_target "$2" "$gesture_right")
-  write_file
-  echo "$gesture_right"
-  ;;
-gesture-hold)
-  [[ $# -eq 2 ]] || usage
-  gesture_hold=$(norm_tap "$2" "$gesture_hold")
-  write_file
-  printf '%s\n' "$gesture_hold"
-  ;;
-gesture-power)
-  [[ $# -eq 2 ]] || usage
-  gesture_power=$(norm_tap "$2" "$gesture_power")
-  write_file
-  printf '%s\n' "$gesture_power"
-  ;;
-set)
-  [[ $# -eq 3 ]] || usage
-  case "$2" in
-    sheet|tile|card|control_center_tile|control_center_slider|control_center_round)
-      [[ $3 =~ ^[0-9]+([.][0-9]+)?$ ]] || usage
-      eval "$2=\$3"
-      write_file
-      echo "$3"
-      ;;
-    *) usage ;;
-  esac
-  ;;
--h|--help|help) usage ;;
-*) usage ;;
-esac
+
+def norm_density(v):
+    n = str(v or "").lower().strip()
+    if n in ("compact", "small", "dense", "tight"): return "compact"
+    return "roomy"
+
+
+TARGETS = ["none", "app-drawer", "app-drawer-minimal", "workspace-overview", "control-center"]
+TARGET_LABELS = {"none": "Nothing", "app-drawer": "App drawer",
+                 "app-drawer-minimal": "Minimal app drawer",
+                 "workspace-overview": "Workspace overview",
+                 "control-center": "Control Center", "themes": "Themes"}
+
+
+# gestures.md Q1. Words, never plugin ids. An unreadable value is the caller's
+# default rather than `none`, so a typo cannot switch an edge off.
+def norm_target(v, fallback):
+    n = str(v or "").lower().strip()
+    if n in ("off", "nothing"): n = "none"
+    if n.startswith("moarchy."): n = n[len("moarchy."):]
+    return n if n in TARGETS else fallback
+
+
+# Q10. The taps take any desktop id as well, so an unknown value passes
+# through rather than falling back -- and desktop ids are case sensitive.
+def norm_tap(v, fallback):
+    raw = str(v or "").strip()
+    n = raw.lower()
+    if n == "": return fallback
+    if n in ("none", "off", "nothing"): return "none"
+    if n == "agent": return "agent"
+    if n in TARGETS or n == "themes": return n
+    return raw
+
+
+def label_target(v):
+    return TARGET_LABELS.get(v, v)
+
+
+def label_tap(v):
+    if v == "agent": return "Coding agent"
+    return TARGET_LABELS.get(v, v)
+
+
+# ------------------------------------------------------------------ schema
+
+KEY_LINE = re.compile(r"^\s*([A-Za-z0-9_-]+)\s*=\s*(.*?)\s*$")
+DOC_LINE = re.compile(r"^\s*#\s*([a-z][a-z0-9-]*)\s*=\s*(\S+)")
+HEAD = re.compile(r"^\s*\[\s*([A-Za-z0-9_.-]+)\s*\]\s*(#.*)?$")
+
+
+def schema():
+    """{(section, key): default} from the packaged file: its set keys, and the
+    optional ones it documents as `# key = default` inside a section."""
+    p = packaged_path()
+    if not p:
+        die("the packaged ui.toml is missing, so there is no list of keys to check against", 3)
+    with open(p, "rb") as f:
+        data = tomllib.load(f)
+    out = {}
+    for sec, table in data.items():
+        if isinstance(table, dict):
+            for k, v in table.items():
+                out[(sec, k)] = v
+    sec = None
+    for line in open(p, encoding="utf-8"):
+        m = HEAD.match(line)
+        if m:
+            sec = m.group(1)
+            continue
+        d = DOC_LINE.match(line)
+        if sec and d and (sec, d.group(1)) not in out:
+            try:
+                out[(sec, d.group(1))] = tomllib.loads("v = " + d.group(2))["v"]
+            except tomllib.TOMLDecodeError:
+                out[(sec, d.group(1))] = d.group(2)
+    return out
+
+
+# ------------------------------------------------------------------ reading
+
+def lenient(text):
+    """Toml.flat()'s read: what a hand-edited `corners = large` still means."""
+    data, cur = {}, None
+    for line in text.splitlines():
+        line = re.sub(r"\s+#.*$", "", line).strip()
+        if not line or line.startswith("#"):
+            continue
+        m = HEAD.match(line)
+        if m:
+            cur = data.setdefault(m.group(1), {})
+            continue
+        m = KEY_LINE.match(line)
+        if not m:
+            continue
+        v = m.group(2)
+        if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+            v = v[1:-1]
+        (cur if cur is not None else data)[m.group(1)] = v
+    return data
+
+
+def read():
+    try:
+        text = open(FILE, encoding="utf-8").read()
+    except FileNotFoundError:
+        return {}
+    try:
+        return tomllib.loads(text)
+    except tomllib.TOMLDecodeError:
+        return lenient(text)
+
+
+def value(data, sec, key, default=None):
+    """The section's key, else the flat name it had before the sections."""
+    t = data.get(sec)
+    if isinstance(t, dict) and t.get(key) not in (None, ""):
+        return t[key]
+    for flat, where in LEGACY.items():
+        if where == (sec, key) and data.get(flat) not in (None, "") and not isinstance(data.get(flat), dict):
+            return data[flat]
+    return default
+
+
+def effective(data):
+    s = schema()
+    return {(sec, k): value(data, sec, k, d) for (sec, k), d in s.items()}
+
+
+def fmt(v):
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, float) and v.is_integer():
+        return str(int(v))
+    return str(v)
+
+
+# ------------------------------------------------------------------ writing
+
+def toml_value(v):
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, (int, float)):
+        return fmt(v)
+    return json.dumps(str(v), ensure_ascii=False)
+
+
+def load_lines():
+    try:
+        return open(FILE, encoding="utf-8").read().splitlines()
+    except FileNotFoundError:
+        p = packaged_path()
+        return [
+            "# moarchy's UI settings. Every key is optional: one that is not here is",
+            "# its default. The keys, their values and their defaults are documented in",
+            "# " + (p if p.startswith("/usr") else "/usr/share/moarchy/ui.toml") + ", and `moarchy-ui keys` lists them.",
+        ]
+
+
+def sections_of(lines):
+    """[(name, header_index, end_index)] with end exclusive; the top-level
+    block before any header is ("", -1, first_header)."""
+    heads = [(i, HEAD.match(l).group(1)) for i, l in enumerate(lines) if HEAD.match(l)]
+    out = [("", -1, heads[0][0] if heads else len(lines))]
+    for n, (i, name) in enumerate(heads):
+        end = heads[n + 1][0] if n + 1 < len(heads) else len(lines)
+        out.append((name, i, end))
+    return out
+
+
+def find_key(lines, sec, key):
+    for name, h, end in sections_of(lines):
+        if name != sec:
+            continue
+        for i in range(h + 1, end):
+            m = KEY_LINE.match(lines[i])
+            if m and not lines[i].lstrip().startswith("#") and m.group(1) == key:
+                return i
+    return -1
+
+
+def set_line(lines, sec, key, v):
+    i = find_key(lines, sec, key)
+    rendered = key + " = " + toml_value(v)
+    if i >= 0:
+        # Keep a trailing comment the user wrote on that line.
+        m = re.search(r"(\s+#.*)$", lines[i]) if '"' not in lines[i].split("#")[0][-1:] else None
+        tail = ""
+        if m and lines[i].count('"') % 2 == 0:
+            tail = m.group(1)
+        lines[i] = rendered + tail
+        return
+    secs = sections_of(lines)
+    for name, h, end in secs:
+        if name == sec:
+            last = end
+            while last - 1 > h and lines[last - 1].strip() == "":
+                last -= 1
+            lines.insert(last, rendered)
+            return
+    # A new section, in the order the packaged file has them.
+    order = SECTIONS.index(sec) if sec in SECTIONS else len(SECTIONS)
+    at = len(lines)
+    for name, h, end in secs:
+        if name in SECTIONS and SECTIONS.index(name) > order:
+            at = h
+            break
+    block = ["[" + sec + "]", rendered, ""]
+    if at > 0 and lines[at - 1].strip() != "":
+        block.insert(0, "")
+    lines[at:at] = block
+
+
+def unset_line(lines, sec, key):
+    i = find_key(lines, sec, key)
+    if i >= 0:
+        del lines[i]
+
+
+def migrate(lines):
+    """HM29. Flat keys above the first section move into their sections."""
+    top = sections_of(lines)[0]
+    moved = []
+    for i in range(top[2] - 1, -1, -1):
+        m = KEY_LINE.match(lines[i])
+        if m and not lines[i].lstrip().startswith("#") and m.group(1) in LEGACY:
+            try:
+                v = tomllib.loads("v = " + m.group(2))["v"]
+            except tomllib.TOMLDecodeError:
+                v = m.group(2).strip("\"'")
+            moved.append((LEGACY[m.group(1)], v))
+            del lines[i]
+    for (sec, key), v in reversed(moved):
+        if find_key(lines, sec, key) < 0:
+            set_line(lines, sec, key, v)
+
+
+def write(changes, clears=()):
+    lines = load_lines()
+    migrate(lines)
+    for sec, key in clears:
+        unset_line(lines, sec, key)
+    for (sec, key), v in changes:
+        set_line(lines, sec, key, v)
+    while lines and lines[-1].strip() == "":
+        lines.pop()
+    os.makedirs(os.path.dirname(FILE), exist_ok=True)
+    with open(FILE, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+
+
+# ------------------------------------------------------------------ checking
+
+RANGES = {
+    ("home", "columns"): (2, 12, int), ("home", "opacity"): (0, 1, float),
+    ("home", "border"): (0, 8, float), ("home", "gaps-in"): (0, 24, float),
+    ("home", "gaps-out"): (0, 48, float), ("home", "recent"): (0, 12, int),
+}
+
+
+def coerce(sec, key, raw, default):
+    """A typed value for the key, or exit 2 saying what it takes."""
+    if (sec, key) == ("shape", "corners"):
+        return norm_corners(raw)
+    if (sec, key) == ("control-center", "density"):
+        return norm_density(raw)
+    if sec == "gestures" and key in ("bottom", "right"):
+        n = norm_target(raw, "")
+        if not n:
+            die(f"{sec}.{key} takes one of: {' | '.join(TARGETS)}", 2)
+        return n
+    if sec == "gestures":
+        return norm_tap(raw, "none")
+    if isinstance(default, bool):
+        n = str(raw).lower().strip()
+        if n in ("true", "yes", "on", "1"): return True
+        if n in ("false", "no", "off", "0"): return False
+        die(f"{sec}.{key} takes true or false", 2)
+    if isinstance(default, (int, float)):
+        if not re.fullmatch(r"[0-9]+(\.[0-9]+)?", str(raw).strip()):
+            die(f"{sec}.{key} takes a number", 2)
+        lo, hi, kind = RANGES.get((sec, key), (0, None, type(default)))
+        v = float(raw)
+        if (lo is not None and v < lo) or (hi is not None and v > hi):
+            die(f"{sec}.{key} takes {lo} to {hi}", 2)
+        if kind is int:
+            if not v.is_integer():
+                die(f"{sec}.{key} takes a whole number", 2)
+            return int(v)
+        return int(v) if v.is_integer() else v
+    return str(raw)
+
+
+def split_key(dotted):
+    if "." not in dotted:
+        return None
+    sec, key = dotted.split(".", 1)
+    return sec, key
+
+
+def die(msg, code=1):
+    print("moarchy-ui: " + msg, file=sys.stderr)
+    sys.exit(code)
+
+
+def usage():
+    print("usage: moarchy-ui [keys | path | get KEY | set KEY VALUE |", file=sys.stderr)
+    print("                   corners VALUE | control-center VALUE |", file=sys.stderr)
+    print("                   gesture-bottom VALUE | gesture-right VALUE |", file=sys.stderr)
+    print("                   gesture-hold VALUE | gesture-power VALUE]", file=sys.stderr)
+    print("  KEY: <section>.<key> (see `moarchy-ui keys`), or one of corners,", file=sys.stderr)
+    print("       control-center, gesture-bottom, gesture-right, gesture-hold,", file=sys.stderr)
+    print("       gesture-power (each also -label), gesture-summary, sheet, tile,", file=sys.stderr)
+    print("       card, control_center_tile, control_center_slider, control_center_round", file=sys.stderr)
+    sys.exit(1)
+
+
+# ------------------------------------------------------------------ the verbs
+
+def main(argv):
+    data = read()
+    corners = norm_corners(value(data, "shape", "corners", "large"))
+    density = norm_density(value(data, "control-center", "density", "roomy"))
+    bottom = norm_target(value(data, "gestures", "bottom", ""), "app-drawer")
+    right = norm_target(value(data, "gestures", "right", ""), "workspace-overview")
+    hold = norm_tap(value(data, "gestures", "hold", ""), "agent")
+    power = norm_tap(value(data, "gestures", "power", ""), "none")
+    overrides = {
+        "sheet": value(data, "shape", "sheet"), "tile": value(data, "shape", "tile"),
+        "card": value(data, "shape", "card"),
+        "control_center_tile": value(data, "control-center", "tile-height"),
+        "control_center_slider": value(data, "control-center", "slider-height"),
+        "control_center_round": value(data, "control-center", "button-size"),
+    }
+    override_at = {"sheet": ("shape", "sheet"), "tile": ("shape", "tile"), "card": ("shape", "card"),
+                   "control_center_tile": ("control-center", "tile-height"),
+                   "control_center_slider": ("control-center", "slider-height"),
+                   "control_center_round": ("control-center", "button-size")}
+
+    if not argv:
+        print(f"corners={corners}")
+        print(f"control_center={density}")
+        print(f"gesture_bottom={bottom}")
+        print(f"gesture_right={right}")
+        print(f"gesture_hold={hold}")
+        print(f"gesture_power={power}")
+        for k, v in overrides.items():
+            if v not in (None, ""):
+                print(f"{k}={fmt(v)}")
+        return
+
+    verb, args = argv[0], argv[1:]
+
+    if verb == "path" and not args:
+        print(FILE)
+        return
+
+    if verb == "keys" and not args:
+        for (sec, key), d in schema().items():
+            v = value(data, sec, key, d)
+            print(f"{sec}.{key} = {toml_value(v)}" + ("" if v == d else f"  (default {toml_value(d)})"))
+        return
+
+    if verb == "get" and len(args) == 1:
+        k = args[0]
+        simple = {
+            "corners": corners, "corners-label": corners.capitalize(),
+            "control-center": density, "control_center": density, "density": density,
+            "control-center-label": density.capitalize(), "density-label": density.capitalize(),
+            "gesture-bottom": bottom, "gesture-right": right,
+            "gesture-hold": hold, "gesture-power": power,
+            "gesture-bottom-label": label_target(bottom), "gesture-right-label": label_target(right),
+            "gesture-hold-label": label_tap(hold), "gesture-power-label": label_tap(power),
+            # settings.md D5. A literal middle dot.
+            "gesture-summary": f"{label_target(bottom)} · {label_target(right)}",
+        }
+        if k in simple:
+            print(simple[k])
+            return
+        if k in overrides:
+            v = overrides[k]
+            print("" if v in (None, "") else fmt(v))
+            return
+        sk = split_key(k)
+        if sk:
+            s = schema()
+            if sk not in s:
+                die(f"no key {k}; `moarchy-ui keys` lists them", 2)
+            print(fmt(value(data, sk[0], sk[1], s[sk])))
+            return
+        usage()
+
+    if verb == "corners" and len(args) == 1:
+        v = norm_corners(args[0])
+        write([(("shape", "corners"), v)], [("shape", k) for k in OWNED[("shape", "corners")]])
+        print(v)
+        return
+
+    if verb in ("control-center", "control_center") and len(args) == 1:
+        v = norm_density(args[0])
+        write([(("control-center", "density"), v)],
+              [("control-center", k) for k in OWNED[("control-center", "density")]])
+        print(v)
+        return
+
+    if verb in ("gesture-bottom", "gesture-right") and len(args) == 1:
+        cur = bottom if verb == "gesture-bottom" else right
+        v = norm_target(args[0], cur)
+        write([(("gestures", verb.split("-")[1]), v)])
+        print(v)
+        return
+
+    if verb in ("gesture-hold", "gesture-power") and len(args) == 1:
+        cur = hold if verb == "gesture-hold" else power
+        v = norm_tap(args[0], cur)
+        write([(("gestures", verb.split("-")[1]), v)])
+        print(v)
+        return
+
+    if verb == "set" and len(args) == 2:
+        k, raw = args
+        if k in override_at:
+            if not re.fullmatch(r"[0-9]+(\.[0-9]+)?", raw):
+                usage()
+            v = float(raw)
+            v = int(v) if v.is_integer() else v
+            write([(override_at[k], v)])
+            print(fmt(v))
+            return
+        sk = split_key(k)
+        if not sk:
+            usage()
+        s = schema()
+        if sk not in s:
+            near = sorted(key for (sec, key) in s if sec == sk[0])
+            if near:
+                die(f"no key {k}; [{sk[0]}] has: {', '.join(near)}", 2)
+            die(f"no section [{sk[0]}]; the sections are: {', '.join(SECTIONS)}", 2)
+        v = coerce(sk[0], sk[1], raw, s[sk])
+        clears = [(sk[0], o) for o in OWNED.get(sk, [])]
+        write([(sk, v)], clears)
+        print(fmt(v))
+        return
+
+    if verb in ("-h", "--help", "help"):
+        usage()
+    usage()
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

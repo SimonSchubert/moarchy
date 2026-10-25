@@ -1,0 +1,336 @@
+#!/usr/bin/env python3
+# Read and write ~/.config/omarchy/home.toml, home's pages (docs/home.md §D).
+#
+# The one writer of that file (HM19). The shell reads it and never writes it;
+# a person or an agent can edit it by hand just as well, and this is for the
+# edits that are easier said than typed.
+#
+#   moarchy-home show                     the pages as written, in order,
+#                                         numbered as home numbers them
+#   moarchy-home json                     the same, as JSON in set's shape (HM57)
+#   moarchy-home path                     the file
+#   moarchy-home add <widget> [page] [w h]
+#                                         a tile on a page of tiles (1 = the
+#                                         first); with no position, home puts
+#                                         it in the first free spot
+#   moarchy-home remove <widget> [page]   every tile of that widget, or only
+#                                         on that page
+#   moarchy-home face <name>              a face page, left of the others
+#   moarchy-home reset                    back to the shipped layout; the file
+#                                         is kept as home.toml.bak
+#   moarchy-home set <json>               replace the pages: what the shell
+#                                         writes after an arrangement (HM48),
+#                                         {"page": [{"face": ..} | {"tiles": [..]}]}
+#   moarchy-home share <widget>           the link that carries a widget of
+#                                         yours, for a QR code (HM47)
+#   moarchy-home import <link> [--as id]  a shared widget, written to
+#                                         ~/.config/omarchy/widgets/<id>.qml
+#
+# A file that does not parse is never written over (HM16): every verb that
+# writes refuses, and says which line is wrong.
+
+import base64
+import json
+import os
+import re
+import sys
+import tomllib
+import zlib
+
+HOME = os.environ.get("HOME", "")
+CONFIG = os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config")
+FILE = os.path.join(CONFIG, "omarchy", "home.toml")
+
+NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
+WIDGETS = os.path.join(CONFIG, "omarchy", "widgets")
+
+# HM47. Omalauncher's share link (Share.kt), with moarchy's own prefix: the
+# widget travels in the fragment, so it reaches no server.
+LINK = "https://simonschubert.github.io/omarchy-widgets/w#"
+PREFIX = "qml1."
+# What a version 40 QR code holds in byte mode at error correction L.
+MAX_LINK = 2953
+
+
+def packaged_path():
+    here = os.path.dirname(os.path.realpath(__file__))
+    for p in (os.path.join(os.environ.get("MOARCHY_PATH", "/usr/share/moarchy"), "home.toml"),
+              "/usr/share/moarchy/home.toml",
+              os.path.join(here, "..", "default", "omarchy", "home.toml")):
+        if os.path.isfile(p):
+            return p
+    return ""
+
+
+def die(msg, code=1):
+    print("moarchy-home: " + msg, file=sys.stderr)
+    sys.exit(code)
+
+
+def load(path):
+    with open(path, "rb") as f:
+        try:
+            return tomllib.load(f)
+        except tomllib.TOMLDecodeError as e:
+            die(f"{path} does not parse ({e}); fix it by hand, or `moarchy-home reset`")
+
+
+def current():
+    """The pages in force: the user's file, else the shipped layout."""
+    if os.path.isfile(FILE):
+        return load(FILE).get("page", [])
+    p = packaged_path()
+    return load(p).get("page", []) if p else []
+
+
+def header():
+    """The comment block above the first [[page]] of the user's file, kept on
+    every write; the packaged pointer for a file this is creating."""
+    if os.path.isfile(FILE):
+        lines = []
+        for line in open(FILE, encoding="utf-8"):
+            if line.strip().startswith("[[page]]"):
+                break
+            if line.strip() == "" or line.lstrip().startswith("#"):
+                lines.append(line.rstrip("\n"))
+        while lines and lines[-1].strip() == "":
+            lines.pop()
+        if lines:
+            return lines
+    return ["# Home's pages, left to right. Faces first, then pages of tiles; home opens",
+            "# on the first page of tiles. Every key is documented in",
+            "# /usr/share/moarchy/home.toml, and `moarchy-home` edits this file."]
+
+
+def render(pages):
+    out = header() + [""]
+    for p in pages:
+        out.append("[[page]]")
+        if "face" in p:
+            out.append(f'face = "{p["face"]}"')
+        else:
+            tiles = p.get("tiles", [])
+            if not tiles:
+                out.append("tiles = []")
+            else:
+                width = max(len(t["widget"]) for t in tiles) + 3
+                out.append("tiles = [")
+                for t in tiles:
+                    head = f'  {{ widget = {chr(34) + t["widget"] + chr(34) + ",":<{width}}'
+                    parts = [f"{k} = {t[k]}" for k in ("x", "y", "w", "h") if k in t]
+                    out.append(head + " " + ", ".join(parts) + " },")
+                out.append("]")
+        out.append("")
+    return "\n".join(out)
+
+
+def save(pages):
+    os.makedirs(os.path.dirname(FILE), exist_ok=True)
+    if os.path.isfile(FILE):
+        load(FILE)  # HM16: refuse to write over a file that does not parse
+    text = render(pages)
+    tomllib.loads(text)  # never write a file the shell could not read back
+    with open(FILE, "w", encoding="utf-8") as f:
+        f.write(text)
+
+
+def tile_pages(pages):
+    return [p for p in pages if "face" not in p]
+
+
+def checked(pages):
+    """HM48. A layout from `set`, refused whole if any page is not one this
+    file can hold: a face with a file name, or tiles at whole, non-negative
+    cells."""
+    if not isinstance(pages, list):
+        die("set: expected a list of pages", 2)
+    out = []
+    for n, p in enumerate(pages, 1):
+        if not isinstance(p, dict) or ("face" in p) == ("tiles" in p):
+            die(f"set: page {n} is neither a face nor tiles", 2)
+        if "face" in p:
+            if not NAME.match(str(p["face"])):
+                die(f"set: page {n}: '{p['face']}' is not a face name", 2)
+            out.append({"face": str(p["face"])})
+            continue
+        tiles = []
+        for m, t in enumerate(p["tiles"] or [], 1):
+            if not isinstance(t, dict) or not NAME.match(str(t.get("widget", ""))):
+                die(f"set: page {n} tile {m} names no widget", 2)
+            tile = {"widget": str(t["widget"])}
+            for k, least in (("x", 0), ("y", 0), ("w", 1), ("h", 1)):
+                if k in t:
+                    v = t[k]
+                    if not isinstance(v, int) or isinstance(v, bool) or v < least:
+                        die(f"set: page {n} tile {m}: {k} = {v!r} is not a whole number >= {least}", 2)
+                    tile[k] = v
+            tiles.append(tile)
+        out.append({"tiles": tiles})
+    if not tile_pages(out):
+        die("set: home needs a page of tiles", 2)
+    return out
+
+
+def encode(text):
+    d = zlib.compressobj(9, zlib.DEFLATED, -15)  # raw DEFLATE, no zlib header
+    raw = d.compress(text.encode("utf-8")) + d.flush()
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def decode(data):
+    raw = base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))
+    return zlib.decompress(raw, -15).decode("utf-8")
+
+
+def main(argv):
+    if not argv or argv[0] in ("-h", "--help", "help"):
+        print(__doc__ or "", end="")
+        print("usage: moarchy-home {show | json | path | add W [page] [w h] | remove W [page] | face NAME | reset"
+              " | set JSON | share W | import LINK [--as ID]}", file=sys.stderr)
+        sys.exit(1 if not argv else 0)
+
+    verb, args = argv[0], argv[1:]
+
+    if verb == "path":
+        print(FILE)
+        return
+
+    if verb == "json" and not args:
+        print(json.dumps({"page": checked(current())}))
+        return
+
+    if verb == "show":
+        pages = current()
+        if not tile_pages(pages):
+            pages = pages + [{"tiles": []}]
+        # HM4: in the file's order, numbered as home numbers them -- page 1 is
+        # the first page of tiles.
+        first = next(i for i, p in enumerate(pages) if "face" not in p)
+        print("source=" + (FILE if os.path.isfile(FILE) else packaged_path() + " (shipped)"))
+        for i, p in enumerate(pages):
+            if "face" in p:
+                print(f"page {i - first + 1}: face {p['face']}")
+                continue
+            print(f"page {i - first + 1}: tiles")
+            for t in p.get("tiles", []):
+                where = f"{t['x']},{t['y']}" if "x" in t and "y" in t else "first free spot"
+                print(f"  {t.get('widget', '?'):<10} {where:<16} {t.get('w', 2)}x{t.get('h', 2)}")
+        return
+
+    if verb == "add" and 1 <= len(args) <= 4:
+        widget = args[0]
+        if not NAME.match(widget):
+            die(f"'{widget}' is not a widget id", 2)
+        page = int(args[1]) if len(args) >= 2 and args[1].isdigit() else 1
+        w, h = 3, 2
+        if len(args) == 4:
+            if not (args[2].isdigit() and args[3].isdigit()):
+                die("w and h are numbers of cells", 2)
+            w, h = int(args[2]), int(args[3])
+        pages = current()
+        grids = tile_pages(pages)
+        while len(grids) < page:
+            fresh = {"tiles": []}
+            pages.append(fresh)
+            grids.append(fresh)
+        grids[page - 1].setdefault("tiles", []).append({"widget": widget, "w": w, "h": h})
+        save(pages)
+        print(f"{widget} on page {page}, {w}x{h}, in the first free spot")
+        return
+
+    if verb == "remove" and 1 <= len(args) <= 2:
+        widget = args[0]
+        only = int(args[1]) if len(args) == 2 and args[1].isdigit() else 0
+        pages = current()
+        n = 0
+        for i, p in enumerate(tile_pages(pages)):
+            if only and i + 1 != only:
+                continue
+            before = len(p.get("tiles", []))
+            p["tiles"] = [t for t in p.get("tiles", []) if t.get("widget") != widget]
+            n += before - len(p["tiles"])
+        if n == 0:
+            die(f"no {widget} tile" + (f" on page {only}" if only else ""), 1)
+        # HM52: a page exists while it holds something; the last page of
+        # tiles stays, however empty.
+        kept = [p for p in pages if "face" in p or p.get("tiles")]
+        if not tile_pages(kept):
+            kept.append({"tiles": []})
+        save(kept)
+        print(f"removed {n}")
+        return
+
+    if verb == "face" and len(args) == 1:
+        if not NAME.match(args[0]):
+            die(f"'{args[0]}' is not a face name", 2)
+        pages = current()
+        pages.insert(0, {"face": args[0]})
+        save(pages)
+        print(f"face {args[0]} added left of the others")
+        return
+
+    if verb == "set" and len(args) == 1:
+        try:
+            data = json.loads(args[0])
+        except json.JSONDecodeError as e:
+            die(f"set: not JSON ({e})", 2)
+        pages = checked(data.get("page") if isinstance(data, dict) else data)
+        save(pages)
+        print(f"{len(pages)} pages")
+        return
+
+    if verb == "share" and len(args) == 1:
+        widget = args[0]
+        if not NAME.match(widget):
+            die(f"'{widget}' is not a widget id", 2)
+        path = os.path.join(WIDGETS, widget + ".qml")
+        if not os.path.isfile(path):
+            die(f"no {path}: only your own widgets are shared; a shipped one is on every moarchy phone", 1)
+        with open(path, encoding="utf-8") as f:
+            link = LINK + PREFIX + widget + "." + encode(f.read())
+        print(link)
+        if len(link) > MAX_LINK:
+            print(f"moarchy-home: {len(link)} characters, more than a QR code holds ({MAX_LINK})",
+                  file=sys.stderr)
+        return
+
+    if verb == "import" and len(args) in (1, 3) and (len(args) == 1 or args[1] == "--as"):
+        link = args[0].strip()
+        at = link.find(PREFIX)
+        if at < 0:
+            die("import: not a moarchy widget link (no " + PREFIX + ")", 2)
+        body = link[at + len(PREFIX):]
+        widget, _, data = body.partition(".")
+        if not NAME.match(widget) or not data:
+            die("import: the link names no widget", 2)
+        if len(args) == 3:
+            widget = args[2]
+            if not NAME.match(widget):
+                die(f"'{widget}' is not a widget id", 2)
+        try:
+            text = decode(data)
+        except (ValueError, zlib.error, UnicodeDecodeError):
+            die("import: the link is damaged; it does not decode", 2)
+        path = os.path.join(WIDGETS, widget + ".qml")
+        if os.path.exists(path):
+            die(f"{path} exists; import it under another name with --as <id>", 1)
+        os.makedirs(WIDGETS, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+        print(widget)
+        return
+
+    if verb == "reset" and not args:
+        if os.path.isfile(FILE):
+            os.replace(FILE, FILE + ".bak")
+            print(f"moved to {FILE}.bak; home is the shipped layout")
+        else:
+            print("home is already the shipped layout")
+        return
+
+    die("usage: moarchy-home {show | json | path | add W [page] [w h] | remove W [page] | face NAME | reset"
+        " | set JSON | share W | import LINK [--as ID]}", 1)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

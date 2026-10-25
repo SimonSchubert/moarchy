@@ -102,6 +102,9 @@ alongside the change that made them untrue.
 | --- | --- |
 | [`naming-convention.md`](naming-convention.md) | Orientation — what each part of the screen is called, the four swipes, and the four kinds of thing quickshell draws |
 | [`gestures.md`](gestures.md) | Contract — every touch gesture: the strip, the edges, the app drawer, long-press |
+| [`home.md`](home.md) | Contract — home: pages of tiles, faces, the prompt bar, and the settings files people and agents edit |
+| [`owl.md`](owl.md) | Contract — OWL widgets on home, from the store Omalauncher installs from |
+| [`app-drawer-minimal.md`](app-drawer-minimal.md) | Contract — the second launcher: the same apps as a list, in one ink, with an A–Z rail |
 | [`settings.md`](settings.md) | Contract — the Settings screens, their rows, and the IPC they answer on |
 | [`control-center.md`](control-center.md) | Contract — the pull-down: tiles, sliders, media, notifications |
 | [`volume.md`](volume.md) | Contract — the hardware volume keys and the panel they raise |
@@ -140,18 +143,39 @@ kinds of thing make up the phone UI:
 Nothing in this repo is the shell itself. The shell is upstream's, fetched at a
 pinned ref, ported to sway at build time by a patch that must apply with no fuzz.
 
+### What that leaves quickshell doing
+
+On a desktop, Omarchy's quickshell shell draws a bar and a menu and the pointer
+does the rest. A phone has no pointer, no window chrome a thumb can hit and no
+panel to right-click, so every piece of system UI a desktop gets from somewhere
+else has to be drawn here instead — and here is one process:
+
+```
+  the compositor        quickshell                 their own processes
+  ----------------      ----------------------     -----------------------
+  windows               everything else on         swaybg            wallpaper
+  workspaces            the glass: 34 surfaces     moarchy-keyboard  the OSK
+  focus, tiling         from 31 plugins            foot, Web, Maps   apps
+```
+
+The rule of thumb: **if it is on the screen and it is not an app's own window or
+the wallpaper, this shell is drawing it** — and four of the things that look
+like apps are it too (the shell apps below).
+
 ## The shell plugins
 
-Thirteen plugins and one directory that is not a plugin, all under
+Fourteen plugins and two directories that are not plugins, all under
 `default/omarchy/plugins/`, installed to `/usr/share/moarchy/plugins`.
 
 | Plugin | Kind | What it owns | Contract |
 | --- | --- | --- | --- |
 | `moarchy.gestures` | panel | the bottom strip, the home pill, the back edge — every touch gesture, and the shell's only compositor-dispatch seam | [`gestures.md`](gestures.md) |
-| `moarchy.app-app drawer` | overlay | the app grid, its search field, the uninstall card | [`gestures.md`](gestures.md) §N, [`apps.md`](apps.md) |
-| `moarchy.workspace-workspace overview` | overlay | every workspace as a card, dragging a window from one to another, and the bin that closes one | [`gestures.md`](gestures.md) §P |
+| `moarchy.app-drawer` | overlay | the app grid, its search field, the uninstall card | [`gestures.md`](gestures.md) §N, [`apps.md`](apps.md) |
+| `moarchy.app-drawer-minimal` | overlay | the same apps as a list: one ink, an A–Z rail, no card. An alternative the two edges can name | [`app-drawer-minimal.md`](app-drawer-minimal.md) |
+| `moarchy.workspace-overview` | overlay | every workspace as a card, dragging a window from one to another, and the bin that closes one | [`gestures.md`](gestures.md) §P |
 | `moarchy.control-center` | overlay | the pull-down: quick tiles, brightness and volume, media, notification history | [`control-center.md`](control-center.md) |
-| `moarchy.settings` | overlay | the settings screen tree and the IPC it answers on | [`settings.md`](settings.md) |
+| `moarchy.settings` | overlay | the settings screen tree and the IPC it answers on; home's pages (`PagesView`) and the widget store (`StoreView`) | [`settings.md`](settings.md) |
+| `moarchy.owl` | **not a plugin** | omarchy-widgets' Quickshell runtime for OWL, unpatched, at `manifest.toml`'s pin; fetched by the package (and `scripts/fetch-owl.sh`), not in git | [`owl.md`](owl.md) |
 | `moarchy.themes` | overlay | the theme picker, as a grid of live swatches | [`settings.md`](settings.md) §theme |
 | `moarchy.wifi` | overlay | pick a network, type a passphrase | [`settings.md`](settings.md) |
 | `moarchy.bluetooth` | overlay | pair and connect a device | [`settings.md`](settings.md) |
@@ -161,6 +185,7 @@ Thirteen plugins and one directory that is not a plugin, all under
 | `moarchy.splash` | panel | the launching app's icon, from the tap until its window appears | [`windows.md`](windows.md) §L |
 | `moarchy.volume` | panel | the vertical volume track the hardware rocker raises, and mute | [`volume.md`](volume.md) |
 | `moarchy.common` | **not a plugin** | the shared code below. No `manifest.json`, so the registry skips it | [`refactor.md`](refactor.md) §E8 |
+| `moarchy.home` | **not a plugin** | what home draws: `Home.qml` (pages, the recent strip, the prompt bar, IPC `home`), `HomeTile.qml`, `HomeFrame.qml`, `HomeMenu.qml` (the long press), `HomeArrange.qml` and `HomeShare.qml` (arranging tiles), `OwlTile.qml` and `HomeOwlHost.qml` (OWL widgets), `Layout.js`, and `faces/`. Drawn on `moarchy.gestures`' Bottom-layer surface | [`home.md`](home.md) |
 
 ### What is shared, and the rule about it
 
@@ -182,6 +207,10 @@ Thirteen plugins and one directory that is not a plugin, all under
 | `Apps.js` | a window → its icon, its name, its glyph. The workspace overview's cards draw their tiles from it, and the app drawer asks it whether an app is already running |
 | `ShellApps.js` | which of our screens are windows, and the compositor helpers |
 | `Theme.js` | the colour arithmetic: luminance, contrast, mix, readableOn |
+| `Toml.js` | the one TOML reader, for `ui.toml`, `widgets.toml` and `home.toml`. `qs_ui/Toml.js` is a byte-for-byte copy for the apps |
+| `Ui.js`, `UiFile.qml` | `ui.toml`, read into radii, sizes, gesture targets and home's grid, and watched |
+| `AgentFile.qml`, `AgentChip.qml`, `AgentMenu.qml` | the chosen coding agent, watched; the prompt bar's chip; the menu that changes it |
+| `ThemeCatalog.qml` | every installed theme and its colours, and the one call that applies one; the theme picker and the home menu's strip both read it |
 
 **A second copy of any of these fails `scripts/style-check.sh`.** That is the
 point of the directory: the rule is checked, not written down. The checker's own
@@ -193,13 +222,33 @@ The thing to know before touching any of them, and the reason a sheet that opens
 puts some of its neighbours away and not others:
 
 ```
- Overlay   the control center · the gesture strip · the back edge · the right edge ·
-           the launch splash · the volume panel
- Top       the app drawer · the workspace overview · the theme picker · the status bar ·
-           moarchy.device
-           the on-screen keyboard (moarchy-keyboard, its own package)
- windows   Settings · Wi-Fi · Bluetooth · SIM — and every app
- Bottom    the home catcher, under everything
+ layer Overlay -- above every window, and above the keyboard
+   control center      moarchy.control-center      swipe down from the bar
+   strip + pill        moarchy.gestures            always there, 20px, reserved
+   back edge           moarchy.gestures            left 16px, invisible
+   right edge          moarchy.gestures            right 16px, invisible
+   launch splash       moarchy.splash              from the tap until the window appears
+   volume panel        moarchy.volume              the hardware rocker
+
+ layer Top -- above windows, below the on-screen keyboard
+   status bar          moarchy.bar                 always there, reserved
+   app drawer          moarchy.app-drawer          swipe up from the strip
+   minimal app drawer  moarchy.app-drawer-minimal  the same, when an edge names it
+   workspace overview  moarchy.workspace-overview  swipe in from the right edge
+   theme picker        moarchy.themes              the Settings theme row
+   device screen       moarchy.device              its tile in the app drawer
+   [ the on-screen keyboard sits here too -- moarchy-keyboard, not this shell ]
+
+ windows -- drawn here, owned by the compositor, living on workspaces
+   Settings            moarchy.settings            the control center's gear
+   Wi-Fi               moarchy.wifi                a long press on the control center's Wi-Fi tile
+   Bluetooth           moarchy.bluetooth           a long press on the control center's BT tile
+   SIM                 moarchy.sim                 the control center's data tile, held or locked
+   18 QML apps         moarchy.*                   Clock, Files, Weather, Phone, Mail...
+
+ layer Bottom -- under everything
+   home                moarchy.gestures            pages of tiles, faces, the prompt bar,
+                       + moarchy.home              and the wallpaper's drags (home.md)
 ```
 
 Two consequences that are easy to get wrong, and have been:
@@ -278,6 +327,9 @@ upgrade rather than doing it, for exactly that reason.
 | --- | --- |
 | `scripts/style-check.sh` | the whole static half: tokens, type, colour, shape, press states, the shared-code rules, the sheet rule, and that every shipped SVG parses. Runs anywhere |
 | `node scripts/sheet-test.js` | the stacking rule, against the shipped `Sheet.js` |
+| `node scripts/toml-test.js` | the TOML reader, and `Ui.js` against the packaged `ui.toml` ([`home.md`](home.md) HM27-HM30) |
+| `node scripts/home-layout-test.js` | home's pages, grid and page turns, and `Layout.js` against the packaged `home.toml` |
+| `node scripts/glyph-test.js` | the minimal drawer's glyph table ([`app-drawer-minimal.md`](app-drawer-minimal.md) M10, M11), against the shipped `Glyphs.js` |
 | `python3 scripts/test-workspace-layout.py` | the workspace-layout rule ([`gestures.md`](gestures.md) P7), against the shipped daemon with `swaymsg` stubbed |
 | `bin/moarchy-selftest` | on the phone. `--gestures`, `--settings`, `--surfaces`, `--windows` are opt-in suites, and they cite the criterion ids in these documents |
 | `scripts/provision.sh` | the dev loop, one step per verb: `steps` lists them, no argument runs prereqs → image → build → flash, then `deploy`, `install`, `watch`, `verify` once the phone is up |

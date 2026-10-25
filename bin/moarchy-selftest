@@ -2852,7 +2852,7 @@ walk(tree)' 2>/dev/null
   #   A8      control center down, up-flick puts it away
   #   B2      a curved thumb swipe still resolves
   #   D2/D3   app drawer springs back; a drag on an app does nothing
-  #   D4      sideways/down on the home screen do nothing
+  #   D4      sideways on the home screen turns the page, down raises the control center (home.md HM5, HM26)
   #   P14     an absence: there is no clear-all to drive
   #   G5      a close-request that only a prompting app shows
   #   F1      home picks the lowest free workspace

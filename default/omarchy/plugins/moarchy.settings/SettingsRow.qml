@@ -65,6 +65,14 @@ Rectangle {
 
   property int radiusCard: Style.space(18)
 
+  // `stepper` only (docs/home.md HM55). The value as it reads -- "6", "88%",
+  // "2 px" -- and whether each end of the range is reached; `stepped` carries
+  // -1 or +1, and the page works out the value, writes it and reads it back.
+  property string stepText: ""
+  property bool canDown: true
+  property bool canUp: true
+  signal stepped(int by)
+
   signal activated()
   signal edited(string value)
   // Not `focusChanged`: Item already has one, and shadowing it silently breaks
@@ -213,6 +221,7 @@ Rectangle {
     // trailing element, which is the switch, and every label would be short by
     // 44px for no reason.
     width: card.rowType === "switch" ? Style.space(44)
+           : card.rowType === "stepper" ? stepper.width
            : (card.rowType === "info" || card.rowType === "action"
               || card.rowType === "input") ? 0
            : Style.space(20)
@@ -269,6 +278,62 @@ Rectangle {
       knobOn: card.color
       knobOff: card.color
     }
+
+    // stepper: `−` value `+`, each button a 44px target (E1). Above the row's
+    // own tap area, which a stepper row does not have: a tap on the label
+    // changing the value would be a guess at which way.
+    Row {
+      id: stepper
+      visible: card.rowType === "stepper"
+      anchors.verticalCenter: parent.verticalCenter
+      anchors.right: parent.right
+      width: visible ? implicitWidth : 0
+
+      component StepButton: Item {
+        id: step
+        property string glyph: ""
+        property bool can: true
+        property int by: 0
+        width: Style.space(44)
+        height: Style.space(44)
+        opacity: step.can ? 1 : 0.35
+        PressVeil {
+          anchors.centerIn: parent
+          width: Style.space(36)
+          height: width
+          radius: width / 2
+          on: stepArea.pressed
+        }
+        Ui.OpticalGlyph {
+          anchors.centerIn: parent
+          width: Style.space(24)
+          height: Style.space(24)
+          text: step.glyph
+          fontFamily: Style.font.family
+          fontSize: Style.font.title
+          color: card.accentColor
+        }
+        MouseArea {
+          id: stepArea
+          anchors.fill: parent
+          enabled: step.can && card.rowEnabled
+          onClicked: card.stepped(step.by)
+        }
+      }
+
+      StepButton { glyph: "\u2212"; by: -1; can: card.canDown }
+      Text {
+        width: Style.space(56)
+        anchors.verticalCenter: parent.verticalCenter
+        horizontalAlignment: Text.AlignHCenter
+        text: card.stepText
+        font.family: Style.font.family
+        font.pixelSize: Style.font.body
+        font.weight: card.textWeight
+        color: card.textColor
+      }
+      StepButton { glyph: "+"; by: 1; can: card.canUp }
+    }
   }
 
   // Not over an input row: a MouseArea filling the card takes the press before
@@ -277,8 +342,8 @@ Rectangle {
   MouseArea {
     id: rowArea
     anchors.fill: parent
-    visible: card.rowType !== "input"
-    enabled: card.rowEnabled && card.rowType !== "input"
+    visible: card.rowType !== "input" && card.rowType !== "stepper"
+    enabled: card.rowEnabled && card.rowType !== "input" && card.rowType !== "stepper"
     onClicked: card.activated()
   }
 }

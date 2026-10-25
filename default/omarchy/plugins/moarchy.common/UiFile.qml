@@ -39,6 +39,21 @@ FileView {
   readonly property int controlCenterSlider: file.px(file.chrome.controlCenterSlider)
   readonly property int controlCenterRound: file.px(file.chrome.controlCenterRound)
 
+  // home.md HM10a. Home's tiles, prompt bar and recent strip: Omalauncher's
+  // 16px times the corner scale, which the preset's `frame` column already is.
+  readonly property int radiusFrame: file.px(file.chrome.frame)
+
+  // home.md HM9, HM10, HM20, HM21. The grid and the frame its tiles wear. The
+  // gaps and the border are scaled like every other length; the opacity and
+  // the counts are not lengths.
+  readonly property int homeColumns: file.chrome.homeColumns
+  readonly property real homeOpacity: file.chrome.homeOpacity
+  readonly property int homeBorder: file.px(file.chrome.homeBorder)
+  readonly property int homeGapsIn: file.px(file.chrome.homeGapsIn)
+  readonly property int homeGapsOut: file.px(file.chrome.homeGapsOut)
+  readonly property int homeRecent: file.chrome.homeRecent
+  readonly property bool homePromptBar: file.chrome.homePromptBar
+
   function radiusOn(size) {
     return Ui.radiusOn(file.radiusTile, size)
   }

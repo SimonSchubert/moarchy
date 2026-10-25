@@ -1,15 +1,22 @@
-// Phone chrome: corners and control center control sizes, from one user file.
+// The shape half of the UI settings file: corners and control center sizes.
 //
 // Keep in step with default/omarchy/plugins/moarchy.common/Ui.js -- the
-// plugins cannot import qs_ui, and the apps cannot import moarchy.common,
-// so the parser exists twice. The file they both read is one:
-// ~/.config/omarchy/ui.toml.
+// plugins cannot import qs_ui, and the apps cannot import moarchy.common, so
+// this exists twice. The file they both read is one, ~/.config/omarchy/ui.toml,
+// and so is the reader: Toml.js here is a byte-for-byte copy of the shell's,
+// and `shapeFrom` below is the same function as the shell's. style-check.sh
+// compares both, because a corners pick the shell and the apps read
+// differently is a phone with two shapes on it.
 .pragma library
 
+.import "Toml.js" as Toml
+
+// The `frame` column is home's tiles (HM10a): Omalauncher's 16px times its
+// corner scale of 1, 0.5 or 0.
 var CORNERS = {
-  large:  { sheet: 28, tile: 20, card: 18 },
-  modest: { sheet: 12, tile: 8,  card: 6  },
-  square: { sheet: 0,  tile: 0,  card: 0  }
+  large:  { sheet: 28, tile: 20, card: 18, frame: 16 },
+  modest: { sheet: 12, tile: 8,  card: 6,  frame: 8  },
+  square: { sheet: 0,  tile: 0,  card: 0,  frame: 0  }
 }
 
 var CONTROL_CENTER = {
@@ -18,7 +25,7 @@ var CONTROL_CENTER = {
 }
 
 function fallback() {
-  return fromData({})
+  return shapeFrom({})
 }
 
 function normCorners(s) {
@@ -36,93 +43,47 @@ function normShade(s) {
   return CONTROL_CENTER[n] ? n : "roomy"
 }
 
-function num(data, names, fallbackValue) {
-  for (var i = 0; i < names.length; i++) {
-    var v = data[names[i]]
-    if (v === undefined || v === "") continue
-    var n = Number(v)
-    if (isFinite(n) && n >= 0) return n
+// The section's key, else the flat name a file from before the sections used.
+function pick(data, path, legacy) {
+  var v = Toml.get(data, path, undefined)
+  if (v !== undefined && v !== "") return v
+  for (var i = 0; i < (legacy || []).length; i++) {
+    var w = data[legacy[i]]
+    if (w !== undefined && w !== "" && typeof w !== "object") return w
   }
-  return fallbackValue
+  return undefined
 }
 
-function fromData(data) {
-  data = data || {}
-  var corners = normCorners(data.corners)
-  var controlCenter = normShade(data.controlCenter || data.density)
+function num(v, fallbackValue, lo, hi) {
+  if (v === undefined || v === "" || v === null || typeof v === "boolean") return fallbackValue
+  var n = Number(v)
+  if (!isFinite(n)) return fallbackValue
+  if (lo !== undefined && n < lo) return fallbackValue
+  if (hi !== undefined && n > hi) return fallbackValue
+  return n
+}
+
+function shapeFrom(data) {
+  var corners = normCorners(pick(data, "shape.corners", ["corners"]))
+  var controlCenter = normShade(pick(data, "control-center.density", ["control_center", "controlCenter", "density"]))
   var c = CORNERS[corners]
   var s = CONTROL_CENTER[controlCenter]
   return {
     corners: corners,
     controlCenter: controlCenter,
-    sheet: num(data, ["sheet"], c.sheet),
-    tile: num(data, ["tile"], c.tile),
-    card: num(data, ["card"], c.card),
-    controlCenterTile: num(data, ["control_center_tile", "controlCenterTile"], s.controlCenterTile),
-    controlCenterSlider: num(data, ["control_center_slider", "controlCenterSlider"], s.controlCenterSlider),
-    controlCenterRound: num(data, ["control_center_round", "controlCenterRound"], s.controlCenterRound)
+    sheet: num(pick(data, "shape.sheet", ["sheet"]), c.sheet, 0),
+    tile: num(pick(data, "shape.tile", ["tile"]), c.tile, 0),
+    card: num(pick(data, "shape.card", ["card"]), c.card, 0),
+    frame: num(pick(data, "shape.frame", []), c.frame, 0),
+    controlCenterTile: num(pick(data, "control-center.tile-height", ["control_center_tile", "controlCenterTile"]), s.controlCenterTile, 0),
+    controlCenterSlider: num(pick(data, "control-center.slider-height", ["control_center_slider", "controlCenterSlider"]), s.controlCenterSlider, 0),
+    controlCenterRound: num(pick(data, "control-center.button-size", ["control_center_round", "controlCenterRound"]), s.controlCenterRound, 0)
   }
-}
-
-function parseToml(text) {
-  var data = {}
-  var lines = String(text || "").split("\n")
-  for (var i = 0; i < lines.length; i++) {
-    var line = lines[i].replace(/\s+#.*$/, "").trim()
-    if (!line || line[0] === "#" || line[0] === "[") continue
-    var eq = line.indexOf("=")
-    if (eq < 1) continue
-    var key = line.slice(0, eq).trim()
-    var raw = line.slice(eq + 1).trim()
-    if ((raw[0] === "\"" && raw[raw.length - 1] === "\"") ||
-        (raw[0] === "'" && raw[raw.length - 1] === "'"))
-      raw = raw.slice(1, -1)
-    data[key] = raw
-  }
-  return data
 }
 
 function parse(text) {
-  return fromData(parseToml(text))
-}
-
-function differs(chrome, key, presetValue) {
-  return Number(chrome[key]) !== Number(presetValue)
-}
-
-function serialize(chrome) {
-  var c = chrome || fallback()
-  var presetC = CORNERS[c.corners] || CORNERS.large
-  var presetS = CONTROL_CENTER[c.controlCenter] || CONTROL_CENTER.roomy
-  var lines = [
-    "# Phone chrome. Independent of the colour theme.",
-    "# Colours live in ~/.local/state/omarchy/current/theme/colors.toml",
-    "# and change with omarchy-theme-set. This file reshapes the UI.",
-    "#",
-    "# corners: large | modest | square",
-    "# control_center:  roomy | compact",
-    "#",
-    "# Optional numbers (logical px) override the preset for that key:",
-    "#   sheet, tile, card, control_center_tile, control_center_slider, control_center_round",
-    "",
-    "corners = \"" + c.corners + "\"",
-    "control_center = \"" + c.controlCenter + "\""
-  ]
-  if (differs(c, "sheet", presetC.sheet)) lines.push("sheet = " + c.sheet)
-  if (differs(c, "tile", presetC.tile)) lines.push("tile = " + c.tile)
-  if (differs(c, "card", presetC.card)) lines.push("card = " + c.card)
-  if (differs(c, "controlCenterTile", presetS.controlCenterTile)) lines.push("control_center_tile = " + c.controlCenterTile)
-  if (differs(c, "controlCenterSlider", presetS.controlCenterSlider)) lines.push("control_center_slider = " + c.controlCenterSlider)
-  if (differs(c, "controlCenterRound", presetS.controlCenterRound)) lines.push("control_center_round = " + c.controlCenterRound)
-  lines.push("")
-  return lines.join("\n")
-}
-
-function merge(chrome, patch) {
-  var cur = chrome || fallback()
-  var data = { corners: cur.corners, controlCenter: cur.controlCenter }
-  for (var k in (patch || {})) data[k] = patch[k]
-  return fromData(data)
+  var r = Toml.parse(text)
+  return shapeFrom(r.ok ? r.data : Toml.flat(text))
 }
 
 function labelCorners(name) {

@@ -123,7 +123,8 @@ pkgver=$_ver
 # 3: sway leaves this list (827f362) and swaybg (f4f0e69). Both commits
 #    changed the payload without moving this number, so the builder kept the
 #    Sep 19 artifact and every image built since still installed sway.
-pkgrel=3
+# 4: qt6-imageformats, for the widget store's WebP previews (docs/owl.md OW16).
+pkgrel=4
 pkgdesc="The moarchy package set -- install this and you have the phone"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
@@ -169,6 +170,9 @@ depends=(
   # (shipped as shell/ inside the Omarchy repo). waybar, mako, walker, elephant
   # and swayosd are all gone -- do not reintroduce them, they would fight it.
   'quickshell'
+  # docs/owl.md OW16. The widget store's previews are WebP, and without this Qt
+  # reads gif, ico, jpeg and svg and nothing else: every card a blank square.
+  'qt6-imageformats'
   'inotify-tools'
   'xdg-desktop-portal-wlr'
   'xdg-desktop-portal-gtk'

@@ -125,7 +125,17 @@ Item {
   Timer {
     id: keyboardRaiseArm
     interval: 120
-    onTriggered: root.keyboardRaiseArmed = root.opened
+    onTriggered: {
+      root.keyboardRaiseArmed = root.opened
+      // HM22. Home's prompt bar asked for the field. Here and not in open(),
+      // so it waits for the same settle G14a waits for: the drawer is up and
+      // still, and the swipe or tap that opened it has ended.
+      if (root.opened && root.promptWanted) {
+        root.promptWanted = false
+        searchField.forceActiveFocus()
+        osk.show()
+      }
+    }
   }
 
   // shell.isPluginOpen() reads this by name to decide what toggle() means, so
@@ -409,6 +419,43 @@ Item {
 
   property string query: ""
   readonly property string pluginId: "moarchy.app-drawer"
+
+  // ------------------------------------------------------- the prompt bar
+  //
+  // docs/home.md HM22-HM24. This field is the prompt bar: the agent chip at
+  // its left, and Enter either opens the app the text names or asks the agent.
+  // Home's bar is a picture of this one, and a tap on it opens the drawer with
+  // `{"prompt": true}`, which is `promptWanted` until the field can take it.
+  Shared.AgentFile { id: agents }
+  property bool promptWanted: false
+  readonly property string promptPlaceholder: agents.current === ""
+    ? "open an app…" : "open an app or ask " + agents.current + "…"
+
+  // HM23. Omalauncher's rule: Enter opens the first match when the text starts
+  // its name, and anything else is a sentence for the agent. The first match is
+  // the grid's own first cell -- appLibrary's order for this text -- so what
+  // Enter opens is the app already under the thumb.
+  function submit(text): string {
+    var t = String(text || "").trim()
+    if (t === "") return "empty"
+    // Rows, not entries: {entry, score, key, name}, as launch(desktopId) below
+    // says. Reading the row as an entry launched nothing and answered
+    // `open undefined` on the phone.
+    var rows = (root.shell && root.shell.appLibrary) ? root.shell.appLibrary.sortedEntries(t) || [] : []
+    var first = rows.length > 0 ? rows[0].entry : null
+    var name = first ? String(root.shell.appLibrary.entryName(first) || "").toLowerCase() : ""
+    if (first && name.indexOf(t.toLowerCase()) === 0) {
+      root.launch(first)
+      return "open " + first.id
+    }
+    // windows.md L10, as launch() does it: the agent's terminal lands on a
+    // workspace of its own. With no agent chosen `ask` opens the picker
+    // instead, which is a window too.
+    ShellApps.goToFreeWorkspace(root.shell)
+    agents.ask(t)
+    root.dismiss()
+    return "ask " + (agents.current || "none")
+  }
 
   readonly property int columns: 4
   readonly property int iconSize: Style.space(42)
@@ -986,6 +1033,11 @@ Item {
 
     root.query = ""
     searchField.text = ""
+    // HM22. Only an open that asks for it; every other open still starts with
+    // the keyboard down (G14a).
+    try { root.promptWanted = JSON.parse(String(payloadJson || "{}")).prompt === true }
+    catch (e) { root.promptWanted = false }
+    agentMenu.open = false
 
     // L5. The app drawer opens on the grid, never on somebody's half-read card.
     root.closeDetail()
@@ -1046,6 +1098,8 @@ Item {
     // that is no longer on screen.
     focusSink.forceActiveFocus()
 
+    root.promptWanted = false
+    agentMenu.open = false
     root.query = ""
     // The card goes with the surface. Left standing it would be the first thing
     // on screen the next time the app drawer came up, about an app that may not be
@@ -1455,6 +1509,9 @@ Item {
       if (root.shell) root.shell.summon(root.pluginId, "{}")
       return "ok"
     }
+    // home.md HM23, without a keyboard: what Enter does with this text.
+    // Answers `open <id>` or `ask <agent>`.
+    function submit(text: string): string { return root.submit(text) }
     function close(): string { root.dismiss(); return "ok" }
     function toggle(): string {
       if (root.shell) root.shell.toggle(root.pluginId, "{}")
@@ -1781,15 +1838,32 @@ Item {
           radius: ui.radiusOn(height)
           color: root.container
 
-          Text {
+          // HM24. The agent chip where the magnifier was: this field is the
+          // prompt bar now, and the chip is what says who Enter asks. Keeps
+          // the magnifier's id because the field's padding is measured off it.
+          // Above the field in z, which fills the pill and would otherwise
+          // take the chip's taps.
+          Shared.AgentChip {
             id: searchGlyph
+            z: 1
             anchors.left: parent.left
             anchors.leftMargin: Style.space(16)
             anchors.verticalCenter: parent.verticalCenter
-            text: "󰍉"
-            font.family: Style.font.family
-            font.pixelSize: Style.font.icon
-            color: root.subdued
+            agent: agents.current
+            accent: root.accent
+            subdued: root.subdued
+            ink: root.textOnSurface
+            radiusTile: root.radiusTile
+            textWeight: root.textWeight
+            open: agentMenu.open
+            interactive: !root.sheetDragging
+            onTapped: {
+              var p = searchGlyph.mapToItem(agentMenu, 0, 0)
+              agentMenu.anchorX = p.x
+              agentMenu.anchorY = p.y
+              agentMenu.anchorBottom = p.y + searchGlyph.height
+              agentMenu.open = true
+            }
           }
 
           // Fills the pill up to the clear button, and the insets are padding
@@ -1833,10 +1907,12 @@ Item {
             // where that line goes. Left at the default the text renders
             // against the top of the pill.
             verticalAlignment: TextInput.AlignVCenter
-            placeholderText: "Search apps and settings"
+            placeholderText: root.promptPlaceholder
             background: null
             verticalPadding: 0
             onTextChanged: queryDebounce.restart()
+            // HM23.
+            onAccepted: root.submit(searchField.text)
 
             // G14a. A press that *starts* on this field, and only once the
             // app drawer is sitting still. ClickFocus keeps Exclusive from parking
@@ -2546,6 +2622,23 @@ Item {
     // draws nothing, and the sheet's own drag areas are unaffected by a sibling
     // with no area.
     Item { id: focusSink; focus: true }
+
+    // HM24. Over the whole sheet while open; nothing while shut.
+    Shared.AgentMenu {
+      id: agentMenu
+      anchors.fill: parent
+      agents: agents
+      shell: root.shell
+      surface: root.surface
+      textOnSurface: root.textOnSurface
+      subdued: root.subdued
+      accent: root.accent
+      borderColor: root.container
+      borderWidth: Style.space(1)
+      radiusCard: ui.radiusCard
+      textWeight: root.textWeight
+      onClosed: agentMenu.open = false
+    }
   }
 
 

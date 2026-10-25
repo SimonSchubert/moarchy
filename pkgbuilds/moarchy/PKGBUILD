@@ -183,7 +183,36 @@ pkgver=$_ver
 #    so this package ships strictly less and upstream answers for more. The
 #    payload changed in both directions, which is exactly what
 #    docker/build-packages.sh needs a new pkgver-pkgrel to notice.
-pkgrel=6
+# 7: the minimal app drawer (docs/app-drawer-minimal.md). A whole plugin
+#    directory, the sheet id it is registered under, the gesture vocabulary
+#    that lets an edge name it, and two Settings rows -- all of which this
+#    package ships, and none of which reaches a phone under an unchanged
+#    pkgver-pkgrel, because docker/build-packages.sh keeps the artifact whose
+#    name it already has.
+# 8: home (docs/home.md). moarchy.home, the prompt bar, sectioned ui.toml with
+#    its documented twin in /usr/share/moarchy, home.toml, moarchy-home, the
+#    rewritten moarchy-ui, and the moarchy skill for coding agents.
+# 9: every plugin writes Upstream.Color. Qt 6.12 shadows the bare name with
+#    its own singleton (style.md C5, omarchy-config pkgrel 8).
+# 10: fixes from the first run on the Pixel: home lays out against its own
+#    height (the prompt bar sat under the strip), an unavailable tile says
+#    what it is, the agent menu scrolls instead of covering its chip, and the
+#    prompt bar's Enter opens the app it matched.
+# 11: the home menu (home.md §J): a long press on home opens Settings and a
+#    strip of themes, read from the theme catalogue the picker now shares.
+# 12: arranging tiles (home.md §K): long-press to select, drag to move or
+#    swap, edges to resize, and edit/share/remove; moarchy-home set, share
+#    and import.
+# 13: Omalauncher's pages (home.md §L): the face invite and the spare page,
+#    pages that go when emptied, faces right of page 1, the home menu's
+#    create row; Settings > Appearance > Home with steppers, and its Pages
+#    screen.
+# 14: OWL widgets (owl.md): the store's runtime as moarchy.owl, OWL tiles on
+#    home, the widget store in Settings, and moarchy-owl.
+# 15: the OWL runtime at 231b59c, which draws only what changed: fear-greed's
+#    once-a-second ~100 ms GUI stall is gone (owl.md OW1's pin moved, and with
+#    it three of the sources' sums).
+pkgrel=15
 pkgdesc="Omarchy's look, keybindings and theming on a phone, under Hyprland"
 arch=('any')
 url='https://github.com/SimonSchubert/moarchy'
@@ -236,7 +265,36 @@ license=('MIT')
 # moarchy-qml-apps was folded in (docs/structure.md B6).
 depends=('bash' 'hyprland' 'omarchy-config' 'foot' 'polkit-gnome' 'upower' 'feedbackd'
          'qt6-5compat' 'python')
-source=()
+# docs/owl.md OW1. The OWL runtime, file by file from the pinned commit: the
+# store's repo is 342 MB of previews, and these are nine files of it. Each has
+# its own checksum, so a moved pin is a build that fails until they are
+# regenerated, which is the intended amount of friction for changing what runs
+# a downloaded widget. sha256sums is positional, in this order.
+_owl_ref=$(manifest_get omarchy-widgets ref) || return 1
+_owl_url=$(manifest_get omarchy-widgets url) || return 1
+_owl_raw="${_owl_url/github.com/raw.githubusercontent.com}/$_owl_ref"
+source=(
+        "owl-Owl.js::$_owl_raw/runtimes/quickshell/Owl.js"
+        "owl-OwlLayout.js::$_owl_raw/runtimes/quickshell/OwlLayout.js"
+        "owl-OwlCanvas.qml::$_owl_raw/runtimes/quickshell/OwlCanvas.qml"
+        "owl-OwlHost.qml::$_owl_raw/runtimes/quickshell/OwlHost.qml"
+        "owl-OwlNode.qml::$_owl_raw/runtimes/quickshell/OwlNode.qml"
+        "owl-OwlSource.qml::$_owl_raw/runtimes/quickshell/OwlSource.qml"
+        "owl-OwlTerminal.qml::$_owl_raw/runtimes/quickshell/OwlTerminal.qml"
+        "owl-OwlWidget.qml::$_owl_raw/runtimes/quickshell/OwlWidget.qml"
+        "owl-owl-source::$_owl_raw/runtimes/quickshell/owl-source"
+        "owl-LICENSE::$_owl_raw/LICENSE")
+sha256sums=(
+            '3460e1bd88f8047cae098fa7a1d7aa147fd6bd38fcac3e5e735e5931380517a5'
+            'ab9210a0306386376d78a7afb5db8b67aae99fc9f050f6112fae51bbb56fc01a'
+            '8ab3252acb6fcf043a122dcffc5e1bfa3064d64fe17d23ad3486d0876a1eb662'
+            '8a9017bf1c1cbda1757e49b25409fd67982a2c7fad80a5fcd834fc9722154c3a'
+            '7de6f01a827a21ea8d60ba247b051fb962b6e868534963f524c2296d656e55c7'
+            '606d24248070d261269cf2efcbe4f369a757a80863e00c330176602655f39d48'
+            '0811fea1b1fd28230549e6c112d12d90bfe6f9f669175b1c685a73ac63789c16'
+            'd9966f505e879ed1ec3fc9bf7cb905171150e54f98078f30ecc7e3fd66d41725'
+            '872dbc8b8d63caf92b5aa802db3e20cbec745bc3e62ddba9976641c493e1e6c8'
+            'a580274a4ee4c412391fe8bf50d32644a4d3b09c8fedf5469324c6e37b898a76')
 
 package() {
   # --- bin/ -- NOT /usr/bin ------------------------------------------------
@@ -293,6 +351,21 @@ package() {
   install -d "$pkgdir/usr/share/moarchy/agents"
   install -m644 "$_repo"/default/agents/*.svg "$pkgdir/usr/share/moarchy/agents/"
 
+  # docs/home.md HM32. The skill that teaches a coding agent this phone's
+  # settings files, beside the icons. moarchy-user-setup links it into each
+  # agent's skills directory, the way upstream links its own `omarchy` skill,
+  # so a package upgrade updates what every agent reads.
+  install -d "$pkgdir/usr/share/moarchy/agents/skills"
+  cp -a "$_repo/default/agents/skills/moarchy" "$pkgdir/usr/share/moarchy/agents/skills/"
+
+  # HM27. The documented defaults: every key of the two UI files, its values
+  # and what it does. Read by people and agents, by `moarchy-ui` as its list of
+  # keys that exist, and by `moarchy-home` as the layout while a home has none.
+  # default/omarchy/ as a whole is not shipped (it is the plugins, copied
+  # below), so these two are named.
+  install -m644 "$_repo/default/omarchy/ui.toml" "$_repo/default/omarchy/home.toml" \
+    "$pkgdir/usr/share/moarchy/"
+
   # --- the shell plugins ---------------------------------------------------
   # PluginRegistry scans this directory before ~/.config/omarchy/plugins, so a
   # user copy of the same id still wins. Every directory in
@@ -320,10 +393,13 @@ package() {
   local icondir="$pkgdir/usr/share/icons/hicolor/scalable/apps"
   install -d "$plugdir" "$appdir" "$icondir"
 
-  local dir id dest entry icon exe
+  local dir id dest entry icon exe sub
   for dir in "$_repo"/default/omarchy/plugins/*/; do
     [[ -d $dir ]] || continue
     id=$(basename "$dir")
+    # The OWL runtime is installed below from its checked sources, never from
+    # a copy scripts/fetch-owl.sh left in the worktree.
+    [[ $id == moarchy.owl ]] && continue
     dest="$plugdir/$id"
     install -d "$dest"
     find "$dir" -maxdepth 1 \( \
@@ -331,15 +407,17 @@ package() {
         -o -name 'manifest.json' -o -name '*.desktop' \
       \) ! -name 'shell.qml' -exec cp -a {} "$dest/" \;
 
-    # docs/widgets.md W34. The widgets are a subdirectory of the kit and the
-    # find above is -maxdepth 1, so they have to be named. Without this the
-    # package is complete in every way a build can check and the phone draws a
-    # control center with a header, a gap and a notification list -- every
-    # widget's Loader failing on a file that is not there.
-    if [[ -d ${dir}widgets ]]; then
-      install -d "$dest/widgets"
-      find "${dir}widgets" -maxdepth 1 -name '*.qml' -exec cp -a {} "$dest/widgets/" \;
-    fi
+    # docs/widgets.md W34, docs/home.md HM34. A kit's QML subdirectories --
+    # moarchy.common's widgets/, moarchy.home's faces/ -- by one rule, because
+    # the find above is -maxdepth 1 and naming each one is how the next one gets
+    # missed. Without this the package is complete in every way a build can
+    # check, and the phone draws a control center with a gap where its widgets
+    # were and a home whose face says it did not load.
+    for sub in widgets faces; do
+      [[ -d ${dir}$sub ]] || continue
+      install -d "$dest/$sub"
+      find "${dir}$sub" -maxdepth 1 -name '*.qml' -exec cp -a {} "$dest/$sub/" \;
+    done
 
     # The kit, vendored as ui/ for the plugins that import it that way. The
     # apps do; the shell's own plugins import ../moarchy.common instead. One
@@ -378,6 +456,20 @@ package() {
       fi
     done
   done
+
+  # --- the OWL runtime (docs/owl.md OW1) ----------------------------------
+  # A kit like moarchy.common: no manifest, imported by home as ../moarchy.owl.
+  # Unpatched; moarchy's side of it is moarchy.home/HomeOwlHost.qml. Not
+  # shell.qml, the runtime's standalone board, nor its tests.
+  local owldir="$plugdir/moarchy.owl" owlf
+  install -d "$owldir"
+  for owlf in Owl.js OwlLayout.js OwlCanvas.qml OwlHost.qml OwlNode.qml \
+              OwlSource.qml OwlTerminal.qml OwlWidget.qml; do
+    install -m644 "$srcdir/owl-$owlf" "$owldir/$owlf"
+  done
+  # What answers android.* sources from Linux; OwlHost runs it by path.
+  install -m755 "$srcdir/owl-owl-source" "$owldir/owl-source"
+  install -Dm644 "$srcdir/owl-LICENSE" "$pkgdir/usr/share/licenses/$pkgname/omarchy-widgets.LICENSE"
 
   # --- the web apps ---------------------------------------------------------
   # Two of upstream's own entries, each with the StartupWMClass upstream has no

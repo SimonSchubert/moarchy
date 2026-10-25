@@ -156,7 +156,7 @@ is available. Anywhere else it is a colour that will not follow a theme change.
 
 ## D. Shape
 
-**D1** Four radii, by what the thing is. The three rectangle radii come from
+**D1** Five radii, by what the thing is. The four rectangle radii come from
 the `corners` preset in `~/.config/omarchy/ui.toml` (large / modest / square).
 Missing file is `large`, which is the look this phone shipped with:
 
@@ -165,11 +165,12 @@ Missing file is `large`, which is the look this phone shipped with:
 | sheet | `Style.space(28)` | `Style.space(12)` | `0` | A full-width surface that slides in: the control center sheet, the app drawer sheet. |
 | tile | `Style.space(20)` | `Style.space(8)` | `0` | Something in a grid or a row that you tap as a unit: control center tiles, theme cells, the app drawer's open-app tiles. Kit `Pill` / `Fab` / `TextField` / `IconButton` / `Switch` / `Check` use this too, via `UiFile.radiusOn`, capped at half the short side so Large stays a pill/circle. So does `moarchy-keyboard`'s restore handle, which reads `tile` out of the same file (its AC 59) and, having no `Style`, does not scale it. |
 | card | `Style.space(18)` | `Style.space(6)` | `0` | A stacked panel or list row: Settings rows, Wi-Fi rows, notification cards, the confirm card, Device's panels. |
+| frame | `Style.space(16)` | `Style.space(8)` | `0` | Home's tiles, recent strip and prompt bar ([`home.md`](home.md) HM10a): Omalauncher's 16px times its corner scale of 1, ½ or 0. |
 | pill / circle | `height / 2`, `width / 2` | same | same | A true capsule that is always fully round: the app drawer handle, the home pill. |
 
-Held as `readonly property int radiusSheet / radiusTile / radiusCard` on the
+Held as `readonly property int radiusSheet / radiusTile / radiusCard / radiusFrame` on the
 surface, bound to `Shared.UiFile` (or `Chrome.UiFile` in an app), so the name
-says which of the four was meant. A labeled button is `Pill`, a track-and-knob
+says which of the five was meant. A labeled button is `Pill`, a track-and-knob
 is `Switch`, a tick box is `Check` — not a `Rectangle` with a copied radius.
 `UiFile.radiusOn(size)` is the cap. Edit the toml, run `moarchy-ui corners
 modest`, or pick from the theme switcher; colours stay in `colors.toml` and are

@@ -18,6 +18,11 @@
 #   moarchy-agent open  <name>   shim, tile, then install and launch through
 #                                omarchy-default-agent
 #   moarchy-agent launch         open the agent already chosen, choosing none
+#   moarchy-agent names          print "<id><TAB><name>" per agent, for a menu
+#   moarchy-agent set   <name>   choose an agent; install and launch nothing
+#   moarchy-agent ask   <prompt> open the chosen agent with a prompt
+#   moarchy-agent skills         link the moarchy and omarchy skills into
+#                                every agent's skills directory
 #
 # `open` is what both the Settings row and the app drawer tile run, and it is
 # idempotent on purpose: the first tap installs, every tap after it launches,
@@ -308,12 +313,42 @@ EOF
   finish_entry
 }
 
+# docs/home.md HM32. The skills that teach an agent this phone: moarchy's own
+# (its settings files, home, tiles and faces) and upstream's `omarchy` (themes,
+# Hyprland, the rest). Linked into each agent's skills directory the way
+# upstream's omarchy-provision-user links them on a desktop -- which this image
+# never runs, so without this no agent here knew either one existed.
+#
+# Links, not copies, so a package upgrade updates what agents read. A name the
+# user has made a real directory of is theirs and is left alone; a link of ours,
+# or a dangling one, is refreshed. Called from every path that starts an agent,
+# so a phone flashed before this existed links them the first time it asks.
+link_skills() {
+  local roots=("$HOME/.agents/skills" "$HOME/.claude/skills" "$HOME/.codex/skills" "$HOME/.pi/agent/skills")
+  local skills=("${MOARCHY_PATH:-/usr/share/moarchy}/agents/skills/moarchy")
+  local up
+  for up in "${OMARCHY_PATH:-/usr/share/omarchy}"/default/agents/skills/*/; do
+    [[ -d $up ]] && skills+=("${up%/}")
+  done
+  local root skill dest
+  for root in "${roots[@]}"; do
+    mkdir -p "$root" 2>/dev/null || continue
+    for skill in "${skills[@]}"; do
+      [[ -d $skill ]] || continue
+      dest="$root/$(basename "$skill")"
+      if [[ -e $dest && ! -L $dest ]]; then continue; fi
+      ln -sfn "$skill" "$dest" 2>/dev/null || true
+    done
+  done
+}
+
 # Everything `open` does, so `launch` can do it without spelling it twice.
 #
 # None of the writes is fatal: the point of the tap is to open the agent, and an
 # unwritable ~/.local costs an icon or a name on PATH, not a session.
 open_agent() {
   local agent=$1
+  link_skills
   write_shim "$agent"  || echo "moarchy-agent: could not write the wrapper" >&2
   write_entry "$agent" || echo "moarchy-agent: could not write the appDrawer tile" >&2
   # omarchy-default-agent installs through mise when it has to, writes
@@ -358,11 +393,56 @@ case "${1:-}" in
       write_shim "$a" || { echo "moarchy-agent: no wrapper for $a" >&2; rc=1; }
     done < <(agents)
     write_current || rc=1
+    link_skills
     exit $rc
     ;;
   open)
     [[ -n ${2:-} ]] || { echo "usage: moarchy-agent open <name>" >&2; exit 2; }
     open_agent "$2"
+    ;;
+  skills)
+    link_skills
+    ;;
+  names)
+    # docs/home.md HM24. The prompt bar's agent menu lists these, so the menu
+    # keeps no list of its own: agent_name() above is already the one this
+    # script, Pages.js and the selftest are held to.
+    while read -r a; do printf '%s\t%s\n' "$a" "$(agent_name "$a")"; done < <(agents)
+    ;;
+  set)
+    # HM24. Choosing from the menu writes the same one-word file upstream's
+    # omarchy-default-agent writes, and the tile follows -- so Settings, the
+    # strip's hold and the bar can never name different agents. It installs
+    # nothing: the first `ask` does that through the shim, the way the first
+    # tap on the tile always has.
+    [[ -n ${2:-} ]] || { echo "usage: moarchy-agent set <name>" >&2; exit 2; }
+    agent_name "$2" >/dev/null || { echo "moarchy-agent: unknown agent '$2'" >&2; exit 1; }
+    mkdir -p "$HOME/.config/omarchy/defaults"
+    printf '%s\n' "$2" >"$HOME/.config/omarchy/defaults/agent"
+    write_entry "$2" || echo "moarchy-agent: could not write the appDrawer tile" >&2
+    ;;
+  ask)
+    # HM23. The prompt bar's Enter on a sentence. One argument, carried as one
+    # argument all the way to the agent: upstream's omarchy-agent takes it as
+    # --prompt and puts it after each agent's own `--`, so nothing here or
+    # there re-splits it, and no shell ever sees it as code.
+    shift
+    [[ ${1:-} == -- ]] && shift
+    (($# == 1)) && [[ -n $1 ]] || { echo "usage: moarchy-agent ask <prompt>" >&2; exit 2; }
+    chosen=$(current_agent)
+    if [[ -z $chosen ]]; then
+      # The same answer `launch` gives with nothing chosen: the picker, and not
+      # whichever agent this script names first.
+      write_setup_entry || echo "moarchy-agent: could not write the appDrawer tile" >&2
+      exec omarchy-shell settings openAt apps.default.agent
+    fi
+    link_skills
+    write_shim "$chosen"  || echo "moarchy-agent: could not write the wrapper" >&2
+    write_entry "$chosen" || echo "moarchy-agent: could not write the appDrawer tile" >&2
+    # Not omarchy-default-agent, which takes no prompt: omarchy-agent is the
+    # script that owns every agent's flags for one, and the one upstream's
+    # `omarchy agent prompt` reaches. It reads the same defaults file.
+    exec omarchy-agent --prompt "$1"
     ;;
   launch)
     # docs/gestures.md C1. The strip's hold, which has no name to give.
@@ -381,7 +461,8 @@ case "${1:-}" in
     exec omarchy-shell settings openAt apps.default.agent
     ;;
   *)
-    echo "usage: moarchy-agent {list|shim|entry|seed|open|launch} [name]" >&2
+    echo "usage: moarchy-agent {list|names|shim|entry|seed|open|launch|set|skills} [name]" >&2
+    echo "       moarchy-agent ask <prompt>" >&2
     exit 2
     ;;
 esac

@@ -32,6 +32,17 @@ url     = "https://github.com/basecamp/omarchy"
 ref     = "c668141e9c42b13c80c9ca4ea108e11708c5e8a5"
 version = "v4.0.4"
 
+# The OWL runtime for Quickshell (docs/owl.md OW1): runtimes/quickshell of the
+# widget store's repo, shipped unpatched as the kit moarchy.owl. The moarchy
+# PKGBUILD fetches its nine files one by one -- the repo is 342 MB of widget
+# previews -- each with its own checksum, so moving this ref means
+# regenerating those too. f586ffb runs the frame clock only while something
+# reads `time`; 231b59c renders only when what changed is on screen, and
+# shares the tree it hands to QML -- together what made OWL affordable here.
+[omarchy-widgets]
+url = "https://github.com/SimonSchubert/omarchy-widgets"
+ref = "231b59cd373d5d8bbbafacab930af2d5330f3dc6"
+
 # ---------------------------------------------------------------------------
 # This project's own version. The packages built out of pkgbuilds/ carry it:
 # moarchy (bin/, default/, config/) and moarchy-meta (the package set).

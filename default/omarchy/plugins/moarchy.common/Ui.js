@@ -1,28 +1,44 @@
-// Phone chrome: corners and control center control sizes, from one user file.
+// The UI settings file, ~/.config/omarchy/ui.toml, read into one object
+// (docs/home.md §G).
 //
 // Colours stay in colors.toml -- omarchy-theme-set already stages those, and
 // every surface already follows them. What this file owns is the half that
-// used to be hardcoded per plugin: D1's three radii, and the control center's tile /
-// slider / round-button heights. Those are a preference, not a theme, so they
-// live in ~/.config/omarchy/ui.toml and survive a palette swap.
+// is a preference rather than a theme: D1's radii, the control center's sizes,
+// what each gesture opens, and home's grid and frame. It survives a palette
+// swap because it is not part of one.
 //
-// `.pragma library` for the same reason Theme.js is: pure functions, one
-// shared instance. The FileView that watches the path is UiFile.qml, because
-// a library cannot own I/O.
+// The file is sectioned -- [shape], [control-center], [gestures], [home] --
+// and the packaged /usr/share/moarchy/ui.toml documents every key. A file
+// written before the sections, with flat `corners = ...` and
+// `gesture_bottom = ...` lines, reads exactly as it did (HM29): each value is
+// looked for in its section first and under its old flat name second.
+//
+// `.pragma library` for the reason Theme.js is: pure functions, one shared
+// instance. Reading is Toml.js (HM30); the FileView that watches the path is
+// UiFile.qml, because a library cannot own I/O; and the one writer is
+// `moarchy-ui`, so nothing here serialises.
 .pragma library
 
 .import "Sheet.js" as Sheet
+.import "Toml.js" as Toml
 
+// The `frame` column is home's tiles (HM10a): Omalauncher's 16px times its
+// corner scale of 1, 0.5 or 0.
 var CORNERS = {
-  large:  { sheet: 28, tile: 20, card: 18 },
-  modest: { sheet: 12, tile: 8,  card: 6  },
-  square: { sheet: 0,  tile: 0,  card: 0  }
+  large:  { sheet: 28, tile: 20, card: 18, frame: 16 },
+  modest: { sheet: 12, tile: 8,  card: 6,  frame: 8  },
+  square: { sheet: 0,  tile: 0,  card: 0,  frame: 0  }
 }
 
 var CONTROL_CENTER = {
   roomy:   { controlCenterTile: 62, controlCenterSlider: 48, controlCenterRound: 36 },
   compact: { controlCenterTile: 48, controlCenterSlider: 36, controlCenterRound: 32 }
 }
+
+// HM10, HM20, HM21. Omalauncher's own defaults (its theme/Style.kt), so home
+// looks like it before anybody has touched a setting.
+var HOME = { columns: 6, opacity: 0.88, border: 2, gapsIn: 6, gapsOut: 6,
+             recent: 8, promptBar: true }
 
 // gestures.md Q1. What the two configurable edges may raise, as words. The
 // file, `bin/moarchy-ui` and the Settings rows all speak these and never a
@@ -35,6 +51,7 @@ var CONTROL_CENTER = {
 var GESTURE_TARGETS = {
   none:                   "",
   "app-drawer":           Sheet.APP_DRAWER,
+  "app-drawer-minimal":   Sheet.APP_DRAWER_MINIMAL,
   "workspace-overview":   Sheet.WORKSPACE_OVERVIEW,
   "control-center":       Sheet.CONTROL_CENTER
 }
@@ -42,6 +59,7 @@ var GESTURE_TARGETS = {
 var GESTURE_LABELS = {
   none:                   "Nothing",
   "app-drawer":           "App drawer",
+  "app-drawer-minimal":   "Minimal app drawer",
   "workspace-overview":   "Workspace overview",
   "control-center":       "Control Center"
 }
@@ -134,118 +152,121 @@ function labelTarget(name, fallbackName) {
   return GESTURE_LABELS[normTarget(name, fallbackName)]
 }
 
-function num(data, names, fallbackValue) {
-  for (var i = 0; i < names.length; i++) {
-    var v = data[names[i]]
-    if (v === undefined || v === "") continue
-    var n = Number(v)
-    if (isFinite(n) && n >= 0) return n
+// ---------------------------------------------------------------------------
+// Reading a value
+// ---------------------------------------------------------------------------
+// `pick(data, "shape.corners", ["corners"])` is the section's key, else the
+// first of the flat names a file from before the sections used (HM29). The
+// flat names are written down here and in `moarchy-ui`'s migration table and
+// nowhere else.
+function pick(data, path, legacy) {
+  var v = Toml.get(data, path, undefined)
+  if (v !== undefined && v !== "") return v
+  for (var i = 0; i < (legacy || []).length; i++) {
+    var w = data[legacy[i]]
+    if (w !== undefined && w !== "" && typeof w !== "object") return w
   }
+  return undefined
+}
+
+function num(v, fallbackValue, lo, hi) {
+  if (v === undefined || v === "" || v === null || typeof v === "boolean") return fallbackValue
+  var n = Number(v)
+  if (!isFinite(n)) return fallbackValue
+  if (lo !== undefined && n < lo) return fallbackValue
+  if (hi !== undefined && n > hi) return fallbackValue
+  return n
+}
+
+function bool(v, fallbackValue) {
+  if (v === true || v === false) return v
+  var s = String(v === undefined ? "" : v).toLowerCase().trim()
+  if (s === "true" || s === "yes" || s === "on" || s === "1") return true
+  if (s === "false" || s === "no" || s === "off" || s === "0") return false
   return fallbackValue
 }
 
-function fromData(data) {
-  data = data || {}
-  var corners = normCorners(data.corners)
-  var controlCenter = normShade(data.controlCenter || data.density)
+// The [shape] and [control-center] half, which the apps read as well
+// (qs_ui/Ui.js). Kept the same function in both files, and style-check.sh
+// compares them, because a corners pick that the shell and the apps read
+// differently is a phone with two shapes on it.
+function shapeFrom(data) {
+  var corners = normCorners(pick(data, "shape.corners", ["corners"]))
+  var controlCenter = normShade(pick(data, "control-center.density", ["control_center", "controlCenter", "density"]))
   var c = CORNERS[corners]
   var s = CONTROL_CENTER[controlCenter]
   return {
     corners: corners,
     controlCenter: controlCenter,
-    sheet: num(data, ["sheet"], c.sheet),
-    tile: num(data, ["tile"], c.tile),
-    card: num(data, ["card"], c.card),
-    controlCenterTile: num(data, ["control_center_tile", "controlCenterTile"], s.controlCenterTile),
-    controlCenterSlider: num(data, ["control_center_slider", "controlCenterSlider"], s.controlCenterSlider),
-    controlCenterRound: num(data, ["control_center_round", "controlCenterRound"], s.controlCenterRound),
-    // Q1. The defaults are today's wiring, so a home with no ui.toml is the
-    // phone as it shipped -- themed by presence, never broken by absence.
-    gestureBottom: normTarget(data.gesture_bottom || data.gestureBottom, "app-drawer"),
-    gestureRight: normTarget(data.gesture_right || data.gestureRight, "workspace-overview"),
-    // Q10. The hold keeps C1's meaning as its default, so a phone nobody has
-    // touched still opens the coding agent. The power button's double press
-    // is new and starts off.
-    gestureHold: normTap(data.gesture_hold || data.gestureHold, "agent"),
-    gesturePower: normTap(data.gesture_power || data.gesturePower, "none")
+    sheet: num(pick(data, "shape.sheet", ["sheet"]), c.sheet, 0),
+    tile: num(pick(data, "shape.tile", ["tile"]), c.tile, 0),
+    card: num(pick(data, "shape.card", ["card"]), c.card, 0),
+    frame: num(pick(data, "shape.frame", []), c.frame, 0),
+    controlCenterTile: num(pick(data, "control-center.tile-height", ["control_center_tile", "controlCenterTile"]), s.controlCenterTile, 0),
+    controlCenterSlider: num(pick(data, "control-center.slider-height", ["control_center_slider", "controlCenterSlider"]), s.controlCenterSlider, 0),
+    controlCenterRound: num(pick(data, "control-center.button-size", ["control_center_round", "controlCenterRound"]), s.controlCenterRound, 0)
   }
 }
 
-function parseToml(text) {
-  var data = {}
-  var lines = String(text || "").split("\n")
-  for (var i = 0; i < lines.length; i++) {
-    var line = lines[i].replace(/\s+#.*$/, "").trim()
-    if (!line || line[0] === "#" || line[0] === "[") continue
-    var eq = line.indexOf("=")
-    if (eq < 1) continue
-    var key = line.slice(0, eq).trim()
-    var raw = line.slice(eq + 1).trim()
-    if ((raw[0] === "\"" && raw[raw.length - 1] === "\"") ||
-        (raw[0] === "'" && raw[raw.length - 1] === "'"))
-      raw = raw.slice(1, -1)
-    data[key] = raw
-  }
-  return data
+function fromData(data) {
+  data = data || {}
+  var out = shapeFrom(data)
+  // Q1. The defaults are today's wiring, so a home with no ui.toml is the
+  // phone as it shipped -- themed by presence, never broken by absence.
+  out.gestureBottom = normTarget(pick(data, "gestures.bottom", ["gesture_bottom", "gestureBottom"]), "app-drawer")
+  out.gestureRight = normTarget(pick(data, "gestures.right", ["gesture_right", "gestureRight"]), "workspace-overview")
+  // Q10. The hold keeps C1's meaning as its default, so a phone nobody has
+  // touched still opens the coding agent. The power button's double press
+  // starts off.
+  out.gestureHold = normTap(pick(data, "gestures.hold", ["gesture_hold", "gestureHold"]), "agent")
+  out.gesturePower = normTap(pick(data, "gestures.power", ["gesture_power", "gesturePower"]), "none")
+  // HM10, HM20, HM21. Out-of-range is the default rather than a clamp: a
+  // grid of 40 columns is a typo, not a request for 12.
+  out.homeColumns = Math.round(num(pick(data, "home.columns", []), HOME.columns, 2, 12))
+  out.homeOpacity = num(pick(data, "home.opacity", []), HOME.opacity, 0, 1)
+  out.homeBorder = num(pick(data, "home.border", []), HOME.border, 0, 8)
+  out.homeGapsIn = num(pick(data, "home.gaps-in", []), HOME.gapsIn, 0, 24)
+  out.homeGapsOut = num(pick(data, "home.gaps-out", []), HOME.gapsOut, 0, 48)
+  out.homeRecent = Math.round(num(pick(data, "home.recent", []), HOME.recent, 0, 12))
+  out.homePromptBar = bool(pick(data, "home.prompt-bar", []), HOME.promptBar)
+  return out
 }
 
+// A file that is not strict TOML is read the forgiving way every version of
+// this file was read before (Toml.flat), so `corners = large` with no quotes
+// still means large (HM29). Only text neither reader can use is the defaults.
 function parse(text) {
-  return fromData(parseToml(text))
+  var r = Toml.parse(text)
+  return fromData(r.ok ? r.data : Toml.flat(text))
 }
 
-function differs(chrome, key, presetValue) {
-  return Number(chrome[key]) !== Number(presetValue)
-}
-
-function serialize(chrome) {
-  var c = chrome || fallback()
-  var presetC = CORNERS[c.corners] || CORNERS.large
-  var presetS = CONTROL_CENTER[c.controlCenter] || CONTROL_CENTER.roomy
-  var lines = [
-    "# Phone chrome. Independent of the colour theme.",
-    "# Colours live in ~/.local/state/omarchy/current/theme/colors.toml",
-    "# and change with omarchy-theme-set. This file reshapes the UI.",
-    "#",
-    "# corners: large | modest | square",
-    "# control_center:  roomy | compact",
-    "#",
-    "# Which sheet each swipeable edge raises:",
-    "#   gesture_bottom, gesture_right: none | app-drawer | workspace-overview | control-center",
-    "#   gesture_hold, gesture_power:   the same, plus agent or an app id",
-    "#",
-    "# Optional numbers (logical px) override the preset for that key:",
-    "#   sheet, tile, card, control_center_tile, control_center_slider, control_center_round",
-    "",
-    "corners = \"" + c.corners + "\"",
-    "control_center = \"" + c.controlCenter + "\"",
-    // Written every time and not gated on differs(): these are presets like
-    // corners and control center, not overrides of one, so there is nothing to omit.
-    "gesture_bottom = \"" + c.gestureBottom + "\"",
-    "gesture_right = \"" + c.gestureRight + "\"",
-    "gesture_hold = \"" + c.gestureHold + "\"",
-    "gesture_power = \"" + c.gesturePower + "\""
-  ]
-  if (differs(c, "sheet", presetC.sheet)) lines.push("sheet = " + c.sheet)
-  if (differs(c, "tile", presetC.tile)) lines.push("tile = " + c.tile)
-  if (differs(c, "card", presetC.card)) lines.push("card = " + c.card)
-  if (differs(c, "controlCenterTile", presetS.controlCenterTile)) lines.push("control_center_tile = " + c.controlCenterTile)
-  if (differs(c, "controlCenterSlider", presetS.controlCenterSlider)) lines.push("control_center_slider = " + c.controlCenterSlider)
-  if (differs(c, "controlCenterRound", presetS.controlCenterRound)) lines.push("control_center_round = " + c.controlCenterRound)
-  lines.push("")
-  return lines.join("\n")
-}
-
+// The optimistic value a picker draws on the tap, before `moarchy-ui` has
+// written the file and the FileView has read it back (Themes.qml). `patch`
+// takes `corners` and `controlCenter`. Choosing a preset drops that preset's
+// overrides, as `moarchy-ui` does on disk; every other setting is carried
+// over, or the gesture and home keys would read as their defaults for as long
+// as the optimistic value is on screen.
 function merge(chrome, patch) {
   var cur = chrome || fallback()
-  // Every key the file owns, not the two this used to name: `merge` feeds
-  // `fromData`, so a key left out here is a key reset to its default for as
-  // long as the optimistic value is on screen (Themes.qml's chip tap).
-  var data = { corners: cur.corners, controlCenter: cur.controlCenter,
-               gesture_bottom: cur.gestureBottom,
-               gesture_right: cur.gestureRight,
-               gesture_hold: cur.gestureHold,
-               gesture_power: cur.gesturePower }
-  for (var k in (patch || {})) data[k] = patch[k]
+  var p = patch || {}
+  var data = {
+    shape: { corners: p.corners !== undefined ? p.corners : cur.corners },
+    "control-center": { density: p.controlCenter !== undefined ? p.controlCenter : cur.controlCenter },
+    gestures: { bottom: cur.gestureBottom, right: cur.gestureRight,
+                hold: cur.gestureHold, power: cur.gesturePower },
+    home: { columns: cur.homeColumns, opacity: cur.homeOpacity, border: cur.homeBorder,
+            "gaps-in": cur.homeGapsIn, "gaps-out": cur.homeGapsOut,
+            recent: cur.homeRecent, "prompt-bar": cur.homePromptBar }
+  }
+  if (p.corners === undefined) {
+    data.shape.sheet = cur.sheet; data.shape.tile = cur.tile
+    data.shape.card = cur.card; data.shape.frame = cur.frame
+  }
+  if (p.controlCenter === undefined) {
+    data["control-center"]["tile-height"] = cur.controlCenterTile
+    data["control-center"]["slider-height"] = cur.controlCenterSlider
+    data["control-center"]["button-size"] = cur.controlCenterRound
+  }
   return fromData(data)
 }
 

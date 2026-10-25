@@ -26,6 +26,9 @@
 //   plugin   hands off to another shell plugin, with returnTo set.
 //   switch   `read` prints the state; `on`/`off` set it. `invert` for the
 //            negative-polarity flags, where the file existing means OFF.
+//   stepper  `read` prints a number; `set` is run with the next one appended.
+//            `min`, `max`, `step`; `percent` shows a 0-1 value as a
+//            percentage, `unit` is appended otherwise (docs/home.md HM55).
 //   choice   a radio row. The page's `reader` says which is current; the row's
 //            `readValue` is what to compare (defaults to `value`), and `write`
 //            is what to run. Those are separate fields because upstream has a
@@ -44,6 +47,10 @@
 //   input    a text field. `placeholder` is the empty state, `numeric` asks
 //            for the digits-only keyboard. Its text is not persisted and does
 //            not outlive the page.
+//
+// A page may draw something other than rows: `arrange: "<surface>"` is
+// ArrangeView over a widget surface, `view: "home-pages"` is PagesView,
+// `view: "owl-store"` is StoreView.
 //
 // A page may build rows at open instead of declaring them: `provider.list`
 // turns one value per line into `choice` rows, `provider.json` takes a JSON
@@ -254,6 +261,9 @@ var PAGES = {
     detailCmd: "omarchy-font-current", covers: { "style.font": "N" } },
   { id: "bar", type: "nav", page: "appearance.bar", glyph: "󰍜", label: "Status bar",
     covers: { "style.bar": "N" } },
+  { id: "home", type: "nav", page: "appearance.home", glyph: "󰋜", label: "Home",
+    detailCmd: "printf '%s columns' \"$(moarchy-ui get home.columns)\"",
+    keywords: "launcher pages faces tiles widgets grid columns gaps border opacity frame recent prompt bar" },
   { id: "control-center", type: "nav", page: "appearance.control-center",
     glyph: "󰕾", label: "Control Center",
     detailCmd: "moarchy-widgets summary control-center",
@@ -261,6 +271,44 @@ var PAGES = {
   { id: "more", type: "nav", page: "appearance.more", glyph: "󰉉", label: "Get more",
     covers: { "install.style": "N" } }
 ]},
+
+// Home, as Omalauncher's style screen has it (docs/home.md HM54): its pages
+// first, then the grid and the frame each tile wears. Steppers (HM55) read and
+// write ~/.config/omarchy/ui.toml through moarchy-ui, so a tap lands on home
+// within a second; the ranges are moarchy-ui's own (bin/moarchy-ui RANGES),
+// which refuses anything outside them.
+"appearance.home": { title: "Home", rows: [
+  { id: "pages", type: "nav", page: "appearance.home.pages", glyph: "󰕬", label: "Pages",
+    detailCmd: "moarchy-home show | grep -c '^page' | sed 's/$/ pages/'",
+    keywords: "faces order arrange move remove" },
+  { id: "widgets", type: "nav", page: "appearance.home.widgets", glyph: "󰜬", label: "Widgets",
+    detail: "the store's widgets, to put on home",
+    keywords: "owl store marketplace install widget download browse" },
+  { id: "columns", type: "stepper", label: "Columns", read: "moarchy-ui get home.columns",
+    set: "moarchy-ui set home.columns", min: 2, max: 12, step: 1 },
+  { id: "gaps-in", type: "stepper", label: "Gaps in", read: "moarchy-ui get home.gaps-in",
+    set: "moarchy-ui set home.gaps-in", min: 0, max: 24, step: 1, unit: "px" },
+  { id: "gaps-out", type: "stepper", label: "Gaps out", read: "moarchy-ui get home.gaps-out",
+    set: "moarchy-ui set home.gaps-out", min: 0, max: 48, step: 1, unit: "px" },
+  { id: "border", type: "stepper", label: "Border", read: "moarchy-ui get home.border",
+    set: "moarchy-ui set home.border", min: 0, max: 8, step: 1, unit: "px" },
+  { id: "opacity", type: "stepper", label: "Opacity", read: "moarchy-ui get home.opacity",
+    set: "moarchy-ui set home.opacity", min: 0, max: 1, step: 0.04, percent: true },
+  { id: "recent", type: "stepper", label: "Recent apps", read: "moarchy-ui get home.recent",
+    set: "moarchy-ui set home.recent", min: 0, max: 12, step: 1,
+    detail: "0 hides the strip" },
+  { id: "prompt-bar", type: "switch", label: "Prompt bar",
+    detail: "open an app, or ask the agent",
+    read: "moarchy-ui get home.prompt-bar",
+    on: "moarchy-ui set home.prompt-bar true", off: "moarchy-ui set home.prompt-bar false" }
+]},
+
+// Home's pages, arranged (HM56). `view` and no rows: Settings draws PagesView
+// instead of the row list, the way an `arrange` page draws ArrangeView.
+"appearance.home.pages": { title: "Pages", view: "home-pages", rows: [] },
+
+// The OWL widget store (docs/owl.md OW7): StoreView, over moarchy-owl.
+"appearance.home.widgets": { title: "Widgets", view: "owl-store", rows: [] },
 
 // The control center's widgets, arranged (docs/widgets.md §E). `arrange` and no
 // rows: Settings draws ArrangeView for this instead of the row list, and the
@@ -669,7 +717,7 @@ var PAGES = {
   // on a page about plugins.
   { id: "gestures", type: "nav", page: "shell.gestures", glyph: "󰶞",
     label: "Gestures", detailCmd: "moarchy-ui get gesture-summary",
-    keywords: "swipe edge bottom right up appDrawer workspaceOverview controlCenter none off" },
+    keywords: "swipe edge bottom right up appDrawer workspaceOverview controlCenter none off minimal list" },
   { id: "plugins", type: "nav", page: "shell.plugins", glyph: "󰐱", label: "Plugins",
     detailCmd: "moarchy-plugins summary",
     covers: { "setup.plugin": "N" } },
@@ -747,6 +795,9 @@ var PAGES = {
     write: "moarchy-ui gesture-bottom none" },
   { id: "b-app-drawer", type: "choice", label: "App drawer", value: "app-drawer",
     detail: "Search and launch", write: "moarchy-ui gesture-bottom app-drawer" },
+  { id: "b-app-drawer-minimal", type: "choice", label: "Minimal app drawer",
+    value: "app-drawer-minimal", detail: "A list, one ink, an A-Z rail",
+    write: "moarchy-ui gesture-bottom app-drawer-minimal" },
   { id: "b-workspace-overview", type: "choice", label: "Overview", value: "workspace-overview",
     detail: "Every workspace as a card",
     write: "moarchy-ui gesture-bottom workspace-overview" },
@@ -761,6 +812,9 @@ var PAGES = {
     detail: "The edge does nothing", write: "moarchy-ui gesture-right none" },
   { id: "r-app-drawer", type: "choice", label: "App drawer", value: "app-drawer",
     detail: "Search and launch", write: "moarchy-ui gesture-right app-drawer" },
+  { id: "r-app-drawer-minimal", type: "choice", label: "Minimal app drawer",
+    value: "app-drawer-minimal", detail: "A list, one ink, an A-Z rail",
+    write: "moarchy-ui gesture-right app-drawer-minimal" },
   { id: "r-workspace-overview", type: "choice", label: "Overview", value: "workspace-overview",
     detail: "Every workspace as a card",
     write: "moarchy-ui gesture-right workspace-overview" },

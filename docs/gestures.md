@@ -21,7 +21,7 @@ other 68, and the five the suites run without a `→` line here, are listed unde
 | **app drawer** | The searchable app grid (`moarchy.app-drawer`). The strip's sheet as shipped. |
 | **workspace overview** | The vertical list of workspace cards (`moarchy.workspace-overview`). The right edge's sheet as shipped. It is the one surface that can put two apps on one workspace, and the one place a window is closed by hand. |
 | **control center** | The pull-down from the top edge (`moarchy.control-center`). |
-| **the strip's sheet** | What an up-swipe from the strip raises. Named by a setting (Q1), so §A says *the app drawer* where it means *this*, and its checks run against the pairing that ships. |
+| **the strip's sheet** | What an up-swipe from the strip raises. Named by a setting (Q1), so §A says *the app drawer* where it means *this*, and its checks run against the pairing that ships. One of the five it can name is the minimal app drawer, which is [`app-drawer-minimal.md`](app-drawer-minimal.md)'s and not this file's. |
 | **the edge's sheet** | What a swipe in from the right edge raises. Named by the same setting, and §P reads the same way. |
 | **trigger** | Any of the four things a setting can point at something: the two edges, the strip's hold (C), and the power button's double press (Q11). |
 | **travel** | Drag distance as a fraction of the sheet being dragged, along the axis it arrives on — the app drawer's own height, ~694 logical px. One pixel of finger is one pixel of sheet, on every surface that drags it (D2a). |
@@ -262,9 +262,10 @@ report 100
 shell. The app receives the touch — everywhere except the left edge band, which
 belongs to the back gesture (G).
 
-**D4** Sideways and downward swipes on the home screen do nothing, for now. The
-home screen handles the up-drag and nothing else; the strip still changes
-workspace and the top edge still opens the control center.
+**D4** Sideways on the home screen turns home's page, and downward raises the
+control center from the top ([`home.md`](home.md) HM5, HM26). Both are decided
+by the router home hands its tiles (HM14b), sideways winning ties as in B1. The
+strip still changes workspace and the top edge still opens the control center.
 
 ## F. Going home
 
@@ -1308,11 +1309,15 @@ opens.
 
 **Q1** Each of the two edges opens the sheet a setting names: `gesture_bottom`
 for the strip and the wallpaper under it, `gesture_right` for the right edge.
-The values are words -- `none`, `app drawer`, `workspace overview`, `control center` -- and not plugin
-ids, so `ui.toml`, `bin/moarchy-ui` and the Settings rows never spell one and
-`Sheet.js` stays the only place the ids live. Shipped they are the app drawer and
-the workspace overview, so a phone nobody has touched behaves exactly as §A and §P
-describe.
+The values are words -- `none`, `app drawer`, `minimal app drawer`, `workspace
+overview`, `control center` -- and not plugin ids, so `ui.toml`,
+`bin/moarchy-ui` and the Settings rows never spell one and `Sheet.js` stays the
+only place the ids live. Shipped they are the app drawer and the workspace
+overview, so a phone nobody has touched behaves exactly as §A and §P describe.
+`minimal app drawer` is the second launcher
+([`app-drawer-minimal.md`](app-drawer-minimal.md) M3): the same apps as a list
+rather than a grid, and an option on either edge rather than a change to what
+ships.
 → with no `ui.toml`, `moarchy-ui get gesture-bottom` == `app drawer` and
 `moarchy-ui get gesture-right` == `workspace overview`; `omarchy-shell gestures status`
 reports `bottom=moarchy.app-drawer right=moarchy.workspace-overview`

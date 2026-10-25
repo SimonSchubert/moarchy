@@ -26,6 +26,16 @@ set -uo pipefail
 
 cd "$(dirname "$0")/.." || exit 1
 PLUGINS=default/omarchy/plugins
+# docs/owl.md OW1. moarchy.owl is the widget store's runtime, fetched unpatched by
+# scripts/fetch-owl.sh; these rules are moarchy's own and not for it. Checked
+# against a view of the plugins without it rather than by an exception in every
+# rule below, which is how one rule would forget.
+if [[ -d $PLUGINS/moarchy.owl ]]; then
+  _view=$(mktemp -d)
+  trap 'rm -rf "$_view"' EXIT
+  ( cd "$PLUGINS" && tar --exclude=./moarchy.owl -cf - . ) | ( cd "$_view" && tar -xf - )
+  PLUGINS=$_view
+fi
 
 # The apps absorbed from moarchy-apps (docs/structure.md B6) live in the same
 # directory as the shell's own plugins and are built on the other kit: they
@@ -75,7 +85,7 @@ printf '\nB. type / C. colour / D. shape\n'
 report=$(python3 - "$PLUGINS" <<'PY'
 import os, pathlib, re, sys
 
-RADII = ("radiusSheet", "radiusTile", "radiusCard", "radiusOn")
+RADII = ("radiusSheet", "radiusTile", "radiusCard", "radiusFrame", "radiusOn")
 HEX = re.compile(r'"#[0-9a-fA-F]{3,8}"')
 problems = []
 
@@ -536,6 +546,61 @@ if command -v node >/dev/null 2>&1; then
   fi
 else
   skip "the glyph table cases need node, which is not installed here (M10, M11)"
+fi
+
+# docs/home.md HM30, HM16, HM27. The shell's one TOML reader, home's layout
+# rules, and the two packaged files they are held to: the reader against every
+# construct this tree's files use and against Python's tomllib on the shipped
+# files, Ui.js against the documented ui.toml, and Layout.js against the
+# documented home.toml. Pure JavaScript, so it needs node and nothing else.
+printf '\nhome and its settings (docs/home.md, not a style.md section)\n'
+if command -v node >/dev/null 2>&1; then
+  if toml_out=$(node scripts/toml-test.js 2>&1); then
+    ok "one TOML reader, and the packaged ui.toml is what the shell does with none ($(grep -c 'ok' <<<"$toml_out") cases, HM27-HM30)"
+  else
+    no "the TOML reader or the packaged ui.toml is broken (HM27-HM30)" "$toml_out"
+  fi
+  if layout_out=$(node scripts/home-layout-test.js 2>&1); then
+    ok "home's pages, grid, page turns and arranging follow §B-§D and §K ($(grep -c 'ok' <<<"$layout_out") cases, HM4-HM17, HM50)"
+  else
+    no "home's layout rules are broken (HM4-HM17, HM50)" "$layout_out"
+  fi
+else
+  skip "the TOML reader and home layout cases need node, which is not installed here (HM4-HM30)"
+fi
+if owl_out=$(bash scripts/test-owl.sh 2>&1); then
+  ok "moarchy-owl installs, checks, updates and removes as owl.md §B says ($(grep -c 'PASS' <<<"$owl_out") cases, OW8-OW17)"
+else
+  no "moarchy-owl is broken (OW8-OW17)" "$owl_out"
+fi
+if home_out=$(bash scripts/test-home.sh 2>&1); then
+  ok "moarchy-home arranges, shares and imports as §K says ($(grep -c 'PASS' <<<"$home_out") cases, HM47, HM48)"
+else
+  no "moarchy-home's arranging, sharing or importing is broken (HM47, HM48)" "$home_out"
+fi
+
+# HM28, HM10. No key in two sections of ui.toml (moarchy-keyboard reads it
+# section-blind), the shell's and the apps' copies of the reader the same file,
+# and one frame on home.
+f=""
+dupes=$(grep -E '^[a-z][a-z0-9-]* *=' default/omarchy/ui.toml | sed 's/ *=.*//' | sort | uniq -d || true)
+[[ -n $dupes ]] && f+="  ui.toml sets a key in two sections, which a section-blind reader cannot tell apart: $dupes"$'\n'
+cmp -s "$PLUGINS/moarchy.common/Toml.js" default/omarchy/qs_ui/Toml.js \
+  || f+="  qs_ui/Toml.js is not a copy of moarchy.common/Toml.js"$'\n'
+for fn in shapeFrom pick num; do
+  a=$(awk "/^function $fn\\(/,/^}/" "$PLUGINS/moarchy.common/Ui.js")
+  b=$(awk "/^function $fn\\(/,/^}/" default/omarchy/qs_ui/Ui.js)
+  [[ -n $a && $a == "$b" ]] || f+="  Ui.js $fn() differs between the shell and the apps"$'\n'
+done
+# What draws over home rather than a tile frames its own cards (HM38, HM42, HM46).
+frames=$(grep -rln 'border.width' "$PLUGINS/moarchy.home" \
+         | grep -vE '/Home(Menu|Arrange|Share)\.qml$' || true)
+[[ $frames == "$PLUGINS/moarchy.home/HomeFrame.qml" ]] \
+  || f+="  border.width is drawn outside HomeFrame.qml on home: $frames"$'\n'
+if [[ -z $f ]]; then
+  ok "ui.toml keys are unique, both Ui.js copies share one reader, and home has one frame (HM10, HM28)"
+else
+  no "home's settings contract is broken" "$f"
 fi
 
 # gestures.md P7. What a workspace holding two windows is arranged as, which is

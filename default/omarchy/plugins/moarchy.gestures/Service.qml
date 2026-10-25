@@ -76,6 +76,7 @@ import "../moarchy.common/ShellApps.js" as ShellApps
 import "../moarchy.common/Sheet.js" as Sheet
 import "../moarchy.common/Edge.js" as Edge
 import "../moarchy.common" as Shared
+import "../moarchy.home" as HomeKit
 
 Item {
   id: root
@@ -763,7 +764,16 @@ Item {
   // not.
   Connections {
     target: Hyprland
-    function onFocusedWorkspaceChanged() { root.lastFocusedToplevel = null }
+    function onFocusedWorkspaceChanged() {
+      root.lastFocusedToplevel = null
+      // Home may have just come into view. The widgets that probe rather than
+      // bind (Fetch) read again once, as WidgetColumn's do when a sheet opens.
+      Qt.callLater(homeView.refresh)
+      // HM38. Leaving home for an app puts the home menu away, so coming back
+      // does not find it still up from the last visit.
+      homeView.closeMenu()
+      homeView.endEdit()
+    }
   }
 
   // F1. The lowest workspace number the compositor does not currently have.
@@ -1062,6 +1072,9 @@ Item {
       // arriving a second time through the same gap.
       if (root.workspaceOccupied())
         root.focusWorkspace(root.firstFreeWorkspace())
+      // home.md HM6. Already home, the gesture still means something: back to
+      // page 1, the way a launcher's home button does.
+      else homeView.goHome()
     }
     else if (action === "clear") root.hideTopmostOverlay()
 
@@ -1201,6 +1214,12 @@ Item {
 
     // G3
     if (root.backTopmostOverlay()) return
+
+    // HM38. The home menu is drawn on home rather than raised as an overlay,
+    // so G3 does not see it; it is the topmost thing while it is up.
+    if (homeView.menuOpen) { homeView.closeMenu(); return }
+    // HM43. Edit mode, the same way: back ends it.
+    if (homeView.arranging) { homeView.endEdit(); return }
 
     // K7. A shell app owns a page stack, and back walks up it before leaving
     // the window. Asked of the *focused window* and not of a list of open
@@ -1421,6 +1440,193 @@ Item {
       root.openVelocity >= root.fling
       || (root.openVelocity > -root.fling && root.pull >= root.sheetCommit))
     onCanceled: from => root.dropDrag()
+  }
+
+  // home.md HM26. Down on home is the control center, entering from the top,
+  // with the same 1:1 rule and the same release as the wallpaper's up-drag
+  // (D2, D2a). Its own tracker because the sign and the sheet are its own;
+  // everything after the latch is the machinery the edges already use.
+  Shared.DragTracker {
+    id: homeDownDrag
+    travel: root.targetTravel()
+    openDirection: 1
+    latchSign: 1
+    axisDominant: true
+    slop: root.slop
+    latchable: root.dragTarget !== null && root.dragStartPull < 1
+    startFrom: root.dragStartPull
+
+    onBegan: {
+      root.dragMode = root.dragSheet
+      root.beginSheet()
+    }
+    onMoved: p => root.setTargetProgress(homeDownDrag.travelled)
+    onFinished: (p, v) => root.releaseTarget(
+      root.openVelocity >= root.fling
+      || (root.openVelocity > -root.fling && root.pull >= root.sheetCommit))
+    onCanceled: from => root.dropDrag()
+  }
+
+  // HM5. Sideways on home turns the page. `travelled` is in pages: it starts
+  // at the page on screen and a page's width of leftward finger adds one, so
+  // it is the position to draw at, unclamped, and Layout.settle() decides
+  // where it lands.
+  Shared.DragTracker {
+    id: pageDrag
+    axis: "x"
+    travel: Math.max(1, homeView.width)
+    openDirection: -1
+    latchSign: 0
+    slop: root.slop
+    startFrom: homeView.page
+
+    onBegan: homeView.paging = true
+    onMoved: p => homeView.dragTo(pageDrag.travelled)
+    onFinished: (p, v) => {
+      homeView.paging = false
+      homeView.settle(pageDrag.startProgress, pageDrag.travelled,
+                      pageDrag.openVelocity, root.fling)
+    }
+    onCanceled: from => {
+      homeView.paging = false
+      homeView.goTo(homeView.page)
+    }
+  }
+
+  // HM14b. Every touch on home, routed once.
+  //
+  // This is the sheet-drag seam a widget already speaks (W13): home hands it
+  // to every tile as `host.sheet`, and the empty space under the tiles is a
+  // SheetDragArea on it too. So a drag that starts on a widget's button and a
+  // drag that starts on the wallpaper arrive here the same way.
+  //
+  // Nothing is pressed on the press. The direction is decided once the finger
+  // has moved past the slop -- sideways wins ties, as on the strip (B1) -- and
+  // only then is that one tracker pressed at the touch's origin and moved to
+  // where the finger is. Pressing all three and cancelling the losers is not
+  // an option: a cancelled tracker emits `canceled`, which is dropDrag(), which
+  // puts away whatever sheet the winner has just started to pull.
+  //
+  // A touch that never gets past the slop presses nothing at all, so it is a
+  // tap, and the control under it keeps it.
+  QtObject {
+    id: homeRouter
+
+    property bool pressed: false
+    property bool decided: false
+    property var tracker: null
+    // HM42. A long press lifted a tile: the rest of this touch carries it.
+    property bool lifting: false
+    property real startX: 0
+    property real startY: 0
+
+    readonly property bool sheetDragging: homeRouter.decided && homeRouter.pressed
+    // Read by a control's onClicked, which fires after the release -- so it
+    // has to survive the release and is cleared by the next press instead.
+    readonly property bool sheetWasDrag: homeRouter.decided
+
+    // `item` null: `mouse` is already in scene coordinates, which is what an
+    // OWL tile's pointer handler has (owl.md OW5).
+    function scenePoint(item, mouse) {
+      return item ? item.mapToItem(null, mouse.x, mouse.y) : Qt.point(mouse.x, mouse.y)
+    }
+
+    function sheetPress(item, mouse): void {
+      var p = homeRouter.scenePoint(item, mouse)
+      homeRouter.pressed = true
+      homeRouter.decided = false
+      homeRouter.lifting = false
+      homeRouter.tracker = null
+      homeRouter.startX = p.x
+      homeRouter.startY = p.y
+      homeHold.restart()
+    }
+
+    function sheetMove(item, mouse): void {
+      if (!homeRouter.pressed) return
+      var p = homeRouter.scenePoint(item, mouse)
+      if (homeRouter.lifting) { homeView.liftMove(p.x, p.y); return }
+      if (!homeRouter.decided) {
+        var dx = p.x - homeRouter.startX
+        var dy = p.y - homeRouter.startY
+        if (Math.max(Math.abs(dx), Math.abs(dy)) <= root.slop) return
+        homeHold.stop()
+        homeRouter.decided = true
+        root.dragMode = "none"
+        root.dragSource = "home"
+        if (Math.abs(dx) >= Math.abs(dy)) {
+          // A page turn drives no sheet, so it leaves `lastDrag` alone: the
+          // strip's pill follows `dx` while a drag is tracked, and must not
+          // slide under a finger turning a page above it.
+          homeRouter.tracker = pageDrag
+        } else if (dy < 0) {
+          // D1, unchanged: the strip's sheet, because the wallpaper is the
+          // strip's drag without the second stop.
+          root.resolveTarget(root.bottomTarget, Edge.BOTTOM)
+          root.pendingMode = root.dragTarget ? root.dragSheet : "none"
+          root.lastDrag = homeDrag
+          homeRouter.tracker = homeDrag
+        } else {
+          root.resolveTarget(Sheet.CONTROL_CENTER, Edge.TOP)
+          root.pendingMode = root.dragTarget ? root.dragSheet : "none"
+          root.lastDrag = homeDownDrag
+          homeRouter.tracker = homeDownDrag
+        }
+        homeRouter.tracker.press(homeRouter.startX, homeRouter.startY)
+      }
+      // Decided by a long press that opened the menu: the rest of the touch
+      // moves nothing.
+      if (homeRouter.tracker) homeRouter.tracker.move(p.x, p.y)
+    }
+
+    function sheetRelease(): void {
+      homeRouter.pressed = false
+      homeHold.stop()
+      if (homeRouter.lifting) { homeRouter.lifting = false; homeView.liftEnd(); return }
+      if (!homeRouter.tracker) return
+      var t = homeRouter.tracker
+      homeRouter.tracker = null
+      t.release()
+      // A vertical drag shares the strip's state; a release that never latched
+      // (no sheet on that edge) reaches no handler, so reset here as the right
+      // edge does. reset() is idempotent after a latched one.
+      if (t !== pageDrag) root.reset()
+    }
+
+    function sheetCancel(): void {
+      homeRouter.pressed = false
+      homeHold.stop()
+      if (homeRouter.lifting) { homeRouter.lifting = false; homeView.liftCancel(); return }
+      if (!homeRouter.tracker) return
+      var t = homeRouter.tracker
+      homeRouter.tracker = null
+      t.cancel()
+      if (t !== pageDrag) root.reset()
+    }
+  }
+
+  // HM37, HM42. A press on home held still for C1's number: on a tile it lifts
+  // the tile, anywhere else it is the home menu -- home knows what is where.
+  // It marks the touch decided, which is what sheetWasDrag reads, so the tile
+  // or the prompt bar under the finger does not take the release as a tap.
+  // Armed on press like the strip's hold, and for the strip's reason (C1): a
+  // handler beside the controls would lose the press to their grab.
+  Timer {
+    id: homeHold
+    interval: root.holdDelay
+    onTriggered: {
+      if (!homeRouter.pressed || homeRouter.decided) return
+      homeRouter.decided = true
+      homeRouter.lifting = homeView.holdAt(homeRouter.startX, homeRouter.startY) === "tile"
+    }
+  }
+
+  // HM22. The prompt bar on home is a picture of a field: this raises the app
+  // drawer with its field focused and the keyboard up. The app drawer and not
+  // the strip's sheet, whichever that is set to, because the drawer's field is
+  // the prompt bar (the minimal drawer has no agent to ask).
+  function openPrompt(): void {
+    Sheet.summon(root.shell, Sheet.APP_DRAWER, JSON.stringify({ prompt: true }))
   }
 
   // G6, G8. The back edge, which is the fifth gesture and was the one §F did
@@ -1942,6 +2148,25 @@ Item {
     // the surface rather than shrinking it.
     margins.bottom: -root.stripHeight
 
+    // home.md HM1. What is drawn on this surface: pages of tiles, faces, the
+    // recent strip and the prompt bar. Above the strip's band and under the
+    // fill below, so I1b's covering colour still paints over all of it for the
+    // frame a window is unmapped.
+    //
+    // Every press on it -- empty space or a tile's own control -- comes to
+    // `homeRouter`, which is the touch area this surface used to have.
+    HomeKit.Home {
+      id: homeView
+      anchors.fill: parent
+      anchors.bottomMargin: root.stripHeight
+      shell: root.shell
+      sheet: homeRouter
+      keyboardUp: root.keyboardReserving
+      // owl.md OW4. Nothing on home runs an OWL widget behind a window.
+      covered: root.fillWorkspace
+      onPromptTapped: root.openPrompt()
+    }
+
     // I1a / I1b. Theme background, filled from underneath.
     //
     // Underneath is the whole trick. Bottom is below every window, so at rest
@@ -1965,46 +2190,6 @@ Item {
       visible: root.fillWorkspace
     }
 
-    MultiPointTouchArea {
-      anchors.fill: parent
-      maximumTouchPoints: 1
-
-      // Its own tracker, because this surface and the strip can both be
-      // mid-gesture in principle and one origin shared between them would let
-      // either clobber the other's.
-      onPressed: pts => {
-        if (pts.length === 0) return
-        root.dragMode = "none"
-        // Set before resolveTarget, which reads it to decide where this drag
-        // starts from.
-        root.dragSource = "home"
-        // Q1. The strip's sheet, because the wallpaper is the strip's drag
-        // without the second stop (D1) and not a gesture with a destination
-        // of its own. With no sheet on that edge there is nothing here to
-        // reach -- a home screen is already home -- so this one does not get
-        // the "home" mode the strip does, and `latchable` below still tests
-        // for a target.
-        root.resolveTarget(root.bottomTarget, Edge.BOTTOM)
-        root.pendingMode = root.dragTarget ? root.dragSheet : "none"
-
-        root.lastDrag = homeDrag
-        homeDrag.press(pts[0].sceneX, pts[0].sceneY)
-      }
-
-      onUpdated: pts => {
-        if (pts.length > 0) homeDrag.move(pts[0].sceneX, pts[0].sceneY)
-      }
-
-      // D4. Sideways and downward do nothing here, so there is no commit()
-      // fallback -- an un-latched gesture on the wallpaper simply ends.
-      onReleased: pts => {
-        if (!root.tracking) return
-        homeDrag.release()
-        root.reset()
-      }
-
-      onCanceled: pts => homeDrag.cancel()
-    }
   }
 
   // ========================================================== the left edge

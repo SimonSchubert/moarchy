@@ -15,7 +15,7 @@ visible.
 | **Settings** | The `moarchy.settings` window. One plugin, one window, many pages. |
 | **page** | One screen in the stack, addressed by a dotted id (`appearance.bar`). |
 | **stack** | The pages currently pushed, root first. Back pops one. |
-| **row** | A line on a page. One of `nav`, `plugin`, `switch`, `choice`, `action`, `link`, `info`, `input`. |
+| **row** | A line on a page. One of `nav`, `plugin`, `switch`, `choice`, `stepper`, `action`, `link`, `info`, `input`. A `stepper` is `home.md` HM55's. |
 | **guard** | A `when:` shell condition copied verbatim from `omarchy-menu.jsonc`. A row whose guard fails is not rendered. |
 | **reader** | The command a `switch` or `choice` page reads its state from. |
 | **bridged launch** | Running an upstream `omarchy-*` command unchanged, in a TUI terminal or the browser. |

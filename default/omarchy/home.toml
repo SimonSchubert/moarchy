@@ -1,0 +1,52 @@
+# Home: its pages left to right, and what is on each (docs/home.md).
+#
+# This packaged copy is the documentation and the layout a phone starts with.
+# The file the shell reads is
+#
+#     ~/.config/omarchy/home.toml
+#
+# and while it does not exist, home is exactly this. A change lands within a
+# second, with no restart. A file that does not parse leaves home as it was and
+# is never written over; `omarchy-shell home report` says which line is wrong.
+#
+#     moarchy-home show                   the pages as home resolved them
+#     moarchy-home add <widget> [page]    put a tile on a page
+#     moarchy-home remove <widget>        take it off
+#     moarchy-home reset                  back to this file
+#
+# A page is a [[page]] block, in order. Each holds one of two things:
+#
+#   face = "<name>"    The whole page is one QML file that draws straight on
+#                      the wallpaper: a start page, a clock, a dashboard.
+#                      ~/.config/omarchy/faces/<name>.qml if it exists,
+#                      otherwise the one this package ships. Faces always sit
+#                      left of the first page of tiles, and home opens on that
+#                      page, so swipe right to reach them.
+#
+#   tiles = [ ... ]    A grid of tiles. Each is { widget = "<id>", x, y, w, h }:
+#                      the widget, its top-left cell and its size in cells.
+#                      The grid has [home] columns columns in ui.toml (6), and
+#                      as many rows as fit. A tile off the grid, or on top of
+#                      one listed before it, takes the first free spot.
+#
+# Widgets that ship:
+#
+#   today      the date, the weather now and the next three days
+#   fetch      the system: os, kernel, uptime, packages, memory, disk, battery
+#   media      what is playing, with its controls (absent while nothing plays)
+#   calendar   the next event in the Calendar app (absent with none coming)
+#
+# Any other id is your own: widget = "clock" loads
+# ~/.config/omarchy/widgets/clock.qml. The moarchy skill an agent reads says
+# how to write one.
+
+[[page]]
+face = "start"
+
+[[page]]
+tiles = [
+  { widget = "fetch",    x = 0, y = 0, w = 3, h = 4 },
+  { widget = "today",    x = 3, y = 0, w = 3, h = 4 },
+  { widget = "media",    x = 0, y = 4, w = 6, h = 2 },
+  { widget = "calendar", x = 0, y = 6, w = 6, h = 1 },
+]

@@ -11,7 +11,7 @@
 // (docs/refactor.md E3's shape).
 .pragma library
 
-.import "Ui.js" as Ui
+.import "Toml.js" as Toml
 
 // ---------------------------------------------------------------------------
 // The catalogue (W8)
@@ -54,7 +54,15 @@ var WIDGETS = [
   { id: "media",        name: "Now playing",       glyph: "󰝚",
     hosts: null, on: true },
   { id: "calendar",     name: "Next event",        glyph: "󰃰",
-    hosts: null, on: false }
+    hosts: null, on: false },
+  // home.md HM14. Tiles for home only: each is drawn at a cell rectangle the
+  // host hands it, and neither has a shape that fits a control center row.
+  //
+  //   md-calendar_today  md-console
+  { id: "today",        name: "Today",             glyph: "󰃶",
+    hosts: ["home"], on: true },
+  { id: "fetch",        name: "System",            glyph: "󰆍",
+    hosts: ["home"], on: true }
 ]
 
 // ---------------------------------------------------------------------------
@@ -101,9 +109,13 @@ var TOGGLES = [
 // what decides whether an id resolves to a file (W2) or to a tile, and it is
 // the only thing that differs between arranging a control center and arranging
 // the row of toggles inside it.
+// `home` is here for the catalogue -- which widgets may be a tile -- and not
+// for an arrangement: where home's tiles go is home.toml (home.md HM15), so
+// `widgets.toml` has no `home` key and Settings has no page for it.
 var SURFACES = {
   "control-center": { kind: "widget", items: WIDGETS },
-  "quick-toggles":  { kind: "toggle", items: TOGGLES }
+  "quick-toggles":  { kind: "toggle", items: TOGGLES },
+  "home":           { kind: "widget", items: WIDGETS }
 }
 
 // ---------------------------------------------------------------------------
@@ -169,16 +181,18 @@ function glyphFor(surface, id) {
 // ---------------------------------------------------------------------------
 // The file
 // ---------------------------------------------------------------------------
-// Flat `key = "value"` lines, the same subset of TOML `Ui.js` reads, and read
-// by that function rather than by a second copy of it (docs/refactor.md E7).
+// Flat `key = "value"` lines, read by the shell's one TOML reader rather than
+// by a copy of it (docs/refactor.md E7, home.md HM30) -- strictly, and the
+// forgiving way when that fails, as Ui.js reads ui.toml.
 
 // The raw list for one host, or "" when the file, the key or the file itself
 // is missing. W18: absent is not empty, and the difference is made below in
 // resolve() rather than here -- this only reports what the file said.
 function rawFor(text, hostId) {
-  var data = Ui.parseToml(text)
+  var r = Toml.parse(text)
+  var data = r.ok ? r.data : Toml.flat(text)
   var v = data[keyFor(hostId)]
-  return v === undefined ? "" : String(v)
+  return v === undefined || v === null || typeof v === "object" ? "" : String(v)
 }
 
 // ---------------------------------------------------------------------------

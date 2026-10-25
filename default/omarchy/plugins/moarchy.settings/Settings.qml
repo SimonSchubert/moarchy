@@ -375,6 +375,8 @@ Item {
     // every switch printed its own raw state under its label -- "Show status
     // bar / false" next to a toggle that was visibly on.
     if (row.type === "switch") return String(row.detail || "")
+    // A stepper shows its value between its buttons, not under its label.
+    if (row.type === "stepper") return String(row.detail || "")
     if (row.read || row.detailCmd) return String(root.valueMap[row.id] || "")
     return String(row.detail || "")
   }
@@ -784,6 +786,43 @@ Item {
     root.lastLaunch = cmd
     if (root.dryRun) return
     Quickshell.execDetached(["bash", "-lc", cmd])
+  }
+
+  // ---------------------------------------------------------- steppers
+  //
+  // docs/home.md HM55. `read` answers the value, `set` is the command it is
+  // appended to, `min`/`max`/`step` the range, and `percent` shows a 0-1 value
+  // as a percentage (`unit` is appended otherwise). The value is held as a
+  // number in the row's own units, so 0.88 + 0.04 is 0.92 and not 0.9200001.
+  function stepValue(row) {
+    var v = Number(root.valueMap[row.id])
+    return isFinite(v) ? v : Number(row.min || 0)
+  }
+  function stepText(row) {
+    if (root.valueMap[row.id] === undefined) return "\u2026"
+    var v = root.stepValue(row)
+    if (row.percent) return Math.round(v * 100) + "%"
+    return String(v) + (row.unit ? " " + row.unit : "")
+  }
+  function stepRow(row, by) {
+    if (!row) return
+    var step = Number(row.step || 1)
+    var places = String(step).indexOf(".") < 0 ? 0 : String(step).split(".")[1].length
+    var next = Math.max(Number(row.min), Math.min(Number(row.max), root.stepValue(row) + by * step))
+    next = Number(next.toFixed(places))
+    if (next === root.stepValue(row)) return
+    // Shown now, so a second tap steps from here; read back when the write
+    // exits, so the file stays the truth (switchProc re-reads).
+    var m = ({})
+    for (var k in root.valueMap) m[k] = root.valueMap[k]
+    m[row.id] = String(next)
+    root.valueMap = m
+    var cmd = String(row.set) + " " + root.shellQuote(String(next))
+    root.lastLaunch = cmd
+    if (root.dryRun) return
+    if (switchProc.running) switchProc.running = false
+    switchProc.command = ["bash", "-lc", cmd]
+    switchProc.running = true
   }
 
   function setSwitch(row, on) {
@@ -1210,13 +1249,29 @@ Item {
           id: arrangeSlot
           width: parent.width
           height: Math.max(0, parent.height - y)
-          active: root.pageDef && root.pageDef.arrange !== undefined
+          active: root.pageDef && (root.pageDef.arrange !== undefined || root.pageDef.view !== undefined)
           visible: active
-          sourceComponent: ArrangeView {
+          // docs/home.md HM56. Home's pages are arranged the same way, by
+          // their handles, but they are pages and not widgets.
+          sourceComponent: !root.pageDef ? null
+                         : root.pageDef.view === "home-pages" ? pagesView
+                         : root.pageDef.view === "owl-store" ? storeView : arrangeView
+        }
+        Component {
+          id: arrangeView
+          ArrangeView {
             host: root
             surface: String(root.pageDef.arrange)
             onNavigate: page => root.push(page)
           }
+        }
+        Component {
+          id: pagesView
+          PagesView { host: root }
+        }
+        Component {
+          id: storeView
+          StoreView { host: root }
         }
 
         ListView {
@@ -1251,6 +1306,10 @@ Item {
             subduedColor: root.subdued
             accentColor: root.accent
             radiusCard: root.radiusCard
+            stepText: modelData.type === "stepper" ? root.stepText(modelData) : ""
+            canDown: modelData.type === "stepper" && root.stepValue(modelData) > Number(modelData.min)
+            canUp: modelData.type === "stepper" && root.stepValue(modelData) < Number(modelData.max)
+            onStepped: function (by) { root.stepRow(modelData, by) }
             onActivated: root.activate(modelData)
             onEdited: function (value) { root.setInput(modelData.id, value) }
             // The id, not a bool: two fields on this page, and clearing the
