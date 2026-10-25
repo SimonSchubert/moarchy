@@ -23,7 +23,11 @@ Owl.OwlHost {
   sansFamily: "JetBrainsMono Nerd Font"
   // OW4. A phone's rate, not a display's: on a Pixel 3a the runtime's clock is
   // most of an OWL widget's cost, and 15 frames is still motion.
-  frameRate: 15
+  //
+  // home.md HM5b. And 1 while a page moves: an animated widget's frame is
+  // ~21 ms of the GUI thread the page turn needs. Slowed rather than stopped,
+  // because stopping is `active`, and `active` restarts a widget's clock.
+  frameRate: owlHost.home && owlHost.home.moving ? 1 : 15
   launcherVersion: "moarchy"
 
   // OW3. Omalauncher's cell is 69 dp; one cell and gap of home's grid is that.

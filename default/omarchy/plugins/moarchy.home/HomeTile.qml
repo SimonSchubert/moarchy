@@ -111,6 +111,9 @@ Item {
     id: loader
     anchors.fill: parent
     anchors.margins: frame.inset
+    // home.md HM5a. A widget compiles in slices between frames where the
+    // engine can, rather than in the one frame its page was built in.
+    asynchronous: true
     // HM12. An unavailable widget keeps its cells: hidden, never collapsed.
     visible: tile.tileState === "ok"
 

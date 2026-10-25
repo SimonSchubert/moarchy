@@ -59,6 +59,24 @@ and the overview (G, P), because those bands take touch ahead of home.
 → a 200px leftward drag on page 1 leaves `home report` on page 2; a sideways
 swipe in the strip band still changes `hyprctl activeworkspace`
 
+**HM5a** Nothing is built or torn down while a page moves -- under the finger
+or settling after it. The page home lands on and its neighbours are built once
+it has landed, without holding a frame where the engine allows, and a page
+once built is kept.
+→ after page turns across every page, `home report` says `built-moving=0`
+
+**HM5b** While a page moves, OWL widgets draw at 1 frame a second, not 15, and
+the page landed on starts its widgets only once it has landed. A turn that
+comes back to the same page does not restart its widgets.
+→ `home report` reads `moving=1 owl-fps=1` during a drag, `owl-fps=15` after
+
+**HM5c** `home report` measures the page turns since the last `home stalls`:
+the turns, the frames drawn per second while moving, the longest late tick of
+a 16 ms timer, and how many ticks were 33 ms or more late. The timer runs only
+while a page moves.
+→ `omarchy-shell home stalls` prints and resets
+`turns=N fps=F stall-max=Ms stalls33=K built-moving=B`
+
 **HM6** Going home while already home returns to page 1. Going home from an app
 lands on the page home was showing.
 → on page 2, `omarchy-shell gestures swipe home` leaves `home report` on page 1

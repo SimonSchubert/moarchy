@@ -166,6 +166,7 @@ Item {
   onResolvedChanged: home.showPages(home.resolved.pages)
   Component.onCompleted: {
     home.pages = home.resolved.pages
+    home.settledPage = home.page
     home.makeOwlHost()
   }
 
@@ -177,7 +178,74 @@ Item {
 
   Behavior on pagePosition {
     enabled: !home.paging
-    NumberAnimation { duration: 260; easing.type: Easing.OutCubic }
+    NumberAnimation { id: pageAnim; duration: 260; easing.type: Easing.OutCubic }
+  }
+
+  // A page under the finger or settling after it (HM5a).
+  readonly property bool moving: home.paging || pageAnim.running
+
+  // HM5a. The page home has landed on: what is built, and whose OWL widgets
+  // run, follows this rather than `page`, which moves the moment a finger
+  // lifts. Later, not now: between the lift and the settle starting, `moving`
+  // is false for an instant, and a page built there is built in the turn.
+  property int settledPage: 0
+  function land(): void { if (!home.moving) home.settledPage = home.page }
+  onPageChanged: Qt.callLater(home.land)
+
+  // ------------------------------------------------------- the meter (HM5c)
+  //
+  // What a page turn costs, measured where it hurts: how late a 16 ms timer
+  // fires on the GUI thread, and how many frames the window draws. Both run
+  // only while a page moves, so the meter costs nothing at rest.
+  property int turns: 0
+  property int turnFrames: 0
+  property real turnMs: 0
+  property int stallMax: 0
+  property int stalls33: 0
+  // HM5a. Pages built or torn down while one moved; it should stay 0.
+  property int builtMoving: 0
+  property real meterLast: 0
+  property real movingSince: 0
+
+  onPagingChanged: if (home.paging) home.turns++
+  onMovingChanged: {
+    Qt.callLater(home.land)
+    var now = Date.now()
+    if (home.moving) {
+      home.movingSince = now
+      home.meterLast = now
+    } else {
+      home.turnMs += now - home.movingSince
+    }
+  }
+  Timer {
+    interval: 16
+    repeat: true
+    running: home.moving
+    onTriggered: {
+      var now = Date.now()
+      var late = now - home.meterLast - 16
+      home.meterLast = now
+      if (late > home.stallMax) home.stallMax = late
+      if (late >= 33) home.stalls33++
+    }
+  }
+  Connections {
+    target: home.Window.window
+    enabled: home.moving
+    function onFrameSwapped() { home.turnFrames++ }
+  }
+  function stalls(): string {
+    var fps = home.turnMs > 0 ? Math.round(home.turnFrames * 10000 / home.turnMs) / 10 : 0
+    var out = "turns=" + home.turns + " fps=" + fps + " stall-max=" + home.stallMax + "ms"
+              + " stalls33=" + home.stalls33 + " built-moving=" + home.builtMoving
+    home.turns = 0
+    home.turnFrames = 0
+    home.turnMs = 0
+    home.stallMax = 0
+    home.stalls33 = 0
+    home.builtMoving = 0
+    return out
   }
 
   function goTo(n) {
@@ -336,6 +404,9 @@ Item {
                + " columns=" + home.grid.columns + " rows=" + home.grid.rows
                + " cell=" + home.grid.cell + " height=" + home.layoutHeight
                + (home.keyboardUp ? " keyboard=up" : ""))
+    lines.push("moving=" + (home.moving ? 1 : 0)
+               + " owl-fps=" + (home.owlHost ? home.owlHost.frameRate : 0)
+               + " built-moving=" + home.builtMoving)
     lines.push("frame radius=" + home.radiusFrame + " border=" + home.frameBorder
                + " opacity=" + ui.homeOpacity + " gaps=" + home.gapIn + "/" + home.gapOut)
     if (home.layoutError !== "") lines.push("layout-error=" + home.layoutError)
@@ -671,6 +742,8 @@ Item {
 
     function report(): string { return home.report() }
     function page(): string { return String(home.page - home.firstTiles + 1) }
+    // HM5c. The page turns since the last call, then starts again.
+    function stalls(): string { return home.stalls() }
     // 1 is the first page of tiles, 0 and below are faces (HM4). Not `goto`,
     // which older JavaScript reserves.
     function go(n: string): string {
@@ -753,9 +826,17 @@ Item {
         z: home.carry !== null && home.carry.page === pageItem.index ? 1 : 0
         width: home.width
         height: home.height
-        // Only the page on screen and its neighbours are built, so a home of
-        // eight pages costs three pages of widgets.
-        readonly property bool near: Math.abs(pageItem.index - home.pagePosition) < 1.5
+        // A page is built when home lands on it or beside it, and the page
+        // landed on, not the position drawn (HM5a): that crossed into the next
+        // page halfway through a turn and built it there, under the finger.
+        readonly property bool near: Math.abs(pageItem.index - home.settledPage) <= 1
+        // And kept once built. Torn down after a landing, a page left its
+        // garbage to the collector in the middle of the next turn; kept, an
+        // off-screen page costs memory and no time -- its OWL widgets are not
+        // `showing`, and nothing else on a page runs unseen.
+        property bool built: false
+        onNearChanged: if (pageItem.near) pageItem.built = true
+        Component.onCompleted: pageItem.built = pageItem.near
 
         function describe(): string {
           var head = "page " + (pageItem.index - home.firstTiles + 1) + " "
@@ -786,7 +867,9 @@ Item {
         Loader {
           id: faceLoader
           anchors.fill: parent
-          active: pageItem.modelData.kind === "face" && pageItem.near
+          // HM5a. Built in slices between frames where the engine can.
+          asynchronous: true
+          active: pageItem.modelData.kind === "face" && pageItem.built
           readonly property string name: pageItem.modelData.face || ""
           readonly property string userPath:
             (Quickshell.env("HOME") || "") + "/.config/omarchy/faces/" + faceLoader.name + ".qml"
@@ -804,7 +887,10 @@ Item {
             if (!faceLoader.active || faceLoader.name === "") return
             faceLoader.setSource(faceLoader.url, { host: home, shell: home.shell })
           }
-          onActiveChanged: faceLoader.load()
+          onActiveChanged: {
+            if (home.moving) home.builtMoving++
+            faceLoader.load()
+          }
           onUrlChanged: faceLoader.load()
           Component.onCompleted: faceLoader.load()
           onStatusChanged: {
@@ -915,7 +1001,9 @@ Item {
         Loader {
           id: tilesLoader
           anchors.fill: parent
-          active: pageItem.modelData.kind === "tiles" && pageItem.near
+          asynchronous: true
+          active: pageItem.modelData.kind === "tiles" && pageItem.built
+          onActiveChanged: if (home.moving) home.builtMoving++
           sourceComponent: Item {
             id: tilesPage
 
@@ -973,8 +1061,9 @@ Item {
                 revision: home.revision
                 cols: tileItem.cellNow.w
                 rows: tileItem.cellNow.h
-                // owl.md OW4: home on screen, and this page the one showing.
-                showing: !home.covered && pageItem.index === home.page
+                // owl.md OW4: home on screen, and this page the one showing --
+                // once it has landed there (HM5b).
+                showing: !home.covered && pageItem.index === home.settledPage
               }
             }
           }
