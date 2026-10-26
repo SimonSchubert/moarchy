@@ -18,31 +18,15 @@ Ids are `CB<n>`, cited by any check that proves one.
 
 ---
 
-## Open questions — decide these first
+## What is boosted, and what is not
 
-Each has a recommendation. Nothing below has been built.
-
-**Q1. Skip the always-on stage?** The plan was to ship a permanent boost from
-`moarchy-restart-shell` and then narrow it to touch. A permanent boost costs
-power at rest: with no finger on the screen, the A75s spend 25-26% of the time
+Only the shell, and only while a finger is down (CB2). A permanent boost costs
+power at rest: with no finger on the screen the A75s spend 25-26% of the time
 at 1.75 GHz or more, against 14-16% unboosted, because gregoftheweb-sip's
-once-a-second burst then runs at full clock. *Recommendation: go straight to the
-touch-scoped boost (CB1-CB7) and never ship the permanent one.*
-
-**Q2. Leave Hyprland unboosted?** Boosting Hyprland alongside the shell measured
-no better than boosting the shell alone (table below). *Recommendation: boost
-the shell only.* A compositor frame drop this meter cannot see is possible but
-unmeasured.
-
-**Q3. Boost the app in front as well?** Android's input boost raises the clock
-for everything. Nothing here measured an app. *Recommendation: shell only for
-now. Make it a one-line widening later, once an app has been measured.*
-
-**Q4. Background clamp: `uclamp.max 512`, plus `nice 10` for OWL sources?**
-512 fits under an A55's capacity of 522. *Recommendation: yes.*
-
-**Q5. Hold time after release: 1 s?** That covers a fling's settle animation
-(about 250 ms) and a quick second swipe. *Recommendation: 1 s.*
+once-a-second redraw then runs at full clock. Hyprland is not boosted: with
+Hyprland boosted too, turns measured no better than with the shell boosted
+alone (table below). The app in front is not boosted either. No app has been
+measured yet.
 
 ## What was measured
 
