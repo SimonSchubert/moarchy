@@ -32,7 +32,9 @@
 #   layout of a window that already exists. moarchy-android-launch asserts the
 #   value BEFORE the activity starts instead -- docs/android.md AC 11.
 
-. "$startdir/../../scripts/manifest.sh"
+# The pins: ../../scripts in this repo, beside this file in its .src.tar.gz
+# (docker/build-packages.sh puts them there).
+if [ -f "$startdir/manifest.sh" ]; then . "$startdir/manifest.sh"; else . "$startdir/../../scripts/manifest.sh"; fi
 _ver=$(manifest_get moarchy version) || return 1
 
 pkgname=moarchy-waydroid

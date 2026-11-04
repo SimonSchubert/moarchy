@@ -33,7 +33,9 @@
 # that makes DEVICE_GROW=filesystem on this phone), and upstream's version is
 # validated on a list of handsets ours would not be.
 
-. "$startdir/../../scripts/manifest.sh"
+# The pins: ../../scripts in this repo, beside this file in its .src.tar.gz
+# (docker/build-packages.sh puts them there).
+if [ -f "$startdir/manifest.sh" ]; then . "$startdir/manifest.sh"; else . "$startdir/../../scripts/manifest.sh"; fi
 _ver=$(manifest_get qbootctl version) || return 1
 _url=$(manifest_get qbootctl url) || return 1
 

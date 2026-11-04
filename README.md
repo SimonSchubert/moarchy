@@ -243,6 +243,21 @@ Reflashing is still needed for changes to the partition layout, to what runs on
 first boot, or to the u-boot SPL — that lives outside any partition, at byte
 131072.
 
+## Source code
+
+Every package in `[moarchy]` has its corresponding source published beside it
+in the same [`repo` release](https://github.com/SimonSchubert/moarchy/releases/tag/repo):
+for `<name>-<ver>-<rel>-<arch>.pkg.tar.xz` there is a
+`<pkgbase>-<ver>-<rel>.src.tar.gz`, made by `makepkg --allsource` in the same
+build. It holds the PKGBUILD, every file it installs or patches with, and every
+source it downloaded — for `linux-moarchy-sdm670`, the full sdm670-mainline
+kernel tree at the pinned tag and the vendored `config` it is built with — plus
+the `manifest.toml` pins, so `makepkg` rebuilds it from that one file. The
+kernel inside an image release is the `linux-moarchy-sdm670` package of the
+same version; its source is in the `repo` release and attached to the image
+release as well. The recipes themselves are in [`pkgbuilds/`](pkgbuilds) and
+the pins in [`manifest.toml`](manifest.toml).
+
 ## Building it yourself
 
 ```bash

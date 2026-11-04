@@ -19,7 +19,9 @@
 #   rather than naming a unit that is not there -- moarchy-firstboot would warn
 #   on every first boot for a feature nobody has built yet.
 
-. "$startdir/../../scripts/manifest.sh"
+# The pins: ../../scripts in this repo, beside this file in its .src.tar.gz
+# (docker/build-packages.sh puts them there).
+if [ -f "$startdir/manifest.sh" ]; then . "$startdir/manifest.sh"; else . "$startdir/../../scripts/manifest.sh"; fi
 _ver=$(manifest_get moarchy version) || return 1
 
 pkgname=moarchy-device-sargo

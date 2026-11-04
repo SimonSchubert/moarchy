@@ -53,7 +53,9 @@
 # line and the guards below fail the build loudly if the pinned ref ever moves
 # out from under it.
 
-. "$startdir/../../scripts/manifest.sh"
+# The pins: ../../scripts in this repo, beside this file in its .src.tar.gz
+# (docker/build-packages.sh puts them there).
+if [ -f "$startdir/manifest.sh" ]; then . "$startdir/manifest.sh"; else . "$startdir/../../scripts/manifest.sh"; fi
 _ver=$(manifest_get moarchy version) || return 1
 _url=$(manifest_get device.sargo ucm-url) || return 1
 _ref=$(manifest_get device.sargo ucm-ref) || return 1

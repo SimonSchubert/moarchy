@@ -32,7 +32,9 @@
 
 # The pin lives in manifest.toml and nowhere else (V1). makepkg exports
 # $startdir, so the reader is reachable from here.
-. "$startdir/../../scripts/manifest.sh"
+# The pins: ../../scripts in this repo, beside this file in its .src.tar.gz
+# (docker/build-packages.sh puts them there).
+if [ -f "$startdir/manifest.sh" ]; then . "$startdir/manifest.sh"; else . "$startdir/../../scripts/manifest.sh"; fi
 _ref=$(manifest_get omarchy ref)   || return 1
 _url=$(manifest_get omarchy url)   || return 1
 _ver=$(manifest_get omarchy version) || return 1

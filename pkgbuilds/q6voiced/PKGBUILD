@@ -28,7 +28,9 @@
 #
 # postmarketOS's own daemon, MIT, pinned at a tag with its tarball checksummed.
 
-. "$startdir/../../scripts/manifest.sh"
+# The pins: ../../scripts in this repo, beside this file in its .src.tar.gz
+# (docker/build-packages.sh puts them there).
+if [ -f "$startdir/manifest.sh" ]; then . "$startdir/manifest.sh"; else . "$startdir/../../scripts/manifest.sh"; fi
 _url=$(manifest_get q6voiced url) || return 1
 _ref=$(manifest_get q6voiced ref) || return 1
 _ver=$(manifest_get q6voiced version) || return 1

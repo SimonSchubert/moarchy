@@ -12,7 +12,8 @@
 #
 # Everything a phone needs to run `pacman -Syu` lives in repo/dist afterwards:
 # every package, a detached signature per package, and the database with its
-# own signature. That is what lets the stanza say SigLevel = Required rather
+# own signature -- and, for every package, its makepkg --allsource source
+# package, signed the same way. That is what lets the stanza say SigLevel = Required rather
 # than trusting HTTPS alone with code that installs as root.
 set -euo pipefail
 
@@ -65,6 +66,33 @@ rm -f "$DIST"/firmware-moarchy-sargo-*
 # week's; the names are what make a stale one visible before it is signed.
 pkgset_list "$DIST" | sed 's/^/    /'
 
+# And each one's corresponding source, published beside it. A third of these
+# packages are GPL -- the kernel first -- and a binary on its own is the one
+# thing that licence does not allow to be distributed. docker/build-packages.sh
+# writes <pkgbase>-<ver>-<rel>.src.tar.gz (makepkg --allsource) for every
+# package it builds; a package without one is refused here, not shipped bare.
+# pkgbase and the full version come from the package's own .PKGINFO, so a split
+# package or an epoch names the right file.
+say "pairing each package with its source"
+_nosrc=0
+for p in "$DIST"/*.pkg.tar.*; do
+  case "$p" in *.sig) continue ;; esac
+  _pi=$(tar -xOf "$p" .PKGINFO 2>/dev/null) || _pi=
+  _base=$(printf '%s\n' "$_pi" | sed -n 's/^pkgbase = //p' | head -1)
+  _ver=$(printf '%s\n' "$_pi" | sed -n 's/^pkgver = //p' | head -1)
+  [ -n "$_base" ] || _base=$(printf '%s\n' "$_pi" | sed -n 's/^pkgname = //p' | head -1)
+  _src="$_base-$_ver.src.tar.gz"
+  if [ -z "$_ver" ] || [ ! -f "$PKGDIR/$_src" ]; then
+    printf '    !! no %s for %s\n' "${_ver:+$_src}" "${p##*/}" >&2
+    _nosrc=1
+    continue
+  fi
+  cp "$PKGDIR/$_src" "$DIST/"
+done
+[ "$_nosrc" = 0 ] ||
+  die "packages without their source; rebuild with ./scripts/provision.sh build (it writes both)"
+info "$(ls -1 "$DIST"/*.src.tar.gz | wc -l | tr -d ' ') source packages"
+
 # The armored public key, published beside the packages.
 #
 # Bootstrapping needs it: moarchy-keyring is itself signed, so pacman refuses
@@ -79,7 +107,7 @@ cp "$REPO_ROOT/repo/keyring/moarchy.asc" "$DIST/moarchy.asc"
 say "signing packages"
 # Detached, one per package, which is what SigLevel = Required checks. --yes so
 # a rebuild overwrites the previous signature rather than prompting.
-for p in "$DIST"/*.pkg.tar.*; do
+for p in "$DIST"/*.pkg.tar.* "$DIST"/*.src.tar.gz; do
   case "$p" in *.sig) continue ;; esac
   gpg --detach-sign --use-agent --no-armor --local-user "$KEYID" --yes "$p"
 done

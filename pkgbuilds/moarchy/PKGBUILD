@@ -16,9 +16,13 @@
 # What is left needs a running user or a live system, and runs once from
 # moarchy-firstboot.service and moarchy-user-setup.service (P8).
 
-. "$startdir/../../scripts/manifest.sh"
+# The pins: ../../scripts in this repo, beside this file in its .src.tar.gz
+# (docker/build-packages.sh puts them there).
+if [ -f "$startdir/manifest.sh" ]; then . "$startdir/manifest.sh"; else . "$startdir/../../scripts/manifest.sh"; fi
 _ver=$(manifest_get moarchy version) || return 1
-_repo="$startdir/../.."
+# bin/, default/ and config/: the repo two directories up, or tree/ in the
+# .src.tar.gz (docker/build-packages.sh).
+if [ -d "$startdir/tree" ]; then _repo="$startdir/tree"; else _repo="$startdir/../.."; fi
 
 pkgname=moarchy
 pkgver=$_ver

@@ -58,7 +58,9 @@
 #   USB_CONFIGFS_MASS_STORAGE -- exposes a block device over USB, the other way
 #                               to get a log off a phone with no console.
 
-. "$startdir/../../scripts/manifest.sh"
+# The pins: ../../scripts in this repo, beside this file in its .src.tar.gz
+# (docker/build-packages.sh puts them there).
+if [ -f "$startdir/manifest.sh" ]; then . "$startdir/manifest.sh"; else . "$startdir/../../scripts/manifest.sh"; fi
 _url=$(manifest_get device.sargo kernel-url) || return 1
 _tag=$(manifest_get device.sargo kernel-ref) || return 1
 

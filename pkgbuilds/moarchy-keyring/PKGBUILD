@@ -11,7 +11,9 @@
 # with `pacman -U` from a URL before switching SigLevel on. That is the same
 # shape archlinux-keyring and danctnix-keyring use.
 
-. "$startdir/../../scripts/manifest.sh"
+# The pins: ../../scripts in this repo, beside this file in its .src.tar.gz
+# (docker/build-packages.sh puts them there).
+if [ -f "$startdir/manifest.sh" ]; then . "$startdir/manifest.sh"; else . "$startdir/../../scripts/manifest.sh"; fi
 _keyid=$(manifest_get repo keyid) || return 1
 
 pkgname=moarchy-keyring

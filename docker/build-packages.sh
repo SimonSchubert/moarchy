@@ -112,6 +112,64 @@ try_makepkg() {
   return 1
 }
 
+# srcpkg <dir> [in-repo] -- the recipe's corresponding source, beside its binary.
+#
+# Every package this build produces is published (repo/publish.sh), and a good
+# third of them are GPL -- the kernel first. Shipping the binary without the
+# source is the one thing that licence does not allow, so the source package is
+# made here, by the same run, from the same recipe and the same pinned sources:
+# `makepkg --allsource` puts the PKGBUILD, every local file in source=() and
+# every DOWNLOADED source (the kernel tarball, the config, the patches) into
+# <pkgbase>-<ver>-<rel>.src.tar.gz. repo/build.sh refuses a package that has no
+# such file beside it.
+#
+# An in-repo recipe needs two more things to be rebuildable from that file on
+# its own. Each PKGBUILD reads its pins through ../../scripts/manifest.sh, which
+# is not in source=() -- so manifest.sh and manifest.toml go into the tarball
+# beside the PKGBUILD, where its loader looks first. And moarchy's package()
+# copies bin/, default/ and config/ out of the tree as $_repo: whatever
+# top-level directories a PKGBUILD names through $_repo go in as tree/, which
+# is where it looks for them before ../.. .
+#
+# Named after the binary this recipe produced, not after --printsrcinfo: a VCS
+# package's pkgver only exists once pkgver() has run.
+srcpkg() {
+  local dir="$1" inrepo="${2:-}" base first verrel want tmp got d
+  base=$( cd "$dir" && makepkg --printsrcinfo 2>/dev/null | awk -F' = ' '/^pkgbase = /{print $2; exit}' )
+  first=$( cd "$dir" && makepkg --packagelist 2>/dev/null | head -1 )
+  [ -n "$base" ] && [ -n "$first" ] || { echo "!! $dir: cannot name its source package" >&2; return 1; }
+  # <name>-<ver>-<rel>-<arch>.pkg.tar.<ext>  ->  <ver>-<rel>
+  verrel=$(basename "$first" | sed -E 's/\.pkg\.tar\..*$//; s/^.*-([^-]+-[^-]+)-[^-]+$/\1/')
+  want="$base-$verrel.src.tar.gz"
+  if [ -f "$OUT/$want" ] && [ "${REBUILD:-0}" != 1 ]; then
+    produced+=("$want"); return 0
+  fi
+  tmp=$(mktemp -d)
+  if ! ( cd "$dir" && SRCPKGDEST="$tmp" makepkg --allsource --nodeps --noconfirm -f ) >"$tmp/log" 2>&1; then
+    tail -5 "$tmp/log" >&2; rm -rf "$tmp"
+    echo "!! makepkg --allsource failed: $dir" >&2; return 1
+  fi
+  got=$(ls "$tmp"/*.src.tar.* 2>/dev/null | head -1)
+  [ -n "$got" ] || { rm -rf "$tmp"; echo "!! no source package for $dir" >&2; return 1; }
+  if [ -n "$inrepo" ]; then
+    mkdir "$tmp/x"
+    tar -xzf "$got" -C "$tmp/x"
+    cp /home/builder/repo/scripts/manifest.sh /home/builder/repo/manifest.toml "$tmp/x/$base/"
+    for d in $(grep -oE '\$_repo"?/[A-Za-z0-9_.-]+' "$dir/PKGBUILD" | sed -E 's#.*/##' | sort -u); do
+      [ -d "/home/builder/repo/$d" ] || continue
+      mkdir -p "$tmp/x/$base/tree"
+      cp -a "/home/builder/repo/$d" "$tmp/x/$base/tree/"
+    done
+    rm -f "$got"
+    got="$tmp/$want"
+    tar --sort=name --owner=0 --group=0 --numeric-owner -C "$tmp/x" -cf - "$base" | gzip -n > "$got"
+  fi
+  mv "$got" "$OUT/$want"
+  rm -rf "$tmp"
+  produced+=("$want")
+  echo "    source: $want"
+}
+
 # record <dir> -- add what makepkg would name for this recipe to the manifest.
 record() {
   local dir="$1" list f
@@ -155,13 +213,16 @@ for component in $(manifest_components); do
       echo "    already in $OUT for this pin -- kept"
       skipped+=("$component")
       record "/home/builder/$component/$c_dir"
+      srcpkg "/home/builder/$component/$c_dir" || failed+=("$component (source)")
     else
       try_makepkg "/home/builder/$component/$c_dir" "${FORCE[@]}" -s --noconfirm --needed
       case $? in
         0) cp "/home/builder/$component/$c_dir"/*.pkg.tar.* "$OUT/" 2>/dev/null || true
-           record "/home/builder/$component/$c_dir" ;;
+           record "/home/builder/$component/$c_dir"
+           srcpkg "/home/builder/$component/$c_dir" || failed+=("$component (source)") ;;
         2) echo "    already in $OUT for this pin -- kept"
-           skipped+=("$component"); record "/home/builder/$component/$c_dir" ;;
+           skipped+=("$component"); record "/home/builder/$component/$c_dir"
+           srcpkg "/home/builder/$component/$c_dir" || failed+=("$component (source)") ;;
         *) echo "!! build failed: $component" >&2; failed+=("$component") ;;
       esac
     fi
@@ -189,13 +250,16 @@ for pkg in $packages; do
     echo "    already in $OUT for this pin -- kept"
     skipped+=("$pkg")
     record "/home/builder/$pkg"
+    srcpkg "/home/builder/$pkg" || failed+=("$pkg (source)")
   else
     try_makepkg "/home/builder/$pkg" "${FORCE[@]}" -s --noconfirm --needed
     case $? in
       0) cp "/home/builder/$pkg"/*.pkg.tar.* "$OUT/" 2>/dev/null || true
-         record "/home/builder/$pkg" ;;
+         record "/home/builder/$pkg"
+         srcpkg "/home/builder/$pkg" || failed+=("$pkg (source)") ;;
       2) echo "    already in $OUT for this pin -- kept"
-         skipped+=("$pkg"); record "/home/builder/$pkg" ;;
+         skipped+=("$pkg"); record "/home/builder/$pkg"
+         srcpkg "/home/builder/$pkg" || failed+=("$pkg (source)") ;;
       *) echo "!! build failed: $pkg" >&2; failed+=("$pkg") ;;
     esac
   fi
@@ -219,12 +283,15 @@ if [ -d /repo/pkgbuilds ]; then
       echo "    already in $OUT for this version -- kept"
       skipped+=("$p")
       record "$d"
+      srcpkg "$d" in-repo || failed+=("$p (source)")
     else
       try_makepkg "$d" "${FORCE[@]}" --nodeps --noconfirm --nocheck
       case $? in
-        0) record "$d" ;;
+        0) record "$d"
+           srcpkg "$d" in-repo || failed+=("$p (source)") ;;
         2) echo "    already in $OUT for this version -- kept"
-           skipped+=("$p"); record "$d" ;;
+           skipped+=("$p"); record "$d"
+           srcpkg "$d" in-repo || failed+=("$p (source)") ;;
         *) echo "!! build failed: $p" >&2; failed+=("$p") ;;
       esac
     fi
